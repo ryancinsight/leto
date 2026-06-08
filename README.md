@@ -155,6 +155,8 @@ Current value-semantic coverage includes:
 - allocating keep-dim `sum_axis`, `mean_axis`, `min_axis`, and `max_axis`
   reductions over contiguous, strided, and empty-axis inputs.
 - `map_into`, `mapv`, and `map` over contiguous and strided inputs.
+- differential tests against `ndarray` for map-style contiguous/transposed
+  traversal and keep-dim axis reductions.
 - `sum` and 2D `matmul`, including differential matmul checks against
   `ndarray` for contiguous and transposed inputs.
 - PyO3 output conversion consumes owned Leto vectors into NumPy instead of
@@ -171,10 +173,9 @@ Current value-semantic coverage includes:
 Leto is not yet a complete `ndarray` replacement for Atlas. Before Apollo or
 Coeus can remove `ndarray`, Leto still needs:
 
-- keep-dim caller-owned and allocating axis reductions are available;
-  differential tests against `ndarray` are still required before downstream
-  replacement;
-- differential tests against `ndarray` for map-style behavior;
+- keep-dim caller-owned and allocating axis reductions are available with
+  differential tests against `ndarray`;
+- differential tests against `ndarray` for map-style behavior are available;
 - differential tests against `ndarray` for all Apollo-facing behavior;
 - direct Apollo and Coeus consumer-crate migrations with dependency updates.
 

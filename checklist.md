@@ -23,8 +23,10 @@
 - [x] [patch] Add named rank-2 `rows`, `columns`, `rows_mut`, and `columns_mut` wrappers over the axis iterator APIs.
 - [x] [patch] Add shape aliases or type aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`, `ArrayView2`, `ArrayView3` if Apollo migration keeps rank-specific readability.
 - [x] [patch] Add `map`, `map_into`, `mapv`-equivalent, and precision-conversion APIs without hidden widen-and-narrow computation.
+- [x] [patch] Add ndarray differential tests for map-style contiguous/transposed traversal.
 - [x] [patch] Add zip-map APIs without duplicating the shared binary/unary traversal strategy.
 - [x] [patch] Add BLAS/matrixmultiply replacement gates: contiguous `matmul`, strided `matmul`, transposed inputs, caller-owned output, and differential tests against `ndarray`.
+- [x] [patch] Add ndarray differential tests for keep-dim axis reductions over contiguous and transposed inputs.
 - [x] [patch] Add Python output conversion that avoids `Vec` clone round-trips where NumPy ownership transfer or direct allocation is available.
 - [x] [patch] Add Python boundary tests for value parity, shape validation, C-contiguous input, and rejected non-contiguous inputs.
 - [x] [patch] Add representative Leto-side Apollo and Coeus migration fixtures for rank aliases, complex precision mapping, keep-dim reduction/broadcast, and dense matmul.
