@@ -13,10 +13,10 @@
 
 ## Phase 1: Sound Core Layout and Storage [patch]
 - [x] Add ndarray-style slicing for full-axis selection, optional signed range bounds, negative indices, negative steps, integer axis removal, new-axis insertion, ellipsis expansion, and implicit trailing axes. Verification: three value-semantic tests over rank-preserving, rank-dropping, rank-adding, reverse, ellipsis, and implicit-tail cases.
-- [ ] Replace unchecked negative-offset casts with checked signed arithmetic across `Layout` and `Array` validation.
-- [ ] Make externally constructed `ArrayView` and `ArrayViewMut` layouts bounds-checked against their backing slices.
-- [ ] Remove or constrain mutable broadcast views that introduce zero-stride write aliasing.
-- [ ] Add overflow-checked shape product and stride multiplication for all constructors and derived layouts.
+- [x] Replace unchecked negative-offset casts with checked signed arithmetic across `Layout` and `Array` validation. Verification: value-semantic tests cover valid negative strides, rejected negative physical offsets, and one-past-storage rejection.
+- [x] Make externally constructed `ArrayView` and `ArrayViewMut` layouts bounds-checked against their backing slices through `try_new` constructors. Verification: invalid external layouts return `StorageError`.
+- [x] Remove or constrain mutable broadcast views that introduce zero-stride write aliasing. Verification: mutable broadcast rejects aliasing expansion and permits same-shape non-aliasing writes.
+- [x] Add overflow-checked shape product and stride multiplication for core constructors and derived layout validation. Remaining risk: property tests still need broad adversarial coverage over large dimensions and slice/broadcast composition.
 - [ ] Add property tests for C/F layouts, negative strides, empty axes, singleton axes, transposes, slices, broadcasts, and offset ranges.
 - [x] Fix `MnemosyneStorage` initialization semantics. `new(len)` requires `T: Default` and initializes elements; `from_slice` copies initialized values; `Drop` drops elements before deallocation.
 

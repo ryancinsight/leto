@@ -45,7 +45,9 @@ pub(crate) struct NormalizedRange {
 }
 
 pub(crate) fn normalize_index(index: isize, axis_len: usize) -> Result<usize> {
-    let len = axis_len as isize;
+    let len = isize::try_from(axis_len).map_err(|_| LetoError::Overflow {
+        reason: "slice axis length conversion",
+    })?;
     let normalized = if index < 0 { len + index } else { index };
     if normalized < 0 || normalized >= len {
         return Err(LetoError::OutOfBounds {
@@ -69,7 +71,9 @@ pub(crate) fn normalize_range(
         });
     }
 
-    let len = axis_len as isize;
+    let len = isize::try_from(axis_len).map_err(|_| LetoError::Overflow {
+        reason: "slice axis length conversion",
+    })?;
     if step > 0 {
         let start = clamp_positive_bound(start.map_or(0, |value| resolve_bound(value, len)), len);
         let end = clamp_positive_bound(end.map_or(len, |value| resolve_bound(value, len)), len);

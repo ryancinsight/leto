@@ -1,5 +1,5 @@
 use crate::application::view::{ArrayView, ArrayViewMut};
-use crate::domain::error::{LetoError, Result};
+use crate::domain::error::Result;
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
 use crate::infrastructure::storage::{Storage, StorageMut};
@@ -21,38 +21,7 @@ where
     /// # Errors
     /// Returns an error if the layout accesses memory before offset 0, or exceeds the storage bounds.
     pub fn new(layout: Layout<N>, storage: S) -> Result<Self> {
-        if N > 0 && !layout.shape.contains(&0) {
-            let mut min_offset = layout.offset as isize;
-            let mut max_offset = layout.offset as isize;
-            for i in 0..N {
-                let s = layout.strides[i];
-                let len = layout.shape[i];
-                if len > 0 {
-                    let b2 = (len - 1) as isize * s;
-                    min_offset += 0isize.min(b2);
-                    max_offset += 0isize.max(b2);
-                }
-            }
-
-            if min_offset < 0 {
-                return Err(LetoError::StorageError {
-                    reason: format!(
-                        "Layout offset underflow: accesses index at physical offset {}",
-                        min_offset
-                    ),
-                });
-            }
-
-            if max_offset as usize > storage.len() {
-                return Err(LetoError::StorageError {
-                    reason: format!(
-                        "Storage size {} is too small for layout max offset {}",
-                        storage.len(),
-                        max_offset
-                    ),
-                });
-            }
-        }
+        layout.validate_storage_len(storage.len())?;
 
         Ok(Self {
             layout,

@@ -33,7 +33,10 @@ impl<const N: usize> Layout<N> {
                 // If any dimension is zero, strides are set but size is zero
                 stride = 0;
             } else {
-                stride = match stride.checked_mul(dim as isize) {
+                let dim = isize::try_from(dim).map_err(|_| LetoError::Overflow {
+                    reason: "C-contiguous dimension conversion",
+                })?;
+                stride = match stride.checked_mul(dim) {
                     Some(s) => s,
                     None => {
                         return Err(LetoError::Overflow {
@@ -60,7 +63,10 @@ impl<const N: usize> Layout<N> {
             if dim == 0 {
                 stride = 0;
             } else {
-                stride = match stride.checked_mul(dim as isize) {
+                let dim = isize::try_from(dim).map_err(|_| LetoError::Overflow {
+                    reason: "F-contiguous dimension conversion",
+                })?;
+                stride = match stride.checked_mul(dim) {
                     Some(s) => s,
                     None => {
                         return Err(LetoError::Overflow {
@@ -79,35 +85,98 @@ impl<const N: usize> Layout<N> {
 
     /// Returns the logical number of elements represented by this layout.
     pub fn size(&self) -> usize {
+        self.checked_size()
+            .expect("layout shape product must fit in usize")
+    }
+
+    /// Returns the logical number of elements with overflow validation.
+    pub fn checked_size(&self) -> Result<usize> {
         if self.shape.contains(&0) {
-            0
+            Ok(0)
         } else {
-            self.shape.iter().product()
+            self.shape.iter().try_fold(1usize, |size, &dim| {
+                size.checked_mul(dim).ok_or(LetoError::Overflow {
+                    reason: "layout shape product",
+                })
+            })
         }
     }
 
     /// Returns the minimum and maximum physical offsets spanned by this layout.
     pub fn min_max_offsets(&self) -> (usize, usize) {
+        self.checked_min_max_offsets()
+            .expect("layout physical offsets must be non-negative and fit in usize")
+    }
+
+    /// Returns the minimum and maximum physical offsets with signed overflow validation.
+    pub fn checked_min_max_offsets(&self) -> Result<(usize, usize)> {
         if N == 0 {
-            return (self.offset, self.offset);
+            return Ok((self.offset, self.offset));
         }
         if self.shape.contains(&0) {
-            return (self.offset, self.offset);
+            return Ok((self.offset, self.offset));
         }
 
-        let mut min_offset = self.offset as isize;
-        let mut max_offset = self.offset as isize;
+        let mut min_offset = isize::try_from(self.offset).map_err(|_| LetoError::Overflow {
+            reason: "layout base offset conversion",
+        })?;
+        let mut max_offset = min_offset;
 
         for i in 0..N {
             let s = self.strides[i];
             let len = self.shape[i];
             let bound1 = 0isize;
-            let bound2 = (len - 1) as isize * s;
-            min_offset += bound1.min(bound2);
-            max_offset += bound1.max(bound2);
+            let len_minus_one = isize::try_from(len - 1).map_err(|_| LetoError::Overflow {
+                reason: "layout dimension bound conversion",
+            })?;
+            let bound2 = len_minus_one.checked_mul(s).ok_or(LetoError::Overflow {
+                reason: "layout dimension bound multiplication",
+            })?;
+            min_offset = min_offset
+                .checked_add(bound1.min(bound2))
+                .ok_or(LetoError::Overflow {
+                    reason: "layout minimum offset accumulation",
+                })?;
+            max_offset = max_offset
+                .checked_add(bound1.max(bound2))
+                .ok_or(LetoError::Overflow {
+                    reason: "layout maximum offset accumulation",
+                })?;
         }
 
-        (min_offset as usize, max_offset as usize)
+        if min_offset < 0 {
+            return Err(LetoError::StorageError {
+                reason: format!("layout accesses negative physical offset {min_offset}"),
+            });
+        }
+
+        Ok((min_offset as usize, max_offset as usize))
+    }
+
+    /// Validates that every addressable physical element is inside `storage_len`.
+    pub fn validate_storage_len(&self, storage_len: usize) -> Result<()> {
+        if self.checked_size()? == 0 {
+            return Ok(());
+        }
+
+        let (min_offset, max_offset) = self.checked_min_max_offsets()?;
+        if min_offset >= storage_len || max_offset >= storage_len {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "storage length {storage_len} does not cover layout physical offsets {min_offset}..={max_offset}"
+                ),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Returns true when multiple logical mutable indices can address one element.
+    pub fn has_zero_stride_aliasing(&self) -> bool {
+        self.shape
+            .iter()
+            .zip(self.strides.iter())
+            .any(|(&dim, &stride)| dim > 1 && stride == 0)
     }
 
     /// Check if the layout is C-contiguous (row-major).
@@ -124,7 +193,14 @@ impl<const N: usize> Layout<N> {
             if self.strides[i] != expected_stride {
                 return false;
             }
-            expected_stride *= self.shape[i] as isize;
+            let dim = match isize::try_from(self.shape[i]) {
+                Ok(dim) => dim,
+                Err(_) => return false,
+            };
+            expected_stride = match expected_stride.checked_mul(dim) {
+                Some(stride) => stride,
+                None => return false,
+            };
         }
         true
     }
@@ -142,14 +218,23 @@ impl<const N: usize> Layout<N> {
             if self.strides[i] != expected_stride {
                 return false;
             }
-            expected_stride *= self.shape[i] as isize;
+            let dim = match isize::try_from(self.shape[i]) {
+                Ok(dim) => dim,
+                Err(_) => return false,
+            };
+            expected_stride = match expected_stride.checked_mul(dim) {
+                Some(stride) => stride,
+                None => return false,
+            };
         }
         true
     }
 
     /// Compute the physical element offset for a given multi-dimensional index.
     pub fn offset_of(&self, index: [usize; N]) -> Result<usize> {
-        let mut offset = self.offset as isize;
+        let mut offset = isize::try_from(self.offset).map_err(|_| LetoError::Overflow {
+            reason: "layout base offset conversion",
+        })?;
         for i in 0..N {
             if index[i] >= self.shape[i] {
                 return Err(LetoError::OutOfBounds {
@@ -157,60 +242,45 @@ impl<const N: usize> Layout<N> {
                     shape: self.shape.to_vec(),
                 });
             }
-            offset += index[i] as isize * self.strides[i];
+            let index = isize::try_from(index[i]).map_err(|_| LetoError::Overflow {
+                reason: "layout index conversion",
+            })?;
+            let delta = index
+                .checked_mul(self.strides[i])
+                .ok_or(LetoError::Overflow {
+                    reason: "layout offset multiplication",
+                })?;
+            offset = offset.checked_add(delta).ok_or(LetoError::Overflow {
+                reason: "layout offset accumulation",
+            })?;
+        }
+        if offset < 0 {
+            return Err(LetoError::StorageError {
+                reason: format!("layout index accesses negative physical offset {offset}"),
+            });
         }
         Ok(offset as usize)
     }
 
     /// Slice the layout on each axis given a slice definition `(start, end, step)`.
     pub fn slice(&self, ranges: &[(usize, usize, isize); N]) -> Result<Self> {
-        let mut new_shape = [0usize; N];
-        let mut new_strides = [0isize; N];
-        let mut new_offset = self.offset as isize;
-
-        for i in 0..N {
-            let (start, end, step) = ranges[i];
-            let dim_len = self.shape[i];
-
-            if step == 0 {
+        let mut args = Vec::with_capacity(N);
+        for &(start, end, step) in ranges {
+            if start > self.shape[args.len()] || end > self.shape[args.len()] {
                 return Err(LetoError::IncompatibleSlice {
                     range: (start, end),
                     shape: self.shape.to_vec(),
                 });
             }
-
-            if start > dim_len || end > dim_len {
-                return Err(LetoError::IncompatibleSlice {
-                    range: (start, end),
-                    shape: self.shape.to_vec(),
-                });
-            }
-
-            if step > 0 {
-                if start > end {
-                    new_shape[i] = 0;
-                } else {
-                    new_shape[i] = (end - start - 1) / step as usize + 1;
-                }
-                new_offset += start as isize * self.strides[i];
-                new_strides[i] = self.strides[i] * step;
-            } else {
-                // negative step: start is higher index, end is lower index (exclusive)
-                if start < end {
-                    new_shape[i] = 0;
-                } else {
-                    new_shape[i] = (start - end - 1) / (-step) as usize + 1;
-                }
-                new_offset += start as isize * self.strides[i];
-                new_strides[i] = self.strides[i] * step;
-            }
+            let start = isize::try_from(start).map_err(|_| LetoError::Overflow {
+                reason: "slice start conversion",
+            })?;
+            let end = isize::try_from(end).map_err(|_| LetoError::Overflow {
+                reason: "slice end conversion",
+            })?;
+            args.push(SliceArg::range(Some(start), Some(end), step));
         }
-
-        Ok(Self {
-            shape: new_shape,
-            strides: new_strides,
-            offset: new_offset as usize,
-        })
+        self.slice_with(&args)
     }
 
     /// Slice the layout with ndarray-style arguments.
@@ -224,7 +294,9 @@ impl<const N: usize> Layout<N> {
         let mut strides = [0isize; M];
         let mut input_axis = 0usize;
         let mut output_axis = 0usize;
-        let mut offset = self.offset as isize;
+        let mut offset = isize::try_from(self.offset).map_err(|_| LetoError::Overflow {
+            reason: "slice base offset conversion",
+        })?;
 
         for arg in expanded {
             match arg {
@@ -265,11 +337,15 @@ impl<const N: usize> Layout<N> {
                         return Err(slice_rank_error(N, M, args));
                     }
                     let normalized = normalize_index(index, self.shape[input_axis])?;
-                    let axis_offset = (normalized as isize)
-                        .checked_mul(self.strides[input_axis])
-                        .ok_or(LetoError::Overflow {
-                            reason: "slice index offset multiplication",
+                    let normalized =
+                        isize::try_from(normalized).map_err(|_| LetoError::Overflow {
+                            reason: "slice index conversion",
                         })?;
+                    let axis_offset = normalized.checked_mul(self.strides[input_axis]).ok_or(
+                        LetoError::Overflow {
+                            reason: "slice index offset multiplication",
+                        },
+                    )?;
                     offset = offset.checked_add(axis_offset).ok_or(LetoError::Overflow {
                         reason: "slice index offset calculation",
                     })?;

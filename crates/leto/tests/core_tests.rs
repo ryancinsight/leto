@@ -1,4 +1,4 @@
-use leto::{Array, Layout, LetoError, SliceArg, VecStorage};
+use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, SliceArg, VecStorage};
 
 #[test]
 fn test_c_contiguous_layout() {
@@ -41,6 +41,72 @@ fn test_offset_calculation() {
     assert!(matches!(
         layout.offset_of([2, 0]),
         Err(LetoError::OutOfBounds { .. })
+    ));
+}
+
+#[test]
+fn test_negative_stride_offsets_are_checked_before_unsigned_conversion() {
+    let layout = Layout::new([3], [-1], 2);
+
+    assert_eq!(layout.checked_min_max_offsets().unwrap(), (0, 2));
+    assert_eq!(layout.offset_of([0]).unwrap(), 2);
+    assert_eq!(layout.offset_of([2]).unwrap(), 0);
+
+    let invalid = Layout::new([3], [-1], 0);
+    assert!(matches!(
+        invalid.checked_min_max_offsets(),
+        Err(LetoError::StorageError { .. })
+    ));
+    assert!(matches!(
+        invalid.offset_of([1]),
+        Err(LetoError::StorageError { .. })
+    ));
+}
+
+#[test]
+fn test_array_rejects_layout_that_reaches_one_past_storage() {
+    let layout = Layout::new([2], [1], 1);
+    let storage = VecStorage::new(vec![10, 20]);
+
+    assert!(matches!(
+        Array::new(layout, storage),
+        Err(LetoError::StorageError { .. })
+    ));
+}
+
+#[test]
+fn test_legacy_slice_empty_range_has_zero_extent_without_underflow() {
+    let layout = Layout::c_contiguous([4]).unwrap();
+    let sliced = layout.slice(&[(2, 2, 1)]).unwrap();
+
+    assert_eq!(sliced.shape, [0]);
+    assert_eq!(sliced.strides, [1]);
+    assert_eq!(sliced.offset, 2);
+    assert_eq!(sliced.checked_size().unwrap(), 0);
+}
+
+#[test]
+fn test_view_try_new_rejects_external_out_of_bounds_layout() {
+    let data = [10, 20];
+    let invalid = Layout::new([2], [1], 1);
+
+    assert!(matches!(
+        ArrayView::try_new(invalid, &data),
+        Err(LetoError::StorageError { .. })
+    ));
+
+    let valid = ArrayView::try_new(Layout::new([2], [1], 0), &data).unwrap();
+    assert_eq!(*valid.get([1]).unwrap(), 20);
+}
+
+#[test]
+fn test_view_mut_try_new_rejects_external_out_of_bounds_layout() {
+    let mut data = [10, 20];
+    let invalid = Layout::new([2], [1], 1);
+
+    assert!(matches!(
+        ArrayViewMut::try_new(invalid, &mut data),
+        Err(LetoError::StorageError { .. })
     ));
 }
 
@@ -182,4 +248,29 @@ fn test_broadcasting() {
     assert_eq!(*broadcasted.get([1, 0]).unwrap(), 100);
     assert_eq!(*broadcasted.get([0, 2]).unwrap(), 300);
     assert_eq!(*broadcasted.get([1, 2]).unwrap(), 300);
+}
+
+#[test]
+fn test_mutable_broadcast_rejects_zero_stride_write_aliasing() {
+    let layout = Layout::c_contiguous([1, 3]).unwrap();
+    let storage = VecStorage::new(vec![100, 200, 300]);
+    let mut array = Array::new(layout, storage).unwrap();
+
+    let result = array.view_mut().broadcast_mut([2, 3]);
+    assert!(matches!(
+        result,
+        Err(LetoError::IncompatibleBroadcast { .. })
+    ));
+}
+
+#[test]
+fn test_mutable_broadcast_permits_non_aliasing_same_shape() {
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let storage = VecStorage::new(vec![1, 2, 3, 4, 5, 6]);
+    let mut array = Array::new(layout, storage).unwrap();
+
+    let mut view = array.view_mut().broadcast_mut([2, 3]).unwrap();
+    *view.get_mut([1, 2]).unwrap() = 60;
+
+    assert_eq!(*view.get([1, 2]).unwrap(), 60);
 }

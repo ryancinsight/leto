@@ -10,9 +10,10 @@
 - [x] [patch] Run `cargo fmt` and keep `cargo fmt --check` clean across all workspace crates.
 - [x] [patch] Fixed `mnemosyne-alloc` feature compilation by importing the allocator trait surface used by `MnemosyneStorage`.
 - [x] [patch] Fixed `MnemosyneStorage` initialization semantics: `new(len)` now requires `T: Default` and initializes elements; `from_slice` copies initialized elements; `Drop` runs element destructors before deallocation.
-- [ ] [patch] Make mutable broadcast writes structurally impossible when the resulting layout has zero-stride aliasing.
-- [ ] [patch] Replace negative-offset casts with checked signed offset validation before any `usize` conversion in `Layout::offset_of`, `Layout::min_max_offsets`, and sliced layout construction.
-- [ ] [patch] Add bounds-checked `ArrayView::new` / `ArrayViewMut::new` constructors or validated constructor variants so externally supplied layouts cannot index past the backing slice.
+- [x] [patch] Make mutable broadcast writes structurally impossible when the resulting layout has zero-stride aliasing.
+- [x] [patch] Replace negative-offset casts with checked signed offset validation before any `usize` conversion in `Layout::offset_of`, `Layout::min_max_offsets`, and sliced layout construction.
+- [x] [patch] Add validated `ArrayView::try_new` / `ArrayViewMut::try_new` constructors so externally supplied layouts cannot index past the backing slice.
+- [x] [patch] Add overflow-checked shape product and storage-span validation through `Layout::checked_size`, `checked_min_max_offsets`, and `validate_storage_len`.
 - [ ] [patch] Collapse duplicated `add`/`sub`/`mul`/`div` traversal into one generic zero-cost binary map skeleton with operation ZSTs.
 - [ ] [patch] Add axis-aware reductions required by Apollo and Coeus: `sum_axis`, `mean_axis`, `min_axis`, `max_axis`, and caller-owned output variants.
 - [ ] [patch] Add ndarray-parity constructors used by Apollo: `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec`.

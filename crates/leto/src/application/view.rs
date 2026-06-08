@@ -1,4 +1,4 @@
-use crate::domain::error::Result;
+use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
 
@@ -13,6 +13,13 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     #[inline]
     pub const fn new(layout: Layout<N>, data: &'a [T]) -> Self {
         Self { layout, data }
+    }
+
+    /// Create a bounds-checked ArrayView from a layout and raw slice.
+    #[inline]
+    pub fn try_new(layout: Layout<N>, data: &'a [T]) -> Result<Self> {
+        layout.validate_storage_len(data.len())?;
+        Ok(Self { layout, data })
     }
 
     /// Returns the shape of the view.
@@ -55,6 +62,14 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     #[inline]
     pub fn get(&self, index: [usize; N]) -> Result<&T> {
         let offset = self.layout.offset_of(index)?;
+        if offset >= self.data.len() {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "physical offset {offset} exceeds backing slice length {}",
+                    self.data.len()
+                ),
+            });
+        }
         Ok(&self.data[offset])
     }
 
@@ -94,8 +109,8 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     pub fn as_slice(&self) -> Option<&'a [T]> {
         if self.layout.is_c_contiguous() {
             let start = self.layout.offset;
-            let end = start + self.layout.size();
-            Some(&self.data[start..end])
+            let end = start.checked_add(self.layout.checked_size().ok()?)?;
+            self.data.get(start..end)
         } else {
             None
         }
@@ -115,6 +130,13 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn new(layout: Layout<N>, data: &'a mut [T]) -> Self {
         Self { layout, data }
+    }
+
+    /// Create a bounds-checked ArrayViewMut from a layout and mutable slice.
+    #[inline]
+    pub fn try_new(layout: Layout<N>, data: &'a mut [T]) -> Result<Self> {
+        layout.validate_storage_len(data.len())?;
+        Ok(Self { layout, data })
     }
 
     /// Returns the shape of the view.
@@ -163,6 +185,14 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn get(&self, index: [usize; N]) -> Result<&T> {
         let offset = self.layout.offset_of(index)?;
+        if offset >= self.data.len() {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "physical offset {offset} exceeds backing slice length {}",
+                    self.data.len()
+                ),
+            });
+        }
         Ok(&self.data[offset])
     }
 
@@ -170,6 +200,14 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn get_mut(&mut self, index: [usize; N]) -> Result<&mut T> {
         let offset = self.layout.offset_of(index)?;
+        if offset >= self.data.len() {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "physical offset {offset} exceeds backing slice length {}",
+                    self.data.len()
+                ),
+            });
+        }
         Ok(&mut self.data[offset])
     }
 
@@ -198,14 +236,20 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     }
 
     /// Broadcast the mutable view to a larger dimensional shape.
-    /// Note: Broadcasted views cannot be written to safely without stride collision if dimensions are expanded (strides are 0).
-    /// Therefore, returning a mutable broadcasted view must be used with caution, but is permitted here.
+    ///
+    /// Returns an error when broadcasting would introduce zero-stride aliasing.
     #[inline]
     pub fn broadcast_mut<const M: usize>(
         self,
         target_shape: [usize; M],
     ) -> Result<ArrayViewMut<'a, T, M>> {
         let broadcasted_layout = self.layout.broadcast(target_shape)?;
+        if broadcasted_layout.has_zero_stride_aliasing() {
+            return Err(LetoError::IncompatibleBroadcast {
+                from: self.layout.shape.to_vec(),
+                to: target_shape.to_vec(),
+            });
+        }
         Ok(ArrayViewMut::new(broadcasted_layout, self.data))
     }
 
@@ -214,8 +258,8 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     pub fn as_slice(&self) -> Option<&[T]> {
         if self.layout.is_c_contiguous() {
             let start = self.layout.offset;
-            let end = start + self.layout.size();
-            Some(&self.data[start..end])
+            let end = start.checked_add(self.layout.checked_size().ok()?)?;
+            self.data.get(start..end)
         } else {
             None
         }
@@ -226,8 +270,8 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     pub fn as_mut_slice(&mut self) -> Option<&mut [T]> {
         if self.layout.is_c_contiguous() {
             let start = self.layout.offset;
-            let end = start + self.layout.size();
-            Some(&mut self.data[start..end])
+            let end = start.checked_add(self.layout.checked_size().ok()?)?;
+            self.data.get_mut(start..end)
         } else {
             None
         }
