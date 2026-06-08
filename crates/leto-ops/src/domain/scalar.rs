@@ -1,7 +1,7 @@
 use half::{bf16, f16};
 
 /// A trait representing scalar numeric types with native precision execution.
-pub trait Scalar: Copy + Send + Sync + PartialEq + 'static {
+pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     /// The zero value.
     const ZERO: Self;
     /// The one value.
@@ -15,6 +15,8 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + 'static {
     fn mul(self, other: Self) -> Self;
     /// Scalar division.
     fn div(self, other: Self) -> Self;
+    /// Construct a scalar from a non-negative element count.
+    fn from_usize(value: usize) -> Self;
 
     /// Element-wise slice addition: `out = a + b`.
     fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]);
@@ -55,6 +57,10 @@ macro_rules! impl_scalar_native {
             #[inline(always)]
             fn div(self, other: Self) -> Self {
                 self / other
+            }
+            #[inline(always)]
+            fn from_usize(value: usize) -> Self {
+                value as $t
             }
 
             #[inline]
@@ -173,6 +179,10 @@ macro_rules! impl_scalar_half {
             #[inline(always)]
             fn div(self, other: Self) -> Self {
                 self / other
+            }
+            #[inline(always)]
+            fn from_usize(value: usize) -> Self {
+                Self::from_f32(value as f32)
             }
 
             #[inline]

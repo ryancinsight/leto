@@ -20,3 +20,7 @@ pub use domain::strategy::ParallelStrategy;
 pub use application::map::{
     add, binary_map, div, matmul, mul, sub, sum, AddOp, BinaryOp, DivOp, MulOp, SubOp,
 };
+pub use application::reduction::{
+    max_axis_into, mean_axis_into, min_axis_into, reduce_axis_into, sum_axis_into, AxisReduction,
+    MaxAxis, MeanAxis, MinAxis, SumAxis,
+};

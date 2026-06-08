@@ -1,4 +1,8 @@
-use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, SliceArg, VecStorage};
+use leto::{
+    domain::{RankMarker, RemoveAxis},
+    Array, Array1, Array2, ArrayView, ArrayViewMut, AxisIter, Layout, LetoError, SliceArg, Storage,
+    VecStorage,
+};
 
 #[test]
 fn test_c_contiguous_layout() {
@@ -41,6 +45,33 @@ fn test_offset_calculation() {
     assert!(matches!(
         layout.offset_of([2, 0]),
         Err(LetoError::OutOfBounds { .. })
+    ));
+}
+
+#[test]
+fn test_rank_marker_removes_axis_shape_and_strides() {
+    let marker = RankMarker::<3>;
+
+    assert_eq!(marker.remove_shape([2, 3, 4], 0).unwrap(), [3, 4]);
+    assert_eq!(marker.remove_shape([2, 3, 4], 1).unwrap(), [2, 4]);
+    assert_eq!(marker.remove_shape([2, 3, 4], 2).unwrap(), [2, 3]);
+
+    assert_eq!(marker.remove_strides([12, 4, 1], 0).unwrap(), [4, 1]);
+    assert_eq!(marker.remove_strides([12, 4, 1], 1).unwrap(), [12, 1]);
+    assert_eq!(marker.remove_strides([12, 4, 1], 2).unwrap(), [12, 4]);
+}
+
+#[test]
+fn test_rank_marker_rejects_out_of_bounds_axis() {
+    let marker = RankMarker::<2>;
+
+    assert!(matches!(
+        marker.remove_shape([2, 3], 2),
+        Err(LetoError::StorageError { .. })
+    ));
+    assert!(matches!(
+        marker.remove_strides([3, 1], 2),
+        Err(LetoError::StorageError { .. })
     ));
 }
 
@@ -119,6 +150,85 @@ fn test_array_creation_and_indexing() {
     assert_eq!(*array.get([0, 0]).unwrap(), 10);
     assert_eq!(*array.get([0, 2]).unwrap(), 12);
     assert_eq!(*array.get([1, 1]).unwrap(), 21);
+}
+
+#[test]
+fn test_rank_aliases_construct_owned_arrays_and_views() {
+    let vector: Array1<i32> = Array::new(
+        Layout::c_contiguous([3]).unwrap(),
+        VecStorage::new(vec![1, 2, 3]),
+    )
+    .unwrap();
+    assert_eq!(*vector.view().get([2]).unwrap(), 3);
+
+    let matrix: Array2<i32> = Array::new(
+        Layout::c_contiguous([2, 2]).unwrap(),
+        VecStorage::new(vec![1, 2, 3, 4]),
+    )
+    .unwrap();
+    assert_eq!(*matrix.view().get([1, 0]).unwrap(), 3);
+}
+
+#[test]
+fn test_ndarray_parity_constructors_and_into_vec() {
+    let zeros = Array::<i32, VecStorage<i32>, 2>::zeros([2, 2]);
+    assert_eq!(zeros.storage().as_slice(), &[0, 0, 0, 0]);
+
+    let filled = Array::<i32, VecStorage<i32>, 2>::from_elem([2, 2], 7);
+    assert_eq!(filled.storage().as_slice(), &[7, 7, 7, 7]);
+
+    let generated = Array::<i32, VecStorage<i32>, 2>::from_shape_fn([2, 3], |[row, col]| {
+        (row as i32) * 10 + col as i32
+    });
+    assert_eq!(generated.storage().as_slice(), &[0, 1, 2, 10, 11, 12]);
+
+    let from_vec =
+        Array::<i32, VecStorage<i32>, 2>::from_shape_vec([2, 2], vec![1, 2, 3, 4]).unwrap();
+    assert_eq!(from_vec.into_vec(), vec![1, 2, 3, 4]);
+
+    assert!(matches!(
+        Array::<i32, VecStorage<i32>, 2>::from_vec([2, 2], vec![1, 2, 3]),
+        Err(LetoError::StorageError { .. })
+    ));
+}
+
+#[test]
+fn test_axis_iter_yields_read_only_subviews() {
+    let array =
+        Array::<i32, VecStorage<i32>, 2>::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+    let rows: Vec<Vec<i32>> = AxisIter::new(&array.view(), 0, RankMarker::<2>)
+        .unwrap()
+        .map(|row| {
+            (0..row.shape()[0])
+                .map(|col| *row.get([col]).unwrap())
+                .collect()
+        })
+        .collect();
+
+    assert_eq!(rows, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+}
+
+#[test]
+fn test_view_axis_iter_methods_yield_subviews() {
+    let mut array =
+        Array::<i32, VecStorage<i32>, 2>::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    let columns: Vec<Vec<i32>> = array
+        .view()
+        .axis_iter::<1>(1)
+        .unwrap()
+        .map(|column| {
+            (0..column.shape()[0])
+                .map(|row| *column.get([row]).unwrap())
+                .collect()
+        })
+        .collect();
+    assert_eq!(columns, vec![vec![1, 4], vec![2, 5], vec![3, 6]]);
+
+    for mut row in array.view_mut().axis_iter_mut::<1>(0).unwrap() {
+        *row.get_mut([0]).unwrap() *= 10;
+    }
+    assert_eq!(array.storage().as_slice(), &[10, 2, 3, 40, 5, 6]);
 }
 
 #[test]

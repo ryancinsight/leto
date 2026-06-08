@@ -1,5 +1,8 @@
 use leto::{Array, Layout, Storage, VecStorage};
-use leto_ops::{add, binary_map, div, matmul, mul, sub, sum, AddOp, MulOp};
+use leto_ops::{
+    add, binary_map, div, matmul, max_axis_into, mean_axis_into, min_axis_into, mul, sub, sum,
+    sum_axis_into, AddOp, MulOp,
+};
 
 #[test]
 fn test_elementwise_binary_ops() {
@@ -94,6 +97,80 @@ fn test_sum_reduction() {
 
     let total = sum(&arr.view());
     assert_eq!(total, 21.0f64);
+}
+
+#[test]
+fn test_axis_reductions_keep_reduced_dimension() {
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let input = Array::new(
+        layout,
+        VecStorage::new(vec![1.0f32, -2.0, 3.0, 4.0, 5.0, -6.0]),
+    )
+    .unwrap();
+
+    let row_layout = Layout::c_contiguous([2, 1]).unwrap();
+    let mut row_sum = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
+    let mut row_mean = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
+    let mut row_min = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
+    let mut row_max = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
+
+    sum_axis_into(&input.view(), 1, &mut row_sum.view_mut()).unwrap();
+    mean_axis_into(&input.view(), 1, &mut row_mean.view_mut()).unwrap();
+    min_axis_into(&input.view(), 1, &mut row_min.view_mut()).unwrap();
+    max_axis_into(&input.view(), 1, &mut row_max.view_mut()).unwrap();
+
+    assert_eq!(row_sum.storage().as_slice(), &[2.0, 3.0]);
+    assert_eq!(row_mean.storage().as_slice(), &[2.0 / 3.0, 1.0]);
+    assert_eq!(row_min.storage().as_slice(), &[-2.0, -6.0]);
+    assert_eq!(row_max.storage().as_slice(), &[3.0, 5.0]);
+
+    let col_layout = Layout::c_contiguous([1, 3]).unwrap();
+    let mut col_sum = Array::new(col_layout, VecStorage::fill(3, 0.0f32)).unwrap();
+    sum_axis_into(&input.view(), 0, &mut col_sum.view_mut()).unwrap();
+    assert_eq!(col_sum.storage().as_slice(), &[5.0, 3.0, -3.0]);
+}
+
+#[test]
+fn test_axis_reduction_rejects_output_shape_mismatch() {
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let input = Array::new(layout, VecStorage::new(vec![1.0f32; 6])).unwrap();
+    let wrong_layout = Layout::c_contiguous([1, 3]).unwrap();
+    let mut wrong = Array::new(wrong_layout, VecStorage::fill(3, 0.0f32)).unwrap();
+
+    let result = sum_axis_into(&input.view(), 1, &mut wrong.view_mut());
+    assert!(matches!(result, Err(leto::LetoError::ShapeMismatch { .. })));
+}
+
+#[test]
+fn test_axis_reduction_strided_transposed_input() {
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let input = Array::new(
+        layout,
+        VecStorage::new(vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    )
+    .unwrap();
+    let transposed = input.transpose([1, 0]).unwrap();
+    let out_layout = Layout::c_contiguous([3, 1]).unwrap();
+    let mut output = Array::new(out_layout, VecStorage::fill(3, 0.0f64)).unwrap();
+
+    sum_axis_into(&transposed, 1, &mut output.view_mut()).unwrap();
+
+    assert_eq!(output.storage().as_slice(), &[5.0, 7.0, 9.0]);
+}
+
+#[test]
+fn test_empty_axis_sum_is_zero_and_mean_is_rejected() {
+    let layout = Layout::c_contiguous([2, 0]).unwrap();
+    let input = Array::new(layout, VecStorage::new(Vec::<f32>::new())).unwrap();
+    let out_layout = Layout::c_contiguous([2, 1]).unwrap();
+    let mut sum_out = Array::new(out_layout, VecStorage::fill(2, 1.0f32)).unwrap();
+    let mut mean_out = Array::new(out_layout, VecStorage::fill(2, 1.0f32)).unwrap();
+
+    sum_axis_into(&input.view(), 1, &mut sum_out.view_mut()).unwrap();
+    assert_eq!(sum_out.storage().as_slice(), &[0.0, 0.0]);
+
+    let result = mean_axis_into(&input.view(), 1, &mut mean_out.view_mut());
+    assert!(matches!(result, Err(leto::LetoError::StorageError { .. })));
 }
 
 #[test]

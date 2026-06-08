@@ -15,10 +15,10 @@
 - [x] [patch] Add validated `ArrayView::try_new` / `ArrayViewMut::try_new` constructors so externally supplied layouts cannot index past the backing slice.
 - [x] [patch] Add overflow-checked shape product and storage-span validation through `Layout::checked_size`, `checked_min_max_offsets`, and `validate_storage_len`.
 - [x] [patch] Collapse duplicated `add`/`sub`/`mul`/`div` traversal into one generic zero-cost binary map skeleton with operation ZSTs.
-- [ ] [patch] Add axis-aware reductions required by Apollo and Coeus: `sum_axis`, `mean_axis`, `min_axis`, `max_axis`, and caller-owned output variants.
-- [ ] [patch] Add ndarray-parity constructors used by Apollo: `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec`.
-- [ ] [patch] Add row/column/axis iteration APIs with contiguous fast paths and strided fallbacks.
-- [ ] [patch] Add shape aliases or type aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`, `ArrayView2`, `ArrayView3` if Apollo migration keeps rank-specific readability.
+- [x] [patch] Add axis-aware reductions required by Apollo and Coeus: `sum_axis_into`, `mean_axis_into`, `min_axis_into`, `max_axis_into`, and caller-owned output variants.
+- [x] [patch] Add ndarray-parity constructors used by Apollo: `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec`.
+- [x] [patch] Add row/column/axis iteration APIs with contiguous fast paths and strided fallbacks.
+- [x] [patch] Add shape aliases or type aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`, `ArrayView2`, `ArrayView3` if Apollo migration keeps rank-specific readability.
 - [ ] [patch] Add `map`, `map_into`, `mapv`-equivalent, zip-map, and precision-conversion APIs without hidden widen-and-narrow computation.
 - [ ] [patch] Add BLAS/matrixmultiply replacement gates: contiguous `matmul`, strided `matmul`, transposed inputs, caller-owned output, and differential tests against `ndarray`.
 - [ ] [patch] Add Python output conversion that avoids `Vec` clone round-trips where NumPy ownership transfer or direct allocation is available.

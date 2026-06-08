@@ -20,3 +20,7 @@ pub use infrastructure::storage::MnemosyneStorage;
 
 pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};
+pub use application::{
+    Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, ArrayViewMut2,
+    ArrayViewMut3, AxisIter, AxisIterMut,
+};

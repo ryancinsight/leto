@@ -115,6 +115,26 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
             None
         }
     }
+
+    /// Return an iterator yielding read-only subviews of rank `M` (where `M = N - 1`) along `axis`.
+    #[inline]
+    pub fn axis_iter<const M: usize>(
+        &self,
+        axis: usize,
+    ) -> Result<crate::application::iter::AxisIter<'_, T, N, M>>
+    where
+        crate::domain::remove_axis::RankMarker<N>: crate::domain::remove_axis::RemoveAxis<
+            N,
+            SmallerShape = [usize; M],
+            SmallerStrides = [isize; M],
+        >,
+    {
+        crate::application::iter::AxisIter::new(
+            self,
+            axis,
+            crate::domain::remove_axis::RankMarker::<N>,
+        )
+    }
 }
 
 // ── ArrayViewMut ──
@@ -275,5 +295,25 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         } else {
             None
         }
+    }
+
+    /// Return an iterator yielding mutable subviews of rank `M` (where `M = N - 1`) along `axis`.
+    #[inline]
+    pub fn axis_iter_mut<const M: usize>(
+        self,
+        axis: usize,
+    ) -> Result<crate::application::iter::AxisIterMut<'a, T, N, M>>
+    where
+        crate::domain::remove_axis::RankMarker<N>: crate::domain::remove_axis::RemoveAxis<
+            N,
+            SmallerShape = [usize; M],
+            SmallerStrides = [isize; M],
+        >,
+    {
+        crate::application::iter::AxisIterMut::new(
+            self,
+            axis,
+            crate::domain::remove_axis::RankMarker::<N>,
+        )
     }
 }

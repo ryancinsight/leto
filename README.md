@@ -62,6 +62,11 @@ assert_eq!(view.shape(), [1, 2]);
 
 - C-contiguous and Fortran-contiguous layout construction.
 - Const-rank shape and stride storage.
+- Rank-readable aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`,
+  `ArrayView2`, `ArrayView3`, and mutable view variants.
+- Owned-array constructors for `zeros`, `from_elem`, `from_vec`,
+  `from_shape_vec`, `from_shape_fn`, and `into_vec`.
+- `AxisIter` and `AxisIterMut` subview iteration over a selected axis.
 - Physical offset calculation.
 - Zero-copy slicing, transposition, and broadcasting.
 - ndarray-style slicing with:
@@ -96,8 +101,12 @@ strided, SIMD, and parallel dispatch path.
   and fall back to scalar loops when Hermes cannot handle the slice.
 - Large contiguous and strided elementwise operations use Moirai through the
   `parallel` feature after layout storage spans are validated.
+- Axis reductions use caller-owned output views and keep the reduced dimension
+  as length one, matching Coeus tensor semantics such as `[N, C] -> [N, 1]`.
+  `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into` share
+  one ZST-selected reduction traversal and use Moirai for large output domains.
 - Strided output layouts that can alias mutable writes through zero strides do
-  not enter the parallel path.
+  not enter parallel write paths.
 - The core `leto` crate remains independent of Hermes and Moirai; integration
   stays in `leto-ops` so layout/storage types can compile separately.
 
@@ -124,6 +133,8 @@ Current value-semantic coverage includes:
 - transposition and broadcasting.
 - elementwise arithmetic through the shared ZST `binary_map` kernel.
 - strided/transposed elementwise traversal.
+- keep-dim `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and
+  `max_axis_into` reductions over contiguous and strided inputs.
 - `sum` and 2D `matmul`.
 
 ## Replacement Status
@@ -131,11 +142,9 @@ Current value-semantic coverage includes:
 Leto is not yet a complete `ndarray` replacement for Atlas. Before Apollo or
 Coeus can remove `ndarray`, Leto still needs:
 
-- rank aliases or constructors for `Array1`, `Array2`, `Array3`;
-- `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and
-  `into_vec` equivalents;
-- row, column, and axis iteration APIs;
-- axis reductions with caller-owned output;
+- named row/column convenience wrappers over axis iteration;
+- keep-dim axis reductions are available; differential tests against `ndarray`
+  are still required before downstream replacement;
 - `map`, `map_into`, `mapv`-equivalent, and zip-map APIs;
 - differential tests against `ndarray` for all Apollo-facing behavior;
 - Python output conversion that avoids clone-through-`Vec` result paths.
