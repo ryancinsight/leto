@@ -146,8 +146,8 @@ Current value-semantic coverage includes:
 - named rank-2 row and column iteration.
 - transposition and broadcasting.
 - property tests for C/F offset formulas, transpose value preservation,
-  reverse slicing, singleton-axis broadcasting, and negative-stride storage
-  span validation.
+  reverse slicing, composed slicing, empty-axis storage validation,
+  singleton-axis broadcasting, and negative-stride storage span validation.
 - elementwise arithmetic through the shared ZST `binary_map` kernel.
 - strided/transposed elementwise traversal.
 - keep-dim `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and

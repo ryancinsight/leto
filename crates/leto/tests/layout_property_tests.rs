@@ -1,4 +1,4 @@
-use leto::{Array, Layout, LetoError, SliceArg};
+use leto::{Array, Layout, LetoError, SliceArg, VecStorage};
 use proptest::prelude::*;
 
 proptest! {
@@ -132,5 +132,63 @@ proptest! {
             );
             prop_assert!(rejects_negative_span);
         }
+    }
+
+    #[test]
+    fn empty_axis_layouts_have_zero_size_without_storage_access(
+        rows in 0usize..8,
+        depth in 0usize..8,
+    ) {
+        let layout = Layout::c_contiguous([rows, 0, depth]).unwrap();
+        let array = Array::<usize, _, 3>::new(layout, VecStorage::new(Vec::new())).unwrap();
+
+        prop_assert_eq!(layout.checked_size().unwrap(), 0);
+        prop_assert_eq!(layout.checked_min_max_offsets().unwrap(), (0, 0));
+        prop_assert!(layout.validate_storage_len(0).is_ok());
+        prop_assert_eq!(array.size(), 0);
+        prop_assert_eq!(array.view().as_slice().unwrap(), &[]);
+    }
+
+    #[test]
+    fn composed_slices_preserve_original_values(
+        rows in 2usize..10,
+        cols in 2usize..10,
+        row_start in 0usize..10,
+        row_take in 1usize..10,
+        col_start in 0usize..10,
+        col_take in 1usize..10,
+        out_row in 0usize..10,
+        out_col in 0usize..10,
+    ) {
+        let row_start = row_start % rows;
+        let row_take = row_take.min(rows - row_start);
+        let row_mid = row_start + row_take;
+        let col_start = col_start % cols;
+        let col_take = col_take.min(cols - col_start);
+        let col_mid = col_start + col_take;
+        let len = rows * cols;
+        let array = Array::from_shape_vec([rows, cols], (0..len).collect::<Vec<_>>()).unwrap();
+
+        let row_slice = array
+            .slice_with::<2>(&[
+                SliceArg::range(Some(row_start as isize), Some(row_mid as isize), 1),
+                SliceArg::All,
+            ])
+            .unwrap();
+        let composed = row_slice
+            .slice_with::<2>(&[
+                SliceArg::All,
+                SliceArg::range(Some(col_start as isize), Some(col_mid as isize), 1),
+            ])
+            .unwrap();
+
+        let out_row = out_row % row_take;
+        let out_col = out_col % col_take;
+
+        prop_assert_eq!(composed.shape(), [row_take, col_take]);
+        prop_assert_eq!(
+            *composed.get([out_row, out_col]).unwrap(),
+            *array.get([row_start + out_row, col_start + out_col]).unwrap()
+        );
     }
 }
