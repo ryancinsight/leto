@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/leto",
+    "crates/leto-ops",
+    "crates/leto-python",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ryancinsight/leto.git"
+
+[workspace.dependencies]
+# ── Local Workspace Crates ──
+leto = { path = "crates/leto" }
+leto-ops = { path = "crates/leto-ops" }
+
+# ── Systems and Parallelization ──
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["parallel"] }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", package = "hermes-simd" }
+
+# ── Numeric Foundations ──
+num-traits = "0.2"
+num-complex = "0.4"
+bytemuck = { version = "1.19", features = ["derive"] }
+half = { version = "2.7", features = ["num-traits", "bytemuck"] }
+
+# ── Error and Utility ──
+thiserror = "2"
+anyhow = "1.0"
+
+# ── Python FFI ──
+pyo3 = { version = "0.23", features = ["extension-module"] }
+numpy = "0.23"
+
+# ── Testing / Benchmarking ──
+proptest = "1.6"
+criterion = "0.5"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = 3

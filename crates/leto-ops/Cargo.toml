@@ -1,0 +1,29 @@
+[package]
+name = "leto-ops"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# ── Local Workspace Crates ──
+leto = { workspace = true }
+
+# ── Systems and Parallelization ──
+moirai = { workspace = true, optional = true }
+hermes-simd = { workspace = true, optional = true }
+
+# ── Numeric Foundations ──
+num-traits = { workspace = true }
+num-complex = { workspace = true }
+bytemuck = { workspace = true }
+half = { workspace = true }
+
+# ── Error Handling ──
+thiserror = { workspace = true }
+
+[features]
+default = ["std", "simd", "parallel"]
+std = ["leto/std", "num-traits/std"]
+simd = ["dep:hermes-simd"]
+parallel = ["dep:moirai"]

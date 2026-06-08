@@ -1,0 +1,23 @@
+[package]
+name = "leto-python"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "leto_python"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# ── Local Workspace Crates ──
+leto = { workspace = true }
+leto-ops = { workspace = true }
+
+# ── Python FFI ──
+pyo3 = { workspace = true }
+numpy = { workspace = true }
+
+# ── Utility ──
+anyhow = { workspace = true }
+thiserror = { workspace = true }

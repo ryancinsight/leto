@@ -1,0 +1,26 @@
+[package]
+name = "leto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# ── Systems and Parallelization ──
+mnemosyne = { workspace = true, optional = true }
+
+# ── Numeric Foundations ──
+num-traits = { workspace = true }
+num-complex = { workspace = true }
+bytemuck = { workspace = true }
+half = { workspace = true }
+
+# ── Error Handling ──
+thiserror = { workspace = true }
+
+[features]
+default = ["std"]
+std = ["num-traits/std"]
+alloc = []
+# mnemosyne integration
+mnemosyne-alloc = ["dep:mnemosyne", "alloc"]
