@@ -1,4 +1,4 @@
-use leto::{Array, ArrayView, Layout, StorageMut, VecStorage};
+use leto::{Array, ArrayView, ArrayViewMut, Layout, VecStorage};
 use leto_ops::{add, div, matmul, mul, sub, sum};
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::exceptions::PyValueError;
@@ -18,7 +18,6 @@ fn require_contiguous_2d<T: numpy::Element>(
     }
 }
 
-// Map NumPy PyReadonlyArray2 to Leto ArrayView
 fn view_from_numpy<'a, T: numpy::Element>(
     arr: &'a PyReadonlyArray2<'_, T>,
 ) -> PyResult<ArrayView<'a, T, 2>> {
@@ -47,7 +46,55 @@ fn view_from_numpy<'a, T: numpy::Element>(
         PyValueError::new_err("Failed to extract contiguous slice from NumPy array")
     })?;
 
-    Ok(ArrayView::new(layout, raw_slice))
+    ArrayView::try_new(layout, raw_slice).map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
+fn output_array(shape: [usize; 2]) -> PyResult<Array<f32, VecStorage<f32>, 2>> {
+    let layout = Layout::c_contiguous(shape).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let size = layout
+        .checked_size()
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Array::new(layout, VecStorage::fill(size, 0.0f32))
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
+fn array_into_numpy2<'py>(
+    py: Python<'py>,
+    array: Array<f32, VecStorage<f32>, 2>,
+    shape: [usize; 2],
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let py_arr1 = PyArray1::from_vec(py, array.into_vec());
+    py_arr1.reshape(shape)
+}
+
+fn binary_py<'py, F>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f32>,
+    b: PyReadonlyArray2<'_, f32>,
+    op: F,
+) -> PyResult<Bound<'py, PyArray2<f32>>>
+where
+    F: FnOnce(
+            &ArrayView<'_, f32, 2>,
+            &ArrayView<'_, f32, 2>,
+            &mut ArrayViewMut<'_, f32, 2>,
+        ) -> leto::Result<()>
+        + Send,
+{
+    require_contiguous_2d(&a, "a")?;
+    require_contiguous_2d(&b, "b")?;
+
+    let a_view = view_from_numpy(&a)?;
+    let b_view = view_from_numpy(&b)?;
+    let shape = [a.shape()[0], a.shape()[1]];
+    let mut out_arr = output_array(shape)?;
+
+    py.allow_threads(|| {
+        op(&a_view, &b_view, &mut out_arr.view_mut())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    })?;
+
+    array_into_numpy2(py, out_arr, shape)
 }
 
 #[pyfunction]
@@ -57,29 +104,7 @@ fn add_py<'py>(
     a: PyReadonlyArray2<'_, f32>,
     b: PyReadonlyArray2<'_, f32>,
 ) -> PyResult<Bound<'py, PyArray2<f32>>> {
-    require_contiguous_2d(&a, "a")?;
-    require_contiguous_2d(&b, "b")?;
-
-    let a_view = view_from_numpy(&a)?;
-    let b_view = view_from_numpy(&b)?;
-
-    let shape = a.shape();
-    let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr =
-        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
-
-    // Release GIL around computation
-    py.allow_threads(|| {
-        add(&a_view, &b_view, &mut out_arr.view_mut())
-            .map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
-
-    // Convert owned Array back to PyArray2
-    let vec = out_arr.storage_mut().as_mut_slice().to_vec();
-    let py_arr1 = PyArray1::from_vec(py, vec);
-    py_arr1.reshape([shape[0], shape[1]])
+    binary_py(py, a, b, add)
 }
 
 #[pyfunction]
@@ -89,27 +114,7 @@ fn sub_py<'py>(
     a: PyReadonlyArray2<'_, f32>,
     b: PyReadonlyArray2<'_, f32>,
 ) -> PyResult<Bound<'py, PyArray2<f32>>> {
-    require_contiguous_2d(&a, "a")?;
-    require_contiguous_2d(&b, "b")?;
-
-    let a_view = view_from_numpy(&a)?;
-    let b_view = view_from_numpy(&b)?;
-
-    let shape = a.shape();
-    let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr =
-        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
-
-    py.allow_threads(|| {
-        sub(&a_view, &b_view, &mut out_arr.view_mut())
-            .map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
-
-    let vec = out_arr.storage_mut().as_mut_slice().to_vec();
-    let py_arr1 = PyArray1::from_vec(py, vec);
-    py_arr1.reshape([shape[0], shape[1]])
+    binary_py(py, a, b, sub)
 }
 
 #[pyfunction]
@@ -119,27 +124,7 @@ fn mul_py<'py>(
     a: PyReadonlyArray2<'_, f32>,
     b: PyReadonlyArray2<'_, f32>,
 ) -> PyResult<Bound<'py, PyArray2<f32>>> {
-    require_contiguous_2d(&a, "a")?;
-    require_contiguous_2d(&b, "b")?;
-
-    let a_view = view_from_numpy(&a)?;
-    let b_view = view_from_numpy(&b)?;
-
-    let shape = a.shape();
-    let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr =
-        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
-
-    py.allow_threads(|| {
-        mul(&a_view, &b_view, &mut out_arr.view_mut())
-            .map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
-
-    let vec = out_arr.storage_mut().as_mut_slice().to_vec();
-    let py_arr1 = PyArray1::from_vec(py, vec);
-    py_arr1.reshape([shape[0], shape[1]])
+    binary_py(py, a, b, mul)
 }
 
 #[pyfunction]
@@ -149,35 +134,15 @@ fn div_py<'py>(
     a: PyReadonlyArray2<'_, f32>,
     b: PyReadonlyArray2<'_, f32>,
 ) -> PyResult<Bound<'py, PyArray2<f32>>> {
-    require_contiguous_2d(&a, "a")?;
-    require_contiguous_2d(&b, "b")?;
-
-    let a_view = view_from_numpy(&a)?;
-    let b_view = view_from_numpy(&b)?;
-
-    let shape = a.shape();
-    let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr =
-        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
-
-    py.allow_threads(|| {
-        div(&a_view, &b_view, &mut out_arr.view_mut())
-            .map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
-
-    let vec = out_arr.storage_mut().as_mut_slice().to_vec();
-    let py_arr1 = PyArray1::from_vec(py, vec);
-    py_arr1.reshape([shape[0], shape[1]])
+    binary_py(py, a, b, div)
 }
 
 #[pyfunction]
 #[pyo3(name = "sum")]
-fn sum_py(a: PyReadonlyArray2<'_, f32>) -> PyResult<f32> {
+fn sum_py(py: Python<'_>, a: PyReadonlyArray2<'_, f32>) -> PyResult<f32> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    Ok(sum(&a_view))
+    Ok(py.allow_threads(|| sum(&a_view)))
 }
 
 #[pyfunction]
@@ -202,20 +167,15 @@ fn matmul_py<'py>(
         ));
     }
 
-    let out_storage = VecStorage::fill(shape_a[0] * shape_b[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape_a[0], shape_b[1]])
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr =
-        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out_shape = [shape_a[0], shape_b[1]];
+    let mut out_arr = output_array(out_shape)?;
 
     py.allow_threads(|| {
         matmul(&a_view, &b_view, &mut out_arr.view_mut())
             .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
 
-    let vec = out_arr.storage_mut().as_mut_slice().to_vec();
-    let py_arr1 = PyArray1::from_vec(py, vec);
-    py_arr1.reshape([shape_a[0], shape_b[1]])
+    array_into_numpy2(py, out_arr, out_shape)
 }
 
 /// A Python module wrapping Leto strided array operations.

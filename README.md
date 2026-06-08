@@ -34,7 +34,7 @@ scheme and the crate responsibility.
 | --- | --- |
 | `leto` | Core const-rank layout, slicing, array, view, and storage primitives. |
 | `leto-ops` | Elementwise arithmetic, reductions, matrix multiplication, SIMD hooks, and Moirai-backed parallel loops. |
-| `leto-python` | Thin PyO3/NumPy boundary over Rust operations. |
+| `leto-python` | Thin PyO3/NumPy boundary over Rust operations with GIL release around compute. |
 
 ## Core API
 
@@ -144,6 +144,8 @@ Current value-semantic coverage includes:
 - `map_into`, `mapv`, and `map` over contiguous and strided inputs.
 - `sum` and 2D `matmul`, including differential matmul checks against
   `ndarray` for contiguous and transposed inputs.
+- PyO3 output conversion consumes owned Leto vectors into NumPy instead of
+  cloning through an intermediate slice.
 
 ## Replacement Status
 
@@ -155,7 +157,7 @@ Coeus can remove `ndarray`, Leto still needs:
   are still required before downstream replacement;
 - differential tests against `ndarray` for map-style behavior;
 - differential tests against `ndarray` for all Apollo-facing behavior;
-- Python output conversion that avoids clone-through-`Vec` result paths.
+- Python value tests for the PyO3 module surface.
 
 See `checklist.md` and `backlog.md` for the tracked migration plan.
 

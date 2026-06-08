@@ -22,7 +22,7 @@
 - [x] [patch] Add `map`, `map_into`, `mapv`-equivalent, and precision-conversion APIs without hidden widen-and-narrow computation.
 - [x] [patch] Add zip-map APIs without duplicating the shared binary/unary traversal strategy.
 - [x] [patch] Add BLAS/matrixmultiply replacement gates: contiguous `matmul`, strided `matmul`, transposed inputs, caller-owned output, and differential tests against `ndarray`.
-- [ ] [patch] Add Python output conversion that avoids `Vec` clone round-trips where NumPy ownership transfer or direct allocation is available.
+- [x] [patch] Add Python output conversion that avoids `Vec` clone round-trips where NumPy ownership transfer or direct allocation is available.
 - [ ] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings.
 - [ ] [patch] Add Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and gradient-adjacent non-differentiable storage boundaries.
 - [ ] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.
