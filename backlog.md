@@ -5,7 +5,7 @@
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
-- [x] [patch] `cargo test --all-features` passes: 24 `leto` core tests and 17 `leto-ops` tests pass. Evidence tier: value-semantic and differential unit tests.
+- [x] [patch] `cargo test --all-features` passes: 24 `leto` core tests, 17 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, differential, and PyO3 boundary unit tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
@@ -55,7 +55,7 @@
 - [ ] Keep Python as a thin PyO3/NumPy boundary over Rust operations.
 - [ ] Resolve or route around the `numpy-0.23.0` rustdoc ICE for `leto-python` without weakening Rust crate documentation gates.
 - [x] Replace current Python result construction that clones through `Vec` after computation. Verification: `leto-python` now transfers owned `VecStorage` with `Array::into_vec()` and `PyArray1::from_vec`, then reshapes without the former `as_mut_slice().to_vec()` clone path.
-- [ ] Add Python tests for shape validation, C-contiguous input, rejected non-contiguous inputs or zero-copy strided support, and value parity with NumPy.
+- [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 
 ## Apollo Migration Gate [arch]
 - [ ] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates.

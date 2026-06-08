@@ -189,3 +189,104 @@ fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(matmul_py, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::ffi::c_str;
+    use std::sync::Once;
+
+    static INIT_PYTHON: Once = Once::new();
+
+    fn prepare_python() {
+        INIT_PYTHON.call_once(pyo3::prepare_freethreaded_python);
+    }
+
+    fn array2<'py>(py: Python<'py>, values: &[Vec<f32>]) -> Bound<'py, PyArray2<f32>> {
+        PyArray2::from_vec2(py, values).expect("rectangular test array must construct")
+    }
+
+    #[test]
+    fn add_returns_numpy_array_with_value_semantics() {
+        prepare_python();
+
+        Python::with_gil(|py| {
+            let lhs = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
+            let rhs = array2(py, &[vec![10.0, 20.0, 30.0], vec![40.0, 50.0, 60.0]]);
+
+            let output = add_py(py, lhs.readonly(), rhs.readonly()).unwrap();
+
+            assert_eq!(output.shape(), &[2, 3]);
+            assert_eq!(
+                output.readonly().as_slice().unwrap(),
+                &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]
+            );
+        });
+    }
+
+    #[test]
+    fn matmul_returns_numpy_array_with_value_semantics() {
+        prepare_python();
+
+        Python::with_gil(|py| {
+            let lhs = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
+            let rhs = array2(py, &[vec![7.0, 8.0], vec![9.0, 10.0], vec![11.0, 12.0]]);
+
+            let output = matmul_py(py, lhs.readonly(), rhs.readonly()).unwrap();
+
+            assert_eq!(output.shape(), &[2, 2]);
+            assert_eq!(
+                output.readonly().as_slice().unwrap(),
+                &[58.0, 64.0, 139.0, 154.0]
+            );
+        });
+    }
+
+    #[test]
+    fn sum_releases_boundary_and_returns_scalar_value() {
+        prepare_python();
+
+        Python::with_gil(|py| {
+            let input = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
+
+            let total = sum_py(py, input.readonly()).unwrap();
+
+            assert_eq!(total, 21.0);
+        });
+    }
+
+    #[test]
+    fn matmul_rejects_shape_mismatch() {
+        prepare_python();
+
+        Python::with_gil(|py| {
+            let lhs = array2(py, &[vec![1.0, 2.0, 3.0]]);
+            let rhs = array2(py, &[vec![4.0, 5.0, 6.0]]);
+
+            let result = matmul_py(py, lhs.readonly(), rhs.readonly());
+
+            assert!(result.is_err());
+        });
+    }
+
+    #[test]
+    fn operations_reject_non_contiguous_numpy_inputs() {
+        prepare_python();
+
+        Python::with_gil(|py| {
+            let view = py
+                .eval(
+                    c_str!("__import__('numpy').arange(6, dtype='float32').reshape(2, 3).T"),
+                    None,
+                    None,
+                )
+                .unwrap()
+                .extract::<PyReadonlyArray2<'_, f32>>()
+                .unwrap();
+
+            let result = sum_py(py, view);
+
+            assert!(result.is_err());
+        });
+    }
+}
