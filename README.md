@@ -148,6 +148,10 @@ Current value-semantic coverage includes:
   cloning through an intermediate slice.
 - PyO3 boundary tests cover value parity for `add`, `sum`, and `matmul`, shape
   mismatch rejection, and rejection of non-contiguous NumPy inputs.
+- Apollo/Coeus migration fixtures cover representative `Array1`/`Array2`/
+  `Array3` construction, complex precision mapping, half-pair storage,
+  keep-dim reduction plus broadcasted elementwise ops, and dense-layer matmul
+  shapes.
 
 ## Replacement Status
 
@@ -159,8 +163,7 @@ Coeus can remove `ndarray`, Leto still needs:
   are still required before downstream replacement;
 - differential tests against `ndarray` for map-style behavior;
 - differential tests against `ndarray` for all Apollo-facing behavior;
-- Apollo and Coeus migration fixtures that exercise real downstream call
-  shapes.
+- direct Apollo and Coeus consumer-crate migrations with dependency updates.
 
 See `checklist.md` and `backlog.md` for the tracked migration plan.
 

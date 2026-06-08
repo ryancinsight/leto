@@ -5,7 +5,7 @@
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
-- [x] [patch] `cargo test --all-features` passes: 24 `leto` core tests, 17 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, differential, and PyO3 boundary unit tests.
+- [x] [patch] `cargo test --all-features` passes: 24 `leto` core tests, 22 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, differential, PyO3 boundary, and downstream-shape migration fixture tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
@@ -29,13 +29,13 @@
 - [ ] Add named row and column convenience wrappers after axis iterator ergonomics are settled.
 - [x] Add `mapv`/typed conversion APIs for scalar storage used by Apollo verification and Python outputs. Verification: value tests cover caller-owned `map_into`, allocating `mapv`, explicit f64-to-f32 conversion, and strided transposed inputs.
 - [x] Add mutable zip-map traversal for Apollo migration call sites. Verification: value tests cover contiguous shape-matched mutation, shape mismatch rejection, and strided transposed views.
-- [ ] Add complex-storage map tests after complex scalar aliases and Apollo differential fixtures are added.
+- [x] Add representative Apollo complex-storage map fixtures for `Array1<Complex64>` to `Array1<Complex32>` and half-pair storage conversion. Verification: `migration_fixtures` covers generated complex arrays, caller-owned output storage, and `mapv` precision conversion without hidden widening.
 - [ ] Add caller-owned output variants for all constructors and operations used in Apollo to preserve zero-copy and allocation control.
 - [ ] Add differential tests against `ndarray` for every Apollo-facing API before replacing a downstream crate dependency.
 
 ## Phase 3: Coeus Tensor Substrate Requirements [minor]
 - [ ] Add shape/stride/layout contracts suitable for tensor batches, channels, and rank-generic model activations.
-- [ ] Add broadcast semantics compatible with tensor elementwise operations, including no mutable aliasing.
+- [x] Add representative broadcast semantics compatible with tensor elementwise operations, including keep-dim `[N, 1] -> [N, C]` read-only broadcast into elementwise add/mul. Verification: `migration_fixtures` covers Coeus normalization-like row reductions and broadcasted arithmetic.
 - [x] Add reductions over axes with keep-dim output modes required by Coeus: `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into`. Verification: value tests cover row/column reductions, strided transposed inputs, shape mismatch rejection, and empty-axis behavior.
 - [ ] Add allocating convenience wrappers for axis reductions only after storage constructors are complete.
 - [x] Add 2D matmul coverage for contiguous inputs, transposed/strided inputs, caller-owned output, and differential parity against `ndarray`.
@@ -59,6 +59,7 @@
 
 ## Apollo Migration Gate [arch]
 - [ ] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates.
+- [x] Add representative Leto-side Apollo and Coeus migration fixtures before direct consumer updates. Verification: fixtures cover Apollo FFT-like rank/complex/precision shapes and Coeus reduction/broadcast/matmul shapes.
 - [ ] Migrate one low-risk Apollo crate first, preferably a verification-only or WGPU verification path, and keep differential tests against `ndarray`.
 - [ ] Migrate public Apollo APIs only after compatibility/migration notes are in Apollo CHANGELOG because replacing `ndarray::Array*` public types is a breaking API change.
 - [ ] Remove Apollo's workspace `ndarray` dependency only after all crate manifests and Python bindings no longer expose or construct `ndarray` arrays except under a temporary compatibility feature.
