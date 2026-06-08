@@ -1,6 +1,6 @@
 use crate::application::index::index_from_flat;
 use crate::domain::scalar::Scalar;
-use leto::{ArrayView, ArrayViewMut, LetoError, Result};
+use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
 #[cfg(feature = "parallel")]
 const PARALLEL_THRESHOLD: usize = 8192;
@@ -234,6 +234,24 @@ where
     Ok(())
 }
 
+/// Apply a keep-dim axis reduction into newly allocated C-contiguous output storage.
+pub fn reduce_axis<Op, T, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+) -> Result<Array<T, VecStorage<T>, N>>
+where
+    Op: AxisReduction<T>,
+    T: Scalar,
+{
+    let shape = output_shape(input.shape(), axis)?;
+    let layout = Layout::c_contiguous(shape)?;
+    let size = layout.checked_size()?;
+    let storage = VecStorage::fill(size, T::ZERO);
+    let mut output = Array::new(layout, storage)?;
+    reduce_axis_into::<Op, T, N>(input, axis, &mut output.view_mut())?;
+    Ok(output)
+}
+
 #[cfg(feature = "parallel")]
 fn parallel_reduce_axis_into<Op, T, const N: usize>(ctx: AxisReductionContext<'_, T, N>)
 where
@@ -296,6 +314,15 @@ pub fn sum_axis_into<T: Scalar, const N: usize>(
     reduce_axis_into::<SumAxis, T, N>(input, axis, output)
 }
 
+/// Sum `input` along `axis` into newly allocated C-contiguous output storage.
+#[inline]
+pub fn sum_axis<T: Scalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+) -> Result<Array<T, VecStorage<T>, N>> {
+    reduce_axis::<SumAxis, T, N>(input, axis)
+}
+
 /// Mean-reduce `input` along `axis`, keeping the reduced axis as length one.
 #[inline]
 pub fn mean_axis_into<T: Scalar, const N: usize>(
@@ -304,6 +331,15 @@ pub fn mean_axis_into<T: Scalar, const N: usize>(
     output: &mut ArrayViewMut<'_, T, N>,
 ) -> Result<()> {
     reduce_axis_into::<MeanAxis, T, N>(input, axis, output)
+}
+
+/// Mean-reduce `input` along `axis` into newly allocated C-contiguous output storage.
+#[inline]
+pub fn mean_axis<T: Scalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+) -> Result<Array<T, VecStorage<T>, N>> {
+    reduce_axis::<MeanAxis, T, N>(input, axis)
 }
 
 /// Min-reduce `input` along `axis`, keeping the reduced axis as length one.
@@ -316,6 +352,15 @@ pub fn min_axis_into<T: Scalar, const N: usize>(
     reduce_axis_into::<MinAxis, T, N>(input, axis, output)
 }
 
+/// Min-reduce `input` along `axis` into newly allocated C-contiguous output storage.
+#[inline]
+pub fn min_axis<T: Scalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+) -> Result<Array<T, VecStorage<T>, N>> {
+    reduce_axis::<MinAxis, T, N>(input, axis)
+}
+
 /// Max-reduce `input` along `axis`, keeping the reduced axis as length one.
 #[inline]
 pub fn max_axis_into<T: Scalar, const N: usize>(
@@ -324,4 +369,13 @@ pub fn max_axis_into<T: Scalar, const N: usize>(
     output: &mut ArrayViewMut<'_, T, N>,
 ) -> Result<()> {
     reduce_axis_into::<MaxAxis, T, N>(input, axis, output)
+}
+
+/// Max-reduce `input` along `axis` into newly allocated C-contiguous output storage.
+#[inline]
+pub fn max_axis<T: Scalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+) -> Result<Array<T, VecStorage<T>, N>> {
+    reduce_axis::<MaxAxis, T, N>(input, axis)
 }

@@ -107,6 +107,9 @@ strided, SIMD, and parallel dispatch path.
   as length one, matching Coeus tensor semantics such as `[N, C] -> [N, 1]`.
   `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into` share
   one ZST-selected reduction traversal and use Moirai for large output domains.
+- Allocating axis-reduction wrappers (`sum_axis`, `mean_axis`, `min_axis`, and
+  `max_axis`) produce C-contiguous output by delegating to the caller-owned
+  reduction core after constructing `VecStorage`.
 - Unary mapping APIs provide `map_into` for caller-owned output and `mapv` /
   `map` for allocating C-contiguous output. Precision changes are explicit in
   the caller-provided closure rather than hidden in the traversal.
@@ -144,6 +147,8 @@ Current value-semantic coverage includes:
 - strided/transposed elementwise traversal.
 - keep-dim `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and
   `max_axis_into` reductions over contiguous and strided inputs.
+- allocating keep-dim `sum_axis`, `mean_axis`, `min_axis`, and `max_axis`
+  reductions over contiguous, strided, and empty-axis inputs.
 - `map_into`, `mapv`, and `map` over contiguous and strided inputs.
 - `sum` and 2D `matmul`, including differential matmul checks against
   `ndarray` for contiguous and transposed inputs.
@@ -161,8 +166,9 @@ Current value-semantic coverage includes:
 Leto is not yet a complete `ndarray` replacement for Atlas. Before Apollo or
 Coeus can remove `ndarray`, Leto still needs:
 
-- keep-dim axis reductions are available; differential tests against `ndarray`
-  are still required before downstream replacement;
+- keep-dim caller-owned and allocating axis reductions are available;
+  differential tests against `ndarray` are still required before downstream
+  replacement;
 - differential tests against `ndarray` for map-style behavior;
 - differential tests against `ndarray` for all Apollo-facing behavior;
 - direct Apollo and Coeus consumer-crate migrations with dependency updates.

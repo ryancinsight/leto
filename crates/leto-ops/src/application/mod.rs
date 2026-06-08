@@ -14,8 +14,8 @@ pub mod zip;
 pub use map::{add, binary_map, div, mul, sub, sum, AddOp, BinaryOp, DivOp, MulOp, SubOp};
 pub use matrix::matmul;
 pub use reduction::{
-    max_axis_into, mean_axis_into, min_axis_into, reduce_axis_into, sum_axis_into, AxisReduction,
-    MaxAxis, MeanAxis, MinAxis, SumAxis,
+    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
+    reduce_axis_into, sum_axis, sum_axis_into, AxisReduction, MaxAxis, MeanAxis, MinAxis, SumAxis,
 };
 pub use unary::{map, map_into, mapv};
 pub use zip::zip_mut_with;

@@ -5,7 +5,7 @@
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
-- [x] [patch] `cargo test --all-features` passes: 26 `leto` core tests, 22 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, differential, PyO3 boundary, and downstream-shape migration fixture tests.
+- [x] [patch] `cargo test --all-features` passes: 26 `leto` core tests, 25 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, differential, PyO3 boundary, and downstream-shape migration fixture tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
@@ -37,7 +37,7 @@
 - [ ] Add shape/stride/layout contracts suitable for tensor batches, channels, and rank-generic model activations.
 - [x] Add representative broadcast semantics compatible with tensor elementwise operations, including keep-dim `[N, 1] -> [N, C]` read-only broadcast into elementwise add/mul. Verification: `migration_fixtures` covers Coeus normalization-like row reductions and broadcasted arithmetic.
 - [x] Add reductions over axes with keep-dim output modes required by Coeus: `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into`. Verification: value tests cover row/column reductions, strided transposed inputs, shape mismatch rejection, and empty-axis behavior.
-- [ ] Add allocating convenience wrappers for axis reductions only after storage constructors are complete.
+- [x] Add allocating convenience wrappers for axis reductions only after storage constructors are complete. Verification: value tests cover contiguous row/column reductions, strided transposed input, C-contiguous output, and empty-axis sum/mean semantics.
 - [x] Add 2D matmul coverage for contiguous inputs, transposed/strided inputs, caller-owned output, and differential parity against `ndarray`.
 - [ ] Add batched matmul semantics only if Coeus requires rank-3+ batch contraction in Leto rather than owning it in Coeus.
 - [ ] Keep Leto non-differentiable. Coeus owns autodiff graph, gradient storage, and optimizer state; Leto owns layout/storage/views only.
