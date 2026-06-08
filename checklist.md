@@ -12,6 +12,7 @@
 - [x] [patch] Fixed `MnemosyneStorage` initialization semantics: `new(len)` now requires `T: Default` and initializes elements; `from_slice` copies initialized elements; `Drop` runs element destructors before deallocation.
 - [x] [patch] Make mutable broadcast writes structurally impossible when the resulting layout has zero-stride aliasing.
 - [x] [patch] Replace negative-offset casts with checked signed offset validation before any `usize` conversion in `Layout::offset_of`, `Layout::min_max_offsets`, and sliced layout construction.
+- [x] [patch] Add property tests for C/F offset formulas, transposes, reverse slices, singleton-axis broadcasts, and negative-stride storage spans.
 - [x] [patch] Add validated `ArrayView::try_new` / `ArrayViewMut::try_new` constructors so externally supplied layouts cannot index past the backing slice.
 - [x] [patch] Add overflow-checked shape product and storage-span validation through `Layout::checked_size`, `checked_min_max_offsets`, and `validate_storage_len`.
 - [x] [patch] Collapse duplicated `add`/`sub`/`mul`/`div` traversal into one generic zero-cost binary map skeleton with operation ZSTs.

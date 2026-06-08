@@ -5,7 +5,7 @@
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
-- [x] [patch] `cargo test --all-features` passes: 26 `leto` core tests, 25 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, differential, PyO3 boundary, and downstream-shape migration fixture tests.
+- [x] [patch] `cargo test --all-features` passes: 32 `leto` core tests, 25 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, property, differential, PyO3 boundary, and downstream-shape migration fixture tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
@@ -18,7 +18,7 @@
 - [x] Make externally constructed `ArrayView` and `ArrayViewMut` layouts bounds-checked against their backing slices through `try_new` constructors. Verification: invalid external layouts return `StorageError`.
 - [x] Remove or constrain mutable broadcast views that introduce zero-stride write aliasing. Verification: mutable broadcast rejects aliasing expansion and permits same-shape non-aliasing writes.
 - [x] Add overflow-checked shape product and stride multiplication for core constructors and derived layout validation. Remaining risk: property tests still need broad adversarial coverage over large dimensions and slice/broadcast composition.
-- [ ] Add property tests for C/F layouts, negative strides, empty axes, singleton axes, transposes, slices, broadcasts, and offset ranges.
+- [x] Add property tests for C/F layouts, negative strides, singleton axes, transposes, slices, broadcasts, and offset ranges. Verification: generated tests cover C/F offset formulas, transpose value preservation, reverse slicing, singleton-axis broadcast stride/value contracts, and negative-stride storage span validation. Remaining risk: empty-axis and multi-step slice composition property coverage still need expansion.
 - [x] Fix `MnemosyneStorage` initialization semantics. `new(len)` requires `T: Default` and initializes elements; `from_slice` copies initialized values; `Drop` drops elements before deallocation.
 
 ## Phase 2: ndarray API Parity Required by Apollo [minor]

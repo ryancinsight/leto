@@ -24,3 +24,6 @@ std = ["num-traits/std"]
 alloc = []
 # mnemosyne integration
 mnemosyne-alloc = ["dep:mnemosyne", "alloc"]
+
+[dev-dependencies]
+proptest = { workspace = true }

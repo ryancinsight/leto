@@ -71,6 +71,8 @@ assert_eq!(view.shape(), [1, 2]);
   the same zero-copy axis iterator implementation.
 - Physical offset calculation.
 - Zero-copy slicing, transposition, and broadcasting.
+- Broadcast preserves source strides for same-shape axes and uses zero strides
+  only for expanded singleton axes.
 - ndarray-style slicing with:
   - full-axis selection,
   - optional signed bounds,
@@ -143,6 +145,9 @@ Current value-semantic coverage includes:
 - ellipsis and implicit trailing axes.
 - named rank-2 row and column iteration.
 - transposition and broadcasting.
+- property tests for C/F offset formulas, transpose value preservation,
+  reverse slicing, singleton-axis broadcasting, and negative-stride storage
+  span validation.
 - elementwise arithmetic through the shared ZST `binary_map` kernel.
 - strided/transposed elementwise traversal.
 - keep-dim `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and
