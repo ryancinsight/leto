@@ -2,6 +2,8 @@
 pub mod aliases;
 /// Owned array type.
 pub mod array;
+/// Named row and column view helpers.
+mod axis;
 mod constructors;
 mod index;
 /// Subview iteration.

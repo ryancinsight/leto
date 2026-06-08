@@ -262,6 +262,49 @@ fn test_view_axis_iter_methods_yield_subviews() {
 }
 
 #[test]
+fn test_named_rows_and_columns_yield_zero_copy_subviews() {
+    let array =
+        Array::<i32, VecStorage<i32>, 2>::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    let rows: Vec<Vec<i32>> = array
+        .rows()
+        .unwrap()
+        .map(|row| {
+            (0..row.shape()[0])
+                .map(|col| *row.get([col]).unwrap())
+                .collect()
+        })
+        .collect();
+    let columns: Vec<Vec<i32>> = array
+        .columns()
+        .unwrap()
+        .map(|column| {
+            (0..column.shape()[0])
+                .map(|row| *column.get([row]).unwrap())
+                .collect()
+        })
+        .collect();
+
+    assert_eq!(rows, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+    assert_eq!(columns, vec![vec![1, 4], vec![2, 5], vec![3, 6]]);
+}
+
+#[test]
+fn test_named_mutable_rows_and_columns_update_backing_storage() {
+    let mut array =
+        Array::<i32, VecStorage<i32>, 2>::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    for mut row in array.rows_mut().unwrap() {
+        *row.get_mut([0]).unwrap() *= 10;
+    }
+    for mut column in array.view_mut().columns_mut().unwrap() {
+        *column.get_mut([1]).unwrap() += 100;
+    }
+
+    assert_eq!(array.storage().as_slice(), &[10, 2, 3, 140, 105, 106]);
+}
+
+#[test]
 fn test_slicing() {
     let layout = Layout::c_contiguous([4, 4]).unwrap();
     let storage = VecStorage::new((0..16).collect());

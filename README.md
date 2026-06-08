@@ -67,6 +67,8 @@ assert_eq!(view.shape(), [1, 2]);
 - Owned-array constructors for `zeros`, `from_elem`, `from_vec`,
   `from_shape_vec`, `from_shape_fn`, and `into_vec`.
 - `AxisIter` and `AxisIterMut` subview iteration over a selected axis.
+- Named rank-2 `rows`, `columns`, `rows_mut`, and `columns_mut` helpers over
+  the same zero-copy axis iterator implementation.
 - Physical offset calculation.
 - Zero-copy slicing, transposition, and broadcasting.
 - ndarray-style slicing with:
@@ -136,6 +138,7 @@ Current value-semantic coverage includes:
 - integer-index axis dropping.
 - new-axis insertion.
 - ellipsis and implicit trailing axes.
+- named rank-2 row and column iteration.
 - transposition and broadcasting.
 - elementwise arithmetic through the shared ZST `binary_map` kernel.
 - strided/transposed elementwise traversal.
@@ -158,7 +161,6 @@ Current value-semantic coverage includes:
 Leto is not yet a complete `ndarray` replacement for Atlas. Before Apollo or
 Coeus can remove `ndarray`, Leto still needs:
 
-- named row/column convenience wrappers over axis iteration;
 - keep-dim axis reductions are available; differential tests against `ndarray`
   are still required before downstream replacement;
 - differential tests against `ndarray` for map-style behavior;
