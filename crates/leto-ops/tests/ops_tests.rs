@@ -1,5 +1,5 @@
-use leto::{Array, Layout, VecStorage, Storage};
-use leto_ops::{add, sub, mul, div, sum, matmul};
+use leto::{Array, Layout, Storage, VecStorage};
+use leto_ops::{add, div, matmul, mul, sub, sum};
 
 #[test]
 fn test_elementwise_binary_ops() {
@@ -13,25 +13,37 @@ fn test_elementwise_binary_ops() {
     let mut out = Array::new(layout, out_storage).unwrap();
 
     add(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
-    assert_eq!(out.storage().as_slice(), &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]);
+    assert_eq!(
+        out.storage().as_slice(),
+        &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]
+    );
 
     // For subtraction, write into out2
     let out2_storage = VecStorage::fill(6, 0.0f32);
     let mut out2 = Array::new(layout, out2_storage).unwrap();
     sub(&out.view(), &a.view(), &mut out2.view_mut()).unwrap();
-    assert_eq!(out2.storage().as_slice(), &[10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
+    assert_eq!(
+        out2.storage().as_slice(),
+        &[10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+    );
 
     // For multiplication, write into out3
     let out3_storage = VecStorage::fill(6, 0.0f32);
     let mut out3 = Array::new(layout, out3_storage).unwrap();
     mul(&out2.view(), &a.view(), &mut out3.view_mut()).unwrap();
-    assert_eq!(out3.storage().as_slice(), &[10.0, 40.0, 90.0, 160.0, 250.0, 360.0]);
+    assert_eq!(
+        out3.storage().as_slice(),
+        &[10.0, 40.0, 90.0, 160.0, 250.0, 360.0]
+    );
 
     // For division, write into out4
     let out4_storage = VecStorage::fill(6, 0.0f32);
     let mut out4 = Array::new(layout, out4_storage).unwrap();
     div(&out3.view(), &a.view(), &mut out4.view_mut()).unwrap();
-    assert_eq!(out4.storage().as_slice(), &[10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
+    assert_eq!(
+        out4.storage().as_slice(),
+        &[10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+    );
 }
 
 #[test]

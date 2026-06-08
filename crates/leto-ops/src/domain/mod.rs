@@ -1,9 +1,11 @@
-pub mod strategy;
+/// Numeric scalar contract.
 pub mod scalar;
+/// Execution strategy marker types.
+pub mod strategy;
 
+pub use scalar::Scalar;
 pub use strategy::ExecutionStrategy;
 pub use strategy::ScalarStrategy;
-pub use scalar::Scalar;
 
 #[cfg(feature = "simd")]
 pub use strategy::SimdStrategy;

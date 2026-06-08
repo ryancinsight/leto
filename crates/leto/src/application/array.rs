@@ -1,8 +1,9 @@
-use std::marker::PhantomData;
+use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
+use crate::domain::slice::SliceArg;
 use crate::infrastructure::storage::{Storage, StorageMut};
-use crate::application::view::{ArrayView, ArrayViewMut};
+use std::marker::PhantomData;
 
 /// An N-dimensional strided array.
 pub struct Array<T, S, const N: usize> {
@@ -35,7 +36,10 @@ where
 
             if min_offset < 0 {
                 return Err(LetoError::StorageError {
-                    reason: format!("Layout offset underflow: accesses index at physical offset {}", min_offset),
+                    reason: format!(
+                        "Layout offset underflow: accesses index at physical offset {}",
+                        min_offset
+                    ),
                 });
             }
 
@@ -112,6 +116,13 @@ where
         Ok(ArrayView::new(sliced_layout, self.storage.as_slice()))
     }
 
+    /// Slice the array with ndarray-style arguments, returning a read-only view.
+    #[inline]
+    pub fn slice_with<const M: usize>(&self, args: &[SliceArg]) -> Result<ArrayView<'_, T, M>> {
+        let sliced_layout = self.layout.slice_with(args)?;
+        Ok(ArrayView::new(sliced_layout, self.storage.as_slice()))
+    }
+
     /// Transpose the array, returning a read-only view.
     #[inline]
     pub fn transpose(&self, axes: [usize; N]) -> Result<ArrayView<'_, T, N>> {
@@ -121,7 +132,10 @@ where
 
     /// Broadcast the array, returning a read-only view.
     #[inline]
-    pub fn broadcast<const M: usize>(&self, target_shape: [usize; M]) -> Result<ArrayView<'_, T, M>> {
+    pub fn broadcast<const M: usize>(
+        &self,
+        target_shape: [usize; M],
+    ) -> Result<ArrayView<'_, T, M>> {
         let broadcasted_layout = self.layout.broadcast(target_shape)?;
         Ok(ArrayView::new(broadcasted_layout, self.storage.as_slice()))
     }
@@ -146,16 +160,38 @@ where
 
     /// Slice the array, returning a mutable view.
     #[inline]
-    pub fn slice_mut(&mut self, ranges: &[(usize, usize, isize); N]) -> Result<ArrayViewMut<'_, T, N>> {
+    pub fn slice_mut(
+        &mut self,
+        ranges: &[(usize, usize, isize); N],
+    ) -> Result<ArrayViewMut<'_, T, N>> {
         let sliced_layout = self.layout.slice(ranges)?;
-        Ok(ArrayViewMut::new(sliced_layout, self.storage.as_mut_slice()))
+        Ok(ArrayViewMut::new(
+            sliced_layout,
+            self.storage.as_mut_slice(),
+        ))
+    }
+
+    /// Slice the array with ndarray-style arguments, returning a mutable view.
+    #[inline]
+    pub fn slice_with_mut<const M: usize>(
+        &mut self,
+        args: &[SliceArg],
+    ) -> Result<ArrayViewMut<'_, T, M>> {
+        let sliced_layout = self.layout.slice_with(args)?;
+        Ok(ArrayViewMut::new(
+            sliced_layout,
+            self.storage.as_mut_slice(),
+        ))
     }
 
     /// Transpose the array, returning a mutable view.
     #[inline]
     pub fn transpose_mut(&mut self, axes: [usize; N]) -> Result<ArrayViewMut<'_, T, N>> {
         let transposed_layout = self.layout.transpose(axes)?;
-        Ok(ArrayViewMut::new(transposed_layout, self.storage.as_mut_slice()))
+        Ok(ArrayViewMut::new(
+            transposed_layout,
+            self.storage.as_mut_slice(),
+        ))
     }
 
     /// Get a mutable reference to the element at the specified index.

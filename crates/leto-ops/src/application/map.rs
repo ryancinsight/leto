@@ -1,5 +1,5 @@
-use leto::{ArrayView, ArrayViewMut, LetoError, Result};
 use crate::domain::scalar::Scalar;
+use leto::{ArrayView, ArrayViewMut, LetoError, Result};
 
 // Helper to convert flat 1D index to N-dimensional index
 #[inline(always)]
@@ -29,7 +29,9 @@ pub fn add<T: Scalar, const N: usize>(
     }
 
     // Contiguous layout fast path
-    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) = (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice()) {
+    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) =
+        (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice())
+    {
         #[cfg(feature = "parallel")]
         {
             if lhs_slice.len() >= 8192 {
@@ -107,7 +109,9 @@ pub fn sub<T: Scalar, const N: usize>(
         });
     }
 
-    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) = (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice()) {
+    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) =
+        (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice())
+    {
         #[cfg(feature = "parallel")]
         {
             if lhs_slice.len() >= 8192 {
@@ -184,7 +188,9 @@ pub fn mul<T: Scalar, const N: usize>(
         });
     }
 
-    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) = (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice()) {
+    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) =
+        (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice())
+    {
         #[cfg(feature = "parallel")]
         {
             if lhs_slice.len() >= 8192 {
@@ -261,7 +267,9 @@ pub fn div<T: Scalar, const N: usize>(
         });
     }
 
-    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) = (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice()) {
+    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) =
+        (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice())
+    {
         #[cfg(feature = "parallel")]
         {
             if lhs_slice.len() >= 8192 {

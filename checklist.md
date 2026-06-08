@@ -6,8 +6,10 @@
 - [x] Core storage exists for borrowed slices, mutable borrowed slices, `Vec`, and feature-gated Mnemosyne allocation.
 - [x] Core `Array`, `ArrayView`, and `ArrayViewMut` wrappers exist for const-rank layouts.
 - [x] Basic elementwise binary ops, `sum`, and 2D `matmul` exist with value-semantic tests.
-- [ ] [patch] Run `cargo fmt` and keep `cargo fmt --check` clean across all workspace crates.
-- [ ] [patch] Fix `mnemosyne-alloc` feature compilation by importing and verifying the allocator trait surface used by `MnemosyneStorage`.
+- [x] [patch] Added ndarray-style slicing with full-axis ranges, optional signed bounds, negative indices, negative strides, axis-dropping integer indices, inserted new axes, ellipsis expansion, and implicit trailing axes through `SliceArg` and `slice_with`.
+- [x] [patch] Run `cargo fmt` and keep `cargo fmt --check` clean across all workspace crates.
+- [x] [patch] Fixed `mnemosyne-alloc` feature compilation by importing the allocator trait surface used by `MnemosyneStorage`.
+- [x] [patch] Fixed `MnemosyneStorage` initialization semantics: `new(len)` now requires `T: Default` and initializes elements; `from_slice` copies initialized elements; `Drop` runs element destructors before deallocation.
 - [ ] [patch] Make mutable broadcast writes structurally impossible when the resulting layout has zero-stride aliasing.
 - [ ] [patch] Replace negative-offset casts with checked signed offset validation before any `usize` conversion in `Layout::offset_of`, `Layout::min_max_offsets`, and sliced layout construction.
 - [ ] [patch] Add bounds-checked `ArrayView::new` / `ArrayViewMut::new` constructors or validated constructor variants so externally supplied layouts cannot index past the backing slice.

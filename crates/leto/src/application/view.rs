@@ -1,5 +1,6 @@
 use crate::domain::error::Result;
 use crate::domain::layout::Layout;
+use crate::domain::slice::SliceArg;
 
 /// A read-only zero-copy view of an N-dimensional strided array.
 pub struct ArrayView<'a, T, const N: usize> {
@@ -64,6 +65,13 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
         Ok(ArrayView::new(sliced_layout, self.data))
     }
 
+    /// Slice the view with ndarray-style arguments.
+    #[inline]
+    pub fn slice_with<const M: usize>(&self, args: &[SliceArg]) -> Result<ArrayView<'a, T, M>> {
+        let sliced_layout = self.layout.slice_with(args)?;
+        Ok(ArrayView::new(sliced_layout, self.data))
+    }
+
     /// Transpose the view by permuting axes.
     #[inline]
     pub fn transpose(&self, axes: [usize; N]) -> Result<ArrayView<'a, T, N>> {
@@ -73,7 +81,10 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
 
     /// Broadcast the view to a larger dimensional shape.
     #[inline]
-    pub fn broadcast<const M: usize>(&self, target_shape: [usize; M]) -> Result<ArrayView<'a, T, M>> {
+    pub fn broadcast<const M: usize>(
+        &self,
+        target_shape: [usize; M],
+    ) -> Result<ArrayView<'a, T, M>> {
         let broadcasted_layout = self.layout.broadcast(target_shape)?;
         Ok(ArrayView::new(broadcasted_layout, self.data))
     }
@@ -169,6 +180,16 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         Ok(ArrayViewMut::new(sliced_layout, self.data))
     }
 
+    /// Slice the mutable view with ndarray-style arguments.
+    #[inline]
+    pub fn slice_with_mut<const M: usize>(
+        self,
+        args: &[SliceArg],
+    ) -> Result<ArrayViewMut<'a, T, M>> {
+        let sliced_layout = self.layout.slice_with(args)?;
+        Ok(ArrayViewMut::new(sliced_layout, self.data))
+    }
+
     /// Transpose the mutable view by permuting axes.
     #[inline]
     pub fn transpose_mut(self, axes: [usize; N]) -> Result<ArrayViewMut<'a, T, N>> {
@@ -180,7 +201,10 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// Note: Broadcasted views cannot be written to safely without stride collision if dimensions are expanded (strides are 0).
     /// Therefore, returning a mutable broadcasted view must be used with caution, but is permitted here.
     #[inline]
-    pub fn broadcast_mut<const M: usize>(self, target_shape: [usize; M]) -> Result<ArrayViewMut<'a, T, M>> {
+    pub fn broadcast_mut<const M: usize>(
+        self,
+        target_shape: [usize; M],
+    ) -> Result<ArrayViewMut<'a, T, M>> {
         let broadcasted_layout = self.layout.broadcast(target_shape)?;
         Ok(ArrayViewMut::new(broadcasted_layout, self.data))
     }

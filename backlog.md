@@ -7,16 +7,18 @@
 ## Current Evidence
 - [x] [patch] Default `cargo test` passes: 7 `leto` core tests and 3 `leto-ops` tests pass. Evidence tier: value-semantic unit tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
-- [ ] [patch] `cargo fmt --check` is not clean. Run `cargo fmt` before any release or downstream adoption.
-- [ ] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is blocked by `mnemosyne-alloc`: `MnemosyneStorage` calls `alloc`/`dealloc` without the allocator trait in scope. Fix and verify all features.
+- [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
+- [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
+- [x] [patch] `cargo test --all-features` is clean.
 
 ## Phase 1: Sound Core Layout and Storage [patch]
+- [x] Add ndarray-style slicing for full-axis selection, optional signed range bounds, negative indices, negative steps, integer axis removal, new-axis insertion, ellipsis expansion, and implicit trailing axes. Verification: three value-semantic tests over rank-preserving, rank-dropping, rank-adding, reverse, ellipsis, and implicit-tail cases.
 - [ ] Replace unchecked negative-offset casts with checked signed arithmetic across `Layout` and `Array` validation.
 - [ ] Make externally constructed `ArrayView` and `ArrayViewMut` layouts bounds-checked against their backing slices.
 - [ ] Remove or constrain mutable broadcast views that introduce zero-stride write aliasing.
 - [ ] Add overflow-checked shape product and stride multiplication for all constructors and derived layouts.
 - [ ] Add property tests for C/F layouts, negative strides, empty axes, singleton axes, transposes, slices, broadcasts, and offset ranges.
-- [ ] Fix `MnemosyneStorage` initialization semantics. `new(len)` currently allocates raw memory but exposes it as initialized `&[T]`; require `T: Default` and initialize, or expose a separate uninitialized storage type with safe initialization tracking.
+- [x] Fix `MnemosyneStorage` initialization semantics. `new(len)` requires `T: Default` and initializes elements; `from_slice` copies initialized values; `Drop` drops elements before deallocation.
 
 ## Phase 2: ndarray API Parity Required by Apollo [minor]
 - [ ] Add rank-specific aliases or constructors for `Array1`, `Array2`, `Array3` and corresponding view types.

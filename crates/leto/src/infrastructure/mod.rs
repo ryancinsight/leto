@@ -1,6 +1,7 @@
+/// Storage traits and backing implementations.
 pub mod storage;
 
-pub use storage::{Storage, StorageMut, SliceStorage, SliceStorageMut, VecStorage};
+pub use storage::{SliceStorage, SliceStorageMut, Storage, StorageMut, VecStorage};
 
 #[cfg(feature = "mnemosyne-alloc")]
 pub use storage::MnemosyneStorage;

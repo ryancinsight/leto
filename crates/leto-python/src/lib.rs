@@ -1,15 +1,20 @@
-use pyo3::prelude::*;
+use leto::{Array, ArrayView, Layout, StorageMut, VecStorage};
+use leto_ops::{add, div, matmul, mul, sub, sum};
+use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::exceptions::PyValueError;
-use numpy::{PyReadonlyArray2, PyArray2, PyArray1, PyUntypedArrayMethods, PyArrayMethods};
-use leto::{ArrayView, Layout, VecStorage, Array, StorageMut};
-use leto_ops::{add, sub, mul, div, sum, matmul};
+use pyo3::prelude::*;
 
 // Require C-contiguous layout check
-fn require_contiguous_2d<T: numpy::Element>(input: &PyReadonlyArray2<'_, T>, name: &str) -> PyResult<()> {
+fn require_contiguous_2d<T: numpy::Element>(
+    input: &PyReadonlyArray2<'_, T>,
+    name: &str,
+) -> PyResult<()> {
     if input.is_c_contiguous() {
         Ok(())
     } else {
-        Err(PyValueError::new_err(format!("{name} must be C-contiguous")))
+        Err(PyValueError::new_err(format!(
+            "{name} must be C-contiguous"
+        )))
     }
 }
 
@@ -22,7 +27,9 @@ fn view_from_numpy<'a, T: numpy::Element>(
 
     let el_size = std::mem::size_of::<T>() as isize;
     if el_size == 0 {
-        return Err(PyValueError::new_err("Zero-sized element type not supported"));
+        return Err(PyValueError::new_err(
+            "Zero-sized element type not supported",
+        ));
     }
 
     let mut el_strides = [0isize; 2];
@@ -36,8 +43,9 @@ fn view_from_numpy<'a, T: numpy::Element>(
     let shape_arr = [shape[0], shape[1]];
     let layout = Layout::new(shape_arr, el_strides, 0);
 
-    let raw_slice = arr.as_slice()
-        .map_err(|_| PyValueError::new_err("Failed to extract contiguous slice from NumPy array"))?;
+    let raw_slice = arr.as_slice().map_err(|_| {
+        PyValueError::new_err("Failed to extract contiguous slice from NumPy array")
+    })?;
 
     Ok(ArrayView::new(layout, raw_slice))
 }
@@ -57,12 +65,15 @@ fn add_py<'py>(
 
     let shape = a.shape();
     let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr = Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let mut out_arr =
+        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     // Release GIL around computation
     py.allow_threads(|| {
-        add(&a_view, &b_view, &mut out_arr.view_mut()).map_err(|e| PyValueError::new_err(e.to_string()))
+        add(&a_view, &b_view, &mut out_arr.view_mut())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
 
     // Convert owned Array back to PyArray2
@@ -86,11 +97,14 @@ fn sub_py<'py>(
 
     let shape = a.shape();
     let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr = Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let mut out_arr =
+        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     py.allow_threads(|| {
-        sub(&a_view, &b_view, &mut out_arr.view_mut()).map_err(|e| PyValueError::new_err(e.to_string()))
+        sub(&a_view, &b_view, &mut out_arr.view_mut())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
 
     let vec = out_arr.storage_mut().as_mut_slice().to_vec();
@@ -113,11 +127,14 @@ fn mul_py<'py>(
 
     let shape = a.shape();
     let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr = Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let mut out_arr =
+        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     py.allow_threads(|| {
-        mul(&a_view, &b_view, &mut out_arr.view_mut()).map_err(|e| PyValueError::new_err(e.to_string()))
+        mul(&a_view, &b_view, &mut out_arr.view_mut())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
 
     let vec = out_arr.storage_mut().as_mut_slice().to_vec();
@@ -140,11 +157,14 @@ fn div_py<'py>(
 
     let shape = a.shape();
     let out_storage = VecStorage::fill(shape[0] * shape[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape[0], shape[1]]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr = Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out_layout = Layout::c_contiguous([shape[0], shape[1]])
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let mut out_arr =
+        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     py.allow_threads(|| {
-        div(&a_view, &b_view, &mut out_arr.view_mut()).map_err(|e| PyValueError::new_err(e.to_string()))
+        div(&a_view, &b_view, &mut out_arr.view_mut())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
 
     let vec = out_arr.storage_mut().as_mut_slice().to_vec();
@@ -154,9 +174,7 @@ fn div_py<'py>(
 
 #[pyfunction]
 #[pyo3(name = "sum")]
-fn sum_py(
-    a: PyReadonlyArray2<'_, f32>,
-) -> PyResult<f32> {
+fn sum_py(a: PyReadonlyArray2<'_, f32>) -> PyResult<f32> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     Ok(sum(&a_view))
@@ -179,15 +197,20 @@ fn matmul_py<'py>(
     let shape_b = b.shape();
 
     if shape_a[1] != shape_b[0] {
-        return Err(PyValueError::new_err("Dimension mismatch for matrix multiplication"));
+        return Err(PyValueError::new_err(
+            "Dimension mismatch for matrix multiplication",
+        ));
     }
 
     let out_storage = VecStorage::fill(shape_a[0] * shape_b[1], 0.0f32);
-    let out_layout = Layout::c_contiguous([shape_a[0], shape_b[1]]).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    let mut out_arr = Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out_layout = Layout::c_contiguous([shape_a[0], shape_b[1]])
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let mut out_arr =
+        Array::new(out_layout, out_storage).map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     py.allow_threads(|| {
-        matmul(&a_view, &b_view, &mut out_arr.view_mut()).map_err(|e| PyValueError::new_err(e.to_string()))
+        matmul(&a_view, &b_view, &mut out_arr.view_mut())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
 
     let vec = out_arr.storage_mut().as_mut_slice().to_vec();

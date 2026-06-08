@@ -1,4 +1,4 @@
-use leto::{Array, Layout, VecStorage, LetoError};
+use leto::{Array, Layout, LetoError, SliceArg, VecStorage};
 
 #[test]
 fn test_c_contiguous_layout() {
@@ -80,6 +80,71 @@ fn test_slicing() {
     assert_eq!(*sliced_view.get([0, 1]).unwrap(), 7);
     assert_eq!(*sliced_view.get([1, 0]).unwrap(), 9);
     assert_eq!(*sliced_view.get([1, 1]).unwrap(), 11);
+}
+
+#[test]
+fn test_ndarray_style_slice_with_negative_bounds_and_reverse_stride() {
+    let layout = Layout::c_contiguous([5, 4]).unwrap();
+    let storage = VecStorage::new((0..20).collect());
+    let array = Array::new(layout, storage).unwrap();
+
+    let view = array
+        .slice_with::<2>(&[
+            SliceArg::range(Some(-1), None, -2),
+            SliceArg::range(Some(1), None, 2),
+        ])
+        .unwrap();
+
+    assert_eq!(view.shape(), [3, 2]);
+    assert_eq!(view.strides(), [-8, 2]);
+    assert_eq!(view.offset(), 17);
+    assert_eq!(*view.get([0, 0]).unwrap(), 17);
+    assert_eq!(*view.get([0, 1]).unwrap(), 19);
+    assert_eq!(*view.get([1, 0]).unwrap(), 9);
+    assert_eq!(*view.get([2, 1]).unwrap(), 3);
+}
+
+#[test]
+fn test_ndarray_style_slice_drops_indexed_axis_and_adds_new_axis() {
+    let layout = Layout::c_contiguous([2, 3, 4]).unwrap();
+    let storage = VecStorage::new((0..24).collect());
+    let array = Array::new(layout, storage).unwrap();
+
+    let view = array
+        .slice_with::<2>(&[
+            SliceArg::Index(-1),
+            SliceArg::NewAxis,
+            SliceArg::range(Some(1), None, 1),
+            SliceArg::Index(2),
+        ])
+        .unwrap();
+
+    assert_eq!(view.shape(), [1, 2]);
+    assert_eq!(view.strides(), [0, 4]);
+    assert_eq!(view.offset(), 18);
+    assert_eq!(*view.get([0, 0]).unwrap(), 18);
+    assert_eq!(*view.get([0, 1]).unwrap(), 22);
+}
+
+#[test]
+fn test_ndarray_style_slice_ellipsis_and_implicit_trailing_axes() {
+    let layout = Layout::c_contiguous([2, 3, 4]).unwrap();
+    let storage = VecStorage::new((0..24).collect());
+    let array = Array::new(layout, storage).unwrap();
+
+    let ellipsis = array
+        .slice_with::<3>(&[SliceArg::Ellipsis, SliceArg::Index(-1), SliceArg::NewAxis])
+        .unwrap();
+    assert_eq!(ellipsis.shape(), [2, 3, 1]);
+    assert_eq!(ellipsis.strides(), [12, 4, 0]);
+    assert_eq!(*ellipsis.get([1, 2, 0]).unwrap(), 23);
+
+    let implicit = array
+        .slice_with::<3>(&[SliceArg::range(Some(1), None, 1)])
+        .unwrap();
+    assert_eq!(implicit.shape(), [1, 3, 4]);
+    assert_eq!(implicit.strides(), [12, 4, 1]);
+    assert_eq!(*implicit.get([0, 2, 3]).unwrap(), 23);
 }
 
 #[test]

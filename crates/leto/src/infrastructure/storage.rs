@@ -100,7 +100,9 @@ impl<T> VecStorage<T> {
     where
         T: Clone,
     {
-        Self { data: vec![value; len] }
+        Self {
+            data: vec![value; len],
+        }
     }
 
     /// Wrap an existing Vec.
@@ -142,23 +144,25 @@ pub struct MnemosyneStorage<T> {
 
 #[cfg(feature = "mnemosyne-alloc")]
 impl<T> MnemosyneStorage<T> {
-    /// Allocate new uninitialized or default-initialized storage via Mnemosyne.
-    pub fn new(len: usize) -> Self {
-        use std::alloc::Layout as AllocLayout;
-        let size = len * std::mem::size_of::<T>();
+    fn allocate_raw(len: usize) -> Self {
+        use std::alloc::{GlobalAlloc, Layout as AllocLayout};
+
+        let size = len
+            .checked_mul(std::mem::size_of::<T>())
+            .expect("MnemosyneStorage allocation size overflow");
         let align = std::mem::align_of::<T>();
         let layout = AllocLayout::from_size_align(size, align)
             .expect("Invalid layout construction for MnemosyneStorage");
 
-        if len == 0 {
+        if size == 0 {
             return Self {
-                ptr: std::ptr::null_mut(),
-                len: 0,
+                ptr: std::ptr::NonNull::<T>::dangling().as_ptr(),
+                len,
                 layout,
             };
         }
 
-        // SAFETY: `layout` is constructible and verified.
+        // SAFETY: `layout` is constructible and verified above.
         let ptr = unsafe { mnemosyne::Mnemosyne.alloc(layout) } as *mut T;
         if ptr.is_null() {
             panic!("Mnemosyne allocation failed");
@@ -166,14 +170,39 @@ impl<T> MnemosyneStorage<T> {
 
         Self { ptr, len, layout }
     }
+}
 
+#[cfg(feature = "mnemosyne-alloc")]
+impl<T: Default> MnemosyneStorage<T> {
+    /// Allocate storage via Mnemosyne and initialize each element with `T::default()`.
+    pub fn new(len: usize) -> Self {
+        let storage = Self::allocate_raw(len);
+        if !storage.ptr.is_null() {
+            for index in 0..len {
+                // SAFETY: `index < len`; allocation holds `len` elements.
+                unsafe {
+                    storage.ptr.add(index).write(T::default());
+                }
+            }
+        }
+        storage
+    }
+}
+
+#[cfg(feature = "mnemosyne-alloc")]
+impl<T> MnemosyneStorage<T> {
     /// Allocate storage and copy elements from a slice.
     pub fn from_slice(slice: &[T]) -> Self
     where
         T: Copy,
     {
-        let mut storage = Self::new(slice.len());
-        storage.as_mut_slice().copy_from_slice(slice);
+        let storage = Self::allocate_raw(slice.len());
+        if !storage.ptr.is_null() {
+            // SAFETY: source and destination are valid for `slice.len()` non-overlapping elements.
+            unsafe {
+                std::ptr::copy_nonoverlapping(slice.as_ptr(), storage.ptr, slice.len());
+            }
+        }
         storage
     }
 }
@@ -183,6 +212,13 @@ impl<T> Drop for MnemosyneStorage<T> {
     #[inline]
     fn drop(&mut self) {
         if !self.ptr.is_null() && self.layout.size() > 0 {
+            for index in 0..self.len {
+                // SAFETY: all public constructors initialize every element.
+                unsafe {
+                    std::ptr::drop_in_place(self.ptr.add(index));
+                }
+            }
+            use std::alloc::GlobalAlloc;
             // SAFETY: `self.ptr` was previously allocated with this layout.
             unsafe {
                 mnemosyne::Mnemosyne.dealloc(self.ptr as *mut u8, self.layout);

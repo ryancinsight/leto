@@ -1,4 +1,4 @@
-use half::{f16, bf16};
+use half::{bf16, f16};
 
 /// A trait representing scalar numeric types with native precision execution.
 pub trait Scalar: Copy + Send + Sync + PartialEq + 'static {
@@ -41,13 +41,21 @@ macro_rules! impl_scalar_native {
             const ONE: Self = 1.0;
 
             #[inline(always)]
-            fn add(self, other: Self) -> Self { self + other }
+            fn add(self, other: Self) -> Self {
+                self + other
+            }
             #[inline(always)]
-            fn sub(self, other: Self) -> Self { self - other }
+            fn sub(self, other: Self) -> Self {
+                self - other
+            }
             #[inline(always)]
-            fn mul(self, other: Self) -> Self { self * other }
+            fn mul(self, other: Self) -> Self {
+                self * other
+            }
             #[inline(always)]
-            fn div(self, other: Self) -> Self { self / other }
+            fn div(self, other: Self) -> Self {
+                self / other
+            }
 
             #[inline]
             fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
@@ -121,7 +129,9 @@ macro_rules! impl_scalar_native {
                 }
                 #[cfg(not(feature = "simd"))]
                 {
-                    s.iter().copied().fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
+                    s.iter()
+                        .copied()
+                        .fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
                 }
             }
 
@@ -133,7 +143,9 @@ macro_rules! impl_scalar_native {
                 }
                 #[cfg(not(feature = "simd"))]
                 {
-                    s.iter().copied().fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
+                    s.iter()
+                        .copied()
+                        .fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
                 }
             }
         }
@@ -147,13 +159,21 @@ macro_rules! impl_scalar_half {
             const ONE: Self = Self::ONE;
 
             #[inline(always)]
-            fn add(self, other: Self) -> Self { self + other }
+            fn add(self, other: Self) -> Self {
+                self + other
+            }
             #[inline(always)]
-            fn sub(self, other: Self) -> Self { self - other }
+            fn sub(self, other: Self) -> Self {
+                self - other
+            }
             #[inline(always)]
-            fn mul(self, other: Self) -> Self { self * other }
+            fn mul(self, other: Self) -> Self {
+                self * other
+            }
             #[inline(always)]
-            fn div(self, other: Self) -> Self { self / other }
+            fn div(self, other: Self) -> Self {
+                self / other
+            }
 
             #[inline]
             fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
@@ -190,12 +210,16 @@ macro_rules! impl_scalar_half {
 
             #[inline]
             fn min_slice(s: &[Self]) -> Self {
-                s.iter().copied().fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
+                s.iter()
+                    .copied()
+                    .fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
             }
 
             #[inline]
             fn max_slice(s: &[Self]) -> Self {
-                s.iter().copied().fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
+                s.iter()
+                    .copied()
+                    .fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
             }
         }
     };
