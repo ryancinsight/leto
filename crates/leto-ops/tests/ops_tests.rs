@@ -1,5 +1,5 @@
 use leto::{Array, Layout, Storage, VecStorage};
-use leto_ops::{add, div, matmul, mul, sub, sum};
+use leto_ops::{add, binary_map, div, matmul, mul, sub, sum, AddOp, MulOp};
 
 #[test]
 fn test_elementwise_binary_ops() {
@@ -43,6 +43,46 @@ fn test_elementwise_binary_ops() {
     assert_eq!(
         out4.storage().as_slice(),
         &[10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+    );
+}
+
+#[test]
+fn test_binary_map_zst_operation_entry_point() {
+    let layout = Layout::c_contiguous([4]).unwrap();
+    let a = Array::new(layout, VecStorage::new(vec![1.0f32, 2.0, 3.0, 4.0])).unwrap();
+    let b = Array::new(layout, VecStorage::new(vec![5.0f32, 6.0, 7.0, 8.0])).unwrap();
+    let mut out = Array::new(layout, VecStorage::fill(4, 0.0f32)).unwrap();
+
+    binary_map::<AddOp, _, 1>(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), &[6.0, 8.0, 10.0, 12.0]);
+
+    binary_map::<MulOp, _, 1>(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), &[5.0, 12.0, 21.0, 32.0]);
+}
+
+#[test]
+fn test_binary_map_strided_transposed_views() {
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let a = Array::new(
+        layout,
+        VecStorage::new(vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    )
+    .unwrap();
+    let b = Array::new(
+        layout,
+        VecStorage::new(vec![10.0f32, 20.0, 30.0, 40.0, 50.0, 60.0]),
+    )
+    .unwrap();
+    let out_layout = Layout::c_contiguous([3, 2]).unwrap();
+    let mut out = Array::new(out_layout, VecStorage::fill(6, 0.0f32)).unwrap();
+
+    let a_t = a.transpose([1, 0]).unwrap();
+    let b_t = b.transpose([1, 0]).unwrap();
+    add(&a_t, &b_t, &mut out.view_mut()).unwrap();
+
+    assert_eq!(
+        out.storage().as_slice(),
+        &[11.0, 44.0, 22.0, 55.0, 33.0, 66.0]
     );
 }
 

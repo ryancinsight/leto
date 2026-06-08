@@ -5,7 +5,7 @@
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
-- [x] [patch] Default `cargo test` passes: 7 `leto` core tests and 3 `leto-ops` tests pass. Evidence tier: value-semantic unit tests.
+- [x] [patch] `cargo test --all-features` passes: 17 `leto` core tests and 5 `leto-ops` tests pass. Evidence tier: value-semantic unit tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
@@ -36,7 +36,7 @@
 - [ ] Keep Leto non-differentiable. Coeus owns autodiff graph, gradient storage, and optimizer state; Leto owns layout/storage/views only.
 
 ## Phase 4: Operations, Performance, and Architecture [minor]
-- [ ] Replace duplicated elementwise functions with one generic binary traversal kernel selected by ZST operation markers.
+- [x] Replace duplicated elementwise functions with one generic binary traversal kernel selected by ZST operation markers. Verification: direct `binary_map::<AddOp>`/`binary_map::<MulOp>` tests and transposed strided-view elementwise test.
 - [ ] Add contiguous fast paths and strided fallback benchmarks for elementwise ops, reductions, and matmul.
 - [ ] Verify Moirai scheduling uses bounded work partitioning without raw-pointer aliasing hazards.
 - [ ] Integrate Hermes SIMD through sealed scalar/vector traits, not ad hoc per-operation dispatch.

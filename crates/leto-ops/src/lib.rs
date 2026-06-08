@@ -17,4 +17,6 @@ pub use domain::strategy::SimdStrategy;
 #[cfg(feature = "parallel")]
 pub use domain::strategy::ParallelStrategy;
 
-pub use application::map::{add, div, matmul, mul, sub, sum};
+pub use application::map::{
+    add, binary_map, div, matmul, mul, sub, sum, AddOp, BinaryOp, DivOp, MulOp, SubOp,
+};

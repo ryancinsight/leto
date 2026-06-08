@@ -83,6 +83,24 @@ assert_eq!(view.shape(), [1, 2]);
   allocation. `new(len)` requires `T: Default` and initializes elements before
   exposing safe slices.
 
+### Operation Features
+
+`leto-ops` routes elementwise arithmetic through one generic
+`binary_map::<Op, T, N>` traversal. Public wrappers such as `add`, `sub`, `mul`,
+and `div` are thin calls into that kernel using zero-sized operation markers
+(`AddOp`, `SubOp`, `MulOp`, `DivOp`). This keeps one authoritative contiguous,
+strided, SIMD, and parallel dispatch path.
+
+- Contiguous views use slice kernels on the `Scalar` trait. Native `f32` and
+  `f64` implementations call Hermes SIMD when the `simd` feature is enabled
+  and fall back to scalar loops when Hermes cannot handle the slice.
+- Large contiguous and strided elementwise operations use Moirai through the
+  `parallel` feature after layout storage spans are validated.
+- Strided output layouts that can alias mutable writes through zero strides do
+  not enter the parallel path.
+- The core `leto` crate remains independent of Hermes and Moirai; integration
+  stays in `leto-ops` so layout/storage types can compile separately.
+
 ## Current Verification
 
 The current local gate is clean:
@@ -104,7 +122,9 @@ Current value-semantic coverage includes:
 - new-axis insertion.
 - ellipsis and implicit trailing axes.
 - transposition and broadcasting.
-- elementwise arithmetic, `sum`, and 2D `matmul`.
+- elementwise arithmetic through the shared ZST `binary_map` kernel.
+- strided/transposed elementwise traversal.
+- `sum` and 2D `matmul`.
 
 ## Replacement Status
 
