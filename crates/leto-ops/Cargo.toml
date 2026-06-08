@@ -22,6 +22,9 @@ half = { workspace = true }
 # ── Error Handling ──
 thiserror = { workspace = true }
 
+[dev-dependencies]
+ndarray = "0.16"
+
 [features]
 default = ["std", "simd", "parallel"]
 std = ["leto/std", "num-traits/std"]

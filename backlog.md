@@ -5,7 +5,7 @@
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
-- [x] [patch] `cargo test --all-features` passes: 24 `leto` core tests and 15 `leto-ops` tests pass. Evidence tier: value-semantic unit tests.
+- [x] [patch] `cargo test --all-features` passes: 24 `leto` core tests and 17 `leto-ops` tests pass. Evidence tier: value-semantic and differential unit tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
@@ -38,12 +38,14 @@
 - [ ] Add broadcast semantics compatible with tensor elementwise operations, including no mutable aliasing.
 - [x] Add reductions over axes with keep-dim output modes required by Coeus: `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into`. Verification: value tests cover row/column reductions, strided transposed inputs, shape mismatch rejection, and empty-axis behavior.
 - [ ] Add allocating convenience wrappers for axis reductions only after storage constructors are complete.
-- [ ] Add matmul coverage for transposed inputs, batched 2D cases, and caller-owned output.
+- [x] Add 2D matmul coverage for contiguous inputs, transposed/strided inputs, caller-owned output, and differential parity against `ndarray`.
+- [ ] Add batched matmul semantics only if Coeus requires rank-3+ batch contraction in Leto rather than owning it in Coeus.
 - [ ] Keep Leto non-differentiable. Coeus owns autodiff graph, gradient storage, and optimizer state; Leto owns layout/storage/views only.
 
 ## Phase 4: Operations, Performance, and Architecture [minor]
 - [x] Replace duplicated elementwise functions with one generic binary traversal kernel selected by ZST operation markers. Verification: direct `binary_map::<AddOp>`/`binary_map::<MulOp>` tests and transposed strided-view elementwise test.
 - [x] Extract shared logical flat-index conversion helpers for core constructors and leto-ops traversals. Verification: all constructor, map, elementwise, and reduction tests pass after the split.
+- [x] Split matrix multiplication into its own module and documented each raw-pointer block with storage-span safety invariants. Verification: `leto-ops` focused tests and clippy pass.
 - [ ] Add contiguous fast paths and strided fallback benchmarks for elementwise ops, reductions, and matmul.
 - [ ] Verify Moirai scheduling uses bounded work partitioning without raw-pointer aliasing hazards.
 - [ ] Integrate Hermes SIMD through sealed scalar/vector traits, not ad hoc per-operation dispatch.

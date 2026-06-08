@@ -108,6 +108,9 @@ strided, SIMD, and parallel dispatch path.
 - Unary mapping APIs provide `map_into` for caller-owned output and `mapv` /
   `map` for allocating C-contiguous output. Precision changes are explicit in
   the caller-provided closure rather than hidden in the traversal.
+- Matrix multiplication lives in a dedicated matrix module, writes into
+  caller-owned output, rejects zero-stride mutable output aliasing, and supports
+  contiguous plus strided/transposed inputs.
 - Strided output layouts that can alias mutable writes through zero strides do
   not enter parallel write paths.
 - The core `leto` crate remains independent of Hermes and Moirai; integration
@@ -139,7 +142,8 @@ Current value-semantic coverage includes:
 - keep-dim `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and
   `max_axis_into` reductions over contiguous and strided inputs.
 - `map_into`, `mapv`, and `map` over contiguous and strided inputs.
-- `sum` and 2D `matmul`.
+- `sum` and 2D `matmul`, including differential matmul checks against
+  `ndarray` for contiguous and transposed inputs.
 
 ## Replacement Status
 
@@ -157,9 +161,9 @@ See `checklist.md` and `backlog.md` for the tracked migration plan.
 
 ## Dependency Policy
 
-Core Leto crates must not depend on `ndarray`. An optional compatibility or
-test-only feature may be added later for differential verification and
-transitional conversions.
+Core Leto crates must not depend on `ndarray`. `leto-ops` uses `ndarray` only as
+a dev-dependency differential oracle for replacement tests; production features
+must remain independent of `ndarray`.
 
 Downstream Atlas repositories consume Leto through a Git remote. Provider-side
 changes must be committed and pushed before Apollo, Coeus, or other consumers

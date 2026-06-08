@@ -3,6 +3,17 @@ use leto_ops::{
     add, binary_map, div, map, map_into, mapv, matmul, max_axis_into, mean_axis_into,
     min_axis_into, mul, sub, sum, sum_axis_into, zip_mut_with, AddOp, MulOp,
 };
+use ndarray::Array2;
+
+fn assert_close_slice(lhs: &[f32], rhs: &[f32]) {
+    assert_eq!(lhs.len(), rhs.len());
+    for (left, right) in lhs.iter().zip(rhs.iter()) {
+        assert!(
+            (*left - *right).abs() <= 1.0e-5,
+            "left {left} differs from right {right}"
+        );
+    }
+}
 
 #[test]
 fn test_elementwise_binary_ops() {
@@ -324,4 +335,39 @@ fn test_matmul_strided_and_transposed() {
     .unwrap();
     matmul(&lhs2, &rhs2.view(), &mut out2.view_mut()).unwrap();
     assert_eq!(out2.storage().as_slice(), &[58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+fn test_matmul_differential_matches_ndarray_contiguous() {
+    let lhs_values = vec![1.0f32, -2.0, 3.0, 4.5, 0.25, -6.0];
+    let rhs_values = vec![7.0f32, 8.0, -9.0, 10.0, 11.0, -12.0];
+    let lhs = Array::from_shape_vec([2, 3], lhs_values.clone()).unwrap();
+    let rhs = Array::from_shape_vec([3, 2], rhs_values.clone()).unwrap();
+    let mut out = Array::zeros([2, 2]);
+
+    matmul(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+
+    let ndarray_lhs = Array2::from_shape_vec((2, 3), lhs_values).unwrap();
+    let ndarray_rhs = Array2::from_shape_vec((3, 2), rhs_values).unwrap();
+    let expected = ndarray_lhs.dot(&ndarray_rhs);
+    assert_close_slice(out.storage().as_slice(), expected.as_slice().unwrap());
+}
+
+#[test]
+fn test_matmul_differential_matches_ndarray_transposed_views() {
+    let lhs_base_values = vec![1.0f32, 4.5, -2.0, 0.25, 3.0, -6.0];
+    let rhs_base_values = vec![7.0f32, -9.0, 11.0, 8.0, 10.0, -12.0];
+    let lhs_base = Array::from_shape_vec([3, 2], lhs_base_values.clone()).unwrap();
+    let rhs_base = Array::from_shape_vec([2, 3], rhs_base_values.clone()).unwrap();
+    let lhs = lhs_base.transpose([1, 0]).unwrap();
+    let rhs = rhs_base.transpose([1, 0]).unwrap();
+    let mut out = Array::zeros([2, 2]);
+
+    matmul(&lhs, &rhs, &mut out.view_mut()).unwrap();
+
+    let ndarray_lhs_base = Array2::from_shape_vec((3, 2), lhs_base_values).unwrap();
+    let ndarray_rhs_base = Array2::from_shape_vec((2, 3), rhs_base_values).unwrap();
+    let expected = ndarray_lhs_base.t().dot(&ndarray_rhs_base.t());
+    let expected_values: Vec<f32> = expected.iter().copied().collect();
+    assert_close_slice(out.storage().as_slice(), &expected_values);
 }
