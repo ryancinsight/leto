@@ -2,6 +2,8 @@
 pub mod aliases;
 /// Owned array type.
 pub mod array;
+mod constructors;
+mod index;
 /// Subview iteration.
 pub mod iter;
 /// Borrowed array view types.

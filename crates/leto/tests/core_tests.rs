@@ -1,6 +1,6 @@
 use leto::{
     domain::{RankMarker, RemoveAxis},
-    Array, Array1, Array2, ArrayView, ArrayViewMut, AxisIter, Layout, LetoError, SliceArg, Storage,
+    Array, Array1, Array2, ArrayView, ArrayViewMut, Layout, LetoError, SliceArg, Storage,
     VecStorage,
 };
 
@@ -196,7 +196,9 @@ fn test_ndarray_parity_constructors_and_into_vec() {
 fn test_axis_iter_yields_read_only_subviews() {
     let array =
         Array::<i32, VecStorage<i32>, 2>::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
-    let rows: Vec<Vec<i32>> = AxisIter::new(&array.view(), 0, RankMarker::<2>)
+    let rows: Vec<Vec<i32>> = array
+        .view()
+        .axis_iter::<1>(0)
         .unwrap()
         .map(|row| {
             (0..row.shape()[0])
@@ -206,6 +208,34 @@ fn test_axis_iter_yields_read_only_subviews() {
         .collect();
 
     assert_eq!(rows, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+}
+
+#[test]
+fn test_axis_iter_mut_yields_mutable_subviews() {
+    let mut array =
+        Array::<i32, VecStorage<i32>, 2>::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    // Increment all values in row 1 by 10
+    let mut iter = array.view_mut().axis_iter_mut::<1>(0).unwrap();
+    let _row0 = iter.next().unwrap();
+    let mut row1 = iter.next().unwrap();
+    for col in 0..row1.shape()[0] {
+        let val = row1.get_mut([col]).unwrap();
+        *val += 10;
+    }
+
+    let rows: Vec<Vec<i32>> = array
+        .view()
+        .axis_iter::<1>(0)
+        .unwrap()
+        .map(|row| {
+            (0..row.shape()[0])
+                .map(|col| *row.get([col]).unwrap())
+                .collect()
+        })
+        .collect();
+
+    assert_eq!(rows, vec![vec![1, 2, 3], vec![14, 15, 16]]);
 }
 
 #[test]

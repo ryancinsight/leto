@@ -105,6 +105,9 @@ strided, SIMD, and parallel dispatch path.
   as length one, matching Coeus tensor semantics such as `[N, C] -> [N, 1]`.
   `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into` share
   one ZST-selected reduction traversal and use Moirai for large output domains.
+- Unary mapping APIs provide `map_into` for caller-owned output and `mapv` /
+  `map` for allocating C-contiguous output. Precision changes are explicit in
+  the caller-provided closure rather than hidden in the traversal.
 - Strided output layouts that can alias mutable writes through zero strides do
   not enter parallel write paths.
 - The core `leto` crate remains independent of Hermes and Moirai; integration
@@ -135,6 +138,7 @@ Current value-semantic coverage includes:
 - strided/transposed elementwise traversal.
 - keep-dim `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and
   `max_axis_into` reductions over contiguous and strided inputs.
+- `map_into`, `mapv`, and `map` over contiguous and strided inputs.
 - `sum` and 2D `matmul`.
 
 ## Replacement Status
@@ -145,7 +149,7 @@ Coeus can remove `ndarray`, Leto still needs:
 - named row/column convenience wrappers over axis iteration;
 - keep-dim axis reductions are available; differential tests against `ndarray`
   are still required before downstream replacement;
-- `map`, `map_into`, `mapv`-equivalent, and zip-map APIs;
+- differential tests against `ndarray` for map-style behavior;
 - differential tests against `ndarray` for all Apollo-facing behavior;
 - Python output conversion that avoids clone-through-`Vec` result paths.
 

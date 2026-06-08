@@ -19,7 +19,8 @@
 - [x] [patch] Add ndarray-parity constructors used by Apollo: `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec`.
 - [x] [patch] Add row/column/axis iteration APIs with contiguous fast paths and strided fallbacks.
 - [x] [patch] Add shape aliases or type aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`, `ArrayView2`, `ArrayView3` if Apollo migration keeps rank-specific readability.
-- [ ] [patch] Add `map`, `map_into`, `mapv`-equivalent, zip-map, and precision-conversion APIs without hidden widen-and-narrow computation.
+- [x] [patch] Add `map`, `map_into`, `mapv`-equivalent, and precision-conversion APIs without hidden widen-and-narrow computation.
+- [x] [patch] Add zip-map APIs without duplicating the shared binary/unary traversal strategy.
 - [ ] [patch] Add BLAS/matrixmultiply replacement gates: contiguous `matmul`, strided `matmul`, transposed inputs, caller-owned output, and differential tests against `ndarray`.
 - [ ] [patch] Add Python output conversion that avoids `Vec` clone round-trips where NumPy ownership transfer or direct allocation is available.
 - [ ] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings.

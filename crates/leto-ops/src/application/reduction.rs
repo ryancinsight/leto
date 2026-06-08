@@ -1,3 +1,4 @@
+use crate::application::index::index_from_flat;
 use crate::domain::scalar::Scalar;
 use leto::{ArrayView, ArrayViewMut, LetoError, Result};
 
@@ -141,19 +142,6 @@ impl<T: Scalar> AxisReduction<T> for MaxAxis {
 
     const ALLOW_EMPTY: bool = false;
     const EMPTY: T = T::ZERO;
-}
-
-#[inline(always)]
-fn index_from_flat<const N: usize>(flat: usize, shape: &[usize; N]) -> [usize; N] {
-    let mut index = [0usize; N];
-    let mut temp = flat;
-    for i in (0..N).rev() {
-        if shape[i] > 0 {
-            index[i] = temp % shape[i];
-            temp /= shape[i];
-        }
-    }
-    index
 }
 
 #[inline]

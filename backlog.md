@@ -5,7 +5,7 @@
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
-- [x] [patch] `cargo test --all-features` passes: 23 `leto` core tests and 9 `leto-ops` tests pass. Evidence tier: value-semantic unit tests.
+- [x] [patch] `cargo test --all-features` passes: 24 `leto` core tests and 15 `leto-ops` tests pass. Evidence tier: value-semantic unit tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
@@ -27,7 +27,9 @@
 - [x] Add `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec` equivalents. Verification: value tests cover filled/generated/vector constructors, length mismatch rejection, and zero-copy contiguous `into_vec`.
 - [x] Add axis iteration APIs that cover row/column traversal without forcing copies. Verification: value test iterates matrix rows as read-only subviews; mutable iterator rejects zero-stride aliasing layouts at construction.
 - [ ] Add named row and column convenience wrappers after axis iterator ergonomics are settled.
-- [ ] Add `mapv`/typed conversion APIs for f64/f32/f16 and complex storage used by Apollo verification and Python outputs.
+- [x] Add `mapv`/typed conversion APIs for scalar storage used by Apollo verification and Python outputs. Verification: value tests cover caller-owned `map_into`, allocating `mapv`, explicit f64-to-f32 conversion, and strided transposed inputs.
+- [x] Add mutable zip-map traversal for Apollo migration call sites. Verification: value tests cover contiguous shape-matched mutation, shape mismatch rejection, and strided transposed views.
+- [ ] Add complex-storage map tests after complex scalar aliases and Apollo differential fixtures are added.
 - [ ] Add caller-owned output variants for all constructors and operations used in Apollo to preserve zero-copy and allocation control.
 - [ ] Add differential tests against `ndarray` for every Apollo-facing API before replacing a downstream crate dependency.
 
@@ -41,6 +43,7 @@
 
 ## Phase 4: Operations, Performance, and Architecture [minor]
 - [x] Replace duplicated elementwise functions with one generic binary traversal kernel selected by ZST operation markers. Verification: direct `binary_map::<AddOp>`/`binary_map::<MulOp>` tests and transposed strided-view elementwise test.
+- [x] Extract shared logical flat-index conversion helpers for core constructors and leto-ops traversals. Verification: all constructor, map, elementwise, and reduction tests pass after the split.
 - [ ] Add contiguous fast paths and strided fallback benchmarks for elementwise ops, reductions, and matmul.
 - [ ] Verify Moirai scheduling uses bounded work partitioning without raw-pointer aliasing hazards.
 - [ ] Integrate Hermes SIMD through sealed scalar/vector traits, not ad hoc per-operation dispatch.

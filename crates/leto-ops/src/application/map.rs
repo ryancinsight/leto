@@ -1,3 +1,4 @@
+use crate::application::index::index_from_flat;
 use crate::domain::scalar::Scalar;
 use leto::{ArrayView, ArrayViewMut, LetoError, Result};
 
@@ -96,20 +97,6 @@ impl<T: Scalar> BinaryOp<T> for DivOp {
     fn apply_slice(lhs: &[T], rhs: &[T], out: &mut [T]) {
         T::div_slice(lhs, rhs, out);
     }
-}
-
-// Helper to convert flat 1D index to N-dimensional index.
-#[inline(always)]
-fn index_from_flat<const N: usize>(flat: usize, shape: &[usize; N]) -> [usize; N] {
-    let mut index = [0usize; N];
-    let mut temp = flat;
-    for i in (0..N).rev() {
-        if shape[i] > 0 {
-            index[i] = temp % shape[i];
-            temp /= shape[i];
-        }
-    }
-    index
 }
 
 #[inline]
@@ -354,48 +341,72 @@ pub fn matmul<T: Scalar>(
     rhs.layout().validate_storage_len(rhs.data().len())?;
     out.layout().validate_storage_len(out.data().len())?;
 
-    // Zero out initial output view.
-    for r in 0..m {
-        for c in 0..n {
-            *out.get_mut([r, c])? = T::ZERO;
+    let lhs_stride_row = lhs.strides()[0];
+    let lhs_stride_col = lhs.strides()[1];
+    let rhs_stride_row = rhs.strides()[0];
+    let rhs_stride_col = rhs.strides()[1];
+    let out_stride_row = out.strides()[0];
+    let out_stride_col = out.strides()[1];
+
+    let lhs_offset = lhs.offset() as isize;
+    let rhs_offset = rhs.offset() as isize;
+    let out_offset = out.offset() as isize;
+
+    // Zero out initial output view using raw pointers.
+    let out_ptr = out.data_mut().as_mut_ptr();
+    unsafe {
+        for r in 0..m {
+            let row_offset = out_offset + r as isize * out_stride_row;
+            for c in 0..n {
+                let off = row_offset + c as isize * out_stride_col;
+                *out_ptr.offset(off) = T::ZERO;
+            }
         }
     }
 
     #[cfg(feature = "parallel")]
     {
         if m >= 16 && !out.layout().has_zero_stride_aliasing() {
-            let lhs_ptr = lhs.data().as_ptr() as usize;
-            let rhs_ptr = rhs.data().as_ptr() as usize;
-            let out_ptr = out.data_mut().as_mut_ptr() as usize;
-
-            let lhs_layout = lhs.layout();
-            let rhs_layout = rhs.layout();
-            let out_layout = out.layout();
+            let lhs_ptr_usize = lhs.data().as_ptr() as usize;
+            let rhs_ptr_usize = rhs.data().as_ptr() as usize;
+            let out_ptr_usize = out.data_mut().as_mut_ptr() as usize;
 
             crate::infrastructure::parallel::parallel_for(0, m, move |i| {
+                let lhs_ptr = lhs_ptr_usize as *const T;
+                let rhs_ptr = rhs_ptr_usize as *const T;
+                let out_ptr = out_ptr_usize as *mut T;
+
+                let lhs_row_offset = lhs_offset + i as isize * lhs_stride_row;
+                let out_row_offset = out_offset + i as isize * out_stride_row;
+
                 for k in 0..k1 {
-                    let lhs_off = lhs_layout
-                        .offset_of([i, k])
-                        .expect("validated lhs matrix layout");
-                    // SAFETY: matrix layout validation happens through `get_mut`
-                    // during zeroing and every row task writes a distinct row.
-                    let lhs_val = unsafe { *(lhs_ptr as *const T).add(lhs_off) };
+                    let lhs_val =
+                        unsafe { *lhs_ptr.offset(lhs_row_offset + k as isize * lhs_stride_col) };
                     if lhs_val == T::ZERO {
                         continue;
                     }
-                    for j in 0..n {
-                        let rhs_off = rhs_layout
-                            .offset_of([k, j])
-                            .expect("validated rhs matrix layout");
-                        let out_off = out_layout
-                            .offset_of([i, j])
-                            .expect("validated output matrix layout");
-                        // SAFETY: row `i` is exclusive to this worker, and
-                        // offsets are validated by `offset_of`.
+
+                    let rhs_row_offset = rhs_offset + k as isize * rhs_stride_row;
+
+                    if rhs_stride_col == 1 && out_stride_col == 1 {
                         unsafe {
-                            let rhs_val = *(rhs_ptr as *const T).add(rhs_off);
-                            let out_ref = &mut *(out_ptr as *mut T).add(out_off);
-                            *out_ref = out_ref.add(lhs_val.mul(rhs_val));
+                            let r_ptr = rhs_ptr.offset(rhs_row_offset);
+                            let o_ptr = out_ptr.offset(out_row_offset);
+                            for j in 0..n {
+                                let rhs_val = *r_ptr.add(j);
+                                let out_ref = o_ptr.add(j);
+                                *out_ref = (*out_ref).add(lhs_val.mul(rhs_val));
+                            }
+                        }
+                    } else {
+                        unsafe {
+                            for j in 0..n {
+                                let rhs_val =
+                                    *rhs_ptr.offset(rhs_row_offset + j as isize * rhs_stride_col);
+                                let out_ref =
+                                    out_ptr.offset(out_row_offset + j as isize * out_stride_col);
+                                *out_ref = (*out_ref).add(lhs_val.mul(rhs_val));
+                            }
                         }
                     }
                 }
@@ -404,17 +415,37 @@ pub fn matmul<T: Scalar>(
         }
     }
 
-    // Cache-efficient sequential loop ordering.
-    for i in 0..m {
-        for k in 0..k1 {
-            let lhs_val = *lhs.get([i, k])?;
-            if lhs_val == T::ZERO {
-                continue;
-            }
-            for j in 0..n {
-                let rhs_val = *rhs.get([k, j])?;
-                let out_ref = out.get_mut([i, j])?;
-                *out_ref = out_ref.add(lhs_val.mul(rhs_val));
+    let lhs_ptr = lhs.data().as_ptr();
+    let rhs_ptr = rhs.data().as_ptr();
+
+    unsafe {
+        for i in 0..m {
+            let lhs_row_offset = lhs_offset + i as isize * lhs_stride_row;
+            let out_row_offset = out_offset + i as isize * out_stride_row;
+
+            for k in 0..k1 {
+                let lhs_val = *lhs_ptr.offset(lhs_row_offset + k as isize * lhs_stride_col);
+                if lhs_val == T::ZERO {
+                    continue;
+                }
+
+                let rhs_row_offset = rhs_offset + k as isize * rhs_stride_row;
+
+                if rhs_stride_col == 1 && out_stride_col == 1 {
+                    let r_ptr = rhs_ptr.offset(rhs_row_offset);
+                    let o_ptr = out_ptr.offset(out_row_offset);
+                    for j in 0..n {
+                        let rhs_val = *r_ptr.add(j);
+                        let out_ref = o_ptr.add(j);
+                        *out_ref = (*out_ref).add(lhs_val.mul(rhs_val));
+                    }
+                } else {
+                    for j in 0..n {
+                        let rhs_val = *rhs_ptr.offset(rhs_row_offset + j as isize * rhs_stride_col);
+                        let out_ref = out_ptr.offset(out_row_offset + j as isize * out_stride_col);
+                        *out_ref = (*out_ref).add(lhs_val.mul(rhs_val));
+                    }
+                }
             }
         }
     }

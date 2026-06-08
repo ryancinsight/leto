@@ -24,3 +24,5 @@ pub use application::reduction::{
     max_axis_into, mean_axis_into, min_axis_into, reduce_axis_into, sum_axis_into, AxisReduction,
     MaxAxis, MeanAxis, MinAxis, SumAxis,
 };
+pub use application::unary::{map, map_into, mapv};
+pub use application::zip::zip_mut_with;
