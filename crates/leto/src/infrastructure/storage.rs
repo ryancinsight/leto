@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 /// A trait representing read-only multidimensional array storage.
 pub trait Storage<T> {
     /// Returns a reference to the underlying elements as a slice.
@@ -129,6 +131,63 @@ impl<T> StorageMut<T> for VecStorage<T> {
     #[inline]
     fn as_mut_slice(&mut self) -> &mut [T] {
         &mut self.data
+    }
+}
+
+// ── CowStorage ──
+
+/// Copy-on-write storage for arrays that can borrow read-only input and detach on mutation.
+pub struct CowStorage<'a, T: Clone> {
+    data: Cow<'a, [T]>,
+}
+
+impl<'a, T: Clone> CowStorage<'a, T> {
+    /// Create storage from a borrowed slice without copying.
+    #[inline]
+    pub const fn borrowed(slice: &'a [T]) -> Self {
+        Self {
+            data: Cow::Borrowed(slice),
+        }
+    }
+
+    /// Create storage from an owned vector.
+    #[inline]
+    pub const fn owned(data: Vec<T>) -> Self {
+        Self {
+            data: Cow::Owned(data),
+        }
+    }
+
+    /// Returns true when the storage still borrows caller-owned memory.
+    #[inline]
+    pub const fn is_borrowed(&self) -> bool {
+        matches!(self.data, Cow::Borrowed(_))
+    }
+
+    /// Returns true when the storage owns its memory.
+    #[inline]
+    pub const fn is_owned(&self) -> bool {
+        matches!(self.data, Cow::Owned(_))
+    }
+
+    /// Consume the storage and return owned data, cloning only when still borrowed.
+    #[inline]
+    pub fn into_owned(self) -> Vec<T> {
+        self.data.into_owned()
+    }
+}
+
+impl<'a, T: Clone> Storage<T> for CowStorage<'a, T> {
+    #[inline]
+    fn as_slice(&self) -> &[T] {
+        self.data.as_ref()
+    }
+}
+
+impl<'a, T: Clone> StorageMut<T> for CowStorage<'a, T> {
+    #[inline]
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self.data.to_mut()
     }
 }
 

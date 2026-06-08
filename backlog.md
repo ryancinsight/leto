@@ -10,12 +10,14 @@
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
 - [x] [patch] `cargo test --all-features` is clean.
+- [x] [patch] `CowStorage` is available for Leto arrays that borrow read-only Apollo/Coeus inputs and clone only when mutable access is requested. Evidence tier: value-semantic tests assert pointer identity on read-only borrowed storage, source preservation after mutation, and owned-detach output values.
 - [ ] [patch] Full `cargo doc --no-deps` is blocked by a rustdoc internal compiler error in the `leto-python`/`numpy-0.23.0` documentation path. `cargo doc --no-deps -p leto -p leto-ops` passes.
 
 ## Phase 1: Sound Core Layout and Storage [patch]
 - [x] Add ndarray-style slicing for full-axis selection, optional signed range bounds, negative indices, negative steps, integer axis removal, new-axis insertion, ellipsis expansion, and implicit trailing axes. Verification: three value-semantic tests over rank-preserving, rank-dropping, rank-adding, reverse, ellipsis, and implicit-tail cases.
 - [x] Replace unchecked negative-offset casts with checked signed arithmetic across `Layout` and `Array` validation. Verification: value-semantic tests cover valid negative strides, rejected negative physical offsets, and one-past-storage rejection.
 - [x] Make externally constructed `ArrayView` and `ArrayViewMut` layouts bounds-checked against their backing slices through `try_new` constructors. Verification: invalid external layouts return `StorageError`.
+- [x] Add copy-on-write storage for zero-copy read-only interop and mutation-time detachment. Verification: core tests cover borrowed pointer identity, owned-detach transition, unchanged source backing, and mutated owned values.
 - [x] Remove or constrain mutable broadcast views that introduce zero-stride write aliasing. Verification: mutable broadcast rejects aliasing expansion and permits same-shape non-aliasing writes.
 - [x] Add overflow-checked shape product and stride multiplication for core constructors and derived layout validation. Verification: property tests cover bounded generated offset, empty-axis, negative-stride, and composed-slice cases.
 - [x] Add property tests for C/F layouts, negative strides, singleton axes, transposes, slices, broadcasts, and offset ranges. Verification: generated tests cover C/F offset formulas, transpose value preservation, reverse slicing, composed slicing, empty-axis storage validation, singleton-axis broadcast stride/value contracts, and negative-stride storage span validation. Remaining risk: broad adversarial composition over larger dimensions still needs expansion.

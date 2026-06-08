@@ -1,7 +1,7 @@
 use leto::{
     domain::{RankMarker, RemoveAxis},
-    Array, Array1, Array2, ArrayView, ArrayViewMut, Layout, LetoError, SliceArg, Storage,
-    VecStorage,
+    Array, Array1, Array2, ArrayView, ArrayViewMut, CowStorage, Layout, LetoError, SliceArg,
+    Storage, VecStorage,
 };
 
 #[test]
@@ -150,6 +150,34 @@ fn test_array_creation_and_indexing() {
     assert_eq!(*array.get([0, 0]).unwrap(), 10);
     assert_eq!(*array.get([0, 2]).unwrap(), 12);
     assert_eq!(*array.get([1, 1]).unwrap(), 21);
+}
+
+#[test]
+fn test_cow_storage_borrows_without_copying_on_read() {
+    let backing = [10, 11, 12, 13];
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let array = Array::new(layout, CowStorage::borrowed(&backing)).unwrap();
+
+    assert!(array.storage().is_borrowed());
+    assert!(std::ptr::eq(
+        array.storage().as_slice().as_ptr(),
+        backing.as_ptr()
+    ));
+    assert_eq!(*array.get([1, 1]).unwrap(), 13);
+}
+
+#[test]
+fn test_cow_storage_detaches_on_mutation() {
+    let backing = [1, 2, 3, 4];
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let mut array = Array::new(layout, CowStorage::borrowed(&backing)).unwrap();
+
+    *array.get_mut([0, 1]).unwrap() = 20;
+
+    assert!(array.storage().is_owned());
+    assert_ne!(array.storage().as_slice().as_ptr(), backing.as_ptr());
+    assert_eq!(backing, [1, 2, 3, 4]);
+    assert_eq!(array.storage().as_slice(), &[1, 20, 3, 4]);
 }
 
 #[test]
