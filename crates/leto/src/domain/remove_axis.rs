@@ -136,3 +136,151 @@ impl RemoveAxis<4> for RankMarker<4> {
         }
     }
 }
+
+impl RemoveAxis<5> for RankMarker<5> {
+    const SMALLER_RANK: usize = 4;
+    type SmallerShape = [usize; 4];
+    type SmallerStrides = [isize; 4];
+
+    #[inline]
+    fn remove_shape(&self, shape: [usize; 5], axis: usize) -> Result<Self::SmallerShape> {
+        match axis {
+            0 => Ok([shape[1], shape[2], shape[3], shape[4]]),
+            1 => Ok([shape[0], shape[2], shape[3], shape[4]]),
+            2 => Ok([shape[0], shape[1], shape[3], shape[4]]),
+            3 => Ok([shape[0], shape[1], shape[2], shape[4]]),
+            4 => Ok([shape[0], shape[1], shape[2], shape[3]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 5"),
+            }),
+        }
+    }
+
+    #[inline]
+    fn remove_strides(&self, strides: [isize; 5], axis: usize) -> Result<Self::SmallerStrides> {
+        match axis {
+            0 => Ok([strides[1], strides[2], strides[3], strides[4]]),
+            1 => Ok([strides[0], strides[2], strides[3], strides[4]]),
+            2 => Ok([strides[0], strides[1], strides[3], strides[4]]),
+            3 => Ok([strides[0], strides[1], strides[2], strides[4]]),
+            4 => Ok([strides[0], strides[1], strides[2], strides[3]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 5"),
+            }),
+        }
+    }
+}
+
+impl RemoveAxis<6> for RankMarker<6> {
+    const SMALLER_RANK: usize = 5;
+    type SmallerShape = [usize; 5];
+    type SmallerStrides = [isize; 5];
+
+    #[inline]
+    fn remove_shape(&self, shape: [usize; 6], axis: usize) -> Result<Self::SmallerShape> {
+        match axis {
+            0 => Ok([shape[1], shape[2], shape[3], shape[4], shape[5]]),
+            1 => Ok([shape[0], shape[2], shape[3], shape[4], shape[5]]),
+            2 => Ok([shape[0], shape[1], shape[3], shape[4], shape[5]]),
+            3 => Ok([shape[0], shape[1], shape[2], shape[4], shape[5]]),
+            4 => Ok([shape[0], shape[1], shape[2], shape[3], shape[5]]),
+            5 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 6"),
+            }),
+        }
+    }
+
+    #[inline]
+    fn remove_strides(&self, strides: [isize; 6], axis: usize) -> Result<Self::SmallerStrides> {
+        match axis {
+            0 => Ok([strides[1], strides[2], strides[3], strides[4], strides[5]]),
+            1 => Ok([strides[0], strides[2], strides[3], strides[4], strides[5]]),
+            2 => Ok([strides[0], strides[1], strides[3], strides[4], strides[5]]),
+            3 => Ok([strides[0], strides[1], strides[2], strides[4], strides[5]]),
+            4 => Ok([strides[0], strides[1], strides[2], strides[3], strides[5]]),
+            5 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 6"),
+            }),
+        }
+    }
+}
+
+impl RemoveAxis<7> for RankMarker<7> {
+    const SMALLER_RANK: usize = 6;
+    type SmallerShape = [usize; 6];
+    type SmallerStrides = [isize; 6];
+
+    #[inline]
+    fn remove_shape(&self, shape: [usize; 7], axis: usize) -> Result<Self::SmallerShape> {
+        match axis {
+            0 => Ok([shape[1], shape[2], shape[3], shape[4], shape[5], shape[6]]),
+            1 => Ok([shape[0], shape[2], shape[3], shape[4], shape[5], shape[6]]),
+            2 => Ok([shape[0], shape[1], shape[3], shape[4], shape[5], shape[6]]),
+            3 => Ok([shape[0], shape[1], shape[2], shape[4], shape[5], shape[6]]),
+            4 => Ok([shape[0], shape[1], shape[2], shape[3], shape[5], shape[6]]),
+            5 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[6]]),
+            6 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[5]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 7"),
+            }),
+        }
+    }
+
+    #[inline]
+    fn remove_strides(&self, strides: [isize; 7], axis: usize) -> Result<Self::SmallerStrides> {
+        match axis {
+            0 => Ok([strides[1], strides[2], strides[3], strides[4], strides[5], strides[6]]),
+            1 => Ok([strides[0], strides[2], strides[3], strides[4], strides[5], strides[6]]),
+            2 => Ok([strides[0], strides[1], strides[3], strides[4], strides[5], strides[6]]),
+            3 => Ok([strides[0], strides[1], strides[2], strides[4], strides[5], strides[6]]),
+            4 => Ok([strides[0], strides[1], strides[2], strides[3], strides[5], strides[6]]),
+            5 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[6]]),
+            6 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[5]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 7"),
+            }),
+        }
+    }
+}
+
+impl RemoveAxis<8> for RankMarker<8> {
+    const SMALLER_RANK: usize = 7;
+    type SmallerShape = [usize; 7];
+    type SmallerStrides = [isize; 7];
+
+    #[inline]
+    fn remove_shape(&self, shape: [usize; 8], axis: usize) -> Result<Self::SmallerShape> {
+        match axis {
+            0 => Ok([shape[1], shape[2], shape[3], shape[4], shape[5], shape[6], shape[7]]),
+            1 => Ok([shape[0], shape[2], shape[3], shape[4], shape[5], shape[6], shape[7]]),
+            2 => Ok([shape[0], shape[1], shape[3], shape[4], shape[5], shape[6], shape[7]]),
+            3 => Ok([shape[0], shape[1], shape[2], shape[4], shape[5], shape[6], shape[7]]),
+            4 => Ok([shape[0], shape[1], shape[2], shape[3], shape[5], shape[6], shape[7]]),
+            5 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[6], shape[7]]),
+            6 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[5], shape[7]]),
+            7 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[5], shape[6]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 8"),
+            }),
+        }
+    }
+
+    #[inline]
+    fn remove_strides(&self, strides: [isize; 8], axis: usize) -> Result<Self::SmallerStrides> {
+        match axis {
+            0 => Ok([strides[1], strides[2], strides[3], strides[4], strides[5], strides[6], strides[7]]),
+            1 => Ok([strides[0], strides[2], strides[3], strides[4], strides[5], strides[6], strides[7]]),
+            2 => Ok([strides[0], strides[1], strides[3], strides[4], strides[5], strides[6], strides[7]]),
+            3 => Ok([strides[0], strides[1], strides[2], strides[4], strides[5], strides[6], strides[7]]),
+            4 => Ok([strides[0], strides[1], strides[2], strides[3], strides[5], strides[6], strides[7]]),
+            5 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[6], strides[7]]),
+            6 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[5], strides[7]]),
+            7 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[5], strides[6]]),
+            _ => Err(LetoError::StorageError {
+                reason: format!("Axis {axis} out of bounds for rank 8"),
+            }),
+        }
+    }
+}

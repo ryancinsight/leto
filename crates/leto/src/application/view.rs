@@ -4,8 +4,8 @@ use crate::domain::slice::SliceArg;
 
 /// A read-only zero-copy view of an N-dimensional strided array.
 pub struct ArrayView<'a, T, const N: usize> {
-    layout: Layout<N>,
-    data: &'a [T],
+    pub(crate) layout: Layout<N>,
+    pub(crate) data: &'a [T],
 }
 
 impl<'a, T, const N: usize> ArrayView<'a, T, N> {
@@ -141,8 +141,8 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
 
 /// A mutable zero-copy view of an N-dimensional strided array.
 pub struct ArrayViewMut<'a, T, const N: usize> {
-    layout: Layout<N>,
-    data: &'a mut [T],
+    pub(crate) layout: Layout<N>,
+    pub(crate) data: &'a mut [T],
 }
 
 impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {

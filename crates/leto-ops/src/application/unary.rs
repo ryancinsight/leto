@@ -157,13 +157,16 @@ where
     let len = input.len();
     let input_ptr = input.as_ptr() as usize;
     let output_ptr = output.as_mut_ptr() as usize;
+    let chunk_size = 4096;
 
-    crate::infrastructure::parallel::parallel_for(0, len, move |index| {
-        // SAFETY: each worker writes a unique element in `0..len`; input and
-        // output slices have equal length by `map_into` shape validation.
-        unsafe {
-            let value = *(input_ptr as *const T).add(index);
-            *(output_ptr as *mut U).add(index) = f(value);
+    crate::infrastructure::parallel::parallel_for_chunks(len, chunk_size, move |start, end| {
+        for index in start..end {
+            // SAFETY: each worker writes a unique element in `start..end`; input and
+            // output slices have equal length by `map_into` shape validation.
+            unsafe {
+                let value = *(input_ptr as *const T).add(index);
+                *(output_ptr as *mut U).add(index) = f(value);
+            }
         }
     });
 }
@@ -177,23 +180,30 @@ where
 {
     let input_ptr = ctx.input_data.as_ptr() as usize;
     let output_ptr = ctx.output_data.as_mut_ptr() as usize;
+    let chunk_size = 512;
 
-    crate::infrastructure::parallel::parallel_for(0, ctx.size, move |flat_idx| {
-        let index = index_from_flat(flat_idx, &ctx.shape);
-        let input_offset = ctx
-            .input_layout
-            .offset_of(index)
-            .expect("validated input layout must map every logical index");
-        let output_offset = ctx
-            .output_layout
-            .offset_of(index)
-            .expect("validated output layout must map every logical index");
+    crate::infrastructure::parallel::parallel_for_chunks(
+        ctx.size,
+        chunk_size,
+        move |start, end| {
+            for flat_idx in start..end {
+                let index = index_from_flat(flat_idx, &ctx.shape);
+                let input_offset = ctx
+                    .input_layout
+                    .offset_of(index)
+                    .expect("validated input layout must map every logical index");
+                let output_offset = ctx
+                    .output_layout
+                    .offset_of(index)
+                    .expect("validated output layout must map every logical index");
 
-        // SAFETY: storage spans are validated before dispatch and zero-stride
-        // output aliasing is rejected before this path.
-        unsafe {
-            let value = *(input_ptr as *const T).add(input_offset);
-            *(output_ptr as *mut U).add(output_offset) = f(value);
-        }
-    });
+                // SAFETY: storage spans are validated before dispatch and zero-stride
+                // output aliasing is rejected before this path.
+                unsafe {
+                    let value = *(input_ptr as *const T).add(input_offset);
+                    *(output_ptr as *mut U).add(output_offset) = f(value);
+                }
+            }
+        },
+    );
 }

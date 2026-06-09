@@ -29,6 +29,9 @@ num-complex = "0.4"
 bytemuck = { version = "1.19", features = ["derive"] }
 half = { version = "2.7", features = ["num-traits", "bytemuck"] }
 
+# ── Optional Compatibility ──
+ndarray = "0.16"
+
 # ── Error and Utility ──
 thiserror = "2"
 anyhow = "1.0"

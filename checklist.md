@@ -31,9 +31,12 @@
 - [x] [patch] Add Python boundary tests for value parity, shape validation, C-contiguous input, and rejected non-contiguous inputs.
 - [x] [patch] Add representative Leto-side Apollo and Coeus migration fixtures for rank aliases, complex precision mapping, keep-dim reduction/broadcast, and dense matmul.
 - [x] [patch] Add `CowStorage` so Leto can borrow Apollo/Coeus read-only buffers without copying and detach into owned storage on mutation.
+- [x] [patch] Add `CowStorage::as_borrowed` and `as_owned` accessors so callers can inspect backing state without cloning or forcing detachment.
+- [x] [patch] Split storage infrastructure into SRP leaf modules for traits, borrowed slices, owned vectors, Cow, and Mnemosyne allocation while preserving the public storage API.
+- [x] [patch] Fix ndarray-to-Leto zero-copy view conversion for negative strides by preserving signed strides and anchoring the borrowed backing slice at the minimum physical address.
 - [ ] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings.
 - [ ] [patch] Add Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and gradient-adjacent non-differentiable storage boundaries.
-- [ ] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.
+- [x] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.
 - [ ] [minor] Publish a pushed Git revision only after `fmt`, `clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features`, docs, and differential ndarray parity tests pass.
 
 ## Naming decision [patch]

@@ -27,3 +27,7 @@ pub use application::{
     Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, ArrayViewMut2,
     ArrayViewMut3, AxisIter, AxisIterMut,
 };
+
+#[cfg(feature = "ndarray-compat")]
+/// ndarray compatibility conversions.
+pub use infrastructure::ndarray_compat;

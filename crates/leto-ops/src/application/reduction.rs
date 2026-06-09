@@ -33,6 +33,8 @@ pub trait AxisReduction<T: Scalar>: sealed::Sealed + Copy + Send + Sync + 'stati
     const ALLOW_EMPTY: bool;
     /// Empty reduction value when `ALLOW_EMPTY` is true.
     const EMPTY: T;
+    /// Try a fast-path slice-based reduction.
+    fn reduce_slice(slice: &[T]) -> Option<T>;
 }
 
 /// Sum axis-reduction marker.
@@ -74,6 +76,11 @@ impl<T: Scalar> AxisReduction<T> for SumAxis {
 
     const ALLOW_EMPTY: bool = true;
     const EMPTY: T = T::ZERO;
+
+    #[inline(always)]
+    fn reduce_slice(slice: &[T]) -> Option<T> {
+        Some(T::sum_slice(slice))
+    }
 }
 
 impl<T: Scalar> AxisReduction<T> for MeanAxis {
@@ -94,6 +101,11 @@ impl<T: Scalar> AxisReduction<T> for MeanAxis {
 
     const ALLOW_EMPTY: bool = false;
     const EMPTY: T = T::ZERO;
+
+    #[inline(always)]
+    fn reduce_slice(slice: &[T]) -> Option<T> {
+        Some(T::sum_slice(slice))
+    }
 }
 
 impl<T: Scalar> AxisReduction<T> for MinAxis {
@@ -118,6 +130,11 @@ impl<T: Scalar> AxisReduction<T> for MinAxis {
 
     const ALLOW_EMPTY: bool = false;
     const EMPTY: T = T::ZERO;
+
+    #[inline(always)]
+    fn reduce_slice(slice: &[T]) -> Option<T> {
+        Some(T::min_slice(slice))
+    }
 }
 
 impl<T: Scalar> AxisReduction<T> for MaxAxis {
@@ -142,6 +159,11 @@ impl<T: Scalar> AxisReduction<T> for MaxAxis {
 
     const ALLOW_EMPTY: bool = false;
     const EMPTY: T = T::ZERO;
+
+    #[inline(always)]
+    fn reduce_slice(slice: &[T]) -> Option<T> {
+        Some(T::max_slice(slice))
+    }
 }
 
 #[inline]
@@ -209,6 +231,8 @@ where
         }
     }
 
+    let is_axis_contiguous = input_layout.strides[axis] == 1;
+
     for flat_idx in 0..out_size {
         let out_idx = index_from_flat(flat_idx, &out_shape);
         let out_off = output_layout.offset_of(out_idx)?;
@@ -220,13 +244,29 @@ where
         let mut input_idx = out_idx;
         input_idx[axis] = 0;
         let first_off = input_layout.offset_of(input_idx)?;
-        let mut acc = Op::initial(input_data[first_off]);
 
-        for axis_idx in 1..axis_len {
-            input_idx[axis] = axis_idx;
-            let input_off = input_layout.offset_of(input_idx)?;
-            acc = Op::fold(acc, input_data[input_off]);
-        }
+        let acc = if is_axis_contiguous {
+            if let Some(slice_res) = Op::reduce_slice(&input_data[first_off..first_off + axis_len])
+            {
+                slice_res
+            } else {
+                let mut a = Op::initial(input_data[first_off]);
+                for axis_idx in 1..axis_len {
+                    input_idx[axis] = axis_idx;
+                    let input_off = input_layout.offset_of(input_idx)?;
+                    a = Op::fold(a, input_data[input_off]);
+                }
+                a
+            }
+        } else {
+            let mut a = Op::initial(input_data[first_off]);
+            for axis_idx in 1..axis_len {
+                input_idx[axis] = axis_idx;
+                let input_off = input_layout.offset_of(input_idx)?;
+                a = Op::fold(a, input_data[input_off]);
+            }
+            a
+        };
 
         output_data[out_off] = Op::finalize(acc, axis_len);
     }
@@ -260,48 +300,78 @@ where
 {
     let input_ptr = ctx.input_data.as_ptr() as usize;
     let output_ptr = ctx.output_data.as_mut_ptr() as usize;
+    let chunk_size = 512;
 
-    crate::infrastructure::parallel::parallel_for(0, ctx.out_size, move |flat_idx| {
-        let out_idx = index_from_flat(flat_idx, &ctx.out_shape);
-        let out_off = ctx
-            .output_layout
-            .offset_of(out_idx)
-            .expect("validated output layout must map every logical index");
-        if ctx.axis_len == 0 {
-            // SAFETY: each worker writes a distinct logical output element and
-            // zero-stride aliasing output layouts do not enter this path.
-            unsafe {
-                *(output_ptr as *mut T).add(out_off) = Op::EMPTY;
+    crate::infrastructure::parallel::parallel_for_chunks(
+        ctx.out_size,
+        chunk_size,
+        move |start, end| {
+            let is_axis_contiguous = ctx.input_layout.strides[ctx.axis] == 1;
+            for flat_idx in start..end {
+                let out_idx = index_from_flat(flat_idx, &ctx.out_shape);
+                let out_off = ctx
+                    .output_layout
+                    .offset_of(out_idx)
+                    .expect("validated output layout must map every logical index");
+                if ctx.axis_len == 0 {
+                    // SAFETY: each worker writes a distinct logical output element.
+                    unsafe {
+                        *(output_ptr as *mut T).add(out_off) = Op::EMPTY;
+                    }
+                    continue;
+                }
+
+                let mut input_idx = out_idx;
+                input_idx[ctx.axis] = 0;
+                let first_off = ctx
+                    .input_layout
+                    .offset_of(input_idx)
+                    .expect("validated input layout must map every logical index");
+
+                let acc = if is_axis_contiguous {
+                    // SAFETY: input slice bounds are validated.
+                    let slice = unsafe {
+                        std::slice::from_raw_parts(
+                            (input_ptr as *const T).add(first_off),
+                            ctx.axis_len,
+                        )
+                    };
+                    if let Some(slice_res) = Op::reduce_slice(slice) {
+                        slice_res
+                    } else {
+                        let mut a = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
+                        for axis_idx in 1..ctx.axis_len {
+                            input_idx[ctx.axis] = axis_idx;
+                            let input_off = ctx
+                                .input_layout
+                                .offset_of(input_idx)
+                                .expect("validated input layout must map every logical index");
+                            let value = unsafe { *(input_ptr as *const T).add(input_off) };
+                            a = Op::fold(a, value);
+                        }
+                        a
+                    }
+                } else {
+                    let mut a = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
+                    for axis_idx in 1..ctx.axis_len {
+                        input_idx[ctx.axis] = axis_idx;
+                        let input_off = ctx
+                            .input_layout
+                            .offset_of(input_idx)
+                            .expect("validated input layout must map every logical index");
+                        let value = unsafe { *(input_ptr as *const T).add(input_off) };
+                        a = Op::fold(a, value);
+                    }
+                    a
+                };
+
+                // SAFETY: each worker writes a distinct logical output element.
+                unsafe {
+                    *(output_ptr as *mut T).add(out_off) = Op::finalize(acc, ctx.axis_len);
+                }
             }
-            return;
-        }
-
-        let mut input_idx = out_idx;
-        input_idx[ctx.axis] = 0;
-        let first_off = ctx
-            .input_layout
-            .offset_of(input_idx)
-            .expect("validated input layout must map every logical index");
-        // SAFETY: input/output storage spans are validated before dispatch.
-        let mut acc = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
-
-        for axis_idx in 1..ctx.axis_len {
-            input_idx[ctx.axis] = axis_idx;
-            let input_off = ctx
-                .input_layout
-                .offset_of(input_idx)
-                .expect("validated input layout must map every logical index");
-            // SAFETY: input storage span is validated before dispatch.
-            let value = unsafe { *(input_ptr as *const T).add(input_off) };
-            acc = Op::fold(acc, value);
-        }
-
-        // SAFETY: each worker writes a distinct logical output element and
-        // zero-stride aliasing output layouts do not enter this path.
-        unsafe {
-            *(output_ptr as *mut T).add(out_off) = Op::finalize(acc, ctx.axis_len);
-        }
-    });
+        },
+    );
 }
 
 /// Sum `input` along `axis`, keeping the reduced axis as length one.

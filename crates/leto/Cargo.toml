@@ -18,12 +18,17 @@ half = { workspace = true }
 # ── Error Handling ──
 thiserror = { workspace = true }
 
+# ── Optional Compatibility ──
+ndarray = { workspace = true, optional = true }
+
 [features]
 default = ["std"]
 std = ["num-traits/std"]
 alloc = []
 # mnemosyne integration
 mnemosyne-alloc = ["dep:mnemosyne", "alloc"]
+# ndarray integration
+ndarray-compat = ["dep:ndarray", "std"]
 
 [dev-dependencies]
 proptest = { workspace = true }

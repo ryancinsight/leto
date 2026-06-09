@@ -205,15 +205,19 @@ where
     let lhs_ptr = lhs.as_ptr() as usize;
     let rhs_ptr = rhs.as_ptr() as usize;
     let out_ptr = out.as_mut_ptr() as usize;
+    let chunk_size = 4096;
 
-    crate::infrastructure::parallel::parallel_for(0, numel, move |i| {
-        // SAFETY: each worker writes a unique `i` in `0..numel`; all slices
-        // have equal length by `binary_map` validation and are alive for the
-        // duration of `parallel_for`.
+    crate::infrastructure::parallel::parallel_for_chunks(numel, chunk_size, move |start, end| {
+        // SAFETY: each worker writes to a distinct range of `out` corresponding to `start..end`.
+        // The slices are valid for the lifetime of parallel execution.
         unsafe {
-            let lhs_val = *(lhs_ptr as *const T).add(i);
-            let rhs_val = *(rhs_ptr as *const T).add(i);
-            *(out_ptr as *mut T).add(i) = Op::apply(lhs_val, rhs_val);
+            let lhs_chunk =
+                std::slice::from_raw_parts((lhs_ptr as *const T).add(start), end - start);
+            let rhs_chunk =
+                std::slice::from_raw_parts((rhs_ptr as *const T).add(start), end - start);
+            let out_chunk =
+                std::slice::from_raw_parts_mut((out_ptr as *mut T).add(start), end - start);
+            Op::apply_slice(lhs_chunk, rhs_chunk, out_chunk);
         }
     });
 }
@@ -227,31 +231,38 @@ where
     let lhs_ptr = ctx.lhs_data.as_ptr() as usize;
     let rhs_ptr = ctx.rhs_data.as_ptr() as usize;
     let out_ptr = ctx.out_data.as_mut_ptr() as usize;
+    let chunk_size = 512;
 
-    crate::infrastructure::parallel::parallel_for(0, ctx.size, move |flat_idx| {
-        let multi_idx = index_from_flat(flat_idx, &ctx.shape);
-        let lhs_off = ctx
-            .lhs_layout
-            .offset_of(multi_idx)
-            .expect("validated lhs layout must map every logical index");
-        let rhs_off = ctx
-            .rhs_layout
-            .offset_of(multi_idx)
-            .expect("validated rhs layout must map every logical index");
-        let out_off = ctx
-            .out_layout
-            .offset_of(multi_idx)
-            .expect("validated output layout must map every logical index");
+    crate::infrastructure::parallel::parallel_for_chunks(
+        ctx.size,
+        chunk_size,
+        move |start, end| {
+            for flat_idx in start..end {
+                let multi_idx = index_from_flat(flat_idx, &ctx.shape);
+                let lhs_off = ctx
+                    .lhs_layout
+                    .offset_of(multi_idx)
+                    .expect("validated lhs layout must map every logical index");
+                let rhs_off = ctx
+                    .rhs_layout
+                    .offset_of(multi_idx)
+                    .expect("validated rhs layout must map every logical index");
+                let out_off = ctx
+                    .out_layout
+                    .offset_of(multi_idx)
+                    .expect("validated output layout must map every logical index");
 
-        // SAFETY: storage spans are validated before dispatch; each logical
-        // flat index maps to one output offset. Mutable views that can alias
-        // through broadcast zero strides are rejected by Leto view construction.
-        unsafe {
-            let lhs_val = *(lhs_ptr as *const T).add(lhs_off);
-            let rhs_val = *(rhs_ptr as *const T).add(rhs_off);
-            *(out_ptr as *mut T).add(out_off) = Op::apply(lhs_val, rhs_val);
-        }
-    });
+                // SAFETY: storage spans are validated before dispatch; each logical
+                // flat index maps to one output offset. Mutable views that can alias
+                // through broadcast zero strides are rejected by Leto view construction.
+                unsafe {
+                    let lhs_val = *(lhs_ptr as *const T).add(lhs_off);
+                    let rhs_val = *(rhs_ptr as *const T).add(rhs_off);
+                    *(out_ptr as *mut T).add(out_off) = Op::apply(lhs_val, rhs_val);
+                }
+            }
+        },
+    );
 }
 
 /// Element-wise array addition: `out = lhs + rhs`.

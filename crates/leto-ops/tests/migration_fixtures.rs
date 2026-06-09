@@ -130,3 +130,253 @@ fn coeus_tensor_matmul_fixture_matches_dense_layer_shape() {
         &[-8.5, 14.0, 0.75, -8.5, 14.75, -20.25, -8.375, 18.5]
     );
 }
+
+#[cfg(feature = "ndarray-compat")]
+#[test]
+fn test_ndarray_compatibility_conversions() {
+    use leto::{Array2, ArrayView2, ArrayViewMut2};
+    use ndarray::s;
+    use ndarray::Array2 as NdArray2;
+
+    // 1. Leto to ndarray view conversion
+    let leto_arr = Array2::from_shape_vec([2, 3], vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let nd_view = ndarray::ArrayView::try_from(leto_arr.view()).unwrap();
+    assert_eq!(nd_view.shape(), &[2, 3]);
+    assert_eq!(nd_view.strides(), &[3, 1]);
+    assert_close(nd_view[[0, 0]], 1.0);
+    assert_close(nd_view[[1, 2]], 6.0);
+
+    // 2. ndarray view to Leto view conversion
+    let leto_view_back = ArrayView2::from(nd_view);
+    assert_eq!(leto_view_back.shape(), [2, 3]);
+    assert_eq!(leto_view_back.strides(), [3, 1]);
+    assert_close(*leto_view_back.get([1, 2]).unwrap(), 6.0);
+
+    // 3. Leto mut view to ndarray mut view conversion
+    let mut leto_arr_mut = leto_arr;
+    {
+        let mut nd_view_mut = ndarray::ArrayViewMut::try_from(leto_arr_mut.view_mut()).unwrap();
+        nd_view_mut[[0, 1]] = 20.0;
+    }
+    assert_close(*leto_arr_mut.get([0, 1]).unwrap(), 20.0);
+
+    // 4. ndarray to Leto owned conversion
+    let nd_arr =
+        NdArray2::from_shape_vec((2, 3), vec![10.0f32, 20.0, 30.0, 40.0, 50.0, 60.0]).unwrap();
+    let leto_owned = Array2::from(nd_arr.clone());
+    assert_eq!(leto_owned.shape(), [2, 3]);
+    assert_close(*leto_owned.get([0, 0]).unwrap(), 10.0);
+    assert_close(*leto_owned.get([1, 2]).unwrap(), 60.0);
+
+    // 5. Leto owned to ndarray conversion
+    let nd_back = ndarray::Array::try_from(leto_owned).unwrap();
+    assert_eq!(nd_back.shape(), &[2, 3]);
+    assert_close(nd_back[[0, 0]], 10.0);
+
+    // 6. negative-stride ndarray views convert without copying.
+    let nd_source = NdArray2::from_shape_vec((2, 3), vec![1_i32, 2, 3, 4, 5, 6]).unwrap();
+    let reversed = nd_source.slice(s![..;-1, ..;-1]);
+    let leto_reversed = ArrayView2::from(reversed);
+    assert_eq!(leto_reversed.shape(), [2, 3]);
+    assert_eq!(leto_reversed.strides(), [-3, -1]);
+    assert_eq!(*leto_reversed.get([0, 0]).unwrap(), 6);
+    assert_eq!(*leto_reversed.get([1, 2]).unwrap(), 1);
+
+    let mut nd_mut = NdArray2::from_shape_vec((2, 3), vec![1_i32, 2, 3, 4, 5, 6]).unwrap();
+    {
+        let reversed_rows = nd_mut.slice_mut(s![..;-1, ..]);
+        let mut leto_mut = ArrayViewMut2::from(reversed_rows);
+        assert_eq!(leto_mut.strides(), [-3, 1]);
+        *leto_mut.get_mut([0, 1]).unwrap() = 50;
+    }
+    assert_eq!(nd_mut[[1, 1]], 50);
+}
+
+#[test]
+fn apollo_dht_real_transform_simulation() {
+    let n = 8;
+    let signal = Array1::from_shape_fn([n], |[i]| (i as f64 * 0.5).sin());
+    let mut dht = Array1::<f64>::zeros([n]);
+
+    for k in 0..n {
+        let mut sum = 0.0;
+        for j in 0..n {
+            let angle = 2.0 * std::f64::consts::PI * (j * k) as f64 / n as f64;
+            let cas = angle.cos() + angle.sin();
+            sum += signal.get([j]).unwrap() * cas;
+        }
+        *dht.get_mut([k]).unwrap() = sum;
+    }
+
+    assert_eq!(dht.shape(), [n]);
+    let sig_energy: f64 = signal.storage().as_slice().iter().map(|&x| x * x).sum();
+    let dht_energy: f64 = dht.storage().as_slice().iter().map(|&x| x * x).sum();
+    assert!((sig_energy - dht_energy / n as f64).abs() < 1.0e-5);
+}
+
+#[test]
+fn apollo_ntt_modular_transform_simulation() {
+    let n = 8;
+    let q = 17;
+    let root = 9;
+    let signal = Array1::from_shape_fn([n], |[i]| (i as u64) % q);
+    let mut ntt = Array1::<u64>::zeros([n]);
+
+    for k in 0..n {
+        let mut sum = 0;
+        for j in 0..n {
+            let exponent = (j * k) % n;
+            let mut w = 1;
+            for _ in 0..exponent {
+                w = (w * root) % q;
+            }
+            sum = (sum + signal.get([j]).unwrap() * w) % q;
+        }
+        *ntt.get_mut([k]).unwrap() = sum;
+    }
+
+    assert_eq!(ntt.shape(), [n]);
+    let expected_sum: u64 = signal.storage().as_slice().iter().sum::<u64>() % q;
+    assert_eq!(*ntt.get([0]).unwrap(), expected_sum);
+}
+
+#[test]
+fn apollo_nufft_non_uniform_grid_interpolation() {
+    let m = 5;
+    let n = 16;
+
+    let coords = Array1::<f64>::from_shape_vec([m], vec![1.2, 4.7, 8.0, 11.5, 14.1]).unwrap();
+    let strengths =
+        Array1::from_shape_fn([m], |[i]| Complex64::new((i + 1) as f64, -((i + 1) as f64)));
+
+    let mut grid = Array1::<Complex64>::zeros([n]);
+    let width = 2.0;
+
+    for i in 0..m {
+        let x = *coords.get([i]).unwrap();
+        let c = *strengths.get([i]).unwrap();
+
+        let x_center = x.round() as isize;
+        for offset in -2..=2 {
+            let g_idx = ((x_center + offset).rem_euclid(n as isize)) as usize;
+            let dist = x - (x_center + offset) as f64;
+            let weight = (-dist * dist / (2.0 * width * width)).exp();
+
+            let current = grid.get([g_idx]).unwrap();
+            *grid.get_mut([g_idx]).unwrap() =
+                Complex64::new(current.re + c.re * weight, current.im + c.im * weight);
+        }
+    }
+
+    assert_eq!(grid.shape(), [n]);
+    assert!(grid.get([1]).unwrap().re > 0.0);
+    assert!(grid.get([8]).unwrap().re > 0.0);
+}
+
+#[test]
+fn apollo_sht_spherical_harmonic_grid_eval() {
+    let n_theta = 4;
+    let n_phi = 8;
+
+    let theta = Array1::from_shape_fn([n_theta], |[i]| {
+        std::f64::consts::PI * (i as f64 + 0.5) / n_theta as f64
+    });
+    let _phi = Array1::from_shape_fn([n_phi], |[j]| {
+        2.0 * std::f64::consts::PI * j as f64 / n_phi as f64
+    });
+
+    let factor = 0.5 * (3.0 / std::f64::consts::PI).sqrt();
+    let mut grid = Array2::<f64>::zeros([n_theta, n_phi]);
+
+    for i in 0..n_theta {
+        let t = *theta.get([i]).unwrap();
+        let val = factor * t.cos();
+        for j in 0..n_phi {
+            *grid.get_mut([i, j]).unwrap() = val;
+        }
+    }
+
+    assert_eq!(grid.shape(), [n_theta, n_phi]);
+    for i in 0..n_theta {
+        let reference = *grid.get([i, 0]).unwrap();
+        for j in 1..n_phi {
+            assert_close(reference as f32, *grid.get([i, j]).unwrap() as f32);
+        }
+    }
+}
+
+#[test]
+fn apollo_wgpu_host_mapped_buffer_verification() {
+    let arr = Array3::from_shape_fn([2, 3, 4], |[x, y, z]| (x * 12 + y * 4 + z) as f32);
+
+    assert_eq!(arr.strides(), [12, 4, 1]);
+
+    let slice = arr.storage().as_slice();
+    assert_eq!(slice.len(), 24);
+    assert_eq!(slice[0], 0.0);
+    assert_eq!(slice[23], 23.0);
+
+    let byte_len = std::mem::size_of_val(slice);
+    assert_eq!(byte_len, 96);
+}
+
+#[test]
+fn apollo_python_bindings_strides_compatibility() {
+    let arr = Array2::from_shape_vec([3, 4], (0..12).collect()).unwrap();
+
+    let elem_strides = arr.strides();
+    assert_eq!(elem_strides, [4, 1]);
+
+    let item_size = std::mem::size_of::<i32>() as isize;
+    let byte_strides = [elem_strides[0] * item_size, elem_strides[1] * item_size];
+    assert_eq!(byte_strides, [16, 4]);
+
+    let view = arr.view();
+    let transposed = view.transpose([1, 0]).unwrap();
+    assert_eq!(transposed.shape(), [4, 3]);
+    assert_eq!(transposed.strides(), [1, 4]);
+
+    let transposed_byte_strides = [
+        transposed.strides()[0] * item_size,
+        transposed.strides()[1] * item_size,
+    ];
+    assert_eq!(transposed_byte_strides, [4, 16]);
+}
+
+#[test]
+fn coeus_tensor_layout_and_broadcasting() {
+    let a = Array2::from_shape_vec([2, 3], vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    assert_eq!(a.shape(), [2, 3]);
+    assert_eq!(a.strides(), [3, 1]);
+
+    let a_t = a.view().transpose([1, 0]).unwrap();
+    assert_eq!(a_t.shape(), [3, 2]);
+    assert_eq!(a_t.strides(), [1, 3]);
+
+    let row = Array2::from_shape_vec([1, 3], vec![10.0f32, 20.0, 30.0]).unwrap();
+    let broadcasted = row.view().broadcast([2, 3]).unwrap();
+    assert_eq!(broadcasted.shape(), [2, 3]);
+    assert_eq!(broadcasted.strides(), [0, 1]);
+
+    assert_eq!(*broadcasted.get([0, 0]).unwrap(), 10.0);
+    assert_eq!(*broadcasted.get([0, 2]).unwrap(), 30.0);
+    assert_eq!(*broadcasted.get([1, 0]).unwrap(), 10.0);
+    assert_eq!(*broadcasted.get([1, 2]).unwrap(), 30.0);
+}
+
+#[test]
+fn coeus_non_differentiable_storage_boundaries() {
+    use leto::{Array, CowStorage, Layout};
+
+    let backing = vec![1.0f32, 2.0, 3.0, 4.0];
+    let layout = Layout::c_contiguous([2, 2]).unwrap();
+    let mut array = Array::new(layout, CowStorage::borrowed(&backing)).unwrap();
+
+    assert!(array.storage().is_borrowed());
+    assert_eq!(*array.get([1, 0]).unwrap(), 3.0);
+
+    *array.get_mut([0, 1]).unwrap() = 20.0;
+
+    assert!(array.storage().is_owned());
+    assert_eq!(array.storage().as_owned().unwrap(), &[1.0, 20.0, 3.0, 4.0]);
+}

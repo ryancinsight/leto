@@ -1,3 +1,4 @@
+use crate::domain::strategy::{SimdOperations, SimdStrategy};
 use half::{bf16, f16};
 
 /// A trait representing scalar numeric types with native precision execution.
@@ -65,11 +66,8 @@ macro_rules! impl_scalar_native {
 
             #[inline]
             fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                #[cfg(feature = "simd")]
-                {
-                    if hermes_simd::elementwise_add::<$t>(a, b, out).is_ok() {
-                        return;
-                    }
+                if <SimdStrategy as SimdOperations<Self>>::add_slice(a, b, out).is_ok() {
+                    return;
                 }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x + y;
@@ -78,11 +76,8 @@ macro_rules! impl_scalar_native {
 
             #[inline]
             fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                #[cfg(feature = "simd")]
-                {
-                    if hermes_simd::elementwise_sub::<$t>(a, b, out).is_ok() {
-                        return;
-                    }
+                if <SimdStrategy as SimdOperations<Self>>::sub_slice(a, b, out).is_ok() {
+                    return;
                 }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x - y;
@@ -91,11 +86,8 @@ macro_rules! impl_scalar_native {
 
             #[inline]
             fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                #[cfg(feature = "simd")]
-                {
-                    if hermes_simd::elementwise_mul::<$t>(a, b, out).is_ok() {
-                        return;
-                    }
+                if <SimdStrategy as SimdOperations<Self>>::mul_slice(a, b, out).is_ok() {
+                    return;
                 }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x * y;
@@ -104,11 +96,8 @@ macro_rules! impl_scalar_native {
 
             #[inline]
             fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                #[cfg(feature = "simd")]
-                {
-                    if hermes_simd::elementwise_div::<$t>(a, b, out).is_ok() {
-                        return;
-                    }
+                if <SimdStrategy as SimdOperations<Self>>::div_slice(a, b, out).is_ok() {
+                    return;
                 }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x / y;
@@ -117,24 +106,18 @@ macro_rules! impl_scalar_native {
 
             #[inline]
             fn sum_slice(s: &[Self]) -> Self {
-                #[cfg(feature = "simd")]
-                {
-                    hermes_simd::sum::<$t>(s)
-                }
-                #[cfg(not(feature = "simd"))]
-                {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::sum_slice(s) {
+                    res
+                } else {
                     s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
                 }
             }
 
             #[inline]
             fn min_slice(s: &[Self]) -> Self {
-                #[cfg(feature = "simd")]
-                {
-                    hermes_simd::min::<$t>(s)
-                }
-                #[cfg(not(feature = "simd"))]
-                {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
+                    res
+                } else {
                     s.iter()
                         .copied()
                         .fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
@@ -143,12 +126,9 @@ macro_rules! impl_scalar_native {
 
             #[inline]
             fn max_slice(s: &[Self]) -> Self {
-                #[cfg(feature = "simd")]
-                {
-                    hermes_simd::max::<$t>(s)
-                }
-                #[cfg(not(feature = "simd"))]
-                {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::max_slice(s) {
+                    res
+                } else {
                     s.iter()
                         .copied()
                         .fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
@@ -187,6 +167,9 @@ macro_rules! impl_scalar_half {
 
             #[inline]
             fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::add_slice(a, b, out).is_ok() {
+                    return;
+                }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x + y;
                 }
@@ -194,6 +177,9 @@ macro_rules! impl_scalar_half {
 
             #[inline]
             fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::sub_slice(a, b, out).is_ok() {
+                    return;
+                }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x - y;
                 }
@@ -201,6 +187,9 @@ macro_rules! impl_scalar_half {
 
             #[inline]
             fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::mul_slice(a, b, out).is_ok() {
+                    return;
+                }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x * y;
                 }
@@ -208,6 +197,9 @@ macro_rules! impl_scalar_half {
 
             #[inline]
             fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::div_slice(a, b, out).is_ok() {
+                    return;
+                }
                 for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
                     *o = x / y;
                 }
@@ -215,21 +207,33 @@ macro_rules! impl_scalar_half {
 
             #[inline]
             fn sum_slice(s: &[Self]) -> Self {
-                s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::sum_slice(s) {
+                    res
+                } else {
+                    s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
+                }
             }
 
             #[inline]
             fn min_slice(s: &[Self]) -> Self {
-                s.iter()
-                    .copied()
-                    .fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
+                    res
+                } else {
+                    s.iter()
+                        .copied()
+                        .fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
+                }
             }
 
             #[inline]
             fn max_slice(s: &[Self]) -> Self {
-                s.iter()
-                    .copied()
-                    .fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::max_slice(s) {
+                    res
+                } else {
+                    s.iter()
+                        .copied()
+                        .fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
+                }
             }
         }
     };
