@@ -98,11 +98,15 @@ impl<const N: usize> Layout<N> {
                         reason: "slice offset calculation",
                     })?;
                     shape[output_axis] = normalized.len;
-                    strides[output_axis] = self.strides[input_axis]
-                        .checked_mul(normalized.step)
-                        .ok_or(LetoError::Overflow {
-                            reason: "slice stride multiplication",
-                        })?;
+                    strides[output_axis] = if normalized.len == 1 {
+                        0
+                    } else {
+                        self.strides[input_axis]
+                            .checked_mul(normalized.step)
+                            .ok_or(LetoError::Overflow {
+                                reason: "slice stride multiplication",
+                            })?
+                    };
                     input_axis += 1;
                     output_axis += 1;
                 }

@@ -22,6 +22,8 @@
 - [x] Add overflow-checked shape product and stride multiplication for core constructors and derived layout validation. Verification: property tests cover bounded generated offset, empty-axis, negative-stride, and composed-slice cases.
 - [x] Add property tests for C/F layouts, negative strides, singleton axes, transposes, slices, broadcasts, and offset ranges. Verification: generated tests cover C/F offset formulas, transpose value preservation, reverse slicing, composed slicing, empty-axis storage validation, singleton-axis broadcast stride/value contracts, and negative-stride storage span validation. Remaining risk: broad adversarial composition over larger dimensions still needs expansion.
 - [x] Fix `MnemosyneStorage` initialization semantics. `new(len)` requires `T: Default` and initializes elements; `from_slice` copies initialized values; `Drop` drops elements before deallocation.
+- [x] Add Apollo ndarray-validation contract tests. Coverage validates Leto constructor, storage, transpose, broadcast, axis iteration, mutable view, slice metadata, ndarray conversion, negative-stride import, and bounds-rejection behavior against `ndarray`.
+- [x] Align retained single-element range stride metadata with `ndarray`: `SliceArg::range` outputs stride `0` when the normalized range length is exactly one, while empty ranges preserve their computed stride.
 
 ## Phase 2: ndarray API Parity Required by Apollo [minor]
 - [x] Add rank-specific aliases for `Array1`, `Array2`, `Array3` and corresponding view types. Verification: value test constructs `Array1` and `Array2` aliases and reads through views.

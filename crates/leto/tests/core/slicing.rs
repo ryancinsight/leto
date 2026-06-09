@@ -99,6 +99,6 @@ fn test_ndarray_style_slice_ellipsis_and_implicit_trailing_axes() {
         .slice_with::<3>(&[SliceArg::range(Some(1), None, 1)])
         .unwrap();
     assert_eq!(implicit.shape(), [1, 3, 4]);
-    assert_eq!(implicit.strides(), [12, 4, 1]);
+    assert_eq!(implicit.strides(), [0, 4, 1]);
     assert_eq!(*implicit.get([0, 2, 3]).unwrap(), 23);
 }

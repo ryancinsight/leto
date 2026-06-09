@@ -34,6 +34,8 @@
 - [x] [patch] Add `CowStorage::as_borrowed` and `as_owned` accessors so callers can inspect backing state without cloning or forcing detachment.
 - [x] [patch] Split storage infrastructure into SRP leaf modules for traits, borrowed slices, owned vectors, Cow, and Mnemosyne allocation while preserving the public storage API.
 - [x] [patch] Fix ndarray-to-Leto zero-copy view conversion for negative strides by preserving signed strides and anchoring the borrowed backing slice at the minimum physical address.
+- [x] [patch] Add Apollo ndarray-validation contract coverage for constructors, C-order storage, transpose, broadcast, axis iteration, mutable views, owned ndarray round trips, negative-stride views, slice-with metadata, and storage-bound rejection.
+- [x] [patch] Match ndarray retained single-element range stride metadata by setting the sliced axis stride to `0` when `SliceArg::range` selects exactly one logical element; empty ranges keep their computed stride.
 - [ ] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings.
 - [ ] [patch] Add Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and gradient-adjacent non-differentiable storage boundaries.
 - [x] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.

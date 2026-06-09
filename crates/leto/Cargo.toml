@@ -32,3 +32,4 @@ ndarray-compat = ["dep:ndarray", "std"]
 
 [dev-dependencies]
 proptest = { workspace = true }
+ndarray = { workspace = true }
