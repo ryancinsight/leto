@@ -133,3 +133,91 @@ fn test_as_mut_slice_memory_order_writes_offset_block() {
 
     assert_eq!(array.storage().as_slice(), &[0, 1, 2, 3, 40, 50]);
 }
+
+#[test]
+fn test_reshape_reinterprets_dense_row_major_layout_without_copying() {
+    let array = Array::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    let reshaped = array.reshape([3, 2]).unwrap();
+
+    assert_eq!(reshaped.shape(), [3, 2]);
+    assert_eq!(reshaped.strides(), [2, 1]);
+    assert_eq!(*reshaped.get([0, 0]).unwrap(), 1);
+    assert_eq!(*reshaped.get([1, 1]).unwrap(), 4);
+    assert_eq!(*reshaped.get([2, 1]).unwrap(), 6);
+    assert_eq!(reshaped.as_slice().unwrap(), &[1, 2, 3, 4, 5, 6]);
+}
+
+#[test]
+fn test_into_shape_preserves_owned_storage_and_new_rank() {
+    let array = Array::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    let reshaped = array.into_shape([6]).unwrap();
+
+    assert_eq!(reshaped.shape(), [6]);
+    assert_eq!(reshaped.strides(), [1]);
+    assert_eq!(reshaped.storage().as_slice(), &[1, 2, 3, 4, 5, 6]);
+}
+
+#[test]
+fn test_reshape_rejects_shape_size_mismatch_and_strided_layouts() {
+    let array = Array::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+    let wrong_size = array.reshape([4, 2]);
+    assert!(matches!(wrong_size, Err(LetoError::ShapeMismatch { .. })));
+
+    let transposed = array.transpose([1, 0]).unwrap();
+    let strided_reshape = transposed.reshape([6]);
+    assert!(matches!(
+        strided_reshape,
+        Err(LetoError::StorageError { .. })
+    ));
+}
+
+#[test]
+fn test_reshape_mut_writes_through_dense_row_major_view() {
+    let mut array = Array::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    {
+        let mut reshaped = array.reshape_mut([3, 2]).unwrap();
+        *reshaped.get_mut([2, 0]).unwrap() = 50;
+    }
+
+    assert_eq!(array.storage().as_slice(), &[1, 2, 3, 4, 50, 6]);
+}
+
+#[test]
+fn test_permute_is_named_transpose_alias() {
+    let array = Array::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
+
+    let permuted = array.permute([1, 0]).unwrap();
+    let transposed = array.transpose([1, 0]).unwrap();
+
+    assert_eq!(permuted.shape(), transposed.shape());
+    assert_eq!(permuted.strides(), transposed.strides());
+    assert_eq!(*permuted.get([2, 1]).unwrap(), 6);
+}
+
+#[test]
+fn test_to_contiguous_materializes_logical_row_major_order() {
+    let array = Array::from_shape_vec([3, 4], (0i32..12).collect::<Vec<_>>()).unwrap();
+    let strided = array
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(Some(0), Some(4), 2)])
+        .unwrap();
+
+    let contiguous = strided.to_contiguous();
+
+    assert_eq!(contiguous.shape(), [3, 2]);
+    assert_eq!(contiguous.strides(), [2, 1]);
+    assert_eq!(contiguous.storage().as_slice(), &[0, 2, 4, 6, 8, 10]);
+}
+
+#[test]
+fn test_to_contiguous_materializes_broadcasted_views() {
+    let row = Array::from_shape_vec([1, 3], vec![10, 20, 30]).unwrap();
+    let broadcast = row.broadcast([2, 3]).unwrap();
+
+    let contiguous = broadcast.to_contiguous();
+
+    assert_eq!(contiguous.shape(), [2, 3]);
+    assert_eq!(contiguous.storage().as_slice(), &[10, 20, 30, 10, 20, 30]);
+}

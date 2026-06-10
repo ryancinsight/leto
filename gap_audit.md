@@ -42,7 +42,7 @@ matmul, CoW storage, Mnemosyne storage, ndarray-compat conversions.
 | Contiguous-slice access on views (`as_slice`, `as_slice_mut`, memory-order variant) | `as_slice_memory_order_mut`, `is_standard_layout` | Apollo FFT butterfly kernels require contiguous mutable slices (~20 call sites) | Closed |
 | Multi-array zip (3+ operands) and `Zip::indexed` | `Zip::from(..).and(..).and(..)` | Apollo precision-downgrade and scaling paths (~20 sites use 2-operand; some need 3) | [minor] |
 | `mapv_inplace` / in-place unary mutation | `mapv_inplace` | Apollo normalization (1/N scaling) (~5 sites) | Closed |
-| Reshape / `into_shape` on contiguous arrays | `into_shape_with_order` | Apollo (low frequency), Coeus `reshape` (required) | [minor] |
+| Reshape / `into_shape` on contiguous arrays | `into_shape_with_order` | Apollo (low frequency), Coeus `reshape` (required) | Closed |
 | Scalar–array elementwise ops (array + scalar, array * scalar) | `&a + 1.0`, `mapv` shortcuts | Apollo scaling, Coeus bias/scale paths | Closed |
 | Broadcast-aware binary ops into caller-owned output | broadcasted elementwise ops | Coeus passes `a_layout`, `b_layout`, `c_layout`; Apollo validation and scale paths | Closed |
 | std::ops operator impls on arrays/views (`Add`, `Sub`, `Mul`, `Div`, `Neg`) | operator overloads | Ergonomics for both consumers; std-trait integration mandate | [minor] |
@@ -96,12 +96,11 @@ Integration path (recorded as the plan of record in backlog Phase 6):
 Blocking sub-gaps for step 1: broadcast-aware binary writing through an
 output layout (Coeus passes `a_layout`, `b_layout`, `c_layout` — leto's
 `binary_map` currently requires shape-matched views), unary ZST op suite,
-reshape/permute/to_contiguous, concat/pad/split, batched matmul, seeded RNG
-fill.
+concat/pad/split, batched matmul, seeded RNG fill.
 
 ## D. Residual Risk Register
 
-Update 2026-06-10 (v0.3.0): several §A/§B gaps closed — see CHANGELOG and the
+Update 2026-06-10 (v0.5.0): several §A/§B gaps closed — see CHANGELOG and the
 two ADRs in `docs/adr/`.
 
 - Dynamic-rank boundary: DECIDED ([major]) in

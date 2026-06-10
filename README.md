@@ -224,9 +224,10 @@ Current value-semantic coverage includes:
   consolidates that non-differentiable layer into Leto while Coeus keeps
   `ComputeBackend`, autodiff, NN kernels, and GPU backends. The const-rank vs
   dynamic-rank boundary is decided in ADR 0002, and the unary math-op suite is
-  present. Broadcast-aware binary ops into caller-owned output layouts are also
-  present. Remaining blocking gaps: reshape/permute/to_contiguous,
-  concat/pad/split, batched matmul, and seeded RNG fill.
+  present. Broadcast-aware binary ops into caller-owned output layouts and
+  const-rank reshape/permute/to_contiguous materialization are also present.
+  Remaining blocking gaps: concat/pad/split, batched matmul, and seeded RNG
+  fill.
 
 The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
 `gap_audit.md`; the tracked migration plan lives in `checklist.md` and

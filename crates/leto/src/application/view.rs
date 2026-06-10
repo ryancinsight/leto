@@ -1,6 +1,9 @@
+use crate::application::array::Array;
+use crate::application::index::index_from_flat;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
+use crate::infrastructure::storage::VecStorage;
 
 /// Computes the physical `[offset, offset + size)` range covered by a layout
 /// whose elements form a single dense block. Returns `None` only on size
@@ -112,6 +115,47 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     ) -> Result<ArrayView<'a, T, M>> {
         let broadcasted_layout = self.layout.broadcast(target_shape)?;
         Ok(ArrayView::new(broadcasted_layout, self.data))
+    }
+
+    /// Reinterpret this view with a new shape without copying.
+    ///
+    /// The current layout must be dense row-major and the new shape must have
+    /// the same logical element count.
+    #[inline]
+    pub fn reshape<const M: usize>(&self, shape: [usize; M]) -> Result<ArrayView<'a, T, M>> {
+        let reshaped_layout = self.layout.reshape(shape)?;
+        Ok(ArrayView::new(reshaped_layout, self.data))
+    }
+
+    /// Named alias for [`transpose`](Self::transpose).
+    #[inline]
+    pub fn permute(&self, axes: [usize; N]) -> Result<ArrayView<'a, T, N>> {
+        self.transpose(axes)
+    }
+
+    /// Materialize this view into C-contiguous row-major storage.
+    ///
+    /// Dense row-major views clone the exposed slice. Strided, transposed, or
+    /// broadcasted views are copied in logical row-major order.
+    pub fn to_contiguous(&self) -> Array<T, VecStorage<T>, N>
+    where
+        T: Clone,
+    {
+        let data = match self.as_slice() {
+            Some(slice) => slice.to_vec(),
+            None => {
+                let size = self.layout.size();
+                let shape = self.shape();
+                let mut values = Vec::with_capacity(size);
+                for flat_idx in 0..size {
+                    let index = index_from_flat(flat_idx, &shape);
+                    values.push(self.get(index).expect("validated logical index").clone());
+                }
+                values
+            }
+        };
+        Array::from_shape_vec(self.shape(), data)
+            .expect("logical row-major materialization has matching shape and storage")
     }
 
     /// Returns true when the view is canonically C-contiguous at offset 0.
@@ -311,6 +355,31 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             });
         }
         Ok(ArrayViewMut::new(broadcasted_layout, self.data))
+    }
+
+    /// Reinterpret this mutable view with a new shape without copying.
+    ///
+    /// The current layout must be dense row-major and the new shape must have
+    /// the same logical element count.
+    #[inline]
+    pub fn reshape_mut<const M: usize>(self, shape: [usize; M]) -> Result<ArrayViewMut<'a, T, M>> {
+        let reshaped_layout = self.layout.reshape(shape)?;
+        Ok(ArrayViewMut::new(reshaped_layout, self.data))
+    }
+
+    /// Named alias for [`transpose_mut`](Self::transpose_mut).
+    #[inline]
+    pub fn permute_mut(self, axes: [usize; N]) -> Result<ArrayViewMut<'a, T, N>> {
+        self.transpose_mut(axes)
+    }
+
+    /// Materialize this mutable view into C-contiguous row-major storage.
+    pub fn to_contiguous(&self) -> Array<T, VecStorage<T>, N>
+    where
+        T: Clone,
+    {
+        let view = ArrayView::new(self.layout, self.data());
+        view.to_contiguous()
     }
 
     /// Returns true when the view is canonically C-contiguous at offset 0.

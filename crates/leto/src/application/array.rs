@@ -110,6 +110,43 @@ where
         Ok(ArrayView::new(broadcasted_layout, self.storage.as_slice()))
     }
 
+    /// Reinterpret this array with a new shape without copying.
+    ///
+    /// The current layout must be dense row-major and the new shape must have
+    /// the same logical element count.
+    #[inline]
+    pub fn reshape<const M: usize>(&self, shape: [usize; M]) -> Result<ArrayView<'_, T, M>> {
+        let reshaped_layout = self.layout.reshape(shape)?;
+        Ok(ArrayView::new(reshaped_layout, self.storage.as_slice()))
+    }
+
+    /// Consume this array and reinterpret its storage with a new shape without copying.
+    ///
+    /// The current layout must be dense row-major and the new shape must have
+    /// the same logical element count.
+    #[inline]
+    pub fn into_shape<const M: usize>(self, shape: [usize; M]) -> Result<Array<T, S, M>> {
+        let reshaped_layout = self.layout.reshape(shape)?;
+        Array::new(reshaped_layout, self.storage)
+    }
+
+    /// Named alias for [`transpose`](Self::transpose).
+    #[inline]
+    pub fn permute(&self, axes: [usize; N]) -> Result<ArrayView<'_, T, N>> {
+        self.transpose(axes)
+    }
+
+    /// Materialize this array into C-contiguous row-major storage.
+    ///
+    /// Dense row-major arrays clone the exposed slice. Strided, transposed, or
+    /// broadcasted arrays are copied in logical row-major order.
+    pub fn to_contiguous(&self) -> Array<T, crate::infrastructure::storage::VecStorage<T>, N>
+    where
+        T: Clone,
+    {
+        self.view().to_contiguous()
+    }
+
     /// Get a reference to the element at the specified index.
     #[inline]
     pub fn get(&self, index: [usize; N]) -> Result<&T> {
@@ -162,6 +199,28 @@ where
             transposed_layout,
             self.storage.as_mut_slice(),
         ))
+    }
+
+    /// Reinterpret this mutable array with a new shape without copying.
+    ///
+    /// The current layout must be dense row-major and the new shape must have
+    /// the same logical element count.
+    #[inline]
+    pub fn reshape_mut<const M: usize>(
+        &mut self,
+        shape: [usize; M],
+    ) -> Result<ArrayViewMut<'_, T, M>> {
+        let reshaped_layout = self.layout.reshape(shape)?;
+        Ok(ArrayViewMut::new(
+            reshaped_layout,
+            self.storage.as_mut_slice(),
+        ))
+    }
+
+    /// Named mutable alias for [`transpose_mut`](Self::transpose_mut).
+    #[inline]
+    pub fn permute_mut(&mut self, axes: [usize; N]) -> Result<ArrayViewMut<'_, T, N>> {
+        self.transpose_mut(axes)
     }
 
     /// Get a mutable reference to the element at the specified index.

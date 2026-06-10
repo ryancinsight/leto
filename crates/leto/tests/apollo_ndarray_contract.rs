@@ -163,6 +163,44 @@ fn apollo_slice_with_matches_ndarray_shape_stride_and_values() {
 }
 
 #[test]
+fn apollo_reshape_and_to_contiguous_match_ndarray_value_order() {
+    let values = (0..12).collect::<Vec<_>>();
+    let leto = Array3::from_shape_vec([2, 3, 2], values.clone()).unwrap();
+    let ndarray = ndarray::Array3::from_shape_vec((2, 3, 2), values).unwrap();
+
+    let leto_reshaped = leto.reshape([3, 4]).unwrap();
+    let ndarray_reshaped = ndarray.view().into_shape_with_order((3, 4)).unwrap();
+    assert_eq!(leto_reshaped.shape(), [3, 4]);
+    assert_eq!(ndarray_reshaped.shape(), &[3, 4]);
+    for row in 0..3 {
+        for col in 0..4 {
+            assert_eq!(
+                *leto_reshaped.get([row, col]).unwrap(),
+                ndarray_reshaped[[row, col]],
+                "reshape mismatch at [{row}, {col}]"
+            );
+        }
+    }
+
+    let leto_strided = leto
+        .slice_with::<3>(&[
+            SliceArg::All,
+            SliceArg::range(Some(0), Some(3), 2),
+            SliceArg::All,
+        ])
+        .unwrap();
+    let ndarray_strided = ndarray.slice(ndarray::s![.., ..;2, ..]);
+    let leto_contiguous = leto_strided.to_contiguous();
+    let ndarray_contiguous = ndarray_strided.as_standard_layout().to_owned();
+
+    assert_eq!(leto_contiguous.shape(), [2, 2, 2]);
+    assert_slice_eq(
+        leto_contiguous.storage().as_slice(),
+        ndarray_contiguous.as_slice().unwrap(),
+    );
+}
+
+#[test]
 fn apollo_mutable_ndarray_view_roundtrip_updates_original_storage() {
     let mut array = Array2::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
     {

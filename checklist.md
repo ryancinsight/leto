@@ -1,9 +1,8 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.4.0 [minor] (Cargo.toml bumped;
+Sprint phase: Execution. Target version: 0.5.0 [minor] (Cargo.toml bumped;
 CHANGELOG synced). In-flight item: none. Next concrete increment: Phase 6
-shape/materialization capabilities (`reshape`/`permute`/`to_contiguous`), per
-ADR 0002.
+shape composition capabilities (`concat`/`stack`/`pad`/`split`), per ADR 0002.
 
 ## Atlas ndarray replacement readiness [arch]
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
@@ -62,9 +61,10 @@ ADR 0002.
 - [x] [minor] Generalize `symmetric_eigen_jacobi` over `T: RealScalar` (native precision, no hidden widening). f32 genericity test added; f64 path unchanged.
 - [x] [arch] std::ops operator overloading decision — `docs/adr/0001-elementwise-operator-overloading.md` (deferred; orphan rule; `scalar_map` covers the scalar case).
 - [x] [minor] Broadcast-aware binary ops into caller-owned output layouts: `binary_map`/`add`/`sub`/`mul`/`div` broadcast each input to the output shape, preserve the equal-shape contiguous fast path, and reject zero-stride aliased mutable output layouts. Value tests cover dense and strided broadcast inputs; ndarray differential coverage validates broadcasted add.
-- [ ] [minor] `reshape`/`permute`/`to_contiguous`, `concat`/`stack`/`pad`/`split`, batched rank-3 matmul, `cumsum`, seeded RNG constructors (backlog Phase 6).
+- [x] [minor] `reshape`/`permute`/`to_contiguous`: dense row-major reshape/into_shape on layouts, arrays, and views; permute aliases over transpose; row-major materialization for strided/transposed/broadcasted arrays and views. Value tests and ndarray contract coverage added.
+- [ ] [minor] `concat`/`stack`/`pad`/`split`, batched rank-3 matmul, `cumsum`, seeded RNG constructors (backlog Phase 6).
 - [ ] [minor] Apollo/Coeus differential and migration coverage for the new ops before consumer dependency updates.
-- [x] [patch] Current Leto 0.3.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Full `cargo doc --workspace --all-features --no-deps` remains blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`.
+- [x] [patch] Current Leto 0.5.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Full `cargo doc --workspace --all-features --no-deps` remains blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`.
 
 ## Naming decision [patch]
 - [x] Keep `leto` as the crate name. Functionally, Leto is a non-differentiable shared strided-array substrate between Coeus and Apollo; mythologically, Leto bridges Coeus and Apollo as parent/child context. The name is appropriate if the crate remains the shared array/memory vocabulary, not an autodiff engine or spectral-transform crate.

@@ -98,4 +98,30 @@ impl<const N: usize> Layout<N> {
             .zip(self.strides.iter())
             .any(|(&dim, &stride)| dim > 1 && stride == 0)
     }
+
+    /// Reinterpret a dense row-major layout with a new shape.
+    ///
+    /// This preserves logical row-major element order and performs no
+    /// materialization. Strided, Fortran-order, or broadcasted layouts must be
+    /// materialized with `to_contiguous` before reshaping.
+    pub fn reshape<const M: usize>(&self, shape: [usize; M]) -> Result<Layout<M>> {
+        let target = Layout::<M>::c_contiguous(shape)?;
+        if self.checked_size()? != target.checked_size()? {
+            return Err(LetoError::ShapeMismatch {
+                lhs: self.shape.to_vec(),
+                rhs: shape.to_vec(),
+            });
+        }
+        if !self.is_c_dense() {
+            return Err(LetoError::StorageError {
+                reason: "reshape requires a dense row-major layout".to_string(),
+            });
+        }
+
+        Ok(Layout {
+            shape,
+            strides: target.strides,
+            offset: self.offset,
+        })
+    }
 }

@@ -4,6 +4,18 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.5.0] - 2026-06-10
+
+### Added
+
+- `leto`: `Layout::reshape`, `Array::reshape`, `Array::into_shape`,
+  `ArrayView::reshape`, and mutable reshape view variants for dense row-major
+  layout reinterpretation without materializing storage.
+- `leto`: `permute`/`permute_mut` named aliases over transpose semantics for
+  arrays and views.
+- `leto`: `to_contiguous` materialization for arrays and views, copying
+  strided, transposed, or broadcasted layouts into canonical row-major storage.
+
 ## [0.4.0] - 2026-06-10
 
 ### Added
