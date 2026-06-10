@@ -14,7 +14,7 @@ Each routine generic over `T: RealScalar`, native-precision accumulation (wider
 accumulator only via a trait-encoded associated type with numerical justification),
 admitted only with a named consumer driver (coeus/apollo) and a differential
 oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
-- [ ] [patch] Vector/matrix norms (L1, L2, Frobenius, inf) over `RealScalar`.
+- [x] [patch] Vector/matrix norms over `RealScalar`: `NormKind` ZST markers (`NormL1`/`NormL2`/`NormMax`) through one generic `norm` traversal in `application/linalg/norms.rs`; `norm_l2` covers Euclidean (rank-1) and Frobenius (rank-2+) in one entry point. Eigensolver consolidated into `linalg/` (re-export paths stable). Verification: nalgebra differential oracle, strided layout-independence, empty-view, and exact f16 tests.
 - [ ] [minor] Triangular solve + LU with partial pivoting; `solve`, `det`, `inv`.
 - [ ] [minor] QR (Householder) + least-squares solve.
 - [ ] [minor] Cholesky (SPD) factorization + solve.

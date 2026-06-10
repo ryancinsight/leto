@@ -1,7 +1,7 @@
-/// Real symmetric eigensolver operations.
-pub mod eigen;
 /// Shared logical-index conversion helpers.
 pub(crate) mod index;
+/// Dense linear algebra: eigensolver and norms.
+pub mod linalg;
 /// Elementwise binary and aggregate map operations.
 pub mod map;
 /// Matrix multiplication operations.
@@ -19,7 +19,10 @@ pub mod vector;
 /// Mutable zip-map operations.
 pub mod zip;
 
-pub use eigen::{symmetric_eigen_jacobi, SymmetricEigenDecomposition};
+pub use linalg::{
+    norm, norm_l1, norm_l2, norm_max, symmetric_eigen_jacobi, NormKind, NormL1, NormL2, NormMax,
+    SymmetricEigenDecomposition,
+};
 pub use map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
     MulOp, SubOp,

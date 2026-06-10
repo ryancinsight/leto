@@ -3,11 +3,10 @@
 Sprint phase: Execution. Target version: 0.7.0 [minor] (Cargo.toml bumped;
 CHANGELOG synced). In-flight item: none.
 
-Next concrete increment (Stage A1, nalgebra completion — see backlog "Atlas
-in-house replacement roadmap"): vector/matrix norms (L1/L2/Frobenius/inf) over
-`RealScalar` in a new `leto-ops::application::linalg` module, with a differential
-oracle vs ndarray. Then triangular solve + LU. Each linalg routine is gated by a
-named consumer driver (coeus/apollo) and a differential oracle.
+Stage A1 norms delivered in 0.8.0 (`linalg/norms.rs`, nalgebra oracle; eigen
+consolidated under `linalg/`). Next concrete increment (Stage A1): triangular
+solve + LU with partial pivoting (`solve`/`det`/`inv`), nalgebra differential
+oracle, gated on a named consumer driver (coeus/apollo/CFDrs).
 
 Parallel cross-repo track: Coeus CPU consolidation onto coeus-leto; the shared
 GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)

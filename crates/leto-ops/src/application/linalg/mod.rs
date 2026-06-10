@@ -1,0 +1,14 @@
+//! Dense linear algebra (Stage A1 of the Atlas nalgebra replacement).
+//!
+//! Routines are admitted with a named consumer driver and a differential
+//! oracle (nalgebra as a dev-dependency), generic over `RealScalar`, and run
+//! in native precision per the `Scalar` contract.
+
+/// Real symmetric eigensolver (Jacobi rotations).
+pub mod eigen;
+/// Vector and matrix norms.
+pub mod norms;
+
+pub use eigen::SymmetricEigenDecomposition;
+pub use eigen::{symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance};
+pub use norms::{norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2, NormMax};

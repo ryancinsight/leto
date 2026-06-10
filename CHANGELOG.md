@@ -4,6 +4,34 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.8.0] - 2026-06-10
+
+Stage A1 (nalgebra replacement) first increment: norms, plus a vertical
+`linalg` module consolidating dense linear algebra.
+
+### Added
+
+- `leto-ops`: `application/linalg/norms.rs` — `NormKind` ZST contract with
+  `NormL1` (`Σ|x|`), `NormL2` (`sqrt(Σx²)`; Euclidean over rank-1, Frobenius
+  over rank-2+ through one generic entry point), and `NormMax` (`max|x|`)
+  markers; one generic `norm::<K, T, N>` traversal (memory-order contiguous
+  fast path + strided logical fallback) with `norm_l1`/`norm_l2`/`norm_max`
+  wrappers. Generic over `RealScalar`, native-precision accumulation.
+- `leto-ops`: top-level re-export of `symmetric_eigen_jacobi_with_tolerance`.
+
+### Changed
+
+- `leto-ops`: the eigensolver moved into the new `application/linalg/` module
+  (`linalg/eigen.rs`); all public re-export paths (`leto_ops::symmetric_eigen_jacobi`,
+  `SymmetricEigenDecomposition`) are unchanged.
+
+### Tests
+
+- Norm differential oracle vs nalgebra (`DVector::norm`/`lp_norm`/`amax`,
+  `DMatrix::norm` Frobenius), strided/transposed layout-independence,
+  logical-selection-only strided slices, empty-view zero, and exact
+  reduced-precision (3-4-5 in `f16`) coverage.
+
 ## [0.7.0] - 2026-06-10
 
 ### Added
