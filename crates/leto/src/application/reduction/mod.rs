@@ -1,13 +1,14 @@
 //! Element-wise reduction operations over N-dimensional strided arrays.
 //!
 //! # Submodules
-//! - [`sum`]     — `sum_all`, `sum_axis`
-//! - [`mean`]    — `mean_all`, `mean_axis`
-//! - [`min_max`] — `min_all`, `max_all`, `min_axis`, `max_axis`, `argmin`, `argmax`
+//! - [`sum`](crate::application::reduction::sum) — [`sum_all`], [`sum_axis`]
+//! - [`mean`](crate::application::reduction::mean) — [`mean_all`], [`mean_axis`]
+//! - [`min_max`](crate::application::reduction::min_max) — [`min_all`], [`max_all`], [`min_axis`], [`max_axis`], [`argmin`], [`argmax`]
 //!
 //! # Shared infrastructure
-//! [`iter_elements`] is a `pub(crate)` helper that yields `&T` references for
-//! every logical element of an [`ArrayView`], respecting arbitrary strides.
+//! `iter_elements` is a `pub(crate)` helper that yields `&T` references for
+//! every logical element of an [`ArrayView`](crate::application::view::ArrayView),
+//! respecting arbitrary strides.
 //! All leaf modules import it via `crate::application::reduction::iter_elements`.
 
 pub mod mean;

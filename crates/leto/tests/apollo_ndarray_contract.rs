@@ -180,3 +180,27 @@ fn apollo_rejects_layouts_that_exceed_storage_bounds() {
     let result = leto::Array::<i32, VecStorage<i32>, 2>::new(layout, VecStorage::new(vec![1, 2]));
     assert!(matches!(result, Err(leto::LetoError::StorageError { .. })));
 }
+
+#[cfg(feature = "mnemosyne-alloc")]
+#[test]
+fn apollo_mnemosyne_owned_constructors_match_ndarray_c_order() {
+    let values = vec![1_i32, 2, 3, 4, 5, 6];
+    let leto =
+        leto::Array::<i32, leto::MnemosyneStorage<i32>, 2>::from_mnemosyne_slice([2, 3], &values)
+            .unwrap();
+    let ndarray = NdArray2::from_shape_vec((2, 3), values).unwrap();
+
+    assert_eq!(leto.shape(), [2, 3]);
+    assert_eq!(leto.strides(), [3, 1]);
+    assert_slice_eq(leto.storage().as_slice(), ndarray.as_slice().unwrap());
+
+    let zeros = leto::Array::<f64, leto::MnemosyneStorage<f64>, 2>::zeros_mnemosyne([2, 3]);
+    let nd_zeros = NdArray2::<f64>::zeros((2, 3));
+    assert_eq!(zeros.shape(), [2, 3]);
+    assert_eq!(zeros.strides(), [3, 1]);
+    assert_slice_eq(zeros.storage().as_slice(), nd_zeros.as_slice().unwrap());
+
+    let result =
+        leto::Array::<i32, leto::MnemosyneStorage<i32>, 2>::from_mnemosyne_slice([2, 3], &[1, 2]);
+    assert!(matches!(result, Err(leto::LetoError::StorageError { .. })));
+}

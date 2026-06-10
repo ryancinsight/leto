@@ -79,9 +79,7 @@ where
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
-    axis_reduce_lanes::<T, S, N, M, _>(arr, axis, |acc, elem| {
-        if elem < acc { elem } else { acc }
-    })
+    axis_reduce_lanes::<T, S, N, M, _>(arr, axis, |acc, elem| if elem < acc { elem } else { acc })
 }
 
 /// Maximum along `axis`, reducing rank by one.
@@ -97,9 +95,7 @@ where
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
-    axis_reduce_lanes::<T, S, N, M, _>(arr, axis, |acc, elem| {
-        if elem > acc { elem } else { acc }
-    })
+    axis_reduce_lanes::<T, S, N, M, _>(arr, axis, |acc, elem| if elem > acc { elem } else { acc })
 }
 
 // ── argmin / argmax ───────────────────────────────────────────────────────────

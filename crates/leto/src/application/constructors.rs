@@ -2,6 +2,8 @@ use crate::application::array::Array;
 use crate::application::index::index_from_flat;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
+#[cfg(feature = "mnemosyne-alloc")]
+use crate::infrastructure::storage::MnemosyneStorage;
 use crate::infrastructure::storage::VecStorage;
 
 impl<T, const N: usize> Array<T, VecStorage<T>, N> {
@@ -96,5 +98,38 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
             vec.push(val);
         }
         vec
+    }
+}
+
+#[cfg(feature = "mnemosyne-alloc")]
+impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
+    /// Create a Mnemosyne-backed array of a given shape filled with `T::default()`.
+    pub fn zeros_mnemosyne(shape: [usize; N]) -> Self
+    where
+        T: Default,
+    {
+        let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
+        let storage = MnemosyneStorage::new(layout.size());
+        Self::new(layout, storage).expect("valid Mnemosyne storage bounds")
+    }
+
+    /// Create a Mnemosyne-backed array by copying a C-contiguous source slice.
+    pub fn from_mnemosyne_slice(shape: [usize; N], slice: &[T]) -> Result<Self>
+    where
+        T: Copy,
+    {
+        let layout = Layout::c_contiguous(shape)?;
+        let size = layout.size();
+        if slice.len() != size {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "Slice length {} does not match layout size {}",
+                    slice.len(),
+                    size
+                ),
+            });
+        }
+        let storage = MnemosyneStorage::from_slice(slice);
+        Self::new(layout, storage)
     }
 }
