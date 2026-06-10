@@ -40,20 +40,20 @@ matmul, CoW storage, Mnemosyne storage, ndarray-compat conversions.
 | Gap | ndarray counterpart | Consumer driver | Class |
 | --- | --- | --- | --- |
 | Contiguous-slice access on views (`as_slice`, `as_slice_mut`, memory-order variant) | `as_slice_memory_order_mut`, `is_standard_layout` | Apollo FFT butterfly kernels require contiguous mutable slices (~20 call sites) | Closed |
-| Multi-array zip (3+ operands) and `Zip::indexed` | `Zip::from(..).and(..).and(..)` | Apollo precision-downgrade and scaling paths (~20 sites use 2-operand; some need 3) | [minor] |
+| Multi-array zip (3+ operands) and `Zip::indexed` | `Zip::from(..).and(..).and(..)` | Apollo precision-downgrade and scaling paths | `zip2_mut_with` Closed; `Zip::indexed` still [minor] |
 | `mapv_inplace` / in-place unary mutation | `mapv_inplace` | Apollo normalization (1/N scaling) (~5 sites) | Closed |
 | Reshape / `into_shape` on contiguous arrays | `into_shape_with_order` | Apollo (low frequency), Coeus `reshape` (required) | Closed |
 | Scalar–array elementwise ops (array + scalar, array * scalar) | `&a + 1.0`, `mapv` shortcuts | Apollo scaling, Coeus bias/scale paths | Closed |
 | Broadcast-aware binary ops into caller-owned output | broadcasted elementwise ops | Coeus passes `a_layout`, `b_layout`, `c_layout`; Apollo validation and scale paths | Closed |
 | std::ops operator impls on arrays/views (`Add`, `Sub`, `Mul`, `Div`, `Neg`) | operator overloads | Ergonomics for both consumers; std-trait integration mandate | [minor] |
-| `concat`/`stack` along axis | `ndarray::concatenate`, `stack` | Coeus `cat()`; Apollo validation builders | [minor] |
+| `concat`/`stack` along axis | `ndarray::concatenate`, `stack` | Coeus `cat()`; Apollo validation builders | Closed (`concat`; `stack` via `InsertAxis` rank helper) |
 | Dynamic-rank escape type at I/O boundaries | `IxDyn` | Apollo generic-over-dimension helpers (~30 sites use `Array<T, D>`); Coeus layout is dynamic-rank | [major] decision: const-rank adapters vs a `DynArray` boundary type |
 | 1D dot / vector ops | `Array1::dot` | Apollo, Coeus | Closed |
 | Elementwise unary math suite (`exp`, `ln`, `sin`, `cos`, `sqrt`, `abs`, `neg`, `powf`) as named ZST ops | `mapv` with std float fns | Coeus `UnaryOp` enum (17 math/activation variants build on these) | Closed |
-| `cumsum` / prefix scans along axis | (ndarray lacks native; Coeus has) | Coeus `cumsum`, `suffix_sum` | [minor] |
-| Random constructors (uniform/normal, seeded) | `ndarray-rand` | Coeus init (`Xorshift64`, Box-Muller); keep deterministic, seed-based | [minor] |
-| Pad / split along axis | (manual in ndarray) | Coeus shape ops | [minor] |
-| Batched (rank-3) matmul | (via einsum/manual) | Coeus batched contraction — only if the boundary decision places it in leto | [minor] |
+| `cumsum` / prefix scans along axis | (ndarray lacks native; Coeus has) | Coeus `cumsum`, `suffix_sum` | Closed (`scan_axis`, `cumsum`, fwd/rev, CumSum/CumProd) |
+| Random constructors (uniform/normal, seeded) | `ndarray-rand` | Coeus init (`Xorshift64`, Box-Muller); keep deterministic, seed-based | Closed (`uniform_with_seed`, `normal_with_seed`) |
+| Pad / split along axis | (manual in ndarray) | Coeus shape ops | Closed (`pad`, `split`) |
+| Batched (rank-3) matmul | (via einsum/manual) | Coeus batched contraction — boundary decision places it in leto | Closed (`batched_matmul`, batch broadcast) |
 
 Non-goals confirmed: conv/pool/attention/optimizer kernels, sparse formats
 (COO/CSR, SpMV/SpMM), autodiff — these stay in Coeus. GPU buffers stay
@@ -100,9 +100,13 @@ concat/pad/split, batched matmul, seeded RNG fill.
 
 ## D. Residual Risk Register
 
-Update 2026-06-10 (v0.5.0): several §A/§B gaps closed — see CHANGELOG and the
-two ADRs in `docs/adr/`.
+Update 2026-06-10 (v0.7.0): all §A/§B/§C leto-side capability gaps closed — see
+CHANGELOG and the two ADRs in `docs/adr/`. Remaining work is cross-cutting: the
+Coeus re-base and Apollo/Coeus consumer migration with differential coverage.
 
+- `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
+  rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
+  all closed.
 - Dynamic-rank boundary: DECIDED ([major]) in
   `docs/adr/0002-coeus-rank-boundary.md` — const-generic dispatch shim at the
   Coeus boundary, shim owned by Coeus, Leto stays const-rank. Phase 6 leto-side
@@ -119,10 +123,13 @@ two ADRs in `docs/adr/`.
 - std::ops operator overloading: DEFERRED ([arch]) in
   `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule). `scalar_map`
   covers array–scalar arithmetic; no consumer blocked.
-- Coverage of new ops: value-semantic tests added (unary math, scalar_map, dot,
-  map_inplace, memory-order slices, f32 eigensolver). No new ndarray differential
-  oracle yet for the unary math suite or scalar_map — add before Apollo/Coeus
-  consumer dependency updates (tracked in checklist next-increments).
+- Coverage of new ops: value-semantic tests plus ndarray differential oracles
+  now cover the unary math suite (`exp`/`sqrt`), `scalar_map`, `concat`,
+  `stack`, `batched_matmul` (per-batch ndarray `dot`), and `cumsum` (reference
+  accumulate), alongside the existing map/reduction/matmul differentials. RNG is
+  validated against closed-form mean/variance (correct per policy, not ndarray).
+  Remaining: differential coverage is leto-internal; consumer-side (Apollo/Coeus)
+  migration tests are the next cross-repo step.
 - `leto-python` rustdoc ICE via `numpy 0.23` still open (tracked in backlog).
 - Differential coverage: ndarray oracle covers map/reductions/matmul; no
   oracle yet for future unary suite, concat/stack, RNG (use closed-form

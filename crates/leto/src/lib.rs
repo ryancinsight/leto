@@ -10,6 +10,7 @@ pub mod infrastructure;
 
 // Re-exports
 pub use domain::error::{LetoError, Result};
+pub use domain::insert_axis::InsertAxis;
 pub use domain::layout::Layout;
 pub use domain::remove_axis::{RankMarker, RemoveAxis};
 pub use domain::slice::SliceArg;
@@ -24,8 +25,8 @@ pub use infrastructure::storage::MnemosyneStorage;
 pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};
 pub use application::{
-    Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, ArrayViewMut2,
-    ArrayViewMut3, AxisIter, AxisIterMut,
+    concat, pad, split, stack, Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3,
+    ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter, AxisIterMut, PadWidth,
 };
 
 #[cfg(feature = "ndarray-compat")]

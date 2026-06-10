@@ -4,6 +4,64 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.7.0] - 2026-06-10
+
+### Added
+
+- `leto`: `InsertAxis` rank helper (`domain/insert_axis.rs`) — the dual of
+  `RemoveAxis`, mapping rank `N -> N + 1` at compile time on stable Rust through
+  the shared `RankMarker` ZST, for ranks 0..=7 (output 1..=8).
+- `leto`: `stack` (`application/structure/stack.rs`) — stacks equal-shaped
+  rank-`N` views along a new axis (inserted at `0..=N`), producing rank
+  `M = N + 1` C-contiguous output in logical row-major order. Output rank is
+  resolved via `InsertAxis`; call as `stack::<T, N, M>(..)`.
+
+### Tests
+
+- ndarray differential oracles added for `unary_map` (exp/sqrt), `scalar_map`,
+  `concat`, `stack`, `batched_matmul` (per-batch `dot`), and `cumsum`, raising
+  the `leto-ops` differential suite to 57 tests.
+
+### Notes
+
+- Closes the `stack` item deferred in 0.6.0. The rank-preserving structural ops
+  (`concat`/`pad`/`split`) remain unchanged.
+
+## [0.6.0] - 2026-06-10
+
+Phase 6/7 gap remediation: structural ops, batched contraction, scans, seeded
+RNG, and multi-operand zip. All const-rank per ADR 0002.
+
+### Added
+
+- `leto`: structural array operations in a new `application/structure/` module —
+  `concat` (along an existing axis), `pad` (per-axis before/after with a fill
+  value), and `split` (zero-copy subviews along an axis). `concat`/`pad`
+  allocate C-contiguous output and read inputs in logical (row-major) order, so
+  strided/transposed inputs are handled correctly.
+- `leto-ops`: `batched_matmul` for rank-3 `[B,M,K] x [B,K,N] -> [B,M,N]`, with
+  batch broadcasting when either operand's batch dim is 1. Dispatches each batch
+  to the rank-2 `matmul` kernel (one authoritative contraction).
+- `leto-ops`: prefix/suffix scans in a new `application/scan.rs` — `ScanOp`
+  trait with `CumSumOp`/`CumProdOp` markers, `ScanDirection` (Forward/Reverse),
+  `scan_axis`/`scan_axis_into`, and `cumsum`/`cumsum_into` wrappers.
+- `leto-ops`: deterministic seeded random constructors `uniform_with_seed` and
+  `normal_with_seed` (Box-Muller), backed by a new `Xorshift64` PRNG domain
+  type (`domain/rng.rs`). Validated against closed-form distribution statistics.
+- `leto-ops`: `zip2_mut_with`, the three-operand analogue of `zip_mut_with`
+  (`ndarray`'s `Zip::from(out).and(a).and(b)`).
+- `leto-ops`: `RealScalar::from_f64` (construction-time conversion for sampling
+  and constants).
+
+### Notes
+
+- `stack` (rank-increasing concat, rank `N -> N+1`) is deferred: stable Rust
+  lacks const-generic rank arithmetic, so it needs an `InsertAxis` rank helper
+  mirroring `RemoveAxis`. Tracked in backlog Phase 6.
+- `batched_matmul` value tests cover explicit batches and batch broadcast; its
+  per-batch path is the rank-2 `matmul` already differentially tested against
+  `ndarray`.
+
 ## [0.5.0] - 2026-06-10
 
 ### Added

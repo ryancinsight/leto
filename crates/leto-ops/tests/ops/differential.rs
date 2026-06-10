@@ -1,6 +1,9 @@
-use leto::{Array, Storage};
-use leto_ops::{add, mapv, matmul, max_axis, mean_axis, min_axis, sum_axis};
-use ndarray::{Array2, Axis};
+use leto::{concat, stack, Array, Storage};
+use leto_ops::{
+    add, batched_matmul, cumsum, mapv, matmul, max_axis, mean_axis, min_axis, scalar_map, sum_axis,
+    unary_map, AddOp, ExpOp, SqrtOp,
+};
+use ndarray::{Array2, Array3, Axis};
 
 fn assert_close_slice(lhs: &[f32], rhs: &[f32]) {
     assert_eq!(lhs.len(), rhs.len());
@@ -138,6 +141,107 @@ fn test_axis_reductions_differential_match_ndarray_keepdim() {
         col_sum.storage().as_slice(),
         expected_col_sum.as_slice().unwrap(),
     );
+}
+
+#[test]
+fn test_unary_map_differential_matches_ndarray() {
+    let values = vec![0.25f32, 1.0, 2.5, 4.0, 0.5, 9.0];
+    let input = Array::from_shape_vec([2, 3], values.clone()).unwrap();
+    let ndarray_input = Array2::from_shape_vec((2, 3), values).unwrap();
+
+    let exp = unary_map(ExpOp, &input.view()).unwrap();
+    let expected_exp = ndarray_input.mapv(|v| v.exp());
+    assert_close_slice(exp.storage().as_slice(), expected_exp.as_slice().unwrap());
+
+    let sqrt = unary_map(SqrtOp, &input.view()).unwrap();
+    let expected_sqrt = ndarray_input.mapv(|v| v.sqrt());
+    assert_close_slice(sqrt.storage().as_slice(), expected_sqrt.as_slice().unwrap());
+}
+
+#[test]
+fn test_scalar_map_differential_matches_ndarray() {
+    let values = vec![1.0f32, -2.0, 3.5, 4.25];
+    let input = Array::from_shape_vec([2, 2], values.clone()).unwrap();
+    let ndarray_input = Array2::from_shape_vec((2, 2), values).unwrap();
+
+    let shifted = scalar_map::<AddOp, _, 2>(&input.view(), 10.0).unwrap();
+    let expected = ndarray_input.mapv(|v| v + 10.0);
+    assert_close_slice(shifted.storage().as_slice(), expected.as_slice().unwrap());
+}
+
+#[test]
+fn test_concat_differential_matches_ndarray() {
+    let a_values = vec![1.0f32, 2.0, 3.0, 4.0];
+    let b_values = vec![5.0f32, 6.0];
+    let a = Array::from_shape_vec([2, 2], a_values.clone()).unwrap();
+    let b = Array::from_shape_vec([1, 2], b_values.clone()).unwrap();
+
+    let out = concat(&[a.view(), b.view()], 0).unwrap();
+
+    let nd_a = Array2::from_shape_vec((2, 2), a_values).unwrap();
+    let nd_b = Array2::from_shape_vec((1, 2), b_values).unwrap();
+    let expected = ndarray::concatenate(Axis(0), &[nd_a.view(), nd_b.view()]).unwrap();
+    assert_eq!(out.shape(), [3, 2]);
+    assert_close_slice(out.storage().as_slice(), expected.as_slice().unwrap());
+}
+
+#[test]
+fn test_stack_differential_matches_ndarray() {
+    let a_values = vec![1.0f32, 2.0, 3.0];
+    let b_values = vec![4.0f32, 5.0, 6.0];
+    let a = Array::from_shape_vec([3], a_values.clone()).unwrap();
+    let b = Array::from_shape_vec([3], b_values.clone()).unwrap();
+
+    let out = stack::<f32, 1, 2>(&[a.view(), b.view()], 1).unwrap();
+
+    let nd_a = ndarray::Array1::from_vec(a_values);
+    let nd_b = ndarray::Array1::from_vec(b_values);
+    let expected = ndarray::stack(Axis(1), &[nd_a.view(), nd_b.view()]).unwrap();
+    let expected_values: Vec<f32> = expected.iter().copied().collect();
+    assert_eq!(out.shape(), [3, 2]);
+    assert_close_slice(out.storage().as_slice(), &expected_values);
+}
+
+#[test]
+fn test_batched_matmul_differential_matches_ndarray_per_batch() {
+    let lhs_values: Vec<f32> = (1..=12).map(|x| x as f32).collect();
+    let rhs_values: Vec<f32> = (1..=12).map(|x| (x as f32) * 0.5).collect();
+    // [2, 2, 3] x [2, 3, 2] -> [2, 2, 2]
+    let lhs = Array::from_shape_vec([2, 2, 3], lhs_values.clone()).unwrap();
+    let rhs = Array::from_shape_vec([2, 3, 2], rhs_values.clone()).unwrap();
+    let mut out = Array::zeros([2, 2, 2]);
+
+    batched_matmul(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+
+    let nd_lhs = Array3::from_shape_vec((2, 2, 3), lhs_values).unwrap();
+    let nd_rhs = Array3::from_shape_vec((2, 3, 2), rhs_values).unwrap();
+    let mut expected = Vec::with_capacity(8);
+    for b in 0..2 {
+        let l = nd_lhs.index_axis(Axis(0), b).to_owned();
+        let r = nd_rhs.index_axis(Axis(0), b).to_owned();
+        let prod = l.dot(&r);
+        expected.extend(prod.iter().copied());
+    }
+    assert_close_slice(out.storage().as_slice(), &expected);
+}
+
+#[test]
+fn test_cumsum_differential_matches_reference_accumulate() {
+    let values = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let input = Array::from_shape_vec([2, 3], values.clone()).unwrap();
+
+    let out = cumsum(&input.view(), 1).unwrap();
+
+    // Reference: running sum along axis 1 of each row.
+    let mut expected = vec![0.0f32; 6];
+    for row in 0..2 {
+        let mut acc = 0.0f32;
+        for col in 0..3 {
+            acc += values[row * 3 + col];
+            expected[row * 3 + col] = acc;
+        }
+    }
+    assert_close_slice(out.storage().as_slice(), &expected);
 }
 
 #[test]

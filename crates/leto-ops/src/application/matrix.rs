@@ -1,5 +1,5 @@
 use crate::domain::scalar::Scalar;
-use leto::{ArrayView, ArrayViewMut, LetoError, Result};
+use leto::{ArrayView, ArrayViewMut, Layout, LetoError, Result};
 
 #[cfg(feature = "parallel")]
 const PARALLEL_ROW_THRESHOLD: usize = 16;
@@ -218,4 +218,71 @@ fn parallel_matmul<T: Scalar>(
             );
         }
     });
+}
+
+/// Perform batched matrix multiplication `out[i] = lhs[i] * rhs[i]` for rank-3
+/// views shaped `[B, M, K] x [B, K, N] -> [B, M, N]`.
+///
+/// The batch dimension of either input may be `1`, in which case that operand
+/// is broadcast across all `B` batches at zero stride (no materialization).
+/// Each batch slice is dispatched to the rank-2 [`matmul`] kernel, so there is
+/// one authoritative contraction implementation; this function only resolves
+/// per-batch 2D layouts.
+pub fn batched_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 3>,
+    rhs: &ArrayView<'_, T, 3>,
+    out: &mut ArrayViewMut<'_, T, 3>,
+) -> Result<()> {
+    let [lhs_batch, m, lhs_k] = lhs.shape();
+    let [rhs_batch, rhs_k, n] = rhs.shape();
+    let [out_batch, out_m, out_n] = out.shape();
+
+    let batch = out_batch;
+    let lhs_batches_ok = lhs_batch == batch || lhs_batch == 1;
+    let rhs_batches_ok = rhs_batch == batch || rhs_batch == 1;
+    if !lhs_batches_ok || !rhs_batches_ok || lhs_k != rhs_k || m != out_m || n != out_n {
+        return Err(LetoError::ShapeMismatch {
+            lhs: lhs.shape().to_vec(),
+            rhs: rhs.shape().to_vec(),
+        });
+    }
+
+    lhs.layout().validate_storage_len(lhs.data().len())?;
+    rhs.layout().validate_storage_len(rhs.data().len())?;
+    out.layout().validate_storage_len(out.data().len())?;
+
+    let lhs_batch_stride = if lhs_batch == 1 { 0 } else { lhs.strides()[0] };
+    let rhs_batch_stride = if rhs_batch == 1 { 0 } else { rhs.strides()[0] };
+    let out_batch_stride = out.strides()[0];
+
+    let lhs_mat = |b: usize| {
+        Layout::new(
+            [m, lhs_k],
+            [lhs.strides()[1], lhs.strides()[2]],
+            (lhs.offset() as isize + b as isize * lhs_batch_stride) as usize,
+        )
+    };
+    let rhs_mat = |b: usize| {
+        Layout::new(
+            [rhs_k, n],
+            [rhs.strides()[1], rhs.strides()[2]],
+            (rhs.offset() as isize + b as isize * rhs_batch_stride) as usize,
+        )
+    };
+    let out_offset = out.offset() as isize;
+    let out_strides = [out.strides()[1], out.strides()[2]];
+
+    for b in 0..batch {
+        let lhs_view = ArrayView::new(lhs_mat(b), lhs.data());
+        let rhs_view = ArrayView::new(rhs_mat(b), rhs.data());
+        let out_layout = Layout::new(
+            [out_m, out_n],
+            out_strides,
+            (out_offset + b as isize * out_batch_stride) as usize,
+        );
+        let mut out_view = ArrayViewMut::new(out_layout, out.data_mut());
+        matmul(&lhs_view, &rhs_view, &mut out_view)?;
+    }
+
+    Ok(())
 }

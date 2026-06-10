@@ -142,7 +142,22 @@ caller-owned output shape, so `[N, 1]` and `[1, C]` views write directly into
   blocks independent of offset.
 - Matrix multiplication lives in a dedicated matrix module, writes into
   caller-owned output, rejects zero-stride mutable output aliasing, and supports
-  contiguous plus strided/transposed inputs.
+  contiguous plus strided/transposed inputs. `batched_matmul` contracts rank-3
+  `[B,M,K] x [B,K,N]` batches (batch dim broadcasts when 1) by dispatching each
+  batch to the rank-2 kernel.
+- Prefix/suffix scans (`scan_axis`, `cumsum`) keep shape and run along an axis
+  through `CumSumOp`/`CumProdOp` markers and a `ScanDirection` (Forward/Reverse).
+- Structural ops in leto core (`concat`, `pad`, `split`, `stack`) compose and
+  partition arrays along an axis; `concat`/`pad`/`stack` allocate C-contiguous
+  output in logical row-major order, `split` returns zero-copy subviews.
+  `stack` is rank-increasing (`N→N+1`) via the `InsertAxis` compile-time rank
+  helper (the dual of `RemoveAxis`), so dimension changes stay in the type
+  system on stable Rust.
+- Deterministic seeded random constructors (`uniform_with_seed`,
+  `normal_with_seed` via Box-Muller) over an `Xorshift64` PRNG produce leto
+  arrays; sampling runs in native precision.
+- `zip2_mut_with` is the three-operand in-place zip (one mutable output, two
+  read inputs), the `Zip::from(out).and(a).and(b)` analogue.
 - Strided output layouts that can alias mutable writes through zero strides do
   not enter parallel write paths.
 - The core `leto` crate remains independent of Hermes and Moirai; integration

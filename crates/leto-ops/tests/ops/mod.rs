@@ -3,4 +3,5 @@ pub mod eigen;
 pub mod elementwise;
 pub mod matmul;
 pub mod reduction;
+pub mod structure_ops;
 pub mod unary_math;

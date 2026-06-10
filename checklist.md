@@ -1,8 +1,9 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.5.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). In-flight item: none. Next concrete increment: Phase 6
-shape composition capabilities (`concat`/`stack`/`pad`/`split`), per ADR 0002.
+Sprint phase: Execution. Target version: 0.7.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). In-flight item: none. Next concrete increment: Apollo/Coeus
+differential + migration coverage for the 0.4–0.7 ops before consumer
+dependency updates, then the cross-repo Coeus re-base (ADR 0002).
 
 ## Atlas ndarray replacement readiness [arch]
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
@@ -62,8 +63,10 @@ shape composition capabilities (`concat`/`stack`/`pad`/`split`), per ADR 0002.
 - [x] [arch] std::ops operator overloading decision — `docs/adr/0001-elementwise-operator-overloading.md` (deferred; orphan rule; `scalar_map` covers the scalar case).
 - [x] [minor] Broadcast-aware binary ops into caller-owned output layouts: `binary_map`/`add`/`sub`/`mul`/`div` broadcast each input to the output shape, preserve the equal-shape contiguous fast path, and reject zero-stride aliased mutable output layouts. Value tests cover dense and strided broadcast inputs; ndarray differential coverage validates broadcasted add.
 - [x] [minor] `reshape`/`permute`/`to_contiguous`: dense row-major reshape/into_shape on layouts, arrays, and views; permute aliases over transpose; row-major materialization for strided/transposed/broadcasted arrays and views. Value tests and ndarray contract coverage added.
-- [ ] [minor] `concat`/`stack`/`pad`/`split`, batched rank-3 matmul, `cumsum`, seeded RNG constructors (backlog Phase 6).
-- [ ] [minor] Apollo/Coeus differential and migration coverage for the new ops before consumer dependency updates.
+- [x] [minor] `concat`/`pad`/`split` (leto core `structure/`), batched rank-3 `matmul`, `cumsum`/`scan_axis`, seeded RNG (`uniform_with_seed`/`normal_with_seed`), and `zip2_mut_with` (3-operand). Value tests for each; RNG validated against closed-form mean/variance. `stack` deferred (needs `InsertAxis` rank helper — stable Rust lacks const-generic `N+1`).
+- [x] [minor] `stack` via an `InsertAxis` rank helper mirroring `RemoveAxis` (rank `N -> N+1`, ranks 0..=7). Value tests: new leading/trailing axis, rank-2→3, transposed-input logical order, shape-mismatch rejection.
+- [x] [patch] Leto-internal ndarray differential coverage for the new ops: `unary_map` (exp/sqrt), `scalar_map`, `concat`, `stack`, `batched_matmul` (per-batch ndarray dot), and `cumsum` (reference accumulate). `ops_tests` differential suite now 57 green.
+- [ ] [minor] Apollo/Coeus consumer-side differential and migration coverage before dependency updates (cross-repo; requires a pushed Leto revision first).
 - [x] [patch] Current Leto 0.5.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Full `cargo doc --workspace --all-features --no-deps` remains blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`.
 
 ## Naming decision [patch]

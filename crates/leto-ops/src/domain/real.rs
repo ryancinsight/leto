@@ -36,6 +36,10 @@ pub trait RealScalar: Scalar {
     fn atan2(self, other: Self) -> Self;
     /// Returns true when the value is neither infinite nor NaN.
     fn is_finite(self) -> bool;
+    /// Construct from an `f64`. This is a construction-time conversion (random
+    /// sampling, mathematical constants), not a compute-path widen-narrow: it
+    /// turns a host-provided or PRNG-derived `f64` into the storage precision.
+    fn from_f64(value: f64) -> Self;
 }
 
 macro_rules! impl_real_native {
@@ -84,6 +88,10 @@ macro_rules! impl_real_native {
             #[inline(always)]
             fn is_finite(self) -> bool {
                 <$t>::is_finite(self)
+            }
+            #[inline(always)]
+            fn from_f64(value: f64) -> Self {
+                value as $t
             }
         }
     };
@@ -140,6 +148,10 @@ macro_rules! impl_real_half {
             #[inline]
             fn is_finite(self) -> bool {
                 self.to_f32().is_finite()
+            }
+            #[inline]
+            fn from_f64(value: f64) -> Self {
+                <$t>::from_f32(value as f32)
             }
         }
     };
