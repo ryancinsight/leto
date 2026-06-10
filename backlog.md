@@ -44,7 +44,7 @@
 - [x] Add reductions over axes with keep-dim output modes required by Coeus: `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into`. Verification: value and ndarray differential tests cover row/column reductions, strided transposed inputs, shape mismatch rejection, and empty-axis behavior.
 - [x] Add allocating convenience wrappers for axis reductions only after storage constructors are complete. Verification: value tests cover contiguous row/column reductions, strided transposed input, C-contiguous output, and empty-axis sum/mean semantics.
 - [x] Add 2D matmul coverage for contiguous inputs, transposed/strided inputs, caller-owned output, and differential parity against `ndarray`.
-- [ ] Add batched matmul semantics only if Coeus requires rank-3+ batch contraction in Leto rather than owning it in Coeus.
+- [x] Resolve batched matmul ownership: the `gap_audit.md` §C boundary decision places rank-3 batch contraction in Leto; implementation tracked in Phase 6.
 - [ ] Keep Leto non-differentiable. Coeus owns autodiff graph, gradient storage, and optimizer state; Leto owns layout/storage/views only.
 
 ## Phase 4: Operations, Performance, and Architecture [minor]
@@ -62,8 +62,34 @@
 - [x] Replace current Python result construction that clones through `Vec` after computation. Verification: `leto-python` now transfers owned `VecStorage` with `Array::into_vec()` and `PyArray1::from_vec`, then reshapes without the former `as_mut_slice().to_vec()` clone path.
 - [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 
+## Phase 6: Coeus Backend Consolidation [arch]
+Source: `gap_audit.md` §C. Coeus (the Atlas burn replacement) carries a duplicate non-differentiable array layer (`coeus-tensor`/`coeus-core` layout, storage, COW, traversal) over the same Mnemosyne/Moirai substrate as Leto. Structural-duplication rule: consolidate to Leto. Coeus keeps `ComputeBackend`, autodiff, NN kernels (conv/pool/attention), optimizers, sparse formats, and GPU backends.
+- [ ] [major] Decide the const-rank vs dynamic-rank boundary: Coeus layouts are runtime-rank; Leto is const-rank. Preferred option: const-generic dispatch shim at the Coeus boundary; alternative: a `DynArray` escape type at I/O boundaries only. ADR required before implementation.
+- [ ] [minor] Add a named unary math-op suite as ZST ops through the existing traversal kernel: `exp`, `ln`, `sin`, `cos`, `sqrt`, `abs`, `neg`, `powf`. Coeus's 17 activation/gradient `UnaryOp` variants compose from these in Coeus, not in Leto.
+- [ ] [minor] Add broadcast-aware binary ops that write through caller-owned output layouts (Coeus passes `a_layout`, `b_layout`, `c_layout`; current `binary_map` requires shape-matched views).
+- [ ] [minor] Add `reshape`/`into_shape` for contiguous arrays, `permute` (named alias over transpose semantics), and `to_contiguous` materialization.
+- [ ] [minor] Add shape ops along an axis: `concat`/`stack`, `pad`, `split`.
+- [ ] [minor] Add batched rank-3 matmul (boundary decision in `gap_audit.md` places batch contraction in Leto).
+- [ ] [minor] Add `cumsum`/prefix-scan along an axis (Coeus `cumsum`/`suffix_sum`).
+- [ ] [minor] Add deterministic seeded random constructors (uniform, normal via Box-Muller) matching Coeus init semantics; validate against closed-form distribution statistics, not ndarray.
+- [ ] [arch] Re-base Coeus's CPU storage/layout layer onto Leto types (or thin adapters) and delete the duplicate, as a coordinated cross-repo unit per the co-evolution protocol; file the consumer-side item in the Coeus backlog naming Leto as provider.
+
+## Phase 7: ndarray Parity Completion (Apollo hot kernels) [minor]
+Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto` boundaries; these items unblock replacing ndarray inside the kernels.
+- [ ] [minor] Add contiguous-slice access on views: `as_slice`/`as_slice_mut` with memory-order guarantees plus `is_standard_layout`-equivalent contiguity queries (named Apollo FFT butterfly blocker, ~20 call sites).
+- [ ] [patch] Add `mapv_inplace`-equivalent in-place unary mutation (Apollo 1/N normalization sites).
+- [ ] [minor] Add 3+-operand zip traversal without duplicating the shared traversal strategy (Apollo precision-downgrade paths).
+- [ ] [minor] Add scalar–array elementwise ops and std::ops operator impls (`Add`/`Sub`/`Mul`/`Div`/`Neg`) on arrays and views per the std-trait integration mandate.
+- [ ] [patch] Add 1D `dot`.
+
+## Phase 8: nalgebra Successor Policy [minor]
+Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is demand-driven.
+- [ ] [minor] Generalize `symmetric_eigen_jacobi` over `T: Scalar` (currently f64-concrete with `Vec<f64>` eigenvalues, violating generic-first authorship); any wider accumulator must be trait-encoded and justified by numerical analysis.
+- [ ] Policy: LU/QR/Cholesky/SVD/solve/norms enter leto-ops only with a named consumer driver and a differential oracle as dev-dependency; no speculative linalg surface.
+
 ## Apollo Migration Gate [arch]
-- [ ] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates.
+- [x] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates. Apollo pins Leto by Git rev with `["std", "ndarray-compat"]` and exposes `forward_leto`/`inverse_leto` API boundaries on FFT, CZT, DHT, NUFFT, SHT, Radon, and STFT.
+- [x] [minor] Replace Apollo's nalgebra dependency: FrFT/GFT eigendecomposition migrated to `leto_ops::symmetric_eigen_jacobi`; GFT adjacency storage migrated to `leto::Array2<f64>`.
 - [x] Add representative Leto-side Apollo and Coeus migration fixtures before direct consumer updates. Verification: fixtures cover Apollo FFT-like rank/complex/precision shapes and Coeus reduction/broadcast/matmul shapes.
 - [ ] Migrate one low-risk Apollo crate first, preferably a verification-only or WGPU verification path, and keep differential tests against `ndarray`.
 - [ ] Migrate public Apollo APIs only after compatibility/migration notes are in Apollo CHANGELOG because replacing `ndarray::Array*` public types is a breaking API change.

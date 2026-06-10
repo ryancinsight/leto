@@ -2,6 +2,16 @@ use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
 
+/// Computes the physical `[offset, offset + size)` range covered by a layout
+/// whose elements form a single dense block. Returns `None` only on size
+/// overflow. Shared by the contiguous-slice accessors of both view types.
+#[inline]
+fn dense_block_range<const N: usize>(layout: &Layout<N>) -> Option<core::ops::Range<usize>> {
+    let start = layout.offset;
+    let end = start.checked_add(layout.checked_size().ok()?)?;
+    Some(start..end)
+}
+
 /// A read-only zero-copy view of an N-dimensional strided array.
 pub struct ArrayView<'a, T, const N: usize> {
     pub(crate) layout: Layout<N>,
@@ -104,13 +114,43 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
         Ok(ArrayView::new(broadcasted_layout, self.data))
     }
 
-    /// Expose the underlying slice if it is C-contiguous.
+    /// Returns true when the view is canonically C-contiguous at offset 0.
+    #[inline]
+    pub fn is_c_contiguous(&self) -> bool {
+        self.layout.is_c_contiguous()
+    }
+
+    /// Returns true when the view is canonically Fortran-contiguous at offset 0.
+    #[inline]
+    pub fn is_f_contiguous(&self) -> bool {
+        self.layout.is_f_contiguous()
+    }
+
+    /// Returns true when the view's elements occupy a dense block in some
+    /// memory order (C or F), independent of offset.
+    #[inline]
+    pub fn is_contiguous(&self) -> bool {
+        self.layout.is_contiguous()
+    }
+
+    /// Expose the underlying slice if the elements form a dense row-major
+    /// (C-order) block, independent of offset.
     #[inline]
     pub fn as_slice(&self) -> Option<&'a [T]> {
-        if self.layout.is_c_contiguous() {
-            let start = self.layout.offset;
-            let end = start.checked_add(self.layout.checked_size().ok()?)?;
-            self.data.get(start..end)
+        if self.layout.is_c_dense() {
+            self.data.get(dense_block_range(&self.layout)?)
+        } else {
+            None
+        }
+    }
+
+    /// Expose the underlying slice if the elements form a dense block in some
+    /// memory order (C or F), independent of offset. The returned slice is in
+    /// physical memory order, matching `ndarray::as_slice_memory_order`.
+    #[inline]
+    pub fn as_slice_memory_order(&self) -> Option<&'a [T]> {
+        if self.layout.is_contiguous() {
+            self.data.get(dense_block_range(&self.layout)?)
         } else {
             None
         }
@@ -273,25 +313,66 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         Ok(ArrayViewMut::new(broadcasted_layout, self.data))
     }
 
-    /// Expose the underlying slice if it is C-contiguous.
+    /// Returns true when the view is canonically C-contiguous at offset 0.
+    #[inline]
+    pub fn is_c_contiguous(&self) -> bool {
+        self.layout.is_c_contiguous()
+    }
+
+    /// Returns true when the view is canonically Fortran-contiguous at offset 0.
+    #[inline]
+    pub fn is_f_contiguous(&self) -> bool {
+        self.layout.is_f_contiguous()
+    }
+
+    /// Returns true when the view's elements occupy a dense block in some
+    /// memory order (C or F), independent of offset.
+    #[inline]
+    pub fn is_contiguous(&self) -> bool {
+        self.layout.is_contiguous()
+    }
+
+    /// Expose the underlying slice if the elements form a dense row-major
+    /// (C-order) block, independent of offset.
     #[inline]
     pub fn as_slice(&self) -> Option<&[T]> {
-        if self.layout.is_c_contiguous() {
-            let start = self.layout.offset;
-            let end = start.checked_add(self.layout.checked_size().ok()?)?;
-            self.data.get(start..end)
+        if self.layout.is_c_dense() {
+            self.data.get(dense_block_range(&self.layout)?)
         } else {
             None
         }
     }
 
-    /// Expose the underlying mutable slice if it is C-contiguous.
+    /// Expose the underlying mutable slice if the elements form a dense
+    /// row-major (C-order) block, independent of offset.
     #[inline]
     pub fn as_mut_slice(&mut self) -> Option<&mut [T]> {
-        if self.layout.is_c_contiguous() {
-            let start = self.layout.offset;
-            let end = start.checked_add(self.layout.checked_size().ok()?)?;
-            self.data.get_mut(start..end)
+        if self.layout.is_c_dense() {
+            self.data.get_mut(dense_block_range(&self.layout)?)
+        } else {
+            None
+        }
+    }
+
+    /// Expose the underlying slice if the elements form a dense block in some
+    /// memory order (C or F), independent of offset. Physical memory order.
+    #[inline]
+    pub fn as_slice_memory_order(&self) -> Option<&[T]> {
+        if self.layout.is_contiguous() {
+            self.data.get(dense_block_range(&self.layout)?)
+        } else {
+            None
+        }
+    }
+
+    /// Expose the underlying mutable slice if the elements form a dense block
+    /// in some memory order (C or F), independent of offset. This is the
+    /// `ndarray::as_slice_memory_order_mut` analogue Apollo's in-place FFT
+    /// butterfly kernels require.
+    #[inline]
+    pub fn as_mut_slice_memory_order(&mut self) -> Option<&mut [T]> {
+        if self.layout.is_contiguous() {
+            self.data.get_mut(dense_block_range(&self.layout)?)
         } else {
             None
         }

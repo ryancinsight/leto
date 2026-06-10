@@ -1,25 +1,30 @@
 # Leto: Systems-Optimized N-Dimensional Strided Arrays
 
 Leto is a Rust workspace for N-dimensional strided array layouts, zero-copy
-views, storage backends, and array operations. It is intended to replace direct
-`ndarray` usage as the shared non-differentiable memory and layout vocabulary
-between Atlas spectral transforms (`apollo`) and tensor/autodiff systems
-(`coeus`).
+views, storage backends, and array operations. It replaces direct `ndarray`
+and `nalgebra` usage as the shared non-differentiable memory, layout, and
+dense-linear-algebra vocabulary between Atlas spectral transforms (`apollo`)
+and tensor/autodiff systems (`coeus`, the Atlas replacement for `burn`).
 
 ## Role In Atlas
 
 Leto sits between:
 
-- `mnemosyne`: optional aligned allocation and memory policy.
+- `mnemosyne`: optional aligned allocation and memory policy (which itself
+  consumes `themis` placement law and `melinoe` branded-capability proofs).
 - `moirai`: parallel scheduling for elementwise and reduction operations.
 - `hermes`: SIMD-backed scalar/vector execution.
 - `apollo`: spectral transforms that need shared 1D/2D/3D array views.
 - `coeus`: tensor and autodiff systems that need layout-compatible storage
   without making Apollo depend on Coeus.
 
-Leto owns layout, storage, views, slicing, and non-differentiable operations.
-Coeus owns autodiff graphs, gradients, optimizers, and neural-network state.
-Apollo owns Fourier, spectral, and transform kernels.
+Layer boundary: Leto owns layout, storage, views, slicing, broadcasting,
+elementwise math, reductions, matmul, shape ops, and dense linear algebra
+(currently the symmetric Jacobi eigensolver). Coeus owns autodiff graphs,
+NN kernels (conv/pool/attention), optimizers, sparse formats, and GPU
+backends behind its `ComputeBackend` trait. Apollo owns Fourier, spectral,
+and transform kernels. `themis` and `melinoe` are consumed indirectly via
+`mnemosyne`/`moirai`, not as direct leto dependencies.
 
 ## Naming
 
@@ -159,6 +164,8 @@ Current value-semantic coverage includes:
   traversal and keep-dim axis reductions.
 - `sum` and 2D `matmul`, including differential matmul checks against
   `ndarray` for contiguous and transposed inputs.
+- symmetric Jacobi eigendecomposition value tests (eigenvalue ordering,
+  reconstruction, orthonormality, symmetry/finiteness rejection).
 - PyO3 output conversion consumes owned Leto vectors into NumPy instead of
   cloning through an intermediate slice.
 - PyO3 boundary tests cover value parity for `add`, `sum`, and `matmul`, shape
@@ -168,18 +175,40 @@ Current value-semantic coverage includes:
   keep-dim reduction plus broadcasted elementwise ops, and dense-layer matmul
   shapes.
 
+### Linear Algebra Features
+
+- `symmetric_eigen_jacobi` and `symmetric_eigen_jacobi_with_tolerance`
+  compute symmetric eigendecompositions (ascending eigenvalues, orthonormal
+  column eigenvectors) via Jacobi rotations. This closed Apollo's `nalgebra`
+  dependency: FrFT/GFT eigendecomposition now runs on Leto.
+- Further decompositions (LU, QR, Cholesky, SVD) are added only with a named
+  consumer driver and a differential oracle; see `gap_audit.md` §B.
+
 ## Replacement Status
 
-Leto is not yet a complete `ndarray` replacement for Atlas. Before Apollo or
-Coeus can remove `ndarray`, Leto still needs:
+- **nalgebra**: replaced for Apollo. Apollo removed its `nalgebra`
+  dependency by migrating eigendecomposition to
+  `leto_ops::symmetric_eigen_jacobi` and graph adjacency storage to
+  `leto::Array2<f64>`.
+- **ndarray, Apollo**: partial. Apollo pins Leto as a Git dependency and
+  exposes `forward_leto`/`inverse_leto` boundaries on FFT, CZT, DHT, NUFFT,
+  SHT, Radon, and STFT; `ndarray` remains Apollo's internal CPU compute
+  substrate and differential oracle. The named blocker for hot-kernel
+  migration is contiguous-slice access on Leto views
+  (`as_slice`/`as_slice_mut` with memory-order guarantees).
+- **Coeus backend**: not started. Coeus currently carries its own
+  layout/storage/traversal stack (`coeus-tensor`, `coeus-core`) duplicating
+  Leto's layer over the same Mnemosyne/Moirai substrate. The plan of record
+  consolidates that non-differentiable layer into Leto while Coeus keeps
+  `ComputeBackend`, autodiff, NN kernels, and GPU backends. Blocking gaps:
+  broadcast-aware binary ops into caller-owned output layouts, a named
+  unary math-op suite, reshape/permute/to_contiguous, concat/pad/split,
+  batched matmul, seeded RNG fill, and the const-rank vs dynamic-rank
+  boundary decision.
 
-- keep-dim caller-owned and allocating axis reductions are available with
-  differential tests against `ndarray`;
-- differential tests against `ndarray` for map-style behavior are available;
-- differential tests against `ndarray` for all Apollo-facing behavior;
-- direct Apollo and Coeus consumer-crate migrations with dependency updates.
-
-See `checklist.md` and `backlog.md` for the tracked migration plan.
+The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
+`gap_audit.md`; the tracked migration plan lives in `checklist.md` and
+`backlog.md`.
 
 ## Dependency Policy
 

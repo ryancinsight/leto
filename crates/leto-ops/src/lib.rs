@@ -8,6 +8,7 @@ pub mod domain;
 /// SIMD and parallel execution infrastructure.
 pub mod infrastructure;
 
+pub use domain::real::RealScalar;
 pub use domain::scalar::Scalar;
 pub use domain::strategy::{ExecutionStrategy, ScalarStrategy};
 
@@ -19,12 +20,17 @@ pub use domain::strategy::ParallelStrategy;
 
 pub use application::eigen::{symmetric_eigen_jacobi, SymmetricEigenDecomposition};
 pub use application::map::{
-    add, binary_map, div, mul, sub, sum, AddOp, BinaryOp, DivOp, MulOp, SubOp,
+    add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
+    MulOp, SubOp,
 };
 pub use application::matrix::matmul;
 pub use application::reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
     reduce_axis_into, sum_axis, sum_axis_into, AxisReduction, MaxAxis, MeanAxis, MinAxis, SumAxis,
 };
-pub use application::unary::{map, map_into, mapv};
+pub use application::unary::{
+    map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ExpOp, LnOp, NegOp,
+    PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
+};
+pub use application::vector::dot;
 pub use application::zip::zip_mut_with;

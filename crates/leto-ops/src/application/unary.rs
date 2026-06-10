@@ -1,4 +1,5 @@
 use crate::application::index::index_from_flat;
+use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
 #[cfg(feature = "parallel")]
@@ -145,6 +146,159 @@ where
     F: Fn(T) -> U + Copy + Send + Sync + 'static,
 {
     mapv(input, f)
+}
+
+/// Apply `f` to every element of `view` in place.
+///
+/// This is the `ndarray::mapv_inplace` analogue. Elementwise in-place mutation
+/// is memory-order independent, so the contiguous fast path accepts any dense
+/// block (C or F). Zero-stride write aliasing is rejected because it would
+/// apply `f` to a single physical element more than once.
+pub fn map_inplace<T, F, const N: usize>(view: &mut ArrayViewMut<'_, T, N>, f: F) -> Result<()>
+where
+    T: Copy + Send + Sync + 'static,
+    F: Fn(T) -> T + Copy + Send + Sync + 'static,
+{
+    view.layout().validate_storage_len(view.data().len())?;
+    if view.layout().has_zero_stride_aliasing() {
+        return Err(LetoError::StorageError {
+            reason: "in-place map layout must not contain zero-stride aliasing".to_string(),
+        });
+    }
+
+    if let Some(slice) = view.as_mut_slice_memory_order() {
+        #[cfg(feature = "parallel")]
+        {
+            if slice.len() >= PARALLEL_THRESHOLD {
+                parallel_map_inplace_slice(slice, f);
+                return Ok(());
+            }
+        }
+
+        for value in slice.iter_mut() {
+            *value = f(*value);
+        }
+        return Ok(());
+    }
+
+    let size = view.layout().checked_size()?;
+    let shape = view.shape();
+    let layout = view.layout();
+    let data = view.data_mut();
+    for flat_idx in 0..size {
+        let index = index_from_flat(flat_idx, &shape);
+        let offset = layout.offset_of(index)?;
+        data[offset] = f(data[offset]);
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "parallel")]
+fn parallel_map_inplace_slice<T, F>(slice: &mut [T], f: F)
+where
+    T: Copy + Send + Sync + 'static,
+    F: Fn(T) -> T + Copy + Send + Sync + 'static,
+{
+    let len = slice.len();
+    let ptr = slice.as_mut_ptr() as usize;
+    let chunk_size = 4096;
+
+    crate::infrastructure::parallel::parallel_for_chunks(len, chunk_size, move |start, end| {
+        for index in start..end {
+            // SAFETY: each worker mutates a unique element in `start..end` of a
+            // validated dense block.
+            unsafe {
+                let cell = (ptr as *mut T).add(index);
+                *cell = f(*cell);
+            }
+        }
+    });
+}
+
+/// Zero-sized (or value-carrying) named real unary operation contract.
+///
+/// Implementors route through the shared [`map_into`]/[`mapv`] traversal via
+/// [`unary_map_into`]/[`unary_map`]; no implementor defines its own traversal.
+pub trait UnaryOp<T: RealScalar>: Copy + Send + Sync + 'static {
+    /// Apply the scalar operation.
+    fn apply(&self, x: T) -> T;
+}
+
+macro_rules! define_unary_op {
+    ($(#[$meta:meta])* $name:ident => $method:ident) => {
+        $(#[$meta])*
+        #[derive(Clone, Copy, Debug, Default)]
+        pub struct $name;
+
+        impl<T: RealScalar> UnaryOp<T> for $name {
+            #[inline(always)]
+            fn apply(&self, x: T) -> T {
+                x.$method()
+            }
+        }
+    };
+}
+
+define_unary_op!(/// `e^x` operation marker.
+    ExpOp => exp);
+define_unary_op!(/// Natural logarithm operation marker.
+    LnOp => ln);
+define_unary_op!(/// Sine operation marker.
+    SinOp => sin);
+define_unary_op!(/// Cosine operation marker.
+    CosOp => cos);
+define_unary_op!(/// Square-root operation marker.
+    SqrtOp => sqrt);
+define_unary_op!(/// Absolute-value operation marker.
+    AbsOp => abs);
+define_unary_op!(/// Additive-inverse operation marker.
+    NegOp => neg);
+define_unary_op!(/// Reciprocal operation marker.
+    RecipOp => recip);
+
+/// Power operation carrying its exponent. Zero-cost: monomorphizes to a direct
+/// `powf` call with the captured exponent.
+#[derive(Clone, Copy, Debug)]
+pub struct PowfOp<T: RealScalar> {
+    /// The exponent applied to every element.
+    pub exponent: T,
+}
+
+impl<T: RealScalar> UnaryOp<T> for PowfOp<T> {
+    #[inline(always)]
+    fn apply(&self, x: T) -> T {
+        x.powf(self.exponent)
+    }
+}
+
+/// Apply a named unary operation into caller-owned output through the shared
+/// traversal kernel.
+#[inline]
+pub fn unary_map_into<T, Op, const N: usize>(
+    op: Op,
+    input: &ArrayView<'_, T, N>,
+    output: &mut ArrayViewMut<'_, T, N>,
+) -> Result<()>
+where
+    T: RealScalar,
+    Op: UnaryOp<T>,
+{
+    map_into(input, output, move |x| op.apply(x))
+}
+
+/// Apply a named unary operation, allocating a C-contiguous output, through the
+/// shared traversal kernel.
+#[inline]
+pub fn unary_map<T, Op, const N: usize>(
+    op: Op,
+    input: &ArrayView<'_, T, N>,
+) -> Result<Array<T, VecStorage<T>, N>>
+where
+    T: RealScalar,
+    Op: UnaryOp<T>,
+{
+    mapv(input, move |x| op.apply(x))
 }
 
 #[cfg(feature = "parallel")]

@@ -1,5 +1,9 @@
 # Leto Development Checklist
 
+Sprint phase: Execution (Phase 2). Target version: 0.3.0 [minor].
+In-flight item: none. Next concrete increment: contiguous-slice view access
+(`as_slice`/`as_slice_mut`) — the named Apollo FFT hot-kernel blocker.
+
 ## Atlas ndarray replacement readiness [arch]
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
 - [x] Core C/F-contiguous `Layout<const N: usize>` construction, offset lookup, slicing, transpose, and broadcast have value-semantic tests.
@@ -43,6 +47,19 @@
 - [ ] [patch] Add Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and gradient-adjacent non-differentiable storage boundaries.
 - [x] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.
 - [ ] [minor] Publish a pushed Git revision only after `fmt`, `clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features`, docs, and differential ndarray parity tests pass.
+
+## Gap analysis: ndarray/nalgebra replacement [arch]
+- [x] [patch] Audit Leto against `ndarray` 0.16, `nalgebra`, Apollo usage, and Coeus backend requirements; record in `gap_audit.md` (2026-06-10). Findings: Apollo partially migrated (Git-pinned Leto, `forward_leto` boundaries, nalgebra removed via `symmetric_eigen_jacobi`); Coeus has zero Leto references and duplicates the layout/storage layer; layer-boundary decision recorded in `gap_audit.md` §C/`README.md`.
+- [x] [patch] Sync README role, layer boundary, linear-algebra features, and replacement status with the audited state.
+
+## Next increments (ordered)
+- [ ] [minor] Contiguous-slice view access (`as_slice`/`as_slice_mut`, memory-order variants, contiguity queries) — unblocks Apollo FFT hot kernels (backlog Phase 7).
+- [ ] [patch] `mapv_inplace`-equivalent and 1D `dot` (backlog Phase 7).
+- [ ] [major] ADR: const-rank vs dynamic-rank boundary for Coeus integration (backlog Phase 6; blocks all Phase 6 implementation).
+- [ ] [minor] Unary math-op ZST suite (`exp`, `ln`, `sin`, `cos`, `sqrt`, `abs`, `neg`, `powf`) through the existing traversal kernel (backlog Phase 6).
+- [ ] [minor] Broadcast-aware binary ops into caller-owned output layouts (backlog Phase 6).
+- [ ] [minor] `reshape`/`permute`/`to_contiguous`, `concat`/`pad`/`split`, batched matmul, `cumsum`, seeded RNG constructors (backlog Phase 6).
+- [ ] [minor] Generalize `symmetric_eigen_jacobi` over `T: Scalar` (backlog Phase 8).
 
 ## Naming decision [patch]
 - [x] Keep `leto` as the crate name. Functionally, Leto is a non-differentiable shared strided-array substrate between Coeus and Apollo; mythologically, Leto bridges Coeus and Apollo as parent/child context. The name is appropriate if the crate remains the shared array/memory vocabulary, not an autodiff engine or spectral-transform crate.

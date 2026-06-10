@@ -1,6 +1,6 @@
 use crate::application::index::index_from_flat;
 use crate::domain::scalar::Scalar;
-use leto::{ArrayView, ArrayViewMut, LetoError, Result};
+use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
 #[cfg(feature = "parallel")]
 const PARALLEL_THRESHOLD: usize = 8192;
@@ -303,6 +303,42 @@ pub fn div<T: Scalar, const N: usize>(
     out: &mut ArrayViewMut<'_, T, N>,
 ) -> Result<()> {
     binary_map::<DivOp, T, N>(lhs, rhs, out)
+}
+
+// -- Scalar broadcast --
+
+/// Apply a binary operation between every element and a single scalar,
+/// allocating a C-contiguous output: `out = op(input, scalar)`.
+///
+/// Reuses the [`BinaryOp`] markers and the shared allocating traversal
+/// ([`crate::application::unary::mapv`]) so no scalar-specific kernel exists.
+/// `add`/`sub`/`mul`/`div` against a scalar are therefore `scalar_map::<AddOp>`
+/// and friends.
+#[inline]
+pub fn scalar_map<Op, T, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    scalar: T,
+) -> Result<Array<T, VecStorage<T>, N>>
+where
+    Op: BinaryOp<T>,
+    T: Scalar,
+{
+    crate::application::unary::mapv(input, move |x| Op::apply(x, scalar))
+}
+
+/// Apply a binary operation between every element and a single scalar into
+/// caller-owned output: `out = op(input, scalar)`.
+#[inline]
+pub fn scalar_map_into<Op, T, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    scalar: T,
+    output: &mut ArrayViewMut<'_, T, N>,
+) -> Result<()>
+where
+    Op: BinaryOp<T>,
+    T: Scalar,
+{
+    crate::application::unary::map_into(input, output, move |x| Op::apply(x, scalar))
 }
 
 // -- Reductions --
