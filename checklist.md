@@ -9,9 +9,9 @@ in-house replacement roadmap"): vector/matrix norms (L1/L2/Frobenius/inf) over
 oracle vs ndarray. Then triangular solve + LU. Each linalg routine is gated by a
 named consumer driver (coeus/apollo) and a differential oracle.
 
-Parallel cross-repo track: Coeus CPU consolidation onto coeus-leto and the
-GPU backend program (wgpu + cuda-oxide) per coeus MS-60+; apollo ndarray
-retirement + cuda-oxide FFT path.
+Parallel cross-repo track: Coeus CPU consolidation onto coeus-leto; the shared
+GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
+consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 
 ## Atlas ndarray replacement readiness [arch]
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
