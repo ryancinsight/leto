@@ -17,6 +17,7 @@ pub use domain::strategy::SimdStrategy;
 #[cfg(feature = "parallel")]
 pub use domain::strategy::ParallelStrategy;
 
+pub use application::eigen::{symmetric_eigen_jacobi, SymmetricEigenDecomposition};
 pub use application::map::{
     add, binary_map, div, mul, sub, sum, AddOp, BinaryOp, DivOp, MulOp, SubOp,
 };

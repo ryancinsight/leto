@@ -1,6 +1,8 @@
+/// Real symmetric eigensolver operations.
+pub mod eigen;
 /// Shared logical-index conversion helpers.
 pub(crate) mod index;
-/// Elementwise, reduction, and matrix operations.
+/// Elementwise binary and aggregate map operations.
 pub mod map;
 /// Matrix multiplication operations.
 pub mod matrix;
@@ -11,6 +13,7 @@ pub mod unary;
 /// Mutable zip-map operations.
 pub mod zip;
 
+pub use eigen::{symmetric_eigen_jacobi, SymmetricEigenDecomposition};
 pub use map::{add, binary_map, div, mul, sub, sum, AddOp, BinaryOp, DivOp, MulOp, SubOp};
 pub use matrix::matmul;
 pub use reduction::{
