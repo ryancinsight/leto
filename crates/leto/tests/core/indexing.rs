@@ -1,4 +1,6 @@
-use leto::{Array, Array1, Array2, ArrayView, ArrayViewMut, Layout, LetoError, Storage, VecStorage};
+use leto::{
+    Array, Array1, Array2, ArrayView, ArrayViewMut, Layout, LetoError, Storage, VecStorage,
+};
 
 #[test]
 fn test_array_creation_and_indexing() {

@@ -8,10 +8,10 @@ mod constructors;
 mod index;
 /// Subview iteration.
 pub mod iter;
-/// Borrowed array view types.
-pub mod view;
 /// Element-wise reduction operations (sum, mean, min, max, argmin, argmax).
 pub mod reduction;
+/// Borrowed array view types.
+pub mod view;
 
 pub use aliases::{
     Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, ArrayViewMut2,
@@ -19,7 +19,7 @@ pub use aliases::{
 };
 pub use array::Array;
 pub use iter::{AxisIter, AxisIterMut};
-pub use view::{ArrayView, ArrayViewMut};
 pub use reduction::{
     argmax, argmin, max_all, max_axis, mean_all, mean_axis, min_all, min_axis, sum_all, sum_axis,
 };
+pub use view::{ArrayView, ArrayViewMut};

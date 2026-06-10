@@ -100,10 +100,10 @@ fn column_norm32(values: &[f32], n: usize, col: usize) -> f32 {
 
 #[test]
 fn symmetric_eigen_jacobi_rejects_invalid_inputs() {
-    let rectangular = Array2::from_shape_vec([2, 3], vec![1.0; 6]).unwrap();
+    let rectangular = Array2::from_shape_vec([2, 3], vec![1.0f64; 6]).unwrap();
     assert!(symmetric_eigen_jacobi(&rectangular.view()).is_err());
 
-    let asymmetric = Array2::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let asymmetric = Array2::from_shape_vec([2, 2], vec![1.0f64, 2.0, 3.0, 4.0]).unwrap();
     assert!(symmetric_eigen_jacobi(&asymmetric.view()).is_err());
 
     let non_finite = Array2::from_shape_vec([2, 2], vec![1.0, f64::NAN, f64::NAN, 1.0]).unwrap();

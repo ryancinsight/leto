@@ -88,10 +88,7 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     })
 }
 
-fn validate_symmetric_input<T: RealScalar>(
-    matrix: &ArrayView2<'_, T>,
-    tolerance: T,
-) -> Result<()> {
+fn validate_symmetric_input<T: RealScalar>(matrix: &ArrayView2<'_, T>, tolerance: T) -> Result<()> {
     let [rows, cols] = matrix.shape();
     if rows != cols {
         return Err(LetoError::ShapeMismatch {

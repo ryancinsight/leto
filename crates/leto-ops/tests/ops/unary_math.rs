@@ -69,7 +69,11 @@ fn test_map_inplace_on_transposed_view() {
     // Transposed (F-order) view: contiguous in memory order, so the fast path
     // applies, and every logical element is touched exactly once.
     let layout = Layout::c_contiguous([2, 3]).unwrap();
-    let mut array = Array::new(layout, VecStorage::new(vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0])).unwrap();
+    let mut array = Array::new(
+        layout,
+        VecStorage::new(vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    )
+    .unwrap();
 
     {
         let mut transposed = array.view_mut().transpose_mut([1, 0]).unwrap();

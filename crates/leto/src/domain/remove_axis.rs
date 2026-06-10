@@ -231,13 +231,27 @@ impl RemoveAxis<7> for RankMarker<7> {
     #[inline]
     fn remove_strides(&self, strides: [isize; 7], axis: usize) -> Result<Self::SmallerStrides> {
         match axis {
-            0 => Ok([strides[1], strides[2], strides[3], strides[4], strides[5], strides[6]]),
-            1 => Ok([strides[0], strides[2], strides[3], strides[4], strides[5], strides[6]]),
-            2 => Ok([strides[0], strides[1], strides[3], strides[4], strides[5], strides[6]]),
-            3 => Ok([strides[0], strides[1], strides[2], strides[4], strides[5], strides[6]]),
-            4 => Ok([strides[0], strides[1], strides[2], strides[3], strides[5], strides[6]]),
-            5 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[6]]),
-            6 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[5]]),
+            0 => Ok([
+                strides[1], strides[2], strides[3], strides[4], strides[5], strides[6],
+            ]),
+            1 => Ok([
+                strides[0], strides[2], strides[3], strides[4], strides[5], strides[6],
+            ]),
+            2 => Ok([
+                strides[0], strides[1], strides[3], strides[4], strides[5], strides[6],
+            ]),
+            3 => Ok([
+                strides[0], strides[1], strides[2], strides[4], strides[5], strides[6],
+            ]),
+            4 => Ok([
+                strides[0], strides[1], strides[2], strides[3], strides[5], strides[6],
+            ]),
+            5 => Ok([
+                strides[0], strides[1], strides[2], strides[3], strides[4], strides[6],
+            ]),
+            6 => Ok([
+                strides[0], strides[1], strides[2], strides[3], strides[4], strides[5],
+            ]),
             _ => Err(LetoError::StorageError {
                 reason: format!("Axis {axis} out of bounds for rank 7"),
             }),
@@ -253,14 +267,30 @@ impl RemoveAxis<8> for RankMarker<8> {
     #[inline]
     fn remove_shape(&self, shape: [usize; 8], axis: usize) -> Result<Self::SmallerShape> {
         match axis {
-            0 => Ok([shape[1], shape[2], shape[3], shape[4], shape[5], shape[6], shape[7]]),
-            1 => Ok([shape[0], shape[2], shape[3], shape[4], shape[5], shape[6], shape[7]]),
-            2 => Ok([shape[0], shape[1], shape[3], shape[4], shape[5], shape[6], shape[7]]),
-            3 => Ok([shape[0], shape[1], shape[2], shape[4], shape[5], shape[6], shape[7]]),
-            4 => Ok([shape[0], shape[1], shape[2], shape[3], shape[5], shape[6], shape[7]]),
-            5 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[6], shape[7]]),
-            6 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[5], shape[7]]),
-            7 => Ok([shape[0], shape[1], shape[2], shape[3], shape[4], shape[5], shape[6]]),
+            0 => Ok([
+                shape[1], shape[2], shape[3], shape[4], shape[5], shape[6], shape[7],
+            ]),
+            1 => Ok([
+                shape[0], shape[2], shape[3], shape[4], shape[5], shape[6], shape[7],
+            ]),
+            2 => Ok([
+                shape[0], shape[1], shape[3], shape[4], shape[5], shape[6], shape[7],
+            ]),
+            3 => Ok([
+                shape[0], shape[1], shape[2], shape[4], shape[5], shape[6], shape[7],
+            ]),
+            4 => Ok([
+                shape[0], shape[1], shape[2], shape[3], shape[5], shape[6], shape[7],
+            ]),
+            5 => Ok([
+                shape[0], shape[1], shape[2], shape[3], shape[4], shape[6], shape[7],
+            ]),
+            6 => Ok([
+                shape[0], shape[1], shape[2], shape[3], shape[4], shape[5], shape[7],
+            ]),
+            7 => Ok([
+                shape[0], shape[1], shape[2], shape[3], shape[4], shape[5], shape[6],
+            ]),
             _ => Err(LetoError::StorageError {
                 reason: format!("Axis {axis} out of bounds for rank 8"),
             }),
@@ -270,14 +300,30 @@ impl RemoveAxis<8> for RankMarker<8> {
     #[inline]
     fn remove_strides(&self, strides: [isize; 8], axis: usize) -> Result<Self::SmallerStrides> {
         match axis {
-            0 => Ok([strides[1], strides[2], strides[3], strides[4], strides[5], strides[6], strides[7]]),
-            1 => Ok([strides[0], strides[2], strides[3], strides[4], strides[5], strides[6], strides[7]]),
-            2 => Ok([strides[0], strides[1], strides[3], strides[4], strides[5], strides[6], strides[7]]),
-            3 => Ok([strides[0], strides[1], strides[2], strides[4], strides[5], strides[6], strides[7]]),
-            4 => Ok([strides[0], strides[1], strides[2], strides[3], strides[5], strides[6], strides[7]]),
-            5 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[6], strides[7]]),
-            6 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[5], strides[7]]),
-            7 => Ok([strides[0], strides[1], strides[2], strides[3], strides[4], strides[5], strides[6]]),
+            0 => Ok([
+                strides[1], strides[2], strides[3], strides[4], strides[5], strides[6], strides[7],
+            ]),
+            1 => Ok([
+                strides[0], strides[2], strides[3], strides[4], strides[5], strides[6], strides[7],
+            ]),
+            2 => Ok([
+                strides[0], strides[1], strides[3], strides[4], strides[5], strides[6], strides[7],
+            ]),
+            3 => Ok([
+                strides[0], strides[1], strides[2], strides[4], strides[5], strides[6], strides[7],
+            ]),
+            4 => Ok([
+                strides[0], strides[1], strides[2], strides[3], strides[5], strides[6], strides[7],
+            ]),
+            5 => Ok([
+                strides[0], strides[1], strides[2], strides[3], strides[4], strides[6], strides[7],
+            ]),
+            6 => Ok([
+                strides[0], strides[1], strides[2], strides[3], strides[4], strides[5], strides[7],
+            ]),
+            7 => Ok([
+                strides[0], strides[1], strides[2], strides[3], strides[4], strides[5], strides[6],
+            ]),
             _ => Err(LetoError::StorageError {
                 reason: format!("Axis {axis} out of bounds for rank 8"),
             }),
