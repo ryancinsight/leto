@@ -32,6 +32,10 @@ pub trait RealScalar: Scalar {
     fn recip(self) -> Self;
     /// `self` raised to the power `exponent`.
     fn powf(self, exponent: Self) -> Self;
+    /// Four-quadrant arctangent of `self / other` (radians).
+    fn atan2(self, other: Self) -> Self;
+    /// Returns true when the value is neither infinite nor NaN.
+    fn is_finite(self) -> bool;
 }
 
 macro_rules! impl_real_native {
@@ -72,6 +76,14 @@ macro_rules! impl_real_native {
             #[inline(always)]
             fn powf(self, exponent: Self) -> Self {
                 self.powf(exponent)
+            }
+            #[inline(always)]
+            fn atan2(self, other: Self) -> Self {
+                self.atan2(other)
+            }
+            #[inline(always)]
+            fn is_finite(self) -> bool {
+                <$t>::is_finite(self)
             }
         }
     };
@@ -120,6 +132,14 @@ macro_rules! impl_real_half {
             #[inline]
             fn powf(self, exponent: Self) -> Self {
                 <$t>::from_f32(self.to_f32().powf(exponent.to_f32()))
+            }
+            #[inline]
+            fn atan2(self, other: Self) -> Self {
+                <$t>::from_f32(self.to_f32().atan2(other.to_f32()))
+            }
+            #[inline]
+            fn is_finite(self) -> bool {
+                self.to_f32().is_finite()
             }
         }
     };
