@@ -1,5 +1,5 @@
 use leto::{Array, Storage};
-use leto_ops::{mapv, matmul, max_axis, mean_axis, min_axis, sum_axis};
+use leto_ops::{add, mapv, matmul, max_axis, mean_axis, min_axis, sum_axis};
 use ndarray::{Array2, Axis};
 
 fn assert_close_slice(lhs: &[f32], rhs: &[f32]) {
@@ -67,6 +67,23 @@ fn test_map_differential_matches_ndarray_contiguous_and_transposed_views() {
 
     assert_eq!(mapped_transposed.shape(), [3, 2]);
     assert_close_slice(mapped_transposed.storage().as_slice(), &expected_values);
+}
+
+#[test]
+fn test_binary_broadcast_differential_matches_ndarray() {
+    let lhs_values = vec![1.0f32, 10.0];
+    let rhs_values = vec![2.0f32, -3.0, 4.5];
+    let lhs = Array::from_shape_vec([2, 1], lhs_values.clone()).unwrap();
+    let rhs = Array::from_shape_vec([1, 3], rhs_values.clone()).unwrap();
+    let mut out = Array::zeros([2, 3]);
+
+    add(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+
+    let ndarray_lhs = Array2::from_shape_vec((2, 1), lhs_values).unwrap();
+    let ndarray_rhs = Array2::from_shape_vec((1, 3), rhs_values).unwrap();
+    let expected =
+        ndarray_lhs.broadcast((2, 3)).unwrap().to_owned() + ndarray_rhs.broadcast((2, 3)).unwrap();
+    assert_close_slice(out.storage().as_slice(), expected.as_slice().unwrap());
 }
 
 #[test]

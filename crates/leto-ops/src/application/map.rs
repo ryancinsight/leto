@@ -105,12 +105,8 @@ fn validate_binary_shapes<T, const N: usize>(
     rhs: &ArrayView<'_, T, N>,
     out: &ArrayViewMut<'_, T, N>,
 ) -> Result<()> {
-    if lhs.shape() != rhs.shape() || lhs.shape() != out.shape() {
-        return Err(LetoError::ShapeMismatch {
-            lhs: lhs.shape().to_vec(),
-            rhs: rhs.shape().to_vec(),
-        });
-    }
+    lhs.layout().broadcast(out.shape())?;
+    rhs.layout().broadcast(out.shape())?;
     Ok(())
 }
 
@@ -137,30 +133,39 @@ where
     T: Scalar,
 {
     validate_binary_shapes(lhs, rhs, out)?;
+    let out_shape = out.shape();
 
     if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) =
         (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice())
     {
-        debug_assert_eq!(lhs_slice.len(), rhs_slice.len());
-        debug_assert_eq!(lhs_slice.len(), out_slice.len());
+        if lhs.shape() == out_shape && rhs.shape() == out_shape {
+            debug_assert_eq!(lhs_slice.len(), rhs_slice.len());
+            debug_assert_eq!(lhs_slice.len(), out_slice.len());
 
-        #[cfg(feature = "parallel")]
-        {
-            if lhs_slice.len() >= PARALLEL_THRESHOLD {
-                parallel_binary_map_slice::<Op, T>(lhs_slice, rhs_slice, out_slice);
-                return Ok(());
+            #[cfg(feature = "parallel")]
+            {
+                if lhs_slice.len() >= PARALLEL_THRESHOLD {
+                    parallel_binary_map_slice::<Op, T>(lhs_slice, rhs_slice, out_slice);
+                    return Ok(());
+                }
             }
-        }
 
-        Op::apply_slice(lhs_slice, rhs_slice, out_slice);
-        return Ok(());
+            Op::apply_slice(lhs_slice, rhs_slice, out_slice);
+            return Ok(());
+        }
     }
 
     validate_binary_storage(lhs, rhs, out)?;
-    let size = lhs.layout().checked_size()?;
-    let shape = lhs.shape();
-    let lhs_layout = lhs.layout();
-    let rhs_layout = rhs.layout();
+    if out.layout().has_zero_stride_aliasing() {
+        return Err(LetoError::StorageError {
+            reason: "binary output layout must not contain zero-stride aliasing".to_string(),
+        });
+    }
+
+    let size = out.layout().checked_size()?;
+    let shape = out.shape();
+    let lhs_layout = lhs.layout().broadcast(shape)?;
+    let rhs_layout = rhs.layout().broadcast(shape)?;
     let out_layout = out.layout();
 
     let lhs_data = lhs.data();

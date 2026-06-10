@@ -103,7 +103,9 @@ assert_eq!(view.shape(), [1, 2]);
 `binary_map::<Op, T, N>` traversal. Public wrappers such as `add`, `sub`, `mul`,
 and `div` are thin calls into that kernel using zero-sized operation markers
 (`AddOp`, `SubOp`, `MulOp`, `DivOp`). This keeps one authoritative contiguous,
-strided, SIMD, and parallel dispatch path.
+strided, SIMD, and parallel dispatch path. Inputs may broadcast to the
+caller-owned output shape, so `[N, 1]` and `[1, C]` views write directly into
+`[N, C]` outputs without materializing broadcasted arrays.
 
 - Contiguous views use slice kernels on the `Scalar` trait. Native `f32` and
   `f64` implementations call Hermes SIMD when the `simd` feature is enabled
@@ -222,8 +224,8 @@ Current value-semantic coverage includes:
   consolidates that non-differentiable layer into Leto while Coeus keeps
   `ComputeBackend`, autodiff, NN kernels, and GPU backends. The const-rank vs
   dynamic-rank boundary is decided in ADR 0002, and the unary math-op suite is
-  present. Remaining blocking gaps: broadcast-aware binary ops into
-  caller-owned output layouts, reshape/permute/to_contiguous,
+  present. Broadcast-aware binary ops into caller-owned output layouts are also
+  present. Remaining blocking gaps: reshape/permute/to_contiguous,
   concat/pad/split, batched matmul, and seeded RNG fill.
 
 The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in

@@ -87,6 +87,33 @@ fn test_binary_map_strided_transposed_views() {
 }
 
 #[test]
+fn test_binary_map_broadcasts_inputs_to_output_shape() {
+    let lhs = Array::from_shape_vec([2, 1], vec![1.0f32, 10.0]).unwrap();
+    let rhs = Array::from_shape_vec([1, 3], vec![2.0f32, 3.0, 4.0]).unwrap();
+    let mut out = Array::zeros([2, 3]);
+
+    add(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+
+    assert_eq!(out.storage().as_slice(), &[3.0, 4.0, 5.0, 12.0, 13.0, 14.0]);
+}
+
+#[test]
+fn test_binary_map_broadcasts_strided_input_to_output_shape() {
+    let lhs_base = Array::from_shape_vec([3, 2], vec![1.0f32, 10.0, 2.0, 20.0, 3.0, 30.0]).unwrap();
+    let lhs = lhs_base
+        .transpose([1, 0])
+        .unwrap()
+        .slice(&[(0, 1, 1), (0, 3, 1)])
+        .unwrap();
+    let rhs = Array::from_shape_vec([2, 3], vec![2.0f32, 3.0, 4.0, 5.0, 6.0, 7.0]).unwrap();
+    let mut out = Array::zeros([2, 3]);
+
+    mul(&lhs, &rhs.view(), &mut out.view_mut()).unwrap();
+
+    assert_eq!(out.storage().as_slice(), &[2.0, 6.0, 12.0, 5.0, 12.0, 21.0]);
+}
+
+#[test]
 fn test_map_into_uses_caller_owned_output() {
     let layout = Layout::c_contiguous([4]).unwrap();
     let input = Array::new(layout, VecStorage::new(vec![1.0f32, -2.0, 3.5, 4.0])).unwrap();

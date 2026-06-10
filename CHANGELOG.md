@@ -4,6 +4,15 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.4.0] - 2026-06-10
+
+### Added
+
+- `leto-ops`: `binary_map`/`add`/`sub`/`mul`/`div` now broadcast each input
+  view to the caller-owned output layout when shapes are compatible, covering
+  Coeus-style `[N, 1]` and `[1, C]` elementwise tensor paths without allocating
+  broadcasted inputs.
+
 ## [0.3.0] - 2026-06-10
 
 ndarray/nalgebra gap remediation toward Apollo hot-kernel and Coeus backend

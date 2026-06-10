@@ -1,8 +1,8 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.3.0 [minor] (Cargo.toml bumped;
+Sprint phase: Execution. Target version: 0.4.0 [minor] (Cargo.toml bumped;
 CHANGELOG synced). In-flight item: none. Next concrete increment: Phase 6
-const-rank capabilities (broadcast-aware binary into output layouts), per
+shape/materialization capabilities (`reshape`/`permute`/`to_contiguous`), per
 ADR 0002.
 
 ## Atlas ndarray replacement readiness [arch]
@@ -61,7 +61,7 @@ ADR 0002.
 - [x] [minor] `scalar_map`/`scalar_map_into` array–scalar arithmetic reusing `BinaryOp` markers.
 - [x] [minor] Generalize `symmetric_eigen_jacobi` over `T: RealScalar` (native precision, no hidden widening). f32 genericity test added; f64 path unchanged.
 - [x] [arch] std::ops operator overloading decision — `docs/adr/0001-elementwise-operator-overloading.md` (deferred; orphan rule; `scalar_map` covers the scalar case).
-- [ ] [minor] Broadcast-aware binary ops into caller-owned output layouts (backlog Phase 6; Coeus passes `a_layout`/`b_layout`/`c_layout`).
+- [x] [minor] Broadcast-aware binary ops into caller-owned output layouts: `binary_map`/`add`/`sub`/`mul`/`div` broadcast each input to the output shape, preserve the equal-shape contiguous fast path, and reject zero-stride aliased mutable output layouts. Value tests cover dense and strided broadcast inputs; ndarray differential coverage validates broadcasted add.
 - [ ] [minor] `reshape`/`permute`/`to_contiguous`, `concat`/`stack`/`pad`/`split`, batched rank-3 matmul, `cumsum`, seeded RNG constructors (backlog Phase 6).
 - [ ] [minor] Apollo/Coeus differential and migration coverage for the new ops before consumer dependency updates.
 - [x] [patch] Current Leto 0.3.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Full `cargo doc --workspace --all-features --no-deps` remains blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`.
