@@ -1,9 +1,17 @@
 # Leto Development Checklist
 
 Sprint phase: Execution. Target version: 0.7.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). In-flight item: none. Next concrete increment: Apollo/Coeus
-differential + migration coverage for the 0.4–0.7 ops before consumer
-dependency updates, then the cross-repo Coeus re-base (ADR 0002).
+CHANGELOG synced). In-flight item: none.
+
+Next concrete increment (Stage A1, nalgebra completion — see backlog "Atlas
+in-house replacement roadmap"): vector/matrix norms (L1/L2/Frobenius/inf) over
+`RealScalar` in a new `leto-ops::application::linalg` module, with a differential
+oracle vs ndarray. Then triangular solve + LU. Each linalg routine is gated by a
+named consumer driver (coeus/apollo) and a differential oracle.
+
+Parallel cross-repo track: Coeus CPU consolidation onto coeus-leto and the
+GPU backend program (wgpu + cuda-oxide) per coeus MS-60+; apollo ndarray
+retirement + cuda-oxide FFT path.
 
 ## Atlas ndarray replacement readiness [arch]
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.

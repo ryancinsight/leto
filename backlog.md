@@ -1,5 +1,38 @@
 # Leto Work Backlog
 
+## Atlas in-house replacement roadmap — leto slice [arch]
+
+Cross-repo program to eliminate ndarray, nalgebra, rayon, tokio, std::simd, and
+burn from the Atlas stack using monomorphized zero-cost in-house crates. SSOT
+map: ndarray→leto, nalgebra→leto-ops linalg, rayon/tokio→moirai, std::simd→hermes,
+burn→coeus, alloc→mnemosyne, capabilities→melinoe, GPU=wgpu+cuda-oxide behind
+coeus `ComputeBackend`. leto owns the CPU array substrate and stays CPU-only; GPU
+backends live in coeus/apollo and index leto-style host-side layout metadata.
+
+### Stage A1 — nalgebra linalg completion (leto-ops `application/linalg/`)
+Each routine generic over `T: RealScalar`, native-precision accumulation (wider
+accumulator only via a trait-encoded associated type with numerical justification),
+admitted only with a named consumer driver (coeus/apollo) and a differential
+oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
+- [ ] [patch] Vector/matrix norms (L1, L2, Frobenius, inf) over `RealScalar`.
+- [ ] [minor] Triangular solve + LU with partial pivoting; `solve`, `det`, `inv`.
+- [ ] [minor] QR (Householder) + least-squares solve.
+- [ ] [minor] Cholesky (SPD) factorization + solve.
+- [ ] [major] SVD (Golub–Kahan) + pseudoinverse; ADR before implementation.
+- [ ] [minor] Non-symmetric eigensolver only if a consumer drives it.
+
+### Stage A2 — ndarray consolidation (support coeus/apollo)
+- [ ] [minor] Provide any CPU kernel `coeus-leto` needs to retire coeus's
+  duplicate traversal (reductions incl. argmax/cumsum already present; add gaps
+  as coeus integration surfaces them).
+- [ ] [patch] Keep ndarray strictly a dev-dependency differential oracle; core
+  crates never depend on it in production.
+
+### Stage C2 — hermes SIMD coverage audit
+- [ ] [patch] Audit leto-ops hot kernels (matmul inner loop, reductions, scans,
+  unary math) to ensure they dispatch through hermes `SimdOps` rather than
+  ad-hoc scalar loops; file hermes coverage requests for any missing op/dtype.
+
 ## Replacement Position
 - [x] [arch] Use `leto` as the Atlas shared N-dimensional strided-array and layout crate. It sits below Apollo and Coeus and above Mnemosyne/Moirai/Hermes. It should replace `ndarray` only after parity and verification gates are met.
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
