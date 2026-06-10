@@ -1,8 +1,9 @@
 # Leto Development Checklist
 
-Sprint phase: Execution (Phase 2). Target version: 0.3.0 [minor].
-In-flight item: none. Next concrete increment: contiguous-slice view access
-(`as_slice`/`as_slice_mut`) — the named Apollo FFT hot-kernel blocker.
+Sprint phase: Execution. Target version: 0.3.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). In-flight item: none. Next concrete increment: Phase 6
+const-rank capabilities (broadcast-aware binary into output layouts), per
+ADR 0002.
 
 ## Atlas ndarray replacement readiness [arch]
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
@@ -53,13 +54,17 @@ In-flight item: none. Next concrete increment: contiguous-slice view access
 - [x] [patch] Sync README role, layer boundary, linear-algebra features, and replacement status with the audited state.
 
 ## Next increments (ordered)
-- [ ] [minor] Contiguous-slice view access (`as_slice`/`as_slice_mut`, memory-order variants, contiguity queries) — unblocks Apollo FFT hot kernels (backlog Phase 7).
-- [ ] [patch] `mapv_inplace`-equivalent and 1D `dot` (backlog Phase 7).
-- [ ] [major] ADR: const-rank vs dynamic-rank boundary for Coeus integration (backlog Phase 6; blocks all Phase 6 implementation).
-- [ ] [minor] Unary math-op ZST suite (`exp`, `ln`, `sin`, `cos`, `sqrt`, `abs`, `neg`, `powf`) through the existing traversal kernel (backlog Phase 6).
-- [ ] [minor] Broadcast-aware binary ops into caller-owned output layouts (backlog Phase 6).
-- [ ] [minor] `reshape`/`permute`/`to_contiguous`, `concat`/`pad`/`split`, batched matmul, `cumsum`, seeded RNG constructors (backlog Phase 6).
-- [ ] [minor] Generalize `symmetric_eigen_jacobi` over `T: Scalar` (backlog Phase 8).
+- [x] [minor] Contiguous-slice view access (`as_slice`/`as_mut_slice` now offset-independent C-dense, `as_slice_memory_order`/`as_mut_slice_memory_order`, `is_c_contiguous`/`is_f_contiguous`/`is_contiguous` queries) — unblocks Apollo FFT hot kernels. Value tests: offset-contiguous subview, F-order block, strided-gap rejection, mutable offset-block write.
+- [x] [patch] `map_inplace` (mapv_inplace analogue) and 1D `dot` (contiguous + strided). Value tests in `ops/unary_math.rs`.
+- [x] [major] ADR: const-rank vs dynamic-rank boundary for Coeus integration — `docs/adr/0002-coeus-rank-boundary.md` (const-generic dispatch shim at the Coeus boundary; Leto stays const-rank).
+- [x] [minor] Unary math-op ZST suite (`ExpOp`/`LnOp`/`SinOp`/`CosOp`/`SqrtOp`/`AbsOp`/`NegOp`/`RecipOp`/`PowfOp`) via `UnaryOp` + `unary_map`/`unary_map_into`, on the new segregated `RealScalar` trait. Routed through the existing traversal kernel.
+- [x] [minor] `scalar_map`/`scalar_map_into` array–scalar arithmetic reusing `BinaryOp` markers.
+- [x] [minor] Generalize `symmetric_eigen_jacobi` over `T: RealScalar` (native precision, no hidden widening). f32 genericity test added; f64 path unchanged.
+- [x] [arch] std::ops operator overloading decision — `docs/adr/0001-elementwise-operator-overloading.md` (deferred; orphan rule; `scalar_map` covers the scalar case).
+- [ ] [minor] Broadcast-aware binary ops into caller-owned output layouts (backlog Phase 6; Coeus passes `a_layout`/`b_layout`/`c_layout`).
+- [ ] [minor] `reshape`/`permute`/`to_contiguous`, `concat`/`stack`/`pad`/`split`, batched rank-3 matmul, `cumsum`, seeded RNG constructors (backlog Phase 6).
+- [ ] [minor] Apollo/Coeus differential and migration coverage for the new ops before consumer dependency updates.
+- [x] [patch] Current Leto 0.3.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Full `cargo doc --workspace --all-features --no-deps` remains blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`.
 
 ## Naming decision [patch]
 - [x] Keep `leto` as the crate name. Functionally, Leto is a non-differentiable shared strided-array substrate between Coeus and Apollo; mythologically, Leto bridges Coeus and Apollo as parent/child context. The name is appropriate if the crate remains the shared array/memory vocabulary, not an autodiff engine or spectral-transform crate.

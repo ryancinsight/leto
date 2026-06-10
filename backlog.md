@@ -64,8 +64,8 @@
 
 ## Phase 6: Coeus Backend Consolidation [arch]
 Source: `gap_audit.md` §C. Coeus (the Atlas burn replacement) carries a duplicate non-differentiable array layer (`coeus-tensor`/`coeus-core` layout, storage, COW, traversal) over the same Mnemosyne/Moirai substrate as Leto. Structural-duplication rule: consolidate to Leto. Coeus keeps `ComputeBackend`, autodiff, NN kernels (conv/pool/attention), optimizers, sparse formats, and GPU backends.
-- [ ] [major] Decide the const-rank vs dynamic-rank boundary: Coeus layouts are runtime-rank; Leto is const-rank. Preferred option: const-generic dispatch shim at the Coeus boundary; alternative: a `DynArray` escape type at I/O boundaries only. ADR required before implementation.
-- [ ] [minor] Add a named unary math-op suite as ZST ops through the existing traversal kernel: `exp`, `ln`, `sin`, `cos`, `sqrt`, `abs`, `neg`, `powf`. Coeus's 17 activation/gradient `UnaryOp` variants compose from these in Coeus, not in Leto.
+- [x] [major] Decide the const-rank vs dynamic-rank boundary: resolved in `docs/adr/0002-coeus-rank-boundary.md` — const-generic dispatch shim at the Coeus boundary; Leto stays const-rank; the shim lives in Coeus (consumer-owned). Phase 6 leto-side capabilities are authored const-rank.
+- [x] [minor] Add a named unary math-op suite as ZST ops through the existing traversal kernel: `ExpOp`, `LnOp`, `SinOp`, `CosOp`, `SqrtOp`, `AbsOp`, `NegOp`, `RecipOp`, `PowfOp` via the `UnaryOp` trait and `unary_map`/`unary_map_into`, on the segregated `RealScalar` trait. Coeus's 17 activation/gradient `UnaryOp` variants compose from these in Coeus, not in Leto.
 - [ ] [minor] Add broadcast-aware binary ops that write through caller-owned output layouts (Coeus passes `a_layout`, `b_layout`, `c_layout`; current `binary_map` requires shape-matched views).
 - [ ] [minor] Add `reshape`/`into_shape` for contiguous arrays, `permute` (named alias over transpose semantics), and `to_contiguous` materialization.
 - [ ] [minor] Add shape ops along an axis: `concat`/`stack`, `pad`, `split`.
@@ -76,15 +76,16 @@ Source: `gap_audit.md` §C. Coeus (the Atlas burn replacement) carries a duplica
 
 ## Phase 7: ndarray Parity Completion (Apollo hot kernels) [minor]
 Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto` boundaries; these items unblock replacing ndarray inside the kernels.
-- [ ] [minor] Add contiguous-slice access on views: `as_slice`/`as_slice_mut` with memory-order guarantees plus `is_standard_layout`-equivalent contiguity queries (named Apollo FFT butterfly blocker, ~20 call sites).
-- [ ] [patch] Add `mapv_inplace`-equivalent in-place unary mutation (Apollo 1/N normalization sites).
+- [x] [minor] Add contiguous-slice access on views: `as_slice`/`as_mut_slice` (now offset-independent C-dense) plus `as_slice_memory_order`/`as_mut_slice_memory_order` and `is_c_contiguous`/`is_f_contiguous`/`is_contiguous` queries (named Apollo FFT butterfly blocker). Value tests cover offset-contiguous subviews, F-order blocks, strided-gap rejection, and mutable offset-block writes.
+- [x] [patch] Add `map_inplace` in-place unary mutation (Apollo 1/N normalization sites); memory-order fast path, zero-stride aliasing rejected.
+- [x] [patch] Add 1D `dot` (contiguous fast path + strided fallback, native-precision accumulation).
+- [x] [minor] Add scalar–array elementwise ops: `scalar_map`/`scalar_map_into` reusing `BinaryOp` markers.
+- [ ] [arch] std::ops operator overloading on arrays/views: DEFERRED, see `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule; revisit when a consumer driver exists; `scalar_map` covers the scalar case meanwhile).
 - [ ] [minor] Add 3+-operand zip traversal without duplicating the shared traversal strategy (Apollo precision-downgrade paths).
-- [ ] [minor] Add scalar–array elementwise ops and std::ops operator impls (`Add`/`Sub`/`Mul`/`Div`/`Neg`) on arrays and views per the std-trait integration mandate.
-- [ ] [patch] Add 1D `dot`.
 
 ## Phase 8: nalgebra Successor Policy [minor]
 Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is demand-driven.
-- [ ] [minor] Generalize `symmetric_eigen_jacobi` over `T: Scalar` (currently f64-concrete with `Vec<f64>` eigenvalues, violating generic-first authorship); any wider accumulator must be trait-encoded and justified by numerical analysis.
+- [x] [minor] Generalize `symmetric_eigen_jacobi`/`SymmetricEigenDecomposition` over `T: RealScalar`; runs in native precision with no hidden widening (the wider-accumulator path is intentionally not introduced — a consumer needing higher working precision converts first). f32 genericity test added; f64 path unchanged. `RealScalar` is a segregated transcendental extension of `Scalar` (ISP).
 - [ ] Policy: LU/QR/Cholesky/SVD/solve/norms enter leto-ops only with a named consumer driver and a differential oracle as dev-dependency; no speculative linalg surface.
 
 ## Apollo Migration Gate [arch]

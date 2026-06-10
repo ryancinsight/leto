@@ -100,16 +100,29 @@ fill.
 
 ## D. Residual Risk Register
 
-- Dynamic-rank boundary undecided ([major]): Coeus layout is runtime-rank;
-  leto is const-rank. Options: const-generic dispatch shim at the Coeus
-  boundary (preferred — keeps leto const-rank) vs a `DynArray` escape type.
-  Decision required before Phase 6 implementation starts.
-- `symmetric_eigen_jacobi` is f64-concrete ([minor]): conflicts with the
-  generic-first rule; generalize over `T: Scalar` with an analytically
-  justified accumulator before further linalg work builds on it.
-- Apollo hot-kernel migration unproven: `forward_leto` boundaries exist but
-  internal FFT compute still runs on ndarray; contiguous-slice access on
-  leto views is the named blocker.
+Update 2026-06-10 (v0.3.0): several §A/§B gaps closed — see CHANGELOG and the
+two ADRs in `docs/adr/`.
+
+- Dynamic-rank boundary: DECIDED ([major]) in
+  `docs/adr/0002-coeus-rank-boundary.md` — const-generic dispatch shim at the
+  Coeus boundary, shim owned by Coeus, Leto stays const-rank. Phase 6 leto-side
+  capabilities authored const-rank.
+- `symmetric_eigen_jacobi`: CLOSED ([minor]) — now generic over `T: RealScalar`,
+  native precision, no hidden widening. Residual: no wider-accumulator variant;
+  consumers needing higher working precision than storage convert first
+  (explicit). f16/bf16 transcendentals use the documented f32 fallback.
+- Contiguous-slice view access: CLOSED — `as_slice`/`as_mut_slice` are now
+  offset-independent C-dense; `as_slice_memory_order`/`as_mut_slice_memory_order`
+  expose F-order/offset blocks. Apollo hot-kernel migration still unproven end
+  to end (boundaries exist; internal FFT compute still on ndarray), but the
+  named blocker is removed.
+- std::ops operator overloading: DEFERRED ([arch]) in
+  `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule). `scalar_map`
+  covers array–scalar arithmetic; no consumer blocked.
+- Coverage of new ops: value-semantic tests added (unary math, scalar_map, dot,
+  map_inplace, memory-order slices, f32 eigensolver). No new ndarray differential
+  oracle yet for the unary math suite or scalar_map — add before Apollo/Coeus
+  consumer dependency updates (tracked in checklist next-increments).
 - `leto-python` rustdoc ICE via `numpy 0.23` still open (tracked in backlog).
 - Differential coverage: ndarray oracle covers map/reductions/matmul; no
   oracle yet for future unary suite, concat/stack, RNG (use closed-form

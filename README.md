@@ -119,7 +119,25 @@ strided, SIMD, and parallel dispatch path.
   reduction core after constructing `VecStorage`.
 - Unary mapping APIs provide `map_into` for caller-owned output and `mapv` /
   `map` for allocating C-contiguous output. Precision changes are explicit in
-  the caller-provided closure rather than hidden in the traversal.
+  the caller-provided closure rather than hidden in the traversal. `map_inplace`
+  mutates a view in place (the `mapv_inplace` analogue).
+- Named real unary math operations (`ExpOp`, `LnOp`, `SinOp`, `CosOp`,
+  `SqrtOp`, `AbsOp`, `NegOp`, `RecipOp`, `PowfOp`) are ZST/value-carrying
+  markers implementing the `UnaryOp` trait, routed through the same traversal
+  kernel via `unary_map` / `unary_map_into`. They are bounded on `RealScalar`,
+  a segregated transcendental extension of `Scalar` (native for `f32`/`f64`,
+  documented `f32` fallback for `f16`/`bf16`).
+- `scalar_map` / `scalar_map_into` apply an array–scalar operation reusing the
+  `BinaryOp` markers (`AddOp`/`SubOp`/`MulOp`/`DivOp`); no scalar-specific
+  kernel exists.
+- `dot` computes a rank-1 dot product (contiguous fast path plus strided
+  fallback) accumulating in native precision.
+- Contiguity queries (`is_c_contiguous`, `is_f_contiguous`, `is_contiguous`)
+  and memory-order slice access (`as_slice_memory_order`,
+  `as_mut_slice_memory_order`) expose dense blocks of sliced or iterated
+  subviews at non-zero offsets, the access pattern Apollo's in-place FFT
+  butterfly kernels require. `as_slice` / `as_mut_slice` expose C-order dense
+  blocks independent of offset.
 - Matrix multiplication lives in a dedicated matrix module, writes into
   caller-owned output, rejects zero-stride mutable output aliasing, and supports
   contiguous plus strided/transposed inputs.
@@ -179,8 +197,9 @@ Current value-semantic coverage includes:
 
 - `symmetric_eigen_jacobi` and `symmetric_eigen_jacobi_with_tolerance`
   compute symmetric eigendecompositions (ascending eigenvalues, orthonormal
-  column eigenvectors) via Jacobi rotations. This closed Apollo's `nalgebra`
-  dependency: FrFT/GFT eigendecomposition now runs on Leto.
+  column eigenvectors) via Jacobi rotations, generic over `T: RealScalar` and
+  running in native precision. This closed Apollo's `nalgebra` dependency:
+  FrFT/GFT eigendecomposition now runs on Leto.
 - Further decompositions (LU, QR, Cholesky, SVD) are added only with a named
   consumer driver and a differential oracle; see `gap_audit.md` §B.
 
@@ -193,18 +212,19 @@ Current value-semantic coverage includes:
 - **ndarray, Apollo**: partial. Apollo pins Leto as a Git dependency and
   exposes `forward_leto`/`inverse_leto` boundaries on FFT, CZT, DHT, NUFFT,
   SHT, Radon, and STFT; `ndarray` remains Apollo's internal CPU compute
-  substrate and differential oracle. The named blocker for hot-kernel
-  migration is contiguous-slice access on Leto views
-  (`as_slice`/`as_slice_mut` with memory-order guarantees).
+  substrate and differential oracle. The prior named blocker for hot-kernel
+  migration, contiguous-slice access on Leto views with memory-order
+  guarantees, is closed in 0.3.0; Apollo still needs end-to-end internal kernel
+  migration work.
 - **Coeus backend**: not started. Coeus currently carries its own
   layout/storage/traversal stack (`coeus-tensor`, `coeus-core`) duplicating
   Leto's layer over the same Mnemosyne/Moirai substrate. The plan of record
   consolidates that non-differentiable layer into Leto while Coeus keeps
-  `ComputeBackend`, autodiff, NN kernels, and GPU backends. Blocking gaps:
-  broadcast-aware binary ops into caller-owned output layouts, a named
-  unary math-op suite, reshape/permute/to_contiguous, concat/pad/split,
-  batched matmul, seeded RNG fill, and the const-rank vs dynamic-rank
-  boundary decision.
+  `ComputeBackend`, autodiff, NN kernels, and GPU backends. The const-rank vs
+  dynamic-rank boundary is decided in ADR 0002, and the unary math-op suite is
+  present. Remaining blocking gaps: broadcast-aware binary ops into
+  caller-owned output layouts, reshape/permute/to_contiguous,
+  concat/pad/split, batched matmul, and seeded RNG fill.
 
 The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
 `gap_audit.md`; the tracked migration plan lives in `checklist.md` and
