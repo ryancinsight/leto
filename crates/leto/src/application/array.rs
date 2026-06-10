@@ -6,6 +6,7 @@ use crate::infrastructure::storage::{Storage, StorageMut};
 use std::marker::PhantomData;
 
 /// An N-dimensional strided array.
+#[derive(Debug, Clone)]
 pub struct Array<T, S, const N: usize> {
     pub(crate) layout: Layout<N>,
     pub(crate) storage: S,

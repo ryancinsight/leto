@@ -1,6 +1,7 @@
 use super::traits::{Storage, StorageMut};
 
 /// Owned array storage backed by a standard heap `Vec`.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VecStorage<T> {
     data: Vec<T>,
 }
