@@ -71,11 +71,31 @@ fn symmetric_eigen_jacobi_matches_nalgebra_for_path_graph_laplacian() {
         matrix.storage().as_slice(),
     ));
     let mut expected = reference.eigenvalues.as_slice().to_vec();
-    expected.sort_by(|lhs, rhs| lhs.partial_cmp(rhs).unwrap());
+    expected.sort_by(|lhs: &f64, rhs: &f64| lhs.partial_cmp(rhs).unwrap());
 
     for (actual, expected) in decomposition.eigenvalues.iter().zip(expected.iter()) {
         assert_close(*actual, *expected, 1.0e-10);
     }
+}
+
+#[test]
+fn symmetric_eigen_jacobi_is_generic_over_f32() {
+    // Same 2x2 as the f64 case, exercising the generic path at f32 precision.
+    let matrix = Array2::from_shape_vec([2, 2], vec![2.0f32, 1.0, 1.0, 2.0]).unwrap();
+    let decomposition = symmetric_eigen_jacobi(&matrix.view()).unwrap();
+
+    assert!((decomposition.eigenvalues[0] - 1.0f32).abs() <= 1.0e-5);
+    assert!((decomposition.eigenvalues[1] - 3.0f32).abs() <= 1.0e-5);
+    let eigenvectors = decomposition.eigenvectors.storage().as_slice();
+    let norm0 = column_norm32(eigenvectors, 2, 0);
+    assert!((norm0 - 1.0f32).abs() <= 1.0e-5);
+}
+
+fn column_norm32(values: &[f32], n: usize, col: usize) -> f32 {
+    (0..n)
+        .map(|row| values[row * n + col] * values[row * n + col])
+        .sum::<f32>()
+        .sqrt()
 }
 
 #[test]
