@@ -23,7 +23,8 @@ pub use application::linalg::{
     cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, det, inv, lu_decompose, norm,
     norm_l1, norm_l2, norm_max, qr_decompose, singular_values, solve, solve_least_squares,
     svd_decompose, svd_decompose_with_tolerance, symmetric_eigen_jacobi,
-    symmetric_eigen_jacobi_with_tolerance, CholeskyDecomposition, LuDecomposition, NormKind,
+    symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
+    symmetric_eigenvalues_jacobi_with_tolerance, CholeskyDecomposition, LuDecomposition, NormKind,
     NormL1, NormL2, NormMax, QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition,
 };
 pub use application::map::{

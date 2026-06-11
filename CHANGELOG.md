@@ -4,6 +4,30 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.14.0] - 2026-06-11
+
+Minor nalgebra-parity and eigensolver memory-efficiency increment.
+
+### Added
+
+- `leto-ops`: `symmetric_eigenvalues_jacobi` and
+  `symmetric_eigenvalues_jacobi_with_tolerance` compute sorted eigenvalues for
+  real symmetric matrices without allocating or rotating an eigenvector matrix.
+
+### Changed
+
+- `leto-ops`: the symmetric Jacobi implementation now routes rotations through
+  a monomorphized `RotationTarget` strategy. Full decomposition uses an
+  eigenvector workspace; eigenvalues-only uses a zero-sized no-vector target.
+  The numerical diagonal update is shared by both paths and remains native
+  precision over `T: RealScalar`.
+
+### Tests
+
+- Added value-semantic coverage proving the eigenvalues-only path matches the
+  full decomposition, preserves strided-view semantics, and rejects the same
+  invalid inputs.
+
 ## [0.13.1] - 2026-06-11
 
 Patch performance increment completing the row-walk traversal policy: every
