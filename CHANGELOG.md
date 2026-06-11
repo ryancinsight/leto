@@ -18,6 +18,12 @@ Patch performance increment for strided unary and binary map traversal.
   `RowMajorTraversal` to avoid maintaining separate unary and binary copies of
   the same traversal policy.
 
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `elementwise_add/transposed_256x256`: 1.206 ms → 49–51 µs (**−95.9%,
+  23.7×, p < 0.05**); `contiguous_64k` statistically unchanged (p = 0.56);
+  untouched kernels (matmul, reductions) verified unchanged.
+
 ### Tests
 
 - Added negative last-axis stride differential tests against ndarray for unary
