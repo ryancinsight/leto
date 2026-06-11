@@ -1,4 +1,4 @@
-use crate::application::index::index_from_flat;
+use crate::application::index::RowMajorTraversal;
 use crate::domain::real::RealScalar;
 use leto::{ArrayView, Result};
 
@@ -98,10 +98,16 @@ where
     let data = view.data();
 
     let mut acc = T::ZERO;
-    for flat_idx in 0..size {
-        let index = index_from_flat(flat_idx, &shape);
-        let offset = layout.offset_of(index)?;
-        acc = K::accumulate(acc, data[offset]);
+    if let Some(traversal) = RowMajorTraversal::new(size, shape) {
+        let step = traversal.last_axis_stride(layout);
+        for row in 0..traversal.rows() {
+            let base_idx = traversal.base_index(row);
+            let mut offset = layout.offset_of(base_idx)? as isize;
+            for _ in 0..traversal.inner() {
+                acc = K::accumulate(acc, data[offset as usize]);
+                offset += step;
+            }
+        }
     }
     Ok(K::finish(acc))
 }

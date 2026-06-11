@@ -1,7 +1,7 @@
 use leto::{concat, stack, Array, SliceArg, Storage};
 use leto_ops::{
-    add, batched_matmul, cumsum, mapv, matmul, max_axis, mean_axis, min_axis, scalar_map, sum_axis,
-    unary_map, AddOp, ExpOp, SqrtOp,
+    add, batched_matmul, cumsum, mapv, matmul, max_axis, mean_axis, min_axis, scalar_map, sum,
+    sum_axis, unary_map, AddOp, ExpOp, SqrtOp,
 };
 use ndarray::{s, Array2, Array3, Axis};
 
@@ -133,6 +133,25 @@ fn test_row_walk_binary_map_negative_last_axis_stride() {
         ndarray_lhs.slice(s![.., ..;-1]).to_owned() + ndarray_rhs.slice(s![.., ..;-1]).to_owned();
     let expected_values: Vec<f32> = expected.iter().copied().collect();
     assert_close_slice(out.storage().as_slice(), &expected_values);
+}
+
+#[test]
+fn test_row_walk_sum_negative_last_axis_stride() {
+    let values = vec![1.0f32, -2.0, 3.5, 4.25, -5.5, 6.75, 7.5, -8.25];
+    let input = Array::from_shape_vec([2, 4], values.clone()).unwrap();
+    let reversed = input
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
+        .unwrap();
+
+    let actual = sum(&reversed);
+
+    let ndarray_input = Array2::from_shape_vec((2, 4), values).unwrap();
+    let expected = ndarray_input.slice(s![.., ..;-1]).sum();
+    assert!(
+        (actual - expected).abs() <= 1.0e-5,
+        "actual {actual} expected {expected}"
+    );
 }
 
 #[test]

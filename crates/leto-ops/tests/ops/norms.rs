@@ -1,4 +1,4 @@
-use leto::{Array, Layout, VecStorage};
+use leto::{Array, Layout, SliceArg, VecStorage};
 use leto_ops::{norm_l1, norm_l2, norm_max};
 
 const EPS: f64 = 1e-12;
@@ -67,6 +67,17 @@ fn norms_are_layout_independent_on_strided_views() {
     assert_close(
         norm_l2(&strided).unwrap(),
         (1.0f64 + 9.0 + 16.0 + 36.0).sqrt(),
+    );
+
+    let reversed = array
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
+        .unwrap();
+    assert_close(norm_l2(&reversed).unwrap(), norm_l2(&array.view()).unwrap());
+    assert_close(norm_l1(&reversed).unwrap(), norm_l1(&array.view()).unwrap());
+    assert_close(
+        norm_max(&reversed).unwrap(),
+        norm_max(&array.view()).unwrap(),
     );
 }
 

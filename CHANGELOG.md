@@ -4,6 +4,30 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.11.2] - 2026-06-11
+
+Patch performance increment for strided whole-array reductions and norms.
+
+### Changed
+
+- `leto-ops`: strided whole-array `sum` and generic `norm` traversal now use
+  `RowMajorTraversal`, computing each innermost row base once and walking by
+  the last-axis stride. This removes the per-element row-major index
+  decomposition from reverse-last-axis and transposed reduction fallbacks.
+- `crates/leto-ops/benches/kernels.rs`: added criterion baselines for
+  transposed and reverse-last-axis `sum`/`norm_l2` reductions.
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- First measured strided reduction baselines: transposed `sum` 40.73 µs,
+  transposed `norm_l2` 28.67 µs, reverse-last-axis `sum` 30.55 µs, and
+  reverse-last-axis `norm_l2` 30.21 µs.
+
+### Tests
+
+- Added negative last-axis stride value-semantic coverage for whole-array
+  `sum` and norms.
+
 ## [0.11.1] - 2026-06-11
 
 Patch performance increment for strided unary and binary map traversal.

@@ -1,4 +1,4 @@
-use crate::application::index::{index_from_flat, RowMajorTraversal};
+use crate::application::index::RowMajorTraversal;
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -400,10 +400,20 @@ pub fn sum<T: Scalar, const N: usize>(arr: &ArrayView<'_, T, N>) -> T {
     let data = arr.data();
 
     let mut total = T::ZERO;
-    for flat_idx in 0..size {
-        let multi_idx = index_from_flat(flat_idx, &shape);
-        if let Ok(off) = layout.offset_of(multi_idx) {
-            total = total.add(data[off]);
+    if let Some(traversal) = RowMajorTraversal::new(size, shape) {
+        let step = traversal.last_axis_stride(layout);
+        for row in 0..traversal.rows() {
+            let base_idx = traversal.base_index(row);
+            if let Ok(mut offset) = layout.offset_of(base_idx).map(|offset| offset as isize) {
+                for _ in 0..traversal.inner() {
+                    if let Ok(index) = usize::try_from(offset) {
+                        if let Some(value) = data.get(index) {
+                            total = total.add(*value);
+                        }
+                    }
+                    offset += step;
+                }
+            }
         }
     }
     total

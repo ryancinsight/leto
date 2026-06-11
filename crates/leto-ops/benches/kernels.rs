@@ -6,7 +6,7 @@
 //! pinned; report median + CI from criterion's standard output.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use leto::Array;
+use leto::{Array, SliceArg};
 use leto_ops::{matmul, norm_l2, sum, AddOp};
 use std::hint::black_box;
 
@@ -91,6 +91,27 @@ fn bench_reductions(c: &mut Criterion) {
     });
     group.bench_function("norm_l2_64k", |bencher| {
         bencher.iter(|| norm_l2(black_box(&a.view())).unwrap());
+    });
+
+    let n = 256usize;
+    let square = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0)).unwrap();
+    let transposed = square.transpose([1, 0]).unwrap();
+    group.bench_function("sum_transposed_256x256", |bencher| {
+        bencher.iter(|| sum(black_box(&transposed)));
+    });
+    group.bench_function("norm_l2_transposed_256x256", |bencher| {
+        bencher.iter(|| norm_l2(black_box(&transposed)).unwrap());
+    });
+
+    let reversed = square
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
+        .unwrap();
+    group.bench_function("sum_reverse_last_axis_256x256", |bencher| {
+        bencher.iter(|| sum(black_box(&reversed)));
+    });
+    group.bench_function("norm_l2_reverse_last_axis_256x256", |bencher| {
+        bencher.iter(|| norm_l2(black_box(&reversed)).unwrap());
     });
     group.finish();
 }

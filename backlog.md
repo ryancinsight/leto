@@ -47,10 +47,15 @@ no unmeasured "optimization" per performance_engineering.
   Measured: transposed add 1.206 ms → 49–51 µs (−95.9%, 23.7×, p < 0.05),
   contiguous unchanged; negative-stride differential tests added. Remaining
   gap vs contiguous is ~3.6× (cache-line behavior of column walks).
+- [x] [patch] Row-walk whole-array strided reduction and norm traversal:
+  `sum` and generic `norm` now share the same innermost-row base-offset policy.
+  Criterion baselines added for transposed and reverse-last-axis reductions:
+  transposed `sum` 40.73 µs, transposed `norm_l2` 28.67 µs,
+  reverse-last-axis `sum` 30.55 µs, reverse-last-axis `norm_l2` 30.21 µs.
 - [ ] [minor] L1-tile blocking on top of row-walk for the residual ~3.6×
   column-walk gap (const-generic tile size, selected from themis
-  `CacheLevel` data); also extend row-walk to zip/scan/reduction strided
-  fallbacks (currently still per-element).
+  `CacheLevel` data); also extend row-walk to zip/scan and axis-reduction
+  strided fallbacks (currently still per-element).
 - [ ] [minor] Blocked matmul: 256³ at ~2.38 ms (≈14 GFLOP/s) is memory-bound;
   L1/L2 cache blocking with const-generic tile shapes (one authoritative
   kernel monomorphized per tile shape, per the structural-const-generics
