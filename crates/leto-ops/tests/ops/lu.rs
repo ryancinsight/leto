@@ -18,28 +18,26 @@ fn assert_close_slice(actual: &[f64], expected: &[f64]) {
 }
 
 #[test]
-fn solve_matches_nalgebra() {
-    let a_values = vec![4.0f64, -2.0, 1.0, -2.0, 4.0, -2.0, 1.0, -2.0, 4.0];
-    let rhs_values = vec![11.0f64, -16.0, 17.0];
-    let a = Array::from_shape_vec([3, 3], a_values.clone()).unwrap();
-    let rhs = Array::from_shape_vec([3], rhs_values.clone()).unwrap();
+fn solve_matches_closed_form_fixture() {
+    let a = Array::from_shape_vec(
+        [3, 3],
+        vec![4.0f64, -2.0, 1.0, -2.0, 4.0, -2.0, 1.0, -2.0, 4.0],
+    )
+    .unwrap();
+    let rhs = Array::from_shape_vec([3], vec![11.0f64, -16.0, 17.0]).unwrap();
 
     let x = solve(&a.view(), &rhs.view()).unwrap();
 
-    let na = nalgebra::DMatrix::from_row_slice(3, 3, &a_values);
-    let nb = nalgebra::DVector::from_vec(rhs_values);
-    let expected = na.lu().solve(&nb).expect("nonsingular reference");
-    assert_close_slice(x.storage().as_slice(), expected.as_slice());
+    assert_close_slice(x.storage().as_slice(), &[1.0, -2.0, 3.0]);
 }
 
 #[test]
-fn det_matches_nalgebra_with_pivoting_parity() {
+fn det_matches_closed_form_with_pivoting_parity() {
     // Requires row swaps (zero leading pivot), exercising the parity sign.
-    let values = vec![0.0f64, 2.0, 1.0, 3.0, 0.0, 4.0, 5.0, 6.0, 0.0];
-    let a = Array::from_shape_vec([3, 3], values.clone()).unwrap();
+    let a = Array::from_shape_vec([3, 3], vec![0.0f64, 2.0, 1.0, 3.0, 0.0, 4.0, 5.0, 6.0, 0.0])
+        .unwrap();
 
-    let reference = nalgebra::DMatrix::from_row_slice(3, 3, &values).determinant();
-    assert_close(det(&a.view()).unwrap(), reference);
+    assert_close(det(&a.view()).unwrap(), 58.0);
 }
 
 #[test]
@@ -54,12 +52,18 @@ fn inv_times_original_is_identity() {
     let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
     assert_close_slice(product.storage().as_slice(), &identity);
 
-    // Also check against nalgebra's inverse value-by-value.
-    let reference = nalgebra::DMatrix::from_row_slice(3, 3, &values)
-        .try_inverse()
-        .expect("nonsingular reference");
-    let reference_values: Vec<f64> = reference.transpose().as_slice().to_vec(); // row-major
-    assert_close_slice(a_inv.storage().as_slice(), &reference_values);
+    let expected_inverse = [
+        1.0,
+        -1.0 / 3.0,
+        -2.0 / 3.0,
+        1.0,
+        0.0,
+        -2.0,
+        -2.0,
+        2.0 / 3.0,
+        10.0 / 3.0,
+    ];
+    assert_close_slice(a_inv.storage().as_slice(), &expected_inverse);
 }
 
 #[test]
