@@ -7,23 +7,25 @@ Machine class: Windows 11 x86_64 dev workstation (AVX2-class), 2026-06-11,
 leto 0.11.0. Baselines gate the cache-aware tiling work (atlas ADR 0002 leto
 slice): a statistically significant regression against these blocks merge.
 
-| Benchmark | Median | 95% CI |
-| --- | --- | --- |
-| matmul/dense_64x64 | 28.42 µs | [27.74, 29.03] µs |
-| matmul/dense_256x256 | 2.376 ms | [2.322, 2.429] ms |
-| elementwise_add/contiguous_64k | 13.85 µs | [13.28, 14.50] µs |
-| elementwise_add/transposed_256x256 | 1.206 ms | [1.179, 1.236] ms |
-| reductions/sum_64k | 3.607 µs | [3.554, 3.664] µs |
-| reductions/norm_l2_64k | 28.06 µs | [27.81, 28.28] µs |
+| Benchmark | Baseline (pre row-walk) | After row-walk (0.11.1) | Change |
+| --- | --- | --- | --- |
+| matmul/dense_64x64 | 28.42 µs | unchanged (untouched kernel) | — |
+| matmul/dense_256x256 | 2.376 ms | unchanged (untouched kernel) | — |
+| elementwise_add/contiguous_64k | 13.85 µs | 13.59 µs | no change (p = 0.56) |
+| elementwise_add/transposed_256x256 | 1.206 ms | 50.98 µs → 49.19 µs | **−95.9% (23.7×), p < 0.05** |
+| reductions/sum_64k | 3.607 µs | unchanged (untouched; ±9% run-to-run noise observed and reversed on rerun) | — |
+| reductions/norm_l2_64k | 28.06 µs | unchanged (untouched) | — |
 
 ## Observations (drive the optimization backlog)
 
-- **Strided traversal is the dominant cache problem**: transposed elementwise
-  add over the same 65 536 elements is ~87× slower than contiguous
-  (1.206 ms vs 13.85 µs). The strided fallback recomputes `index_from_flat`
-  + `offset_of` per element and strides column-wise through rows — L1/L2
-  unfriendly. Cache-aware tiling (process in L1-sized blocks along the
-  fast axis) is the targeted fix; these rows are its before-numbers.
+- **Row-walk traversal landed (0.11.1)**: the strided elementwise paths now
+  compute offsets once per innermost row (`RowMajorTraversal`) and walk the
+  last axis by stride increments, eliminating per-element div/mod index
+  decomposition and per-element offset products. Measured: transposed add
+  1.206 ms → 49–51 µs (−95.9%, 23.7×, p < 0.05) with contiguous unchanged.
+  The residual ~3.6× gap vs contiguous (49 µs vs 13.6 µs) is genuine
+  cache-line behavior of column-stride walks — the remaining L1-tile
+  blocking item targets it.
 - matmul 256³ at ~2.38 ms ≈ 14 GFLOP/s (2·n³/t): memory-bound at this size
   on this machine class; blocking (L1/L2 tiles from themis `CacheLevel`)
   is the standard remedy and is backlogged behind these baselines.

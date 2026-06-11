@@ -4,6 +4,25 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.11.1] - 2026-06-11
+
+Patch performance increment for strided unary and binary map traversal.
+
+### Changed
+
+- `leto-ops`: strided `map_into`, `mapv`, and `binary_map` now traverse by
+  innermost logical rows. Each row computes base offsets once and then advances
+  by signed last-axis strides, reducing per-element index decomposition and
+  offset multiplication on Apollo/Coeus strided views.
+- Shared the row traversal shape/chunk calculation through
+  `RowMajorTraversal` to avoid maintaining separate unary and binary copies of
+  the same traversal policy.
+
+### Tests
+
+- Added negative last-axis stride differential tests against ndarray for unary
+  `mapv` and binary `add`, covering the signed-stride row-walk path.
+
 ## [0.11.0] - 2026-06-11
 
 Stage A2 ndarray-parity increment: indexed mutable zip traversal for

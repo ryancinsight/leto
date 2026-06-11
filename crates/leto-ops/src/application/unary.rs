@@ -1,4 +1,4 @@
-use crate::application::index::index_from_flat;
+use crate::application::index::{index_from_flat, RowMajorTraversal};
 use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -93,11 +93,22 @@ where
         }
     }
 
-    for flat_idx in 0..size {
-        let index = index_from_flat(flat_idx, &shape);
-        let input_offset = input_layout.offset_of(index)?;
-        let output_offset = output_layout.offset_of(index)?;
-        output_data[output_offset] = f(input_data[input_offset]);
+    // Row-walk traversal: one offset computation per innermost row, then a
+    // stride-increment walk (see binary_map for rationale + baselines).
+    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
+        return Ok(());
+    };
+    let in_step = traversal.last_axis_stride(input_layout);
+    let out_step = traversal.last_axis_stride(output_layout);
+    for row in 0..traversal.rows() {
+        let base_idx = traversal.base_index(row);
+        let mut input_offset = input_layout.offset_of(base_idx)? as isize;
+        let mut output_offset = output_layout.offset_of(base_idx)? as isize;
+        for _ in 0..traversal.inner() {
+            output_data[output_offset as usize] = f(input_data[input_offset as usize]);
+            input_offset += in_step;
+            output_offset += out_step;
+        }
     }
 
     Ok(())
@@ -121,13 +132,20 @@ where
 
     if let Some(input_slice) = input.as_slice() {
         values.extend(input_slice.iter().copied().map(f));
-    } else {
+    } else if size > 0 {
         let input_layout = input.layout();
         let input_data = input.data();
-        for flat_idx in 0..size {
-            let index = index_from_flat(flat_idx, &shape);
-            let input_offset = input_layout.offset_of(index)?;
-            values.push(f(input_data[input_offset]));
+        // Row-walk read traversal (output is push-sequential by construction).
+        if let Some(traversal) = RowMajorTraversal::new(size, shape) {
+            let in_step = traversal.last_axis_stride(input_layout);
+            for row in 0..traversal.rows() {
+                let base_idx = traversal.base_index(row);
+                let mut input_offset = input_layout.offset_of(base_idx)? as isize;
+                for _ in 0..traversal.inner() {
+                    values.push(f(input_data[input_offset as usize]));
+                    input_offset += in_step;
+                }
+            }
         }
     }
 
@@ -334,28 +352,44 @@ where
 {
     let input_ptr = ctx.input_data.as_ptr() as usize;
     let output_ptr = ctx.output_data.as_mut_ptr() as usize;
-    let chunk_size = 512;
+
+    // Row-walk parallel traversal: workers own disjoint innermost rows; one
+    // offset computation per row, then stride-increment walks (see binary_map
+    // for rationale + baselines).
+    let Some(traversal) = RowMajorTraversal::new(ctx.size, ctx.shape) else {
+        return;
+    };
+    let in_step = traversal.last_axis_stride(ctx.input_layout);
+    let out_step = traversal.last_axis_stride(ctx.output_layout);
+    let row_chunk = traversal.chunk_rows_for(4096);
 
     crate::infrastructure::parallel::parallel_for_chunks(
-        ctx.size,
-        chunk_size,
+        traversal.rows(),
+        row_chunk,
         move |start, end| {
-            for flat_idx in start..end {
-                let index = index_from_flat(flat_idx, &ctx.shape);
-                let input_offset = ctx
+            for row in start..end {
+                let base_idx = traversal.base_index(row);
+                let mut input_offset = ctx
                     .input_layout
-                    .offset_of(index)
-                    .expect("validated input layout must map every logical index");
-                let output_offset = ctx
+                    .offset_of(base_idx)
+                    .expect("validated input layout must map every logical index")
+                    as isize;
+                let mut output_offset = ctx
                     .output_layout
-                    .offset_of(index)
-                    .expect("validated output layout must map every logical index");
+                    .offset_of(base_idx)
+                    .expect("validated output layout must map every logical index")
+                    as isize;
 
-                // SAFETY: storage spans are validated before dispatch and zero-stride
-                // output aliasing is rejected before this path.
+                // SAFETY: storage spans are validated before dispatch; every walked
+                // offset equals offset_of of a validated logical index; workers own
+                // disjoint rows and zero-stride output aliasing is rejected.
                 unsafe {
-                    let value = *(input_ptr as *const T).add(input_offset);
-                    *(output_ptr as *mut U).add(output_offset) = f(value);
+                    for _ in 0..traversal.inner() {
+                        let value = *(input_ptr as *const T).offset(input_offset);
+                        *(output_ptr as *mut U).offset(output_offset) = f(value);
+                        input_offset += in_step;
+                        output_offset += out_step;
+                    }
                 }
             }
         },

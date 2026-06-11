@@ -1,9 +1,9 @@
-use leto::{concat, stack, Array, Storage};
+use leto::{concat, stack, Array, SliceArg, Storage};
 use leto_ops::{
     add, batched_matmul, cumsum, mapv, matmul, max_axis, mean_axis, min_axis, scalar_map, sum_axis,
     unary_map, AddOp, ExpOp, SqrtOp,
 };
-use ndarray::{Array2, Array3, Axis};
+use ndarray::{s, Array2, Array3, Axis};
 
 fn assert_close_slice(lhs: &[f32], rhs: &[f32]) {
     assert_eq!(lhs.len(), rhs.len());
@@ -87,6 +87,52 @@ fn test_binary_broadcast_differential_matches_ndarray() {
     let expected =
         ndarray_lhs.broadcast((2, 3)).unwrap().to_owned() + ndarray_rhs.broadcast((2, 3)).unwrap();
     assert_close_slice(out.storage().as_slice(), expected.as_slice().unwrap());
+}
+
+#[test]
+fn test_row_walk_maps_negative_last_axis_stride() {
+    let values = vec![1.0f32, -2.0, 3.5, 4.25, -5.5, 6.75, 7.5, -8.25];
+    let input = Array::from_shape_vec([2, 4], values.clone()).unwrap();
+    let reversed = input
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
+        .unwrap();
+
+    let mapped = mapv(&reversed, |value| value.mul_add(2.0, 1.0)).unwrap();
+
+    let ndarray_input = Array2::from_shape_vec((2, 4), values).unwrap();
+    let expected = ndarray_input
+        .slice(s![.., ..;-1])
+        .mapv(|value| value.mul_add(2.0, 1.0));
+    let expected_values: Vec<f32> = expected.iter().copied().collect();
+    assert_eq!(mapped.shape(), [2, 4]);
+    assert_close_slice(mapped.storage().as_slice(), &expected_values);
+}
+
+#[test]
+fn test_row_walk_binary_map_negative_last_axis_stride() {
+    let lhs_values = vec![1.0f32, -2.0, 3.5, 4.25, -5.5, 6.75, 7.5, -8.25];
+    let rhs_values = vec![0.5f32, 1.5, -3.0, 2.0, 4.0, -1.0, 6.0, 8.0];
+    let lhs_base = Array::from_shape_vec([2, 4], lhs_values.clone()).unwrap();
+    let rhs_base = Array::from_shape_vec([2, 4], rhs_values.clone()).unwrap();
+    let lhs = lhs_base
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
+        .unwrap();
+    let rhs = rhs_base
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
+        .unwrap();
+    let mut out = Array::zeros([2, 4]);
+
+    add(&lhs, &rhs, &mut out.view_mut()).unwrap();
+
+    let ndarray_lhs = Array2::from_shape_vec((2, 4), lhs_values).unwrap();
+    let ndarray_rhs = Array2::from_shape_vec((2, 4), rhs_values).unwrap();
+    let expected =
+        ndarray_lhs.slice(s![.., ..;-1]).to_owned() + ndarray_rhs.slice(s![.., ..;-1]).to_owned();
+    let expected_values: Vec<f32> = expected.iter().copied().collect();
+    assert_close_slice(out.storage().as_slice(), &expected_values);
 }
 
 #[test]

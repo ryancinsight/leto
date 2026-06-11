@@ -41,12 +41,16 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every
 item below must show a statistically significant improvement against them —
 no unmeasured "optimization" per performance_engineering.
-- [ ] [minor] Tiled strided traversal: the strided elementwise fallback is
-  ~87× slower than contiguous for the same element count
-  (transposed_256x256 = 1.206 ms vs contiguous_64k = 13.85 µs). Replace
-  per-element `index_from_flat`/`offset_of` with blocked traversal over
-  L1-sized tiles along the fastest axis (const-generic tile size, selected
-  from themis `CacheLevel` data at dispatch).
+- [x] [patch] Row-walk strided traversal (`RowMajorTraversal` in
+  `application/index.rs`, shared by binary/unary serial + parallel strided
+  paths): one offset computation per innermost row, stride-increment walk.
+  Measured: transposed add 1.206 ms → 49–51 µs (−95.9%, 23.7×, p < 0.05),
+  contiguous unchanged; negative-stride differential tests added. Remaining
+  gap vs contiguous is ~3.6× (cache-line behavior of column walks).
+- [ ] [minor] L1-tile blocking on top of row-walk for the residual ~3.6×
+  column-walk gap (const-generic tile size, selected from themis
+  `CacheLevel` data); also extend row-walk to zip/scan/reduction strided
+  fallbacks (currently still per-element).
 - [ ] [minor] Blocked matmul: 256³ at ~2.38 ms (≈14 GFLOP/s) is memory-bound;
   L1/L2 cache blocking with const-generic tile shapes (one authoritative
   kernel monomorphized per tile shape, per the structural-const-generics

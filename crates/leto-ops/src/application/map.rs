@@ -1,4 +1,4 @@
-use crate::application::index::index_from_flat;
+use crate::application::index::{index_from_flat, RowMajorTraversal};
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -189,12 +189,32 @@ where
         }
     }
 
-    for flat_idx in 0..size {
-        let multi_idx = index_from_flat(flat_idx, &shape);
-        let lhs_off = lhs_layout.offset_of(multi_idx)?;
-        let rhs_off = rhs_layout.offset_of(multi_idx)?;
-        let out_off = out_layout.offset_of(multi_idx)?;
-        out_data[out_off] = Op::apply(lhs_data[lhs_off], rhs_data[rhs_off]);
+    // Row-walk traversal: one offset computation per innermost row, then a
+    // pure stride-increment walk along the last axis. Removes the per-element
+    // div/mod index decomposition and the three per-element offset products
+    // (the measured ~87x strided-vs-contiguous gap; see benchmark_results.md).
+    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
+        return Ok(());
+    };
+    let lhs_step = traversal.last_axis_stride(lhs_layout);
+    let rhs_step = traversal.last_axis_stride(rhs_layout);
+    let out_step = traversal.last_axis_stride(out_layout);
+
+    for row in 0..traversal.rows() {
+        let base_idx = traversal.base_index(row);
+        let mut lhs_off = lhs_layout.offset_of(base_idx)? as isize;
+        let mut rhs_off = rhs_layout.offset_of(base_idx)? as isize;
+        let mut out_off = out_layout.offset_of(base_idx)? as isize;
+        for _ in 0..traversal.inner() {
+            // Every walked offset equals offset_of of a validated logical
+            // index, so the usize casts are in-bounds by the storage-span
+            // validation above; safe indexing still guards against defects.
+            out_data[out_off as usize] =
+                Op::apply(lhs_data[lhs_off as usize], rhs_data[rhs_off as usize]);
+            lhs_off += lhs_step;
+            rhs_off += rhs_step;
+            out_off += out_step;
+        }
     }
 
     Ok(())
@@ -236,34 +256,54 @@ where
     let lhs_ptr = ctx.lhs_data.as_ptr() as usize;
     let rhs_ptr = ctx.rhs_data.as_ptr() as usize;
     let out_ptr = ctx.out_data.as_mut_ptr() as usize;
-    let chunk_size = 512;
+
+    // Row-walk parallel traversal: workers own disjoint ranges of innermost
+    // rows; each row costs one offset computation plus a stride-increment
+    // walk (see the serial path for the rationale and baseline numbers).
+    let Some(traversal) = RowMajorTraversal::new(ctx.size, ctx.shape) else {
+        return;
+    };
+    let lhs_step = traversal.last_axis_stride(ctx.lhs_layout);
+    let rhs_step = traversal.last_axis_stride(ctx.rhs_layout);
+    let out_step = traversal.last_axis_stride(ctx.out_layout);
+    // Keep roughly the previous elements-per-chunk granularity.
+    let row_chunk = traversal.chunk_rows_for(4096);
 
     crate::infrastructure::parallel::parallel_for_chunks(
-        ctx.size,
-        chunk_size,
+        traversal.rows(),
+        row_chunk,
         move |start, end| {
-            for flat_idx in start..end {
-                let multi_idx = index_from_flat(flat_idx, &ctx.shape);
-                let lhs_off = ctx
+            for row in start..end {
+                let base_idx = traversal.base_index(row);
+                let mut lhs_off = ctx
                     .lhs_layout
-                    .offset_of(multi_idx)
-                    .expect("validated lhs layout must map every logical index");
-                let rhs_off = ctx
+                    .offset_of(base_idx)
+                    .expect("validated lhs layout must map every logical index")
+                    as isize;
+                let mut rhs_off = ctx
                     .rhs_layout
-                    .offset_of(multi_idx)
-                    .expect("validated rhs layout must map every logical index");
-                let out_off = ctx
+                    .offset_of(base_idx)
+                    .expect("validated rhs layout must map every logical index")
+                    as isize;
+                let mut out_off = ctx
                     .out_layout
-                    .offset_of(multi_idx)
-                    .expect("validated output layout must map every logical index");
+                    .offset_of(base_idx)
+                    .expect("validated output layout must map every logical index")
+                    as isize;
 
-                // SAFETY: storage spans are validated before dispatch; each logical
-                // flat index maps to one output offset. Mutable views that can alias
-                // through broadcast zero strides are rejected by Leto view construction.
+                // SAFETY: storage spans are validated before dispatch; every
+                // walked offset equals offset_of of a validated logical index;
+                // each worker owns disjoint rows and the output layout has no
+                // zero-stride aliasing, so no two workers write one element.
                 unsafe {
-                    let lhs_val = *(lhs_ptr as *const T).add(lhs_off);
-                    let rhs_val = *(rhs_ptr as *const T).add(rhs_off);
-                    *(out_ptr as *mut T).add(out_off) = Op::apply(lhs_val, rhs_val);
+                    for _ in 0..traversal.inner() {
+                        let lhs_val = *(lhs_ptr as *const T).offset(lhs_off);
+                        let rhs_val = *(rhs_ptr as *const T).offset(rhs_off);
+                        *(out_ptr as *mut T).offset(out_off) = Op::apply(lhs_val, rhs_val);
+                        lhs_off += lhs_step;
+                        rhs_off += rhs_step;
+                        out_off += out_step;
+                    }
                 }
             }
         },
