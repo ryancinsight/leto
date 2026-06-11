@@ -4,6 +4,22 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.14.1] - 2026-06-11
+
+Patch nalgebra-parity increment.
+
+### Changed
+
+- `leto-ops`: `svd_decompose` and `singular_values` now accept wide
+  full-row-rank matrices by diagonalizing `A A^T` and deriving right singular
+  vectors with `V = A^T U Σ^-1`. Tall and square inputs keep the existing
+  `A^T A` path; rank-deficient inputs still reject explicitly.
+
+### Tests
+
+- Added value-semantic wide SVD coverage proving reconstruction, singular
+  values, and right singular-vector orthonormality.
+
 ## [0.14.0] - 2026-06-11
 
 Minor nalgebra-parity and eigensolver memory-efficiency increment.

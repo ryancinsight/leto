@@ -8,19 +8,19 @@ fn assert_close(lhs: f64, rhs: f64, epsilon: f64) {
     );
 }
 
-fn reconstruct(decomposition: &leto_ops::SvdDecomposition<f64>) -> Vec<f64> {
-    let [rows, cols] = decomposition.left_singular_vectors.shape();
-    let mut output = vec![0.0; rows * cols];
+fn reconstruct(decomposition: &leto_ops::SvdDecomposition<f64>, output_cols: usize) -> Vec<f64> {
+    let [rows, rank] = decomposition.left_singular_vectors.shape();
+    let mut output = vec![0.0; rows * output_cols];
     for row in 0..rows {
-        for col in 0..cols {
+        for col in 0..output_cols {
             let mut value = 0.0;
-            for k in 0..cols {
+            for k in 0..rank {
                 let u = *decomposition.left_singular_vectors.get([row, k]).unwrap();
                 let sigma = decomposition.singular_values[k];
                 let v = *decomposition.right_singular_vectors.get([col, k]).unwrap();
                 value += u * sigma * v;
             }
-            output[row * cols + col] = value;
+            output[row * output_cols + col] = value;
         }
     }
     output
@@ -48,7 +48,7 @@ fn svd_decompose_reconstructs_tall_full_rank_matrix() {
     assert_eq!(decomposition.singular_values.len(), 2);
     assert!(decomposition.singular_values[0] >= decomposition.singular_values[1]);
 
-    let reconstructed = reconstruct(&decomposition);
+    let reconstructed = reconstruct(&decomposition, 2);
     for (actual, expected) in reconstructed.iter().zip(values.iter()) {
         assert_close(*actual, *expected, 1.0e-9);
     }
@@ -57,6 +57,29 @@ fn svd_decompose_reconstructs_tall_full_rank_matrix() {
     assert_close(column_norm(left, 4, 2, 0), 1.0, 1.0e-9);
     assert_close(column_norm(left, 4, 2, 1), 1.0, 1.0e-9);
     assert_close(column_dot(left, 4, 2, 0, 1), 0.0, 1.0e-9);
+}
+
+#[test]
+fn svd_decompose_reconstructs_wide_full_rank_matrix() {
+    let values = vec![3.0, 0.0, 0.0, 0.0, 0.0, 2.0];
+    let matrix = Array2::from_shape_vec([2, 3], values.clone()).unwrap();
+    let decomposition = svd_decompose(&matrix.view()).unwrap();
+
+    assert_eq!(decomposition.singular_values.len(), 2);
+    assert_eq!(decomposition.left_singular_vectors.shape(), [2, 2]);
+    assert_eq!(decomposition.right_singular_vectors.shape(), [3, 2]);
+    assert_close(decomposition.singular_values[0], 3.0, 1.0e-12);
+    assert_close(decomposition.singular_values[1], 2.0, 1.0e-12);
+
+    let reconstructed = reconstruct(&decomposition, 3);
+    for (actual, expected) in reconstructed.iter().zip(values.iter()) {
+        assert_close(*actual, *expected, 1.0e-9);
+    }
+
+    let right = decomposition.right_singular_vectors.storage().as_slice();
+    assert_close(column_norm(right, 3, 2, 0), 1.0, 1.0e-9);
+    assert_close(column_norm(right, 3, 2, 1), 1.0, 1.0e-9);
+    assert_close(column_dot(right, 3, 2, 0, 1), 0.0, 1.0e-9);
 }
 
 #[test]
@@ -103,8 +126,8 @@ fn svd_is_generic_over_f32() {
 
 #[test]
 fn svd_rejects_unsupported_or_invalid_inputs() {
-    let wide = Array2::from_shape_vec([2, 3], vec![1.0f64; 6]).unwrap();
-    assert!(svd_decompose(&wide.view()).is_err());
+    let wide_rank_deficient = Array2::from_shape_vec([2, 3], vec![1.0f64; 6]).unwrap();
+    assert!(svd_decompose(&wide_rank_deficient.view()).is_err());
 
     let rank_deficient =
         Array2::from_shape_vec([3, 2], vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0]).unwrap();

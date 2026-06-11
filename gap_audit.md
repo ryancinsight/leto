@@ -154,3 +154,7 @@ non-symmetric eigen are demand-driven only.
   references. Indexed zip currently rests on value-semantic traversal tests.
 - Evidence tier of this audit: codebase scan + existing test suites; no new
   proofs or benchmarks performed in this audit.
+## Leto wide thin SVD parity [patch]
+- Performed: generalized `leto-ops::svd_decompose` and `singular_values` from tall/square full-column-rank inputs to all full-rank thin SVD shapes. Wide full-row-rank matrices now use `A A^T`, then derive right singular vectors via `V = A^T U Σ^-1`.
+- Architecture effect: Leto closes the current wide-matrix SVD nalgebra-parity gap without a second API or downstream Apollo-specific adapter. Rank-deficient inputs remain explicit errors until a rank-revealing SVD contract is implemented.
+- Evidence tier: value-semantic reconstruction and orthonormality tests. No machine-checked proof was performed.
