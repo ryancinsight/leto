@@ -11,27 +11,20 @@ fn assert_close(actual: f64, expected: f64) {
 }
 
 #[test]
-fn vector_norms_match_nalgebra() {
-    let values = vec![3.0f64, -4.0, 12.0, -0.5, 2.25];
-    let array = Array::from_shape_vec([5], values.clone()).unwrap();
-    let reference = nalgebra::DVector::from_vec(values);
+fn vector_norms_match_closed_form_definitions() {
+    let array = Array::from_shape_vec([5], vec![3.0f64, -4.0, 12.0, -0.5, 2.25]).unwrap();
 
-    assert_close(norm_l2(&array.view()).unwrap(), reference.norm());
-    assert_close(norm_l1(&array.view()).unwrap(), reference.lp_norm(1));
-    assert_close(
-        norm_max(&array.view()).unwrap(),
-        reference.amax(), // max absolute element
-    );
+    assert_close(norm_l2(&array.view()).unwrap(), (174.3125f64).sqrt());
+    assert_close(norm_l1(&array.view()).unwrap(), 21.75);
+    assert_close(norm_max(&array.view()).unwrap(), 12.0);
 }
 
 #[test]
-fn frobenius_norm_matches_nalgebra_rank2() {
-    let values = vec![1.0f64, -2.0, 3.5, 4.25, -5.5, 6.75];
-    let array = Array::from_shape_vec([2, 3], values.clone()).unwrap();
-    let reference = nalgebra::DMatrix::from_row_slice(2, 3, &values);
+fn frobenius_norm_matches_closed_form_rank2() {
+    let array = Array::from_shape_vec([2, 3], vec![1.0f64, -2.0, 3.5, 4.25, -5.5, 6.75]).unwrap();
 
     // norm_l2 over rank-2 is the Frobenius norm; one generic entry point.
-    assert_close(norm_l2(&array.view()).unwrap(), reference.norm());
+    assert_close(norm_l2(&array.view()).unwrap(), (111.125f64).sqrt());
 }
 
 #[test]
