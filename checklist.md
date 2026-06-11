@@ -1,16 +1,17 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.14.1 [patch] (Cargo.toml bumped;
-CHANGELOG synced). In-flight item: wide full-row-rank SVD support delivered
-and verified.
+Sprint phase: Execution. Target version: 0.14.2 [patch] (Cargo.toml bumped;
+CHANGELOG synced). In-flight item: rank-deficient singular-values support
+delivered and verified.
 
 Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least
 squares (0.10.0), Cholesky factor/solve/det/inv (0.12.0), thin SVD for
 tall/square full-column-rank matrices (0.13.0), eigenvalues-only symmetric
-Jacobi (0.14.0), and wide full-row-rank SVD support (0.14.1) all delivered
-with value-semantic identity/reconstruction or full-vs-values parity checks.
-Remaining nalgebra surface: rank-deficient/full SVD variants and any
-consumer-driven non-symmetric eigensolver.
+Jacobi (0.14.0), wide full-row-rank SVD support (0.14.1), and
+rank-deficient singular values (0.14.2) all delivered with value-semantic
+identity/reconstruction or full-vs-values parity checks. Remaining nalgebra
+surface: full rank-revealing SVD vectors and any consumer-driven non-symmetric
+eigensolver.
 
 Stage A2 progress: indexed zip parity (0.11.0) delivered through
 `indexed_zip_mut_with` and `indexed_zip2_mut_with`, closing the current
@@ -21,6 +22,7 @@ GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
 consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 
 ## Atlas ndarray replacement readiness [arch]
+- [x] [patch] Split `leto-ops::singular_values` from the full-vector `svd_decompose` contract so finite rank-deficient matrices return zero singular values through the smaller Gram-matrix eigenvalue path while `svd_decompose` still rejects rank-deficient inputs. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
 - [x] [patch] Generalized `leto-ops::svd_decompose`/`singular_values` from tall-or-square full-column-rank inputs to all full-rank thin SVD shapes, adding the wide full-row-rank `A A^T` path and deriving right singular vectors with `V = A^T U Σ^-1`. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
 - [x] [patch] All Leto package manifests now default both `parallel` and `mnemosyne-memory`; `leto` maps Mnemosyne memory to its existing Mnemosyne-backed storage implementation, `leto-ops` forwards memory into `leto`, and `leto-python` forwards both provider features to its Rust dependencies. Verification: manifest audit confirmed every package default includes both feature contracts; `cargo metadata --no-deps --locked`; `cargo fmt --check`; `cargo check --workspace --all-features`; `cargo test --workspace --all-features`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`.
 - [x] [minor] Add `leto-ops` eigenvalues-only symmetric Jacobi entry points (`symmetric_eigenvalues_jacobi`, `symmetric_eigenvalues_jacobi_with_tolerance`) that share the full decomposition's diagonalization logic through a monomorphized `RotationTarget` strategy and a zero-sized no-vector target. Verification: `cargo fmt --check`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo nextest run --workspace --all-features`; `cargo doc -p leto -p leto-ops --all-features --no-deps`. Full workspace docs remain blocked by the tracked `numpy 0.23` rustdoc ICE in `leto-python`.

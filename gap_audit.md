@@ -1,6 +1,6 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-Audit date: 2026-06-11. Evidence tier: codebase scan of `leto` (0.14.0),
+Audit date: 2026-06-11. Evidence tier: codebase scan of `leto` (0.14.2),
 `D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, current docs.rs pages for
 `ndarray 0.16` and `nalgebra`, and upstream Atlas crates. Counterparts:
 `ndarray 0.16`, `nalgebra` (already removed from Apollo).
@@ -75,7 +75,8 @@ a named Atlas consumer driver.
 | LU / solve / inverse / determinant | `LU`, `try_inverse` | **Closed** — `lu_decompose`, `solve`, `det`, and `inv`, generic over `T: RealScalar`; CFDrs dense solver driver |
 | QR + least squares | `QR` | **Closed** — Householder `qr_decompose` and `solve_least_squares`; CFDrs least-squares driver |
 | Cholesky | `Cholesky` | **Closed** — SPD `cholesky_decompose` and solve; CFDrs SPD driver |
-| Thin full-column-rank SVD | `SVD` subset | **Closed in 0.13.0** — `svd_decompose`, `singular_values`; tall/square full-column-rank matrices only |
+| Thin full-rank SVD | `SVD` subset | **Closed through 0.14.1** — `svd_decompose` supports tall/square full-column-rank and wide full-row-rank matrices; full-vector decomposition rejects rank-deficient inputs explicitly |
+| Rank-deficient singular values | `SVD::singular_values` subset | **Closed in 0.14.2** — `singular_values` computes the smaller Gram-matrix spectrum and returns zero singular values without constructing missing null-space vectors |
 | Full rank-revealing SVD / pseudoinverse | `SVD`, pseudo-inverse helpers | Open — [major], requires ADR before implementation |
 | Norms (L1/L2/Frobenius) | `norm`, `norm_squared` | **Closed** — `NormKind` ZSTs with `norm_l1`, `norm_l2`, and `norm_max` |
 | Non-symmetric eigenvalues/eigenvectors | `eigenvalues`, `complex_eigenvalues`, Schur | Open only with a named consumer driver; current policy rejects speculative surface |
@@ -108,12 +109,13 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-11 (v0.14.0): §A indexed zip parity and the Stage A1
+Update 2026-06-11 (v0.14.2): §A indexed zip parity and the Stage A1
 consumer-driven nalgebra surface are closed through symmetric eigenvalues-only,
-LU, QR, Cholesky, norms, and bounded thin SVD. See CHANGELOG and the two ADRs in
-`docs/adr/`. Remaining work is cross-cutting: the Coeus re-base and Apollo/Coeus
-consumer migration with differential coverage; full rank-revealing SVD and
-non-symmetric eigen are demand-driven only.
+LU, QR, Cholesky, norms, full-rank thin SVD, and rank-deficient singular values.
+See CHANGELOG and the two ADRs in `docs/adr/`. Remaining work is cross-cutting:
+the Coeus re-base and Apollo/Coeus consumer migration with differential
+coverage; full rank-revealing SVD vectors and non-symmetric eigen are
+demand-driven only.
 
 - `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
   rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
@@ -154,6 +156,12 @@ non-symmetric eigen are demand-driven only.
   references. Indexed zip currently rests on value-semantic traversal tests.
 - Evidence tier of this audit: codebase scan + existing test suites; no new
   proofs or benchmarks performed in this audit.
+
+## Leto rank-deficient singular-values parity [patch]
+- Performed: split `leto-ops::singular_values` from the full-vector `svd_decompose` path. Singular-values-only now diagonalizes the smaller Gram matrix and maps near-zero eigenvalues to zero singular values for finite rank-deficient inputs.
+- Architecture effect: Leto matches the common nalgebra singular-values surface for rank-deficient matrices without fabricating null-space singular vectors. `svd_decompose` keeps explicit rank-deficient rejection until a rank-revealing SVD contract exists.
+- Evidence tier: value-semantic tall/wide rank-deficient singular-value tests. No machine-checked proof was performed.
+
 ## Leto wide thin SVD parity [patch]
 - Performed: generalized `leto-ops::svd_decompose` and `singular_values` from tall/square full-column-rank inputs to all full-rank thin SVD shapes. Wide full-row-rank matrices now use `A A^T`, then derive right singular vectors via `V = A^T U Σ^-1`.
 - Architecture effect: Leto closes the current wide-matrix SVD nalgebra-parity gap without a second API or downstream Apollo-specific adapter. Rank-deficient inputs remain explicit errors until a rank-revealing SVD contract is implemented.

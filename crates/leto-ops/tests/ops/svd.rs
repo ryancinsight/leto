@@ -94,6 +94,22 @@ fn singular_values_match_diagonal_closed_form() {
 }
 
 #[test]
+fn singular_values_accept_rank_deficient_inputs_without_vectors() {
+    let tall_rank_deficient =
+        Array2::from_shape_vec([3, 2], vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0]).unwrap();
+    let tall_values = singular_values(&tall_rank_deficient.view()).unwrap();
+    assert_eq!(tall_values.len(), 2);
+    assert_close(tall_values[0], 8.366_600_265_340_756, 1.0e-12);
+    assert_close(tall_values[1], 0.0, 1.0e-12);
+
+    let wide_rank_deficient = Array2::from_shape_vec([2, 3], vec![1.0f64; 6]).unwrap();
+    let wide_values = singular_values(&wide_rank_deficient.view()).unwrap();
+    assert_eq!(wide_values.len(), 2);
+    assert_close(wide_values[0], 2.449_489_742_783_178, 1.0e-12);
+    assert_close(wide_values[1], 0.0, 1.0e-12);
+}
+
+#[test]
 fn svd_accepts_strided_full_rank_view() {
     let backing = Array2::from_shape_vec(
         [4, 4],
@@ -132,7 +148,9 @@ fn svd_rejects_unsupported_or_invalid_inputs() {
     let rank_deficient =
         Array2::from_shape_vec([3, 2], vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0]).unwrap();
     assert!(svd_decompose(&rank_deficient.view()).is_err());
+    assert!(singular_values(&rank_deficient.view()).is_ok());
 
     let non_finite = Array2::from_shape_vec([2, 2], vec![1.0, f64::NAN, 0.0, 1.0]).unwrap();
     assert!(svd_decompose(&non_finite.view()).is_err());
+    assert!(singular_values(&non_finite.view()).is_err());
 }

@@ -15,7 +15,7 @@ pub mod lu;
 pub mod norms;
 /// Householder QR factorization and least-squares solve.
 pub mod qr;
-/// Thin SVD for tall or square full-column-rank matrices.
+/// Thin SVD and singular values for finite matrices.
 pub mod svd;
 
 pub use cholesky::{

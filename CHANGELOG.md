@@ -4,6 +4,22 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.14.2] - 2026-06-11
+
+Patch nalgebra-parity increment.
+
+### Changed
+
+- `leto-ops`: `singular_values` now computes only the smaller Gram-matrix
+  spectrum and returns zero singular values for rank-deficient finite inputs.
+  `svd_decompose` still rejects rank-deficient matrices because full singular
+  vector completion requires a rank-revealing SVD contract.
+
+### Tests
+
+- Added value-semantic tall and wide rank-deficient singular-value coverage,
+  while preserving explicit `svd_decompose` rejection tests.
+
 ## [0.14.1] - 2026-06-11
 
 Patch nalgebra-parity increment.

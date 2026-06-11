@@ -139,9 +139,27 @@ fn svd_from_row_gram<T: RealScalar>(
     })
 }
 
-/// Return singular values for a full-rank matrix.
+/// Return singular values for any finite non-empty matrix.
+///
+/// This path computes only the spectrum of the smaller Gram matrix and does
+/// not derive singular vectors, so rank-deficient inputs return zero singular
+/// values instead of failing the full-vector SVD contract.
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
-    svd_decompose(matrix).map(|decomposition| decomposition.singular_values)
+    let tolerance = default_tolerance::<T>();
+    validate_input(matrix, tolerance)?;
+    let [rows, cols] = matrix.shape();
+    let gram = if rows >= cols {
+        column_gram_matrix(matrix)?
+    } else {
+        row_gram_matrix(matrix)?
+    };
+    let mut eigenvalues =
+        super::eigen::symmetric_eigenvalues_jacobi_with_tolerance(&gram.view(), tolerance)?;
+    eigenvalues.reverse();
+    eigenvalues
+        .into_iter()
+        .map(|eigenvalue| singular_value_or_zero(eigenvalue, tolerance))
+        .collect()
 }
 
 fn default_tolerance<T: RealScalar>() -> T {
@@ -206,23 +224,25 @@ fn row_gram_matrix<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T
 }
 
 fn checked_singular_value<T: RealScalar>(eigenvalue: T, tolerance: T) -> Result<T> {
-    if eigenvalue < T::ZERO {
-        if eigenvalue.neg() > tolerance {
-            return Err(LetoError::StorageError {
-                reason: "SVD normal matrix has a negative eigenvalue beyond tolerance".to_string(),
-            });
-        }
-        return Err(LetoError::StorageError {
-            reason: "SVD input is rank-deficient".to_string(),
-        });
-    }
-    let sigma = eigenvalue.sqrt();
+    let sigma = singular_value_or_zero(eigenvalue, tolerance)?;
     if sigma <= tolerance {
         return Err(LetoError::StorageError {
             reason: "SVD input is rank-deficient".to_string(),
         });
     }
     Ok(sigma)
+}
+
+fn singular_value_or_zero<T: RealScalar>(eigenvalue: T, tolerance: T) -> Result<T> {
+    if eigenvalue < T::ZERO {
+        if eigenvalue.neg() > tolerance {
+            return Err(LetoError::StorageError {
+                reason: "SVD normal matrix has a negative eigenvalue beyond tolerance".to_string(),
+            });
+        }
+        return Ok(T::ZERO);
+    }
+    Ok(eigenvalue.sqrt())
 }
 
 fn normalize_column<T: RealScalar>(
