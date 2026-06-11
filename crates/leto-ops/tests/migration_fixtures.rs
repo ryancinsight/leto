@@ -1,5 +1,5 @@
 use half::f16;
-use leto::{Array1, Array2, Array3, Storage};
+use leto::{Array1, Array2, Array3, SliceArg, Storage};
 use leto_ops::{add, mapv, matmul, mul, sum_axis_into};
 use num_complex::{Complex32, Complex64};
 
@@ -53,6 +53,86 @@ fn apollo_fft_2d_and_3d_real_fields_support_generated_and_zeroed_outputs() {
         recovered_3d.storage().as_slice(),
         field_3d.storage().as_slice()
     );
+}
+
+#[test]
+fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
+    let base = || Array3::from_shape_fn([2, 3, 4], |[x, y, z]| (x * 12 + y * 4 + z) as i32);
+
+    let mut axis2 = base();
+    for x in 0..2 {
+        for y in 0..3 {
+            let mut lane = axis2
+                .view_mut()
+                .slice_with_mut::<1>(&[
+                    SliceArg::Index(x as isize),
+                    SliceArg::Index(y as isize),
+                    SliceArg::All,
+                ])
+                .unwrap();
+            for z in 0..4 {
+                *lane.get_mut([z]).unwrap() += 100 + x * 10 + y;
+            }
+        }
+    }
+    for x in 0..2 {
+        for y in 0..3 {
+            for z in 0..4 {
+                let expected = (x * 12 + y * 4 + z) as i32 + 100 + (x * 10 + y) as i32;
+                assert_eq!(*axis2.get([x, y, z]).unwrap(), expected);
+            }
+        }
+    }
+
+    let mut axis1 = base();
+    for x in 0..2 {
+        for z in 0..4 {
+            let mut lane = axis1
+                .view_mut()
+                .slice_with_mut::<1>(&[
+                    SliceArg::Index(x as isize),
+                    SliceArg::All,
+                    SliceArg::Index(z as isize),
+                ])
+                .unwrap();
+            for y in 0..3 {
+                *lane.get_mut([y]).unwrap() += 200 + x * 10 + z;
+            }
+        }
+    }
+    for x in 0..2 {
+        for y in 0..3 {
+            for z in 0..4 {
+                let expected = (x * 12 + y * 4 + z) as i32 + 200 + (x * 10 + z) as i32;
+                assert_eq!(*axis1.get([x, y, z]).unwrap(), expected);
+            }
+        }
+    }
+
+    let mut axis0 = base();
+    for y in 0..3 {
+        for z in 0..4 {
+            let mut lane = axis0
+                .view_mut()
+                .slice_with_mut::<1>(&[
+                    SliceArg::All,
+                    SliceArg::Index(y as isize),
+                    SliceArg::Index(z as isize),
+                ])
+                .unwrap();
+            for x in 0..2 {
+                *lane.get_mut([x]).unwrap() += 300 + y * 10 + z;
+            }
+        }
+    }
+    for x in 0..2 {
+        for y in 0..3 {
+            for z in 0..4 {
+                let expected = (x * 12 + y * 4 + z) as i32 + 300 + (y * 10 + z) as i32;
+                assert_eq!(*axis0.get([x, y, z]).unwrap(), expected);
+            }
+        }
+    }
 }
 
 #[test]

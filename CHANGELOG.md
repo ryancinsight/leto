@@ -32,6 +32,9 @@ Minor nalgebra-parity and eigensolver memory-efficiency increment.
 - Added value-semantic coverage proving the eigenvalues-only path matches the
   full decomposition, preserves strided-view semantics, and rejects the same
   invalid inputs.
+- Added Apollo migration fixture coverage for mutable rank-1 lanes sliced out
+  of rank-3 Leto arrays along all three axes, matching the ndarray-free 3D FFT
+  axis-pass access pattern.
 
 ## [0.13.1] - 2026-06-11
 
