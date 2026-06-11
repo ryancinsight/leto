@@ -143,3 +143,31 @@ fn test_allocating_empty_axis_sum_is_zero_and_mean_is_rejected() {
     let result = mean_axis(&input.view(), 1);
     assert!(matches!(result, Err(leto::LetoError::StorageError { .. })));
 }
+
+#[test]
+fn integer_scalar_reductions_are_value_semantic() {
+    let input = Array::from_shape_vec([2, 3], vec![3i32, -7, 11, 13, -17, 19]).unwrap();
+
+    let total = sum(&input.view());
+    let row_sum = sum_axis(&input.view(), 1).unwrap();
+    let col_min = min_axis(&input.view(), 0).unwrap();
+    let row_max = max_axis(&input.view(), 1).unwrap();
+
+    assert_eq!(total, 22);
+    assert_eq!(row_sum.storage().as_slice(), &[7, 15]);
+    assert_eq!(col_min.storage().as_slice(), &[3, -17, 11]);
+    assert_eq!(row_max.storage().as_slice(), &[11, 19]);
+}
+
+#[test]
+fn unsigned_integer_reduction_handles_strided_transposed_input() {
+    let input = Array::from_shape_vec([2, 3], vec![2u64, 3, 5, 7, 11, 13]).unwrap();
+    let transposed = input.transpose([1, 0]).unwrap();
+
+    let row_sum = sum_axis(&transposed, 1).unwrap();
+    let row_max = max_axis(&transposed, 1).unwrap();
+
+    assert_eq!(row_sum.shape(), [3, 1]);
+    assert_eq!(row_sum.storage().as_slice(), &[9, 14, 18]);
+    assert_eq!(row_max.storage().as_slice(), &[7, 11, 13]);
+}

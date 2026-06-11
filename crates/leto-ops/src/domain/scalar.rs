@@ -269,3 +269,99 @@ impl_scalar_native!(f32);
 impl_scalar_native!(f64);
 impl_scalar_half!(f16);
 impl_scalar_half!(bf16);
+
+macro_rules! impl_scalar_int {
+    ($t:ty) => {
+        impl Scalar for $t {
+            const ZERO: Self = 0;
+            const ONE: Self = 1;
+
+            #[inline(always)]
+            fn add(self, other: Self) -> Self {
+                self + other
+            }
+            #[inline(always)]
+            fn sub(self, other: Self) -> Self {
+                self - other
+            }
+            #[inline(always)]
+            fn mul(self, other: Self) -> Self {
+                self * other
+            }
+            #[inline(always)]
+            fn div(self, other: Self) -> Self {
+                self / other
+            }
+            #[inline(always)]
+            fn from_usize(value: usize) -> Self {
+                value as $t
+            }
+
+            #[inline]
+            fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x + y;
+                }
+            }
+
+            #[inline]
+            fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x - y;
+                }
+            }
+
+            #[inline]
+            fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x * y;
+                }
+            }
+
+            #[inline]
+            fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x / y;
+                }
+            }
+
+            #[inline]
+            fn sum_slice(s: &[Self]) -> Self {
+                s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
+            }
+
+            #[inline]
+            fn dot_slice(a: &[Self], b: &[Self]) -> Self {
+                a.iter()
+                    .copied()
+                    .zip(b.iter().copied())
+                    .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
+            }
+
+            #[inline]
+            fn min_slice(s: &[Self]) -> Self {
+                s.iter()
+                    .copied()
+                    .fold(Self::MAX, |acc, x| if x < acc { x } else { acc })
+            }
+
+            #[inline]
+            fn max_slice(s: &[Self]) -> Self {
+                s.iter()
+                    .copied()
+                    .fold(Self::MIN, |acc, x| if x > acc { x } else { acc })
+            }
+        }
+    };
+}
+
+impl_scalar_int!(i8);
+impl_scalar_int!(u8);
+impl_scalar_int!(i16);
+impl_scalar_int!(u16);
+impl_scalar_int!(i32);
+impl_scalar_int!(u32);
+impl_scalar_int!(i64);
+impl_scalar_int!(u64);
+impl_scalar_int!(isize);
+impl_scalar_int!(usize);

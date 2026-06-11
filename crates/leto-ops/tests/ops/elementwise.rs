@@ -1,7 +1,7 @@
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
     add, binary_map, div, indexed_zip2_mut_with, indexed_zip_mut_with, map, map_into, mapv, mul,
-    sub, zip_mut_with, AddOp, MulOp,
+    scalar_map, sub, zip_mut_with, AddOp, MulOp,
 };
 
 #[test]
@@ -242,4 +242,24 @@ fn test_indexed_zip2_mut_with_handles_strided_transposed_views() {
     .unwrap();
 
     assert_eq!(out_storage.as_slice(), &[11, 32, 53, 45, 66, 87]);
+}
+
+#[test]
+fn integer_scalar_elementwise_ops_are_value_semantic() {
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let lhs = Array::new(layout, VecStorage::new(vec![1i32, -2, 3, 4, -5, 6])).unwrap();
+    let rhs = Array::new(layout, VecStorage::new(vec![10i32, 20, -30, 40, 50, -60])).unwrap();
+    let mut sum = Array::new(layout, VecStorage::fill(6, 0i32)).unwrap();
+    let mut product = Array::new(layout, VecStorage::fill(6, 0i32)).unwrap();
+
+    add(&lhs.view(), &rhs.view(), &mut sum.view_mut()).unwrap();
+    mul(&lhs.view(), &rhs.view(), &mut product.view_mut()).unwrap();
+    let shifted = scalar_map::<AddOp, _, 2>(&lhs.view(), 7).unwrap();
+
+    assert_eq!(sum.storage().as_slice(), &[11, 18, -27, 44, 45, -54]);
+    assert_eq!(
+        product.storage().as_slice(),
+        &[10, -40, -90, 160, -250, -360]
+    );
+    assert_eq!(shifted.storage().as_slice(), &[8, 5, 10, 11, 2, 13]);
 }
