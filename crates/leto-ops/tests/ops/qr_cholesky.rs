@@ -93,20 +93,20 @@ fn qr_rejects_underdetermined_and_rank_deficient() {
 // ── Cholesky ────────────────────────────────────────────────────────────────
 
 #[test]
-fn cholesky_factor_matches_nalgebra() {
-    let values = vec![25.0f64, 15.0, -5.0, 15.0, 18.0, 0.0, -5.0, 0.0, 11.0];
-    let a = Array::from_shape_vec([3, 3], values.clone()).unwrap();
+fn cholesky_factor_matches_closed_form_fixture() {
+    let a = Array::from_shape_vec(
+        [3, 3],
+        vec![25.0f64, 15.0, -5.0, 15.0, 18.0, 0.0, -5.0, 0.0, 11.0],
+    )
+    .unwrap();
 
     let decomposition = cholesky_decompose(&a.view()).unwrap();
     let l = decomposition.lower();
+    let expected = [5.0, 0.0, 0.0, 3.0, 3.0, 0.0, -1.0, 1.0, 3.0];
 
-    let reference = nalgebra::DMatrix::from_row_slice(3, 3, &values)
-        .cholesky()
-        .expect("SPD reference");
-    let rl = reference.l();
     for r in 0..3 {
         for c in 0..3 {
-            assert_close(*l.get([r, c]).unwrap(), rl[(r, c)]);
+            assert_close(*l.get([r, c]).unwrap(), expected[r * 3 + c]);
         }
     }
 }
@@ -144,9 +144,8 @@ fn cholesky_det_and_inv_match_identity_contract() {
     let det = decomposition.det();
     let det_convenience = cholesky_det(&a.view()).unwrap();
 
-    let reference_det = nalgebra::DMatrix::from_row_slice(3, 3, &values).determinant();
-    assert_close(det, reference_det);
-    assert_close(det_convenience, reference_det);
+    assert_close(det, 83.0);
+    assert_close(det_convenience, 83.0);
 
     let inverse = decomposition.inv().unwrap();
     let inverse_convenience = cholesky_inv(&a.view()).unwrap();
