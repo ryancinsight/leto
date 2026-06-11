@@ -11,6 +11,12 @@ use leto::{ArrayView, Result};
 /// Elementwise norms are traversal-order independent, so the contiguous fast
 /// path may run in physical memory order over any dense block.
 pub trait NormKind<T: RealScalar>: Copy + Send + Sync + 'static {
+    /// Optional dense-slice fast path for norms with a fused reduction kernel.
+    #[inline]
+    fn accumulate_slice(slice: &[T]) -> Option<T> {
+        let _ = slice;
+        None
+    }
     /// Fold one element's contribution into the accumulator.
     fn accumulate(acc: T, x: T) -> T;
     /// Map the final accumulator to the norm value.
@@ -43,6 +49,11 @@ impl<T: RealScalar> NormKind<T> for NormL1 {
 }
 
 impl<T: RealScalar> NormKind<T> for NormL2 {
+    #[inline]
+    fn accumulate_slice(slice: &[T]) -> Option<T> {
+        Some(T::dot_slice(slice, slice))
+    }
+
     #[inline(always)]
     fn accumulate(acc: T, x: T) -> T {
         acc.add(x.mul(x))
@@ -85,6 +96,9 @@ where
     view.layout().validate_storage_len(view.data().len())?;
 
     if let Some(slice) = view.as_slice_memory_order() {
+        if let Some(acc) = K::accumulate_slice(slice) {
+            return Ok(K::finish(acc));
+        }
         let mut acc = T::ZERO;
         for &x in slice {
             acc = K::accumulate(acc, x);

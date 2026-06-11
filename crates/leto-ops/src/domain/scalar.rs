@@ -30,6 +30,8 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
 
     /// Sum reduction over a slice.
     fn sum_slice(s: &[Self]) -> Self;
+    /// Dot product reduction over two equal-length slices.
+    fn dot_slice(a: &[Self], b: &[Self]) -> Self;
     /// Min reduction over a slice.
     fn min_slice(s: &[Self]) -> Self;
     /// Max reduction over a slice.
@@ -110,6 +112,18 @@ macro_rules! impl_scalar_native {
                     res
                 } else {
                     s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
+                }
+            }
+
+            #[inline]
+            fn dot_slice(a: &[Self], b: &[Self]) -> Self {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::dot_slice(a, b) {
+                    res
+                } else {
+                    a.iter()
+                        .copied()
+                        .zip(b.iter().copied())
+                        .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
                 }
             }
 
@@ -211,6 +225,18 @@ macro_rules! impl_scalar_half {
                     res
                 } else {
                     s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
+                }
+            }
+
+            #[inline]
+            fn dot_slice(a: &[Self], b: &[Self]) -> Self {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::dot_slice(a, b) {
+                    res
+                } else {
+                    a.iter()
+                        .copied()
+                        .zip(b.iter().copied())
+                        .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
                 }
             }
 

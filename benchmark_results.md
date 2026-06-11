@@ -7,18 +7,18 @@ Machine class: Windows 11 x86_64 dev workstation (AVX2-class), 2026-06-11.
 Baselines gate the cache-aware tiling work (atlas ADR 0002 leto slice): a
 statistically significant regression in a touched kernel blocks merge.
 
-| Benchmark | Baseline (pre row-walk, 0.11.0) | Row-walk maps (0.11.1) | Row-walk reductions (0.11.2) | Change |
-| --- | --- | --- | --- | --- |
-| matmul/dense_64x64 | 28.42 µs | unchanged (untouched kernel) | 29.80 µs | observed +8.8% vs last run; untouched kernel |
-| matmul/dense_256x256 | 2.376 ms | unchanged (untouched kernel) | 2.401 ms | no change (p = 0.47) |
-| elementwise_add/contiguous_64k | 13.85 µs | 13.59 µs | 14.85 µs | no attributed change; untouched in 0.11.2 |
-| elementwise_add/transposed_256x256 | 1.206 ms | 50.98 µs → 49.19 µs | 55.30 µs | 0.11.1: **−95.9% (23.7×), p < 0.05**; 0.11.2 run variance +11.8% vs prior criterion sample |
-| reductions/sum_64k | 3.607 µs | unchanged (untouched; ±9% run-to-run noise observed and reversed on rerun) | 3.789 µs | contiguous fast path unchanged; criterion reported +4.47% vs prior sample |
-| reductions/norm_l2_64k | 28.06 µs | unchanged (untouched) | 28.07 µs | no material change |
-| reductions/sum_transposed_256x256 | not measured | not measured | 40.73 µs | first measured strided reduction baseline |
-| reductions/norm_l2_transposed_256x256 | not measured | not measured | 28.67 µs | first measured strided norm baseline |
-| reductions/sum_reverse_last_axis_256x256 | not measured | not measured | 30.55 µs | first measured negative-stride reduction baseline |
-| reductions/norm_l2_reverse_last_axis_256x256 | not measured | not measured | 30.21 µs | first measured negative-stride norm baseline |
+| Benchmark | Baseline (pre row-walk, 0.11.0) | Row-walk maps (0.11.1) | Row-walk reductions (0.11.2) | Hermes dot norm (0.11.3) | Change |
+| --- | --- | --- | --- | --- | --- |
+| matmul/dense_64x64 | 28.42 µs | unchanged (untouched kernel) | 29.80 µs | 28.34 µs | no attributed change; untouched kernel |
+| matmul/dense_256x256 | 2.376 ms | unchanged (untouched kernel) | 2.401 ms | 2.245 ms | no attributed change; untouched kernel |
+| elementwise_add/contiguous_64k | 13.85 µs | 13.59 µs | 14.85 µs | 15.11 µs | no attributed change; untouched in 0.11.3 |
+| elementwise_add/transposed_256x256 | 1.206 ms | 50.98 µs → 49.19 µs | 55.30 µs | 50.65 µs | 0.11.1: **−95.9% (23.7×), p < 0.05** |
+| reductions/sum_64k | 3.607 µs | unchanged (untouched; ±9% run-to-run noise observed and reversed on rerun) | 3.789 µs | 3.653 µs | no change (p = 0.97 vs 0.11.2 sample) |
+| reductions/norm_l2_64k | 28.06 µs | unchanged (untouched) | 28.07 µs | 5.508 µs | **−80.0%, p < 0.05** |
+| reductions/sum_transposed_256x256 | not measured | not measured | 40.73 µs | 40.24 µs | no change (p = 0.67) |
+| reductions/norm_l2_transposed_256x256 | not measured | not measured | 28.67 µs | 5.550 µs | **−80.7%, p < 0.05** |
+| reductions/sum_reverse_last_axis_256x256 | not measured | not measured | 30.55 µs | 31.36 µs | no change (p = 0.60) |
+| reductions/norm_l2_reverse_last_axis_256x256 | not measured | not measured | 30.21 µs | 30.82 µs | no change (p = 0.15); non-dense negative stride still row-walks |
 
 ## Observations (drive the optimization backlog)
 
@@ -35,9 +35,16 @@ statistically significant regression in a touched kernel blocks merge.
   The new criterion cases establish first baselines for strided whole-array
   reductions: transposed `sum` 40.73 µs, transposed `norm_l2` 28.67 µs,
   reverse-last-axis `sum` 30.55 µs, and reverse-last-axis `norm_l2` 30.21 µs.
+- **Dense L2/Frobenius norm uses Hermes dot (0.11.3)**: the contiguous fast
+  path computes `Σ x²` through the generic `Scalar::dot_slice` hook. Native
+  f32/f64 dispatch through Hermes; f16/bf16 retain the existing scalar
+  fallback. Measured: `norm_l2_64k` 28.07 µs → 5.508 µs (−80.0%,
+  p < 0.05), and dense-memory transposed `norm_l2` 28.67 µs → 5.550 µs
+  (−80.7%, p < 0.05). Reverse-last-axis views are not dense memory slices and
+  remain on the row-walk fallback.
 - matmul 256³ at ~2.38 ms ≈ 14 GFLOP/s (2·n³/t): memory-bound at this size
   on this machine class; blocking (L1/L2 tiles from themis `CacheLevel`)
   is the standard remedy and is backlogged behind these baselines.
-- norm_l2 is ~7.8× slower than sum over the same data: sum dispatches
-  through hermes SIMD `sum_slice`; the norm fold is a scalar loop —
-  a Stage C2 hermes-coverage item (fused square-accumulate).
+- norm_l2 now dispatches dense f32/f64 square accumulation through Hermes dot.
+  Remaining norm work is the non-dense strided path and any future Hermes
+  fused square-accumulate kernel that avoids dot self-alias dispatch overhead.

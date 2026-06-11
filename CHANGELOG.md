@@ -4,6 +4,30 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.11.3] - 2026-06-11
+
+Patch performance increment for dense L2/Frobenius norms.
+
+### Changed
+
+- `leto-ops`: added a generic `Scalar::dot_slice` reduction hook. Native
+  f32/f64 route through Hermes SIMD dot dispatch; reduced-precision f16/bf16
+  keep the existing native scalar fallback.
+- `leto-ops`: rank-1 `dot` and dense-slice `NormL2` now reuse the shared
+  `dot_slice` contract, keeping one authoritative dot reduction path.
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `reductions/norm_l2_64k`: 28.07 µs → 5.508 µs (**−80.0%, p < 0.05**).
+- `reductions/norm_l2_transposed_256x256`: 28.67 µs → 5.550 µs
+  (**−80.7%, p < 0.05**) when the transposed view exposes a dense memory
+  slice. Negative-stride `norm_l2` remains on the row-walk fallback.
+
+### Tests
+
+- Existing norm and dot value-semantic tests cover the shared dot-slice path,
+  including reduced-precision fallback and strided fallback coverage.
+
 ## [0.11.2] - 2026-06-11
 
 Patch performance increment for strided whole-array reductions and norms.

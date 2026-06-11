@@ -32,10 +32,11 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [ ] [patch] Audit leto-ops hot kernels (matmul inner loop, reductions, scans,
   unary math) to ensure they dispatch through hermes `SimdOps` rather than
   ad-hoc scalar loops; file hermes coverage requests for any missing op/dtype.
-  First measured instance: `norm_l2` is ~7.8× slower than `sum` over the same
-  64k elements (28.06 µs vs 3.61 µs, benchmark_results.md) because the norm
-  fold is scalar while sum uses hermes `sum_slice` — needs a fused
-  square-accumulate hermes path.
+  Dense f32/f64 `norm_l2` now routes `Σx²` through Hermes dot via
+  `Scalar::dot_slice` (28.07 µs → 5.508 µs for 64k elements). Remaining
+  coverage gaps: non-dense strided norm fallback, scans, unary math, matmul
+  inner loops, and a future Hermes fused square-accumulate kernel if profiling
+  shows dot self-alias overhead is material.
 
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
 Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every

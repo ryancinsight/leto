@@ -36,6 +36,8 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn div_slice(a: &[T], b: &[T], out: &mut [T]) -> Result<(), &'static str>;
     /// Vectorized sum reduction.
     fn sum_slice(s: &[T]) -> Option<T>;
+    /// Vectorized dot product reduction.
+    fn dot_slice(a: &[T], b: &[T]) -> Option<T>;
     /// Vectorized min reduction.
     fn min_slice(s: &[T]) -> Option<T>;
     /// Vectorized max reduction.
@@ -65,6 +67,10 @@ macro_rules! impl_simd_ops_native {
             #[inline(always)]
             fn sum_slice(s: &[$t]) -> Option<$t> {
                 Some(hermes_simd::sum::<$t>(s))
+            }
+            #[inline(always)]
+            fn dot_slice(a: &[$t], b: &[$t]) -> Option<$t> {
+                hermes_simd::dot::<$t>(a, b).ok()
             }
             #[inline(always)]
             fn min_slice(s: &[$t]) -> Option<$t> {
@@ -108,6 +114,10 @@ macro_rules! impl_simd_ops_fallback {
                 None
             }
             #[inline(always)]
+            fn dot_slice(_a: &[$t], _b: &[$t]) -> Option<$t> {
+                None
+            }
+            #[inline(always)]
             fn min_slice(_s: &[$t]) -> Option<$t> {
                 None
             }
@@ -146,6 +156,10 @@ macro_rules! impl_simd_ops_unsupported {
             }
             #[inline(always)]
             fn sum_slice(_s: &[$t]) -> Option<$t> {
+                None
+            }
+            #[inline(always)]
+            fn dot_slice(_a: &[$t], _b: &[$t]) -> Option<$t> {
                 None
             }
             #[inline(always)]

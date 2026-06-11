@@ -18,11 +18,7 @@ pub fn dot<T: Scalar>(a: &ArrayView<'_, T, 1>, b: &ArrayView<'_, T, 1>) -> Resul
     b.layout().validate_storage_len(b.data().len())?;
 
     if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
-        let mut acc = T::ZERO;
-        for (&x, &y) in a_slice.iter().zip(b_slice.iter()) {
-            acc = acc.add(x.mul(y));
-        }
-        return Ok(acc);
+        return Ok(T::dot_slice(a_slice, b_slice));
     }
 
     let len = a.shape()[0];
