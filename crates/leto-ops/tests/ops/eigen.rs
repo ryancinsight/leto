@@ -1,5 +1,5 @@
 use leto::{Array2, SliceArg, Storage};
-use leto_ops::symmetric_eigen_jacobi;
+use leto_ops::{symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi};
 
 fn assert_close(lhs: f64, rhs: f64, epsilon: f64) {
     assert!(
@@ -57,6 +57,45 @@ fn symmetric_eigen_jacobi_accepts_strided_symmetric_view() {
 }
 
 #[test]
+fn symmetric_eigenvalues_jacobi_matches_full_decomposition_without_vectors() {
+    let matrix =
+        Array2::from_shape_vec([3, 3], vec![3.0, 2.0, 0.0, 2.0, 3.0, 0.0, 0.0, 0.0, 7.0]).unwrap();
+
+    let eigenvalues = symmetric_eigenvalues_jacobi(&matrix.view()).unwrap();
+    let decomposition = symmetric_eigen_jacobi(&matrix.view()).unwrap();
+
+    assert_eq!(eigenvalues.len(), 3);
+    for (actual, expected) in eigenvalues.iter().zip(decomposition.eigenvalues.iter()) {
+        assert_close(*actual, *expected, 1.0e-12);
+    }
+    assert_close(eigenvalues[0], 1.0, 1.0e-12);
+    assert_close(eigenvalues[1], 5.0, 1.0e-12);
+    assert_close(eigenvalues[2], 7.0, 1.0e-12);
+}
+
+#[test]
+fn symmetric_eigenvalues_jacobi_accepts_strided_symmetric_view() {
+    let matrix = Array2::from_shape_vec(
+        [4, 4],
+        vec![
+            4.0, 0.0, 1.0, 0.0, 0.0, 9.0, 0.0, 8.0, 1.0, 0.0, 4.0, 0.0, 0.0, 8.0, 0.0, 9.0,
+        ],
+    )
+    .unwrap();
+    let view = matrix
+        .view()
+        .slice_with::<2>(&[
+            SliceArg::range(Some(0), None, 2),
+            SliceArg::range(Some(0), None, 2),
+        ])
+        .unwrap();
+
+    let eigenvalues = symmetric_eigenvalues_jacobi(&view).unwrap();
+    assert_close(eigenvalues[0], 3.0, 1.0e-12);
+    assert_close(eigenvalues[1], 5.0, 1.0e-12);
+}
+
+#[test]
 fn symmetric_eigen_jacobi_matches_path_graph_laplacian_closed_form() {
     let matrix = Array2::from_shape_vec(
         [3, 3],
@@ -95,10 +134,13 @@ fn column_norm32(values: &[f32], n: usize, col: usize) -> f32 {
 fn symmetric_eigen_jacobi_rejects_invalid_inputs() {
     let rectangular = Array2::from_shape_vec([2, 3], vec![1.0f64; 6]).unwrap();
     assert!(symmetric_eigen_jacobi(&rectangular.view()).is_err());
+    assert!(symmetric_eigenvalues_jacobi(&rectangular.view()).is_err());
 
     let asymmetric = Array2::from_shape_vec([2, 2], vec![1.0f64, 2.0, 3.0, 4.0]).unwrap();
     assert!(symmetric_eigen_jacobi(&asymmetric.view()).is_err());
+    assert!(symmetric_eigenvalues_jacobi(&asymmetric.view()).is_err());
 
     let non_finite = Array2::from_shape_vec([2, 2], vec![1.0, f64::NAN, f64::NAN, 1.0]).unwrap();
     assert!(symmetric_eigen_jacobi(&non_finite.view()).is_err());
+    assert!(symmetric_eigenvalues_jacobi(&non_finite.view()).is_err());
 }

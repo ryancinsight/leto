@@ -1,8 +1,9 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-Audit date: 2026-06-11. Evidence tier: codebase scan of `leto` (0.11.0),
-`D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, and upstream Atlas crates.
-Counterparts: `ndarray 0.16`, `nalgebra` (already removed from Apollo).
+Audit date: 2026-06-11. Evidence tier: codebase scan of `leto` (0.14.0),
+`D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, current docs.rs pages for
+`ndarray 0.16` and `nalgebra`, and upstream Atlas crates. Counterparts:
+`ndarray 0.16`, `nalgebra` (already removed from Apollo).
 
 ## Consumer Position
 
@@ -45,9 +46,9 @@ matmul, CoW storage, Mnemosyne storage, ndarray-compat conversions.
 | Reshape / `into_shape` on contiguous arrays | `into_shape_with_order` | Apollo (low frequency), Coeus `reshape` (required) | Closed |
 | Scalar–array elementwise ops (array + scalar, array * scalar) | `&a + 1.0`, `mapv` shortcuts | Apollo scaling, Coeus bias/scale paths | Closed |
 | Broadcast-aware binary ops into caller-owned output | broadcasted elementwise ops | Coeus passes `a_layout`, `b_layout`, `c_layout`; Apollo validation and scale paths | Closed |
-| std::ops operator impls on arrays/views (`Add`, `Sub`, `Mul`, `Div`, `Neg`) | operator overloads | Ergonomics for both consumers; std-trait integration mandate | [minor] |
+| std::ops operator impls on arrays/views (`Add`, `Sub`, `Mul`, `Div`, `Neg`) | operator overloads | Ergonomics for both consumers; std-trait integration mandate | Deferred by ADR 0001; current scalar/binary map APIs cover driven cases |
 | `concat`/`stack` along axis | `ndarray::concatenate`, `stack` | Coeus `cat()`; Apollo validation builders | Closed (`concat`; `stack` via `InsertAxis` rank helper) |
-| Dynamic-rank escape type at I/O boundaries | `IxDyn` | Apollo generic-over-dimension helpers (~30 sites use `Array<T, D>`); Coeus layout is dynamic-rank | [major] decision: const-rank adapters vs a `DynArray` boundary type |
+| Dynamic-rank escape type at I/O boundaries | `IxDyn` | Apollo generic-over-dimension helpers (~30 sites use `Array<T, D>`); Coeus layout is dynamic-rank | Decided by ADR 0002: consumer-owned const-rank dispatch adapters; Leto stays const-rank |
 | 1D dot / vector ops | `Array1::dot` | Apollo, Coeus | Closed |
 | Elementwise unary math suite (`exp`, `ln`, `sin`, `cos`, `sqrt`, `abs`, `neg`, `powf`) as named ZST ops | `mapv` with std float fns | Coeus `UnaryOp` enum (17 math/activation variants build on these) | Closed |
 | `cumsum` / prefix scans along axis | (ndarray lacks native; Coeus has) | Coeus `cumsum`, `suffix_sum` | Closed (`scan_axis`, `cumsum`, fwd/rev, CumSum/CumProd) |
@@ -62,16 +63,22 @@ behind Coeus's `ComputeBackend`.
 ## B. Gaps vs nalgebra (linear algebra)
 
 Apollo's nalgebra removal is complete; remaining gaps are forward-looking
-for Coeus/consumer needs, not blocking any current consumer.
+for Coeus/consumer needs, not blocking any current consumer. nalgebra's
+documented decomposition surface includes Schur/Hessenberg, symmetric
+eigendecomposition, SVD, LU, QR, and Cholesky; Leto only admits the subset with
+a named Atlas consumer driver.
 
 | Gap | nalgebra counterpart | Status |
 | --- | --- | --- |
 | Symmetric eigensolver | `SymmetricEigen` | **Closed** — `symmetric_eigen_jacobi` (+ tolerance variant), generic over `T: RealScalar`, native precision, Jacobi rotations |
+| Symmetric eigenvalues-only path | `SymmetricEigen::eigenvalues` / eigenvalue access | **Closed in 0.14.0** — `symmetric_eigenvalues_jacobi` (+ tolerance variant) shares the Jacobi diagonalization kernel through a monomorphized `RotationTarget`; the eigenvalues-only path uses a zero-sized no-vector target and avoids eigenvector storage |
 | LU / solve / inverse / determinant | `LU`, `try_inverse` | **Closed** — `lu_decompose`, `solve`, `det`, and `inv`, generic over `T: RealScalar`; CFDrs dense solver driver |
 | QR + least squares | `QR` | **Closed** — Householder `qr_decompose` and `solve_least_squares`; CFDrs least-squares driver |
 | Cholesky | `Cholesky` | **Closed** — SPD `cholesky_decompose` and solve; CFDrs SPD driver |
-| SVD / pseudoinverse | `SVD` | Open — [major], requires ADR before implementation |
+| Thin full-column-rank SVD | `SVD` subset | **Closed in 0.13.0** — `svd_decompose`, `singular_values`; tall/square full-column-rank matrices only |
+| Full rank-revealing SVD / pseudoinverse | `SVD`, pseudo-inverse helpers | Open — [major], requires ADR before implementation |
 | Norms (L1/L2/Frobenius) | `norm`, `norm_squared` | **Closed** — `NormKind` ZSTs with `norm_l1`, `norm_l2`, and `norm_max` |
+| Non-symmetric eigenvalues/eigenvectors | `eigenvalues`, `complex_eigenvalues`, Schur | Open only with a named consumer driver; current policy rejects speculative surface |
 | Small fixed-size matrix/vector types | `Matrix3`, `Vector3` | Non-goal — const-rank `Array<T, S, 2>` covers the layout; no consumer driver |
 
 Policy: linalg routines enter leto-ops only with a named consumer driver and
@@ -101,10 +108,12 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-11 (v0.11.0): §A indexed zip parity and the Stage A1
-consumer-driven nalgebra surface are closed except SVD. See CHANGELOG and the
-two ADRs in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base and
-Apollo/Coeus consumer migration with differential coverage.
+Update 2026-06-11 (v0.14.0): §A indexed zip parity and the Stage A1
+consumer-driven nalgebra surface are closed through symmetric eigenvalues-only,
+LU, QR, Cholesky, norms, and bounded thin SVD. See CHANGELOG and the two ADRs in
+`docs/adr/`. Remaining work is cross-cutting: the Coeus re-base and Apollo/Coeus
+consumer migration with differential coverage; full rank-revealing SVD and
+non-symmetric eigen are demand-driven only.
 
 - `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
   rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
@@ -117,6 +126,10 @@ Apollo/Coeus consumer migration with differential coverage.
   native precision, no hidden widening. Residual: no wider-accumulator variant;
   consumers needing higher working precision than storage convert first
   (explicit). f16/bf16 transcendentals use the documented f32 fallback.
+- `symmetric_eigenvalues_jacobi`: CLOSED ([minor]) — sorted eigenvalues without
+  eigenvector allocation, implemented by a zero-sized no-vector rotation target
+  over the shared Jacobi diagonalization kernel. Evidence tier:
+  value-semantic full-vs-values parity and strided-view tests.
 - Contiguous-slice view access: CLOSED — `as_slice`/`as_mut_slice` are now
   offset-independent C-dense; `as_slice_memory_order`/`as_mut_slice_memory_order`
   expose F-order/offset blocks. Apollo hot-kernel migration still unproven end

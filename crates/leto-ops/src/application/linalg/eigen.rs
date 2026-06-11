@@ -44,6 +44,29 @@ pub fn symmetric_eigen_jacobi<T: RealScalar>(
     symmetric_eigen_jacobi_with_tolerance(matrix, default_tolerance::<T>())
 }
 
+/// Compute only the eigenvalues of a real symmetric matrix with Jacobi rotations.
+///
+/// This uses the same native-precision Jacobi diagonalization contract as
+/// [`symmetric_eigen_jacobi`] but routes rotations through a zero-sized target
+/// that does not allocate or update an eigenvector matrix.
+pub fn symmetric_eigenvalues_jacobi<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
+    symmetric_eigenvalues_jacobi_with_tolerance(matrix, default_tolerance::<T>())
+}
+
+/// Compute only the eigenvalues of a real symmetric matrix with an explicit tolerance.
+pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
+    matrix: &ArrayView2<'_, T>,
+    tolerance: T,
+) -> Result<Vec<T>> {
+    validate_symmetric_input(matrix, tolerance)?;
+    let [n, _] = matrix.shape();
+    let mut a = copy_row_major(matrix);
+    let mut target = NoEigenvectors;
+
+    diagonalize(&mut a, n, tolerance, &mut target);
+    Ok(sort_diagonal(&a, n))
+}
+
 /// Compute the eigendecomposition of a real symmetric matrix with an explicit tolerance.
 pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
@@ -53,17 +76,8 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let [n, _] = matrix.shape();
     let mut a = copy_row_major(matrix);
     let mut v = identity::<T>(n);
-    let max_sweeps = n.saturating_mul(n).saturating_mul(32).max(1);
-
-    for _ in 0..max_sweeps {
-        let Some((p, q, max_abs)) = largest_off_diagonal(&a, n) else {
-            break;
-        };
-        if max_abs <= tolerance {
-            break;
-        }
-        rotate(&mut a, &mut v, n, p, q);
-    }
+    let mut target = EigenvectorWorkspace { values: &mut v };
+    diagonalize(&mut a, n, tolerance, &mut target);
 
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&lhs, &rhs| {
@@ -139,6 +153,18 @@ fn identity<T: Scalar>(n: usize) -> Vec<T> {
     values
 }
 
+fn sort_diagonal<T: RealScalar>(a: &[T], n: usize) -> Vec<T> {
+    let mut eigenvalues = Vec::with_capacity(n);
+    for index in 0..n {
+        eigenvalues.push(a[index * n + index]);
+    }
+    eigenvalues.sort_by(|lhs, rhs| {
+        lhs.partial_cmp(rhs)
+            .expect("invariant: finite symmetric input yields finite diagonal")
+    });
+    eigenvalues
+}
+
 fn largest_off_diagonal<T: RealScalar>(a: &[T], n: usize) -> Option<(usize, usize, T)> {
     let mut best = None;
     let mut best_abs = T::ZERO;
@@ -154,7 +180,56 @@ fn largest_off_diagonal<T: RealScalar>(a: &[T], n: usize) -> Option<(usize, usiz
     best
 }
 
-fn rotate<T: RealScalar>(a: &mut [T], v: &mut [T], n: usize, p: usize, q: usize) {
+trait RotationTarget<T: RealScalar> {
+    fn rotate_columns(&mut self, n: usize, p: usize, q: usize, c: T, s: T);
+}
+
+struct NoEigenvectors;
+
+impl<T: RealScalar> RotationTarget<T> for NoEigenvectors {
+    #[inline]
+    fn rotate_columns(&mut self, _n: usize, _p: usize, _q: usize, _c: T, _s: T) {}
+}
+
+struct EigenvectorWorkspace<'a, T> {
+    values: &'a mut [T],
+}
+
+impl<T: RealScalar> RotationTarget<T> for EigenvectorWorkspace<'_, T> {
+    #[inline]
+    fn rotate_columns(&mut self, n: usize, p: usize, q: usize, c: T, s: T) {
+        for row in 0..n {
+            let vkp = self.values[row * n + p];
+            let vkq = self.values[row * n + q];
+            self.values[row * n + p] = c.mul(vkp).sub(s.mul(vkq));
+            self.values[row * n + q] = s.mul(vkp).add(c.mul(vkq));
+        }
+    }
+}
+
+fn diagonalize<T, R>(a: &mut [T], n: usize, tolerance: T, target: &mut R)
+where
+    T: RealScalar,
+    R: RotationTarget<T>,
+{
+    let max_sweeps = n.saturating_mul(n).saturating_mul(32).max(1);
+
+    for _ in 0..max_sweeps {
+        let Some((p, q, max_abs)) = largest_off_diagonal(a, n) else {
+            break;
+        };
+        if max_abs <= tolerance {
+            break;
+        }
+        rotate(a, target, n, p, q);
+    }
+}
+
+fn rotate<T, R>(a: &mut [T], target: &mut R, n: usize, p: usize, q: usize)
+where
+    T: RealScalar,
+    R: RotationTarget<T>,
+{
     let app = a[p * n + p];
     let aqq = a[q * n + q];
     let apq = a[p * n + q];
@@ -193,10 +268,5 @@ fn rotate<T: RealScalar>(a: &mut [T], v: &mut [T], n: usize, p: usize, q: usize)
     a[p * n + q] = T::ZERO;
     a[q * n + p] = T::ZERO;
 
-    for row in 0..n {
-        let vkp = v[row * n + p];
-        let vkq = v[row * n + q];
-        v[row * n + p] = c.mul(vkp).sub(s.mul(vkq));
-        v[row * n + q] = s.mul(vkp).add(c.mul(vkq));
-    }
+    target.rotate_columns(n, p, q, c, s);
 }

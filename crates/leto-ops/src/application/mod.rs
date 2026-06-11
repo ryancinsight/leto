@@ -22,8 +22,9 @@ pub mod zip;
 pub use linalg::{
     cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, det, inv, lu_decompose, norm,
     norm_l1, norm_l2, norm_max, qr_decompose, solve, solve_least_squares, symmetric_eigen_jacobi,
-    CholeskyDecomposition, LuDecomposition, NormKind, NormL1, NormL2, NormMax, QrDecomposition,
-    SymmetricEigenDecomposition,
+    symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
+    symmetric_eigenvalues_jacobi_with_tolerance, CholeskyDecomposition, LuDecomposition, NormKind,
+    NormL1, NormL2, NormMax, QrDecomposition, SymmetricEigenDecomposition,
 };
 pub use map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
