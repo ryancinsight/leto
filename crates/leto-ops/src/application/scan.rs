@@ -116,25 +116,37 @@ where
         .map(|(_, &s)| s)
         .product();
 
+    // Lane walk: one offset computation per scan lane, then stride-increment
+    // walks along the scan axis (the row-walk policy applied per lane; the
+    // per-element `offset_of` products are gone). Reverse scans start at the
+    // lane's far end and walk by the negated stride.
+    let input_layout = input.layout();
+    let output_layout = output.layout();
+    let input_data = input.data();
+    let output_data = output.data_mut();
+    let in_axis_step = input_layout.strides[axis];
+    let out_axis_step = output_layout.strides[axis];
+
     let mut index = [0usize; N];
     for outer_flat in 0..outer {
         fill_outer_index(outer_flat, &shape, axis, &mut index);
+        index[axis] = match direction {
+            ScanDirection::Forward => 0,
+            ScanDirection::Reverse => len - 1,
+        };
+        let mut in_off = input_layout.offset_of(index)? as isize;
+        let mut out_off = output_layout.offset_of(index)? as isize;
+        let (in_step, out_step) = match direction {
+            ScanDirection::Forward => (in_axis_step, out_axis_step),
+            ScanDirection::Reverse => (-in_axis_step, -out_axis_step),
+        };
+
         let mut acc = Op::identity();
-        match direction {
-            ScanDirection::Forward => {
-                for k in 0..len {
-                    index[axis] = k;
-                    acc = Op::combine(acc, *input.get(index)?);
-                    *output.get_mut(index)? = acc;
-                }
-            }
-            ScanDirection::Reverse => {
-                for k in (0..len).rev() {
-                    index[axis] = k;
-                    acc = Op::combine(acc, *input.get(index)?);
-                    *output.get_mut(index)? = acc;
-                }
-            }
+        for _ in 0..len {
+            acc = Op::combine(acc, input_data[in_off as usize]);
+            output_data[out_off as usize] = acc;
+            in_off += in_step;
+            out_off += out_step;
         }
     }
     Ok(())

@@ -4,6 +4,30 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.13.1] - 2026-06-11
+
+Patch performance increment completing the row-walk traversal policy: every
+strided fallback in leto-ops now routes through `RowMajorTraversal` (one
+offset computation per innermost row/lane, stride-increment walks) — full
+SSOT for strided traversal.
+
+### Changed
+
+- `leto-ops`: all four zip variants (`zip_mut_with`, `zip2_mut_with`, and the
+  indexed forms) row-walk their strided fallbacks. The indexed forms update
+  the last logical coordinate incrementally, so closures still receive exact
+  indices with the per-element div/mod decomposition gone.
+- `leto-ops`: `map_inplace`'s non-dense fallback row-walks.
+- `leto-ops`: `scan_axis_into` lane walks — one offset per scan lane, then
+  stride increments along the scan axis (reverse scans start at the lane's
+  far end and walk the negated stride), replacing per-element
+  `get`/`get_mut` offset products.
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- New `zip/zip_mut_with_transposed_256x256` case: 553.4 µs → 55.9 µs
+  (**−89.9%, 9.9×, p < 0.05**).
+
 ## [0.13.0] - 2026-06-11
 
 Minor nalgebra-replacement increment for thin SVD.

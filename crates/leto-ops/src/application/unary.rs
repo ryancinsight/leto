@@ -1,4 +1,4 @@
-use crate::application::index::{index_from_flat, RowMajorTraversal};
+use crate::application::index::RowMajorTraversal;
 use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -199,14 +199,22 @@ where
         return Ok(());
     }
 
+    // Row-walk traversal (shared RowMajorTraversal policy; see binary_map).
     let size = view.layout().checked_size()?;
     let shape = view.shape();
     let layout = view.layout();
     let data = view.data_mut();
-    for flat_idx in 0..size {
-        let index = index_from_flat(flat_idx, &shape);
-        let offset = layout.offset_of(index)?;
-        data[offset] = f(data[offset]);
+    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
+        return Ok(());
+    };
+    let step = traversal.last_axis_stride(layout);
+    for row in 0..traversal.rows() {
+        let base = traversal.base_index(row);
+        let mut offset = layout.offset_of(base)? as isize;
+        for _ in 0..traversal.inner() {
+            data[offset as usize] = f(data[offset as usize]);
+            offset += step;
+        }
     }
 
     Ok(())

@@ -7,7 +7,7 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
-use leto_ops::{matmul, norm_l2, sum, AddOp};
+use leto_ops::{matmul, norm_l2, sum, zip_mut_with, AddOp};
 use std::hint::black_box;
 
 fn pinned_values(len: usize, scale: f64) -> Vec<f64> {
@@ -116,9 +116,27 @@ fn bench_reductions(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_zip(c: &mut Criterion) {
+    let mut group = c.benchmark_group("zip");
+    let n = 256usize;
+    let src = Array::from_shape_vec([n, n], pinned_values(n * n, 0.5)).unwrap();
+    group.bench_function("zip_mut_with_transposed_256x256", |bencher| {
+        bencher.iter_batched(
+            || Array::from_shape_vec([n, n], pinned_values(n * n, 1.0)).unwrap(),
+            |mut out| {
+                let transposed = src.transpose([1, 0]).unwrap();
+                zip_mut_with(&mut out.view_mut(), &transposed, |o, &s| *o += s).unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default().sample_size(20);
-    targets = bench_matmul, bench_elementwise, bench_reductions
+    targets = bench_matmul, bench_elementwise, bench_reductions, bench_zip
 }
 criterion_main!(kernels);

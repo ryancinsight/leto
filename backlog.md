@@ -53,10 +53,15 @@ no unmeasured "optimization" per performance_engineering.
   Criterion baselines added for transposed and reverse-last-axis reductions:
   transposed `sum` 40.73 µs, transposed `norm_l2` 28.67 µs,
   reverse-last-axis `sum` 30.55 µs, reverse-last-axis `norm_l2` 30.21 µs.
-- [ ] [minor] L1-tile blocking on top of row-walk for the residual ~3.6×
+- [x] [patch] (0.13.1) Row-walk policy completed across zip (all four
+  variants, indexed forms via incremental last coordinate), `map_inplace`,
+  and scan lane walks — every strided fallback now routes through
+  `RowMajorTraversal`. Measured: transposed zip 553.4 µs → 55.9 µs (−89.9%,
+  9.9×, p < 0.05). Axis-reduction output-index decomposition is amortized
+  over the axis length (cost 1/axis_len per element) and deliberately left.
+- [ ] [minor] L1-tile blocking on top of row-walk for the residual
   column-walk gap (const-generic tile size, selected from themis
-  `CacheLevel` data); also extend row-walk to zip/scan and axis-reduction
-  strided fallbacks (currently still per-element).
+  `CacheLevel` data).
 - [ ] [minor] Blocked matmul: 256³ at ~2.38 ms (≈14 GFLOP/s) is memory-bound;
   L1/L2 cache blocking with const-generic tile shapes (one authoritative
   kernel monomorphized per tile shape, per the structural-const-generics

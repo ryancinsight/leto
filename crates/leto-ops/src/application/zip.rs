@@ -1,4 +1,4 @@
-use crate::application::index::index_from_flat;
+use crate::application::index::RowMajorTraversal;
 use leto::{ArrayView, ArrayViewMut, LetoError, Result};
 
 #[inline]
@@ -52,11 +52,26 @@ where
     let lhs_data = lhs.data_mut();
     let rhs_data = rhs.data();
 
-    for flat_idx in 0..size {
-        let index = index_from_flat(flat_idx, &shape);
-        let lhs_offset = lhs_layout.offset_of(index)?;
-        let rhs_offset = rhs_layout.offset_of(index)?;
-        f(&mut lhs_data[lhs_offset], &rhs_data[rhs_offset]);
+    // Row-walk traversal: one offset computation per innermost row, then a
+    // stride-increment walk (shared RowMajorTraversal policy; see binary_map
+    // for rationale and the recorded baselines).
+    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
+        return Ok(());
+    };
+    let lhs_step = traversal.last_axis_stride(lhs_layout);
+    let rhs_step = traversal.last_axis_stride(rhs_layout);
+    for row in 0..traversal.rows() {
+        let base = traversal.base_index(row);
+        let mut lhs_offset = lhs_layout.offset_of(base)? as isize;
+        let mut rhs_offset = rhs_layout.offset_of(base)? as isize;
+        for _ in 0..traversal.inner() {
+            f(
+                &mut lhs_data[lhs_offset as usize],
+                &rhs_data[rhs_offset as usize],
+            );
+            lhs_offset += lhs_step;
+            rhs_offset += rhs_step;
+        }
     }
 
     Ok(())
@@ -92,11 +107,30 @@ where
     let lhs_data = lhs.data_mut();
     let rhs_data = rhs.data();
 
-    for flat_idx in 0..size {
-        let index = index_from_flat(flat_idx, &shape);
-        let lhs_offset = lhs_layout.offset_of(index)?;
-        let rhs_offset = rhs_layout.offset_of(index)?;
-        f(index, &mut lhs_data[lhs_offset], &rhs_data[rhs_offset]);
+    // Row-walk with an incrementally updated last coordinate: the closure
+    // still receives the exact logical index, but the per-element div/mod
+    // decomposition and offset products are gone.
+    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
+        return Ok(());
+    };
+    let lhs_step = traversal.last_axis_stride(lhs_layout);
+    let rhs_step = traversal.last_axis_stride(rhs_layout);
+    for row in 0..traversal.rows() {
+        let mut index = traversal.base_index(row);
+        let mut lhs_offset = lhs_layout.offset_of(index)? as isize;
+        let mut rhs_offset = rhs_layout.offset_of(index)? as isize;
+        for k in 0..traversal.inner() {
+            if N > 0 {
+                index[N - 1] = k;
+            }
+            f(
+                index,
+                &mut lhs_data[lhs_offset as usize],
+                &rhs_data[rhs_offset as usize],
+            );
+            lhs_offset += lhs_step;
+            rhs_offset += rhs_step;
+        }
     }
 
     Ok(())
@@ -151,16 +185,28 @@ where
     let a_data = a.data();
     let b_data = b.data();
 
-    for flat_idx in 0..size {
-        let index = index_from_flat(flat_idx, &shape);
-        let lhs_offset = lhs_layout.offset_of(index)?;
-        let a_offset = a_layout.offset_of(index)?;
-        let b_offset = b_layout.offset_of(index)?;
-        f(
-            &mut lhs_data[lhs_offset],
-            &a_data[a_offset],
-            &b_data[b_offset],
-        );
+    // Row-walk traversal over all three layouts (see zip_mut_with).
+    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
+        return Ok(());
+    };
+    let lhs_step = traversal.last_axis_stride(lhs_layout);
+    let a_step = traversal.last_axis_stride(a_layout);
+    let b_step = traversal.last_axis_stride(b_layout);
+    for row in 0..traversal.rows() {
+        let base = traversal.base_index(row);
+        let mut lhs_offset = lhs_layout.offset_of(base)? as isize;
+        let mut a_offset = a_layout.offset_of(base)? as isize;
+        let mut b_offset = b_layout.offset_of(base)? as isize;
+        for _ in 0..traversal.inner() {
+            f(
+                &mut lhs_data[lhs_offset as usize],
+                &a_data[a_offset as usize],
+                &b_data[b_offset as usize],
+            );
+            lhs_offset += lhs_step;
+            a_offset += a_step;
+            b_offset += b_step;
+        }
     }
 
     Ok(())
@@ -204,17 +250,33 @@ where
     let a_data = a.data();
     let b_data = b.data();
 
-    for flat_idx in 0..size {
-        let index = index_from_flat(flat_idx, &shape);
-        let lhs_offset = lhs_layout.offset_of(index)?;
-        let a_offset = a_layout.offset_of(index)?;
-        let b_offset = b_layout.offset_of(index)?;
-        f(
-            index,
-            &mut lhs_data[lhs_offset],
-            &a_data[a_offset],
-            &b_data[b_offset],
-        );
+    // Row-walk with an incrementally updated last coordinate (see
+    // indexed_zip_mut_with).
+    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
+        return Ok(());
+    };
+    let lhs_step = traversal.last_axis_stride(lhs_layout);
+    let a_step = traversal.last_axis_stride(a_layout);
+    let b_step = traversal.last_axis_stride(b_layout);
+    for row in 0..traversal.rows() {
+        let mut index = traversal.base_index(row);
+        let mut lhs_offset = lhs_layout.offset_of(index)? as isize;
+        let mut a_offset = a_layout.offset_of(index)? as isize;
+        let mut b_offset = b_layout.offset_of(index)? as isize;
+        for k in 0..traversal.inner() {
+            if N > 0 {
+                index[N - 1] = k;
+            }
+            f(
+                index,
+                &mut lhs_data[lhs_offset as usize],
+                &a_data[a_offset as usize],
+                &b_data[b_offset as usize],
+            );
+            lhs_offset += lhs_step;
+            a_offset += a_step;
+            b_offset += b_step;
+        }
     }
 
     Ok(())

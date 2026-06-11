@@ -20,7 +20,16 @@ statistically significant regression in a touched kernel blocks merge.
 | reductions/sum_reverse_last_axis_256x256 | not measured | not measured | 30.55 µs | 31.36 µs | no change (p = 0.60) |
 | reductions/norm_l2_reverse_last_axis_256x256 | not measured | not measured | 30.21 µs | 30.82 µs | no change (p = 0.15); non-dense negative stride still row-walks |
 
+| zip/zip_mut_with_transposed_256x256 | 553.4 µs (pre row-walk, 0.13.0) | 55.9 µs (0.13.1) | **−89.9% (9.9×), p < 0.05** |
+
 ## Observations (drive the optimization backlog)
+
+- **Row-walk policy complete (0.13.1)**: every strided fallback (binary,
+  unary map/mapv/map_inplace, all four zips, whole-array reductions/norms,
+  scan lanes) routes through `RowMajorTraversal`. The serial zip fallback —
+  previously per-element with two offset products — measured 553.4 µs →
+  55.9 µs on the transposed 256×256 case. Remaining strided cost is the
+  L1-tile blocking item.
 
 - **Row-walk traversal landed (0.11.1)**: the strided elementwise paths now
   compute offsets once per innermost row (`RowMajorTraversal`) and walk the
