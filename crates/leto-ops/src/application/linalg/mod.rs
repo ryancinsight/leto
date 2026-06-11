@@ -6,9 +6,12 @@
 
 /// Real symmetric eigensolver (Jacobi rotations).
 pub mod eigen;
+/// LU decomposition with partial pivoting, solve, determinant, inverse.
+pub mod lu;
 /// Vector and matrix norms.
 pub mod norms;
 
 pub use eigen::SymmetricEigenDecomposition;
 pub use eigen::{symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance};
+pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
 pub use norms::{norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2, NormMax};

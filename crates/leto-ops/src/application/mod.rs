@@ -20,8 +20,8 @@ pub mod vector;
 pub mod zip;
 
 pub use linalg::{
-    norm, norm_l1, norm_l2, norm_max, symmetric_eigen_jacobi, NormKind, NormL1, NormL2, NormMax,
-    SymmetricEigenDecomposition,
+    det, inv, lu_decompose, norm, norm_l1, norm_l2, norm_max, solve, symmetric_eigen_jacobi,
+    LuDecomposition, NormKind, NormL1, NormL2, NormMax, SymmetricEigenDecomposition,
 };
 pub use map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,

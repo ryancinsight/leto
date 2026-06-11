@@ -20,8 +20,8 @@ pub use domain::strategy::SimdStrategy;
 pub use domain::strategy::ParallelStrategy;
 
 pub use application::linalg::{
-    norm, norm_l1, norm_l2, norm_max, symmetric_eigen_jacobi,
-    symmetric_eigen_jacobi_with_tolerance, NormKind, NormL1, NormL2, NormMax,
+    det, inv, lu_decompose, norm, norm_l1, norm_l2, norm_max, solve, symmetric_eigen_jacobi,
+    symmetric_eigen_jacobi_with_tolerance, LuDecomposition, NormKind, NormL1, NormL2, NormMax,
     SymmetricEigenDecomposition,
 };
 pub use application::map::{

@@ -15,7 +15,7 @@ accumulator only via a trait-encoded associated type with numerical justificatio
 admitted only with a named consumer driver (coeus/apollo) and a differential
 oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [x] [patch] Vector/matrix norms over `RealScalar`: `NormKind` ZST markers (`NormL1`/`NormL2`/`NormMax`) through one generic `norm` traversal in `application/linalg/norms.rs`; `norm_l2` covers Euclidean (rank-1) and Frobenius (rank-2+) in one entry point. Eigensolver consolidated into `linalg/` (re-export paths stable). Verification: nalgebra differential oracle, strided layout-independence, empty-view, and exact f16 tests.
-- [ ] [minor] Triangular solve + LU with partial pivoting; `solve`, `det`, `inv`.
+- [x] [minor] LU with partial pivoting (`linalg/lu.rs`): `lu_decompose`/`LuDecomposition<T>` (packed factors, pivots, parity) with `solve`, `det`, `inv` — generic over `RealScalar`, native precision. Driver: CFDrs `cfd-math`. Verification: nalgebra oracle, pivot parity, `inv·A=I`, `det(Aᵀ)=det(A)` via strided view, singular/non-finite rejection, f32 genericity.
 - [ ] [minor] QR (Householder) + least-squares solve.
 - [ ] [minor] Cholesky (SPD) factorization + solve.
 - [ ] [major] SVD (Golub–Kahan) + pseudoinverse; ADR before implementation.

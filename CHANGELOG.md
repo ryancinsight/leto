@@ -4,6 +4,28 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.9.0] - 2026-06-10
+
+Stage A1 second increment: LU with partial pivoting, solve, determinant,
+inverse. Driver: CFDrs `cfd-math` dense solver paths.
+
+### Added
+
+- `leto-ops`: `application/linalg/lu.rs` — `lu_decompose` (partial pivoting,
+  packed unit-L/U factors, permutation + parity), `LuDecomposition<T>` with
+  `solve` (forward/back substitution), `det` (parity × U diagonal), and `inv`
+  (identity-column solves); plus `solve`/`det`/`inv` convenience entry points.
+  Generic over `RealScalar`, native-precision elimination (no hidden
+  widening). `det` of a singular matrix returns zero; `solve`/`inv` reject
+  singular and non-finite inputs with distinct error reasons.
+
+### Tests
+
+- nalgebra differential oracle (`lu().solve`, `determinant`, `try_inverse`),
+  pivot-parity coverage via zero leading pivot, `inv·A = I` value check,
+  strided/transposed logical-value decomposition (`det(Aᵀ) = det(A)`),
+  singular/non-square/non-finite rejection, and f32 genericity.
+
 ## [0.8.0] - 2026-06-10
 
 Stage A1 (nalgebra replacement) first increment: norms, plus a vertical

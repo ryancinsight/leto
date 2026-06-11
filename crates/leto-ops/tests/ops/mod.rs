@@ -1,6 +1,7 @@
 pub mod differential;
 pub mod eigen;
 pub mod elementwise;
+pub mod lu;
 pub mod matmul;
 pub mod norms;
 pub mod reduction;
