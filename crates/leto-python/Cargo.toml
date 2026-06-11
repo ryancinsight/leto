@@ -9,6 +9,11 @@ license.workspace = true
 name = "leto_python"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["parallel", "mnemosyne-memory"]
+parallel = ["leto/parallel", "leto-ops/parallel"]
+mnemosyne-memory = ["leto/mnemosyne-memory", "leto-ops/mnemosyne-memory"]
+
 [dependencies]
 # ── Local Workspace Crates ──
 leto = { workspace = true }

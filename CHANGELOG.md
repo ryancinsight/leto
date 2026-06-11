@@ -16,6 +16,11 @@ Minor nalgebra-parity and eigensolver memory-efficiency increment.
 
 ### Changed
 
+- All package manifests now default both `parallel` and `mnemosyne-memory`.
+  `leto` maps Mnemosyne memory to the existing Mnemosyne-backed storage
+  implementation, `leto-ops` forwards memory into `leto`, and `leto-python`
+  forwards both provider features to its Rust dependencies.
+
 - `leto-ops`: the symmetric Jacobi implementation now routes rotations through
   a monomorphized `RotationTarget` strategy. Full decomposition uses an
   eigenvector workspace; eigenvalues-only uses a zero-sized no-vector target.

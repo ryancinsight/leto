@@ -31,8 +31,9 @@ name = "kernels"
 harness = false
 
 [features]
-default = ["std", "simd", "parallel"]
+default = ["std", "simd", "parallel", "mnemosyne-memory"]
 std = ["leto/std", "num-traits/std"]
 simd = ["dep:hermes-simd"]
 parallel = ["dep:moirai"]
+mnemosyne-memory = ["leto/mnemosyne-memory"]
 ndarray-compat = ["leto/ndarray-compat"]

@@ -22,11 +22,13 @@ thiserror = { workspace = true }
 ndarray = { workspace = true, optional = true }
 
 [features]
-default = ["std", "mnemosyne-alloc"]
+default = ["std", "parallel", "mnemosyne-memory"]
 std = ["num-traits/std"]
 alloc = []
+parallel = []
 # mnemosyne integration
 mnemosyne-alloc = ["dep:mnemosyne", "alloc"]
+mnemosyne-memory = ["mnemosyne-alloc"]
 # ndarray integration
 ndarray-compat = ["dep:ndarray", "std"]
 
