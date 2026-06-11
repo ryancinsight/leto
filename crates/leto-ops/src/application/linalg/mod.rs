@@ -15,6 +15,8 @@ pub mod lu;
 pub mod norms;
 /// Householder QR factorization and least-squares solve.
 pub mod qr;
+/// Thin SVD for tall or square full-column-rank matrices.
+pub mod svd;
 
 pub use cholesky::{
     cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, CholeskyDecomposition,
@@ -24,3 +26,4 @@ pub use eigen::{symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance};
 pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
 pub use norms::{norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2, NormMax};
 pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};
+pub use svd::{singular_values, svd_decompose, svd_decompose_with_tolerance, SvdDecomposition};

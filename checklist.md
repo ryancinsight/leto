@@ -1,14 +1,14 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.12.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). In-flight item: Cholesky SPD det/inv API delivered.
+Sprint phase: Execution. Target version: 0.13.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). In-flight item: thin SVD full-column-rank API delivered.
 
 Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least
-squares (0.10.0), and Cholesky factor/solve/det/inv (0.12.0) all delivered
-with nalgebra differential oracles and value-semantic identity checks.
-`linalg/` now covers the consumer-driven nalgebra surface except SVD. Next
-(Stage A1): SVD [major] requires an ADR before implementation; otherwise
-Stage A1 is closed pending a consumer driver for the non-symmetric eigensolver.
+squares (0.10.0), Cholesky factor/solve/det/inv (0.12.0), and thin SVD for
+tall/square full-column-rank matrices (0.13.0) all delivered with
+value-semantic identity/reconstruction checks. Remaining nalgebra surface:
+rank-deficient/wide/full SVD variants and any consumer-driven non-symmetric
+eigensolver.
 
 Stage A2 progress: indexed zip parity (0.11.0) delivered through
 `indexed_zip_mut_with` and `indexed_zip2_mut_with`, closing the current
@@ -19,6 +19,7 @@ GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
 consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 
 ## Atlas ndarray replacement readiness [arch]
+- [x] [minor] Add `leto-ops` thin SVD (`svd_decompose`, `svd_decompose_with_tolerance`, `singular_values`, `SvdDecomposition`) for tall/square full-column-rank matrices via `A^T A` + symmetric Jacobi; unsupported wide or rank-deficient inputs reject explicitly. Verification: `cargo fmt --check`; `cargo test -p leto-ops --test ops_tests svd --all-features`; `cargo test -p leto-ops --all-features`; `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`; `cargo test --workspace --all-features`.
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
 - [x] Core C/F-contiguous `Layout<const N: usize>` construction, offset lookup, slicing, transpose, and broadcast have value-semantic tests.
 - [x] Core storage exists for borrowed slices, mutable borrowed slices, `Vec`, and feature-gated Mnemosyne allocation.

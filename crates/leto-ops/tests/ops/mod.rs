@@ -7,4 +7,5 @@ pub mod norms;
 pub mod qr_cholesky;
 pub mod reduction;
 pub mod structure_ops;
+pub mod svd;
 pub mod unary_math;

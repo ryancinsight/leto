@@ -4,6 +4,25 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.13.0] - 2026-06-11
+
+Minor nalgebra-replacement increment for thin SVD.
+
+### Added
+
+- `leto-ops`: `SvdDecomposition`, `svd_decompose`,
+  `svd_decompose_with_tolerance`, and `singular_values`.
+- The initial SVD surface supports tall or square full-column-rank matrices.
+  It derives the thin decomposition from `A^T A` plus the existing symmetric
+  Jacobi eigensolver, returning `U`, descending singular values, and `V`.
+  Wide and rank-deficient inputs are rejected explicitly.
+
+### Tests
+
+- Added value-semantic SVD coverage for reconstruction, closed-form diagonal
+  singular values, strided input, f32 generic execution, and invalid input
+  rejection.
+
 ## [0.12.0] - 2026-06-11
 
 Minor nalgebra-replacement increment for SPD linear algebra.
