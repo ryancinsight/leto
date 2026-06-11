@@ -1,13 +1,14 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.11.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). In-flight item: indexed zip parity delivered.
+Sprint phase: Execution. Target version: 0.12.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). In-flight item: Cholesky SPD det/inv API delivered.
 
-Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least squares
-and Cholesky (0.10.0) all delivered with nalgebra differential oracles —
+Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least
+squares (0.10.0), and Cholesky factor/solve/det/inv (0.12.0) all delivered
+with nalgebra differential oracles and value-semantic identity checks.
 `linalg/` now covers the consumer-driven nalgebra surface except SVD. Next
-(Stage A1): SVD [major] requires an ADR before implementation; otherwise Stage
-A1 is closed pending a consumer driver for the non-symmetric eigensolver.
+(Stage A1): SVD [major] requires an ADR before implementation; otherwise
+Stage A1 is closed pending a consumer driver for the non-symmetric eigensolver.
 
 Stage A2 progress: indexed zip parity (0.11.0) delivered through
 `indexed_zip_mut_with` and `indexed_zip2_mut_with`, closing the current

@@ -4,6 +4,23 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.12.0] - 2026-06-11
+
+Minor nalgebra-replacement increment for SPD linear algebra.
+
+### Added
+
+- `leto-ops`: `CholeskyDecomposition::det`, `CholeskyDecomposition::inv`,
+  `cholesky_solve`, `cholesky_det`, and `cholesky_inv`.
+- Cholesky inverse reuses the same private forward/back substitution helper as
+  `solve`, preserving one authoritative SPD solve path.
+
+### Tests
+
+- Added value-semantic Cholesky determinant and inverse coverage: determinant
+  checks against the nalgebra oracle, convenience API parity, and `A·A⁻¹ = I`
+  through Leto `matmul`.
+
 ## [0.11.3] - 2026-06-11
 
 Patch performance increment for dense L2/Frobenius norms.

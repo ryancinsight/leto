@@ -15,7 +15,9 @@ pub mod norms;
 /// Householder QR factorization and least-squares solve.
 pub mod qr;
 
-pub use cholesky::{cholesky_decompose, CholeskyDecomposition};
+pub use cholesky::{
+    cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, CholeskyDecomposition,
+};
 pub use eigen::SymmetricEigenDecomposition;
 pub use eigen::{symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance};
 pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};

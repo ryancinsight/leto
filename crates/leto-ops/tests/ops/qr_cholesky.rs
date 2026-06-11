@@ -1,5 +1,8 @@
 use leto::{Array, Storage};
-use leto_ops::{cholesky_decompose, qr_decompose, solve, solve_least_squares};
+use leto_ops::{
+    cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, matmul, qr_decompose, solve,
+    solve_least_squares,
+};
 
 const EPS: f64 = 1e-9;
 
@@ -124,6 +127,38 @@ fn cholesky_solve_matches_lu_solve() {
         via_cholesky.storage().as_slice(),
         via_lu.storage().as_slice(),
     );
+
+    let via_convenience = cholesky_solve(&a.view(), &rhs.view()).unwrap();
+    assert_close_slice(
+        via_convenience.storage().as_slice(),
+        via_lu.storage().as_slice(),
+    );
+}
+
+#[test]
+fn cholesky_det_and_inv_match_identity_contract() {
+    let values = vec![6.0f64, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let a = Array::from_shape_vec([3, 3], values.clone()).unwrap();
+
+    let decomposition = cholesky_decompose(&a.view()).unwrap();
+    let det = decomposition.det();
+    let det_convenience = cholesky_det(&a.view()).unwrap();
+
+    let reference_det = nalgebra::DMatrix::from_row_slice(3, 3, &values).determinant();
+    assert_close(det, reference_det);
+    assert_close(det_convenience, reference_det);
+
+    let inverse = decomposition.inv().unwrap();
+    let inverse_convenience = cholesky_inv(&a.view()).unwrap();
+    assert_close_slice(
+        inverse.storage().as_slice(),
+        inverse_convenience.storage().as_slice(),
+    );
+
+    let mut product = Array::zeros([3, 3]);
+    matmul(&a.view(), &inverse.view(), &mut product.view_mut()).unwrap();
+    let identity = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    assert_close_slice(product.storage().as_slice(), &identity);
 }
 
 #[test]

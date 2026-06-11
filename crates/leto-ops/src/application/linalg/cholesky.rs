@@ -84,6 +84,17 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
         &self.lower
     }
 
+    /// Determinant of the original SPD matrix: `Π diag(L)^2`.
+    #[must_use]
+    pub fn det(&self) -> T {
+        let mut det = T::ONE;
+        for k in 0..self.dim {
+            let diagonal = *self.lower.get([k, k]).expect("factor diagonal in bounds");
+            det = det.mul(diagonal.mul(diagonal));
+        }
+        det
+    }
+
     /// Solve `A · x = rhs` via `L · y = rhs` then `Lᵀ · x = y`.
     pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
         let n = self.dim;
@@ -93,12 +104,34 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
                 rhs: vec![n],
             });
         }
-        let l = |r: usize, c: usize| *self.lower.get([r, c]).expect("factor in bounds");
-
         let mut x = Vec::with_capacity(n);
         for k in 0..n {
             x.push(*rhs.get([k])?);
         }
+        self.solve_in_place(&mut x);
+        Array1::from_shape_vec([n], x)
+    }
+
+    /// Inverse of the original SPD matrix, solving against identity columns.
+    pub fn inv(&self) -> Result<Array2<T>> {
+        let n = self.dim;
+        let mut out = vec![T::ZERO; n * n];
+        let mut column = vec![T::ZERO; n];
+        for col in 0..n {
+            column.fill(T::ZERO);
+            column[col] = T::ONE;
+            self.solve_in_place(&mut column);
+            for row in 0..n {
+                out[row * n + col] = column[row];
+            }
+        }
+        Array2::from_shape_vec([n, n], out)
+    }
+
+    fn solve_in_place(&self, x: &mut [T]) {
+        let n = self.dim;
+        let l = |r: usize, c: usize| *self.lower.get([r, c]).expect("factor in bounds");
+
         // Forward: L · y = rhs.
         for r in 0..n {
             let mut acc = x[r];
@@ -115,6 +148,26 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
             }
             x[r] = acc.div(l(r, r));
         }
-        Array1::from_shape_vec([n], x)
     }
+}
+
+/// Convenience: decompose and solve `A · x = rhs` through Cholesky.
+#[inline]
+pub fn cholesky_solve<T: RealScalar>(
+    matrix: &ArrayView2<'_, T>,
+    rhs: &ArrayView1<'_, T>,
+) -> Result<Array1<T>> {
+    cholesky_decompose(matrix)?.solve(rhs)
+}
+
+/// Convenience: determinant via Cholesky factorization.
+#[inline]
+pub fn cholesky_det<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<T> {
+    Ok(cholesky_decompose(matrix)?.det())
+}
+
+/// Convenience: inverse via Cholesky factorization.
+#[inline]
+pub fn cholesky_inv<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
+    cholesky_decompose(matrix)?.inv()
 }
