@@ -4,6 +4,7 @@ pub mod elementwise;
 pub mod lu;
 pub mod matmul;
 pub mod norms;
+pub mod qr_cholesky;
 pub mod reduction;
 pub mod structure_ops;
 pub mod unary_math;

@@ -30,8 +30,11 @@ pub struct QrDecomposition<T> {
 ///
 /// The input may be strided/transposed; it is copied once into row-major
 /// working storage. Underdetermined shapes (`m < n`), non-finite values, and
-/// rank-deficient columns (zero pivot norm to working precision) are
-/// rejected with distinct error reasons.
+/// exactly-zero pivot-column norms are rejected with distinct error reasons.
+/// The zero-norm rejection is an exact contract: near rank-deficiency leaves
+/// a tiny floating-point residue rather than an exact zero and manifests as
+/// ill-conditioning of the solve — detecting it requires column pivoting or
+/// an SVD, which this unpivoted factorization deliberately does not do.
 pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecomposition<T>> {
     let [rows, cols] = matrix.shape();
     if rows < cols {
@@ -145,14 +148,14 @@ impl<T: RealScalar> QrDecomposition<T> {
         // y ← Qᵀ·y, one reflector at a time.
         for k in 0..n {
             let mut s = self.heads[k].mul(y[k]);
-            for r in (k + 1)..m {
-                s = s.add(self.packed[r * n + k].mul(y[r]));
+            for (offset, &value) in y[(k + 1)..m].iter().enumerate() {
+                s = s.add(self.packed[(k + 1 + offset) * n + k].mul(value));
             }
             let bs = self.betas[k].mul(s);
             y[k] = y[k].sub(bs.mul(self.heads[k]));
-            for r in (k + 1)..m {
-                let update = bs.mul(self.packed[r * n + k]);
-                y[r] = y[r].sub(update);
+            for (offset, slot) in y[(k + 1)..m].iter_mut().enumerate() {
+                let update = bs.mul(self.packed[(k + 1 + offset) * n + k]);
+                *slot = slot.sub(update);
             }
         }
 

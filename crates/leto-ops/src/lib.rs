@@ -20,9 +20,9 @@ pub use domain::strategy::SimdStrategy;
 pub use domain::strategy::ParallelStrategy;
 
 pub use application::linalg::{
-    cholesky_decompose, qr_decompose, solve_least_squares, CholeskyDecomposition, QrDecomposition,
-    det, inv, lu_decompose, norm, norm_l1, norm_l2, norm_max, solve, symmetric_eigen_jacobi,
-    symmetric_eigen_jacobi_with_tolerance, LuDecomposition, NormKind, NormL1, NormL2, NormMax,
+    cholesky_decompose, det, inv, lu_decompose, norm, norm_l1, norm_l2, norm_max, qr_decompose,
+    solve, solve_least_squares, symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance,
+    CholeskyDecomposition, LuDecomposition, NormKind, NormL1, NormL2, NormMax, QrDecomposition,
     SymmetricEigenDecomposition,
 };
 pub use application::map::{

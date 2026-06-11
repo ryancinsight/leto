@@ -4,6 +4,35 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.10.0] - 2026-06-10
+
+Stage A1 third increment: Householder QR + least squares, and Cholesky (SPD).
+
+### Added
+
+- `leto-ops`: `application/linalg/qr.rs` — `qr_decompose` (Householder, m ≥ n,
+  compact packed form: R upper, reflector tails below the diagonal, heads/β
+  alongside; `Q` is never materialized — solves apply reflectors directly,
+  the fast and memory-lean form) and `QrDecomposition::solve_least_squares`
+  (`Qᵀ·rhs` by reflector application + back-substitution; exact solve at
+  m = n). Rejections: underdetermined shape, non-finite input, exactly-zero
+  pivot-column norm (documented exact contract — near-deficiency is
+  conditioning, not detected by unpivoted QR).
+- `leto-ops`: `application/linalg/cholesky.rs` — `cholesky_decompose`
+  (`A = L·Lᵀ`, reads only the lower triangle so symmetric storage works
+  unchanged) and `CholeskyDecomposition::solve`. Positive-definiteness is
+  verified constructively (non-positive pivot rejects). Driver: CFDrs
+  `cfd-math` SPD paths.
+
+### Tests
+
+- QR: square solve cross-checked against LU, overdetermined least squares vs
+  the independent nalgebra SVD oracle, residual-orthogonality optimality
+  property (`Aᵀ(Ax−b) ≈ 0`), underdetermined/zero-column rejection.
+- Cholesky: factor vs nalgebra `cholesky().l()`, solve vs LU, transposed
+  strided-view symmetry invariance, indefinite/non-square rejection.
+- Both: f32 genericity cross-check (QR vs Cholesky agreement).
+
 ## [0.9.0] - 2026-06-10
 
 Stage A1 second increment: LU with partial pivoting, solve, determinant,

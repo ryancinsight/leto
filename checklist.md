@@ -1,12 +1,13 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.9.0 [minor] (Cargo.toml bumped;
+Sprint phase: Execution. Target version: 0.10.0 [minor] (Cargo.toml bumped;
 CHANGELOG synced). In-flight item: none.
 
-Stage A1 progress: norms (0.8.0, `linalg/norms.rs`) and LU/solve/det/inv
-(0.9.0, `linalg/lu.rs`, CFDrs `cfd-math` driver) delivered, both with nalgebra
-differential oracles. Next concrete increment (Stage A1): QR (Householder) +
-least-squares solve, gated on a named consumer driver; then Cholesky (SPD).
+Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least squares
+and Cholesky (0.10.0) all delivered with nalgebra differential oracles —
+`linalg/` now covers the consumer-driven nalgebra surface except SVD. Next
+(Stage A1): SVD [major] requires an ADR before implementation; otherwise Stage
+A1 is closed pending a consumer driver for the non-symmetric eigensolver.
 
 Parallel cross-repo track: Coeus CPU consolidation onto coeus-leto; the shared
 GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
