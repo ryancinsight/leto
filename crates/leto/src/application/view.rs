@@ -219,6 +219,12 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
             crate::domain::remove_axis::RankMarker::<N>,
         )
     }
+
+    /// Reborrow the read-only view with a shorter lifetime.
+    #[inline]
+    pub fn reborrow(&self) -> ArrayView<'_, T, N> {
+        ArrayView::new(self.layout, self.data)
+    }
 }
 
 // ── ArrayViewMut ──
@@ -241,6 +247,12 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     pub fn try_new(layout: Layout<N>, data: &'a mut [T]) -> Result<Self> {
         layout.validate_storage_len(data.len())?;
         Ok(Self { layout, data })
+    }
+
+    /// Reborrow the mutable view with a shorter lifetime.
+    #[inline]
+    pub fn reborrow(&mut self) -> ArrayViewMut<'_, T, N> {
+        ArrayViewMut::new(self.layout, self.data)
     }
 
     /// Returns the shape of the view.
