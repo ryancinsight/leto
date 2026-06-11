@@ -154,7 +154,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
                 values
             }
         };
-        Array::from_shape_vec(self.shape(), data)
+        Array::<T, VecStorage<T>, N>::from_shape_vec(self.shape(), data)
             .expect("logical row-major materialization has matching shape and storage")
     }
 

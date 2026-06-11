@@ -67,6 +67,52 @@ impl<T> MnemosyneStorage<T> {
         }
         storage
     }
+
+    /// Allocate storage via Mnemosyne and move elements from a vector.
+    pub fn from_vec(vec: Vec<T>) -> Self {
+        let len = vec.len();
+        let capacity = vec.capacity();
+        let storage = Self::allocate_raw(len);
+        let mut vec = std::mem::ManuallyDrop::new(vec);
+        if !storage.ptr.is_null() && len > 0 {
+            // SAFETY: source has `len` initialized elements, destination has
+            // room for `len` elements, and the regions do not overlap.
+            unsafe {
+                std::ptr::copy_nonoverlapping(vec.as_ptr(), storage.ptr, len);
+            }
+        }
+
+        // SAFETY: the elements were moved into Mnemosyne storage above. The
+        // reconstructed vector has length zero, so it releases only capacity.
+        unsafe {
+            let _ = Vec::from_raw_parts(vec.as_mut_ptr(), 0, capacity);
+        }
+        storage
+    }
+
+    /// Move initialized elements from Mnemosyne storage into a vector.
+    pub fn into_vec(self) -> Vec<T> {
+        let mut vec = Vec::with_capacity(self.len);
+        let storage = std::mem::ManuallyDrop::new(self);
+        if !storage.ptr.is_null() && storage.len > 0 {
+            // SAFETY: source has `len` initialized elements, destination has
+            // capacity for `len` elements, and the regions do not overlap.
+            unsafe {
+                std::ptr::copy_nonoverlapping(storage.ptr, vec.as_mut_ptr(), storage.len);
+                vec.set_len(storage.len);
+            }
+        }
+
+        if storage.layout.size() > 0 {
+            use std::alloc::GlobalAlloc;
+            // SAFETY: `storage.ptr` was allocated by Mnemosyne with this layout.
+            unsafe {
+                mnemosyne::Mnemosyne.dealloc(storage.ptr as *mut u8, storage.layout);
+            }
+        }
+
+        vec
+    }
 }
 
 impl<T> Drop for MnemosyneStorage<T> {

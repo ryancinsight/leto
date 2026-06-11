@@ -3,6 +3,9 @@ use leto::{
     Array, CowStorage, Layout, LetoError, Storage, VecStorage,
 };
 
+#[cfg(feature = "mnemosyne-alloc")]
+use leto::MnemosyneStorage;
+
 #[test]
 fn test_rank_marker_removes_axis_shape_and_strides() {
     let marker = RankMarker::<3>;
@@ -86,4 +89,40 @@ fn test_ndarray_parity_constructors_and_into_vec() {
         Array::<i32, VecStorage<i32>, 2>::from_vec([2, 2], vec![1, 2, 3]),
         Err(LetoError::StorageError { .. })
     ));
+}
+
+#[cfg(feature = "mnemosyne-alloc")]
+#[test]
+fn test_mnemosyne_array_constructor_parity_and_into_vec() {
+    let zeros = Array::<i32, MnemosyneStorage<i32>, 2>::zeros_mnemosyne([2, 2]);
+    assert_eq!(zeros.storage().as_slice(), &[0, 0, 0, 0]);
+
+    let generated =
+        Array::<i32, MnemosyneStorage<i32>, 2>::from_mnemosyne_shape_fn([2, 3], |[row, col]| {
+            (row as i32) * 10 + col as i32
+        });
+    assert_eq!(generated.storage().as_slice(), &[0, 1, 2, 10, 11, 12]);
+
+    let from_vec =
+        Array::<i32, MnemosyneStorage<i32>, 2>::from_mnemosyne_shape_vec([2, 2], vec![1, 2, 3, 4])
+            .unwrap();
+    assert_eq!(from_vec.into_vec(), vec![1, 2, 3, 4]);
+
+    assert!(matches!(
+        Array::<i32, MnemosyneStorage<i32>, 2>::from_mnemosyne_vec([2, 2], vec![1, 2, 3]),
+        Err(LetoError::StorageError { .. })
+    ));
+}
+
+#[cfg(feature = "mnemosyne-alloc")]
+#[test]
+fn test_mnemosyne_storage_moves_non_clone_values() {
+    #[derive(Debug, PartialEq, Eq)]
+    struct Payload(usize);
+
+    let storage = MnemosyneStorage::from_vec(vec![Payload(1), Payload(2), Payload(3)]);
+    assert_eq!(storage.as_slice(), &[Payload(1), Payload(2), Payload(3)]);
+
+    let values = storage.into_vec();
+    assert_eq!(values, vec![Payload(1), Payload(2), Payload(3)]);
 }
