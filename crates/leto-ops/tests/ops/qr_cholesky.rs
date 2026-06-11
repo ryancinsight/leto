@@ -35,24 +35,18 @@ fn qr_square_solve_matches_lu() {
 }
 
 #[test]
-fn qr_least_squares_matches_nalgebra_svd() {
-    // Overdetermined 5x2 line fit: independent oracle via nalgebra SVD.
+fn qr_least_squares_matches_closed_form_line_fit() {
+    // Closed-form normal-equation solution for the full-rank line fit.
     let a_values = vec![
         1.0f64, 0.0, 1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0, //
     ];
     let rhs_values = vec![1.1f64, 2.9, 5.2, 6.8, 9.1];
-    let a = Array::from_shape_vec([5, 2], a_values.clone()).unwrap();
-    let rhs = Array::from_shape_vec([5], rhs_values.clone()).unwrap();
+    let a = Array::from_shape_vec([5, 2], a_values).unwrap();
+    let rhs = Array::from_shape_vec([5], rhs_values).unwrap();
 
     let x = solve_least_squares(&a.view(), &rhs.view()).unwrap();
 
-    let na = nalgebra::DMatrix::from_row_slice(5, 2, &a_values);
-    let nb = nalgebra::DVector::from_vec(rhs_values);
-    let expected = na
-        .svd(true, true)
-        .solve(&nb, 1e-12)
-        .expect("full-rank reference");
-    assert_close_slice(x.storage().as_slice(), expected.as_slice());
+    assert_close_slice(x.storage().as_slice(), &[1.04, 1.99]);
 }
 
 #[test]

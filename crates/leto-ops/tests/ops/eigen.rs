@@ -57,21 +57,14 @@ fn symmetric_eigen_jacobi_accepts_strided_symmetric_view() {
 }
 
 #[test]
-fn symmetric_eigen_jacobi_matches_nalgebra_for_path_graph_laplacian() {
+fn symmetric_eigen_jacobi_matches_path_graph_laplacian_closed_form() {
     let matrix = Array2::from_shape_vec(
         [3, 3],
         vec![1.0, -1.0, 0.0, -1.0, 2.0, -1.0, 0.0, -1.0, 1.0],
     )
     .unwrap();
     let decomposition = symmetric_eigen_jacobi(&matrix.view()).unwrap();
-
-    let reference = nalgebra::SymmetricEigen::new(nalgebra::DMatrix::from_row_slice(
-        3,
-        3,
-        matrix.storage().as_slice(),
-    ));
-    let mut expected = reference.eigenvalues.as_slice().to_vec();
-    expected.sort_by(|lhs: &f64, rhs: &f64| lhs.partial_cmp(rhs).unwrap());
+    let expected = [0.0, 1.0, 3.0];
 
     for (actual, expected) in decomposition.eigenvalues.iter().zip(expected.iter()) {
         assert_close(*actual, *expected, 1.0e-10);

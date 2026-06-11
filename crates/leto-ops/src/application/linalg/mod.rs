@@ -1,8 +1,9 @@
 //! Dense linear algebra (Stage A1 of the Atlas nalgebra replacement).
 //!
-//! Routines are admitted with a named consumer driver and a differential
-//! oracle (nalgebra as a dev-dependency), generic over `RealScalar`, and run
-//! in native precision per the `Scalar` contract.
+//! Routines are admitted with a named consumer driver, value-semantic
+//! analytical fixtures, and differential contracts where an internal reference
+//! path exists. Kernels are generic over `RealScalar` and run in native
+//! precision per the `Scalar` contract.
 
 /// Cholesky factorization of symmetric positive-definite matrices.
 pub mod cholesky;
