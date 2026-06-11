@@ -22,7 +22,7 @@ thiserror = { workspace = true }
 ndarray = { workspace = true, optional = true }
 
 [features]
-default = ["std"]
+default = ["std", "mnemosyne-alloc"]
 std = ["num-traits/std"]
 alloc = []
 # mnemosyne integration

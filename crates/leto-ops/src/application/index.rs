@@ -53,6 +53,7 @@ impl<const N: usize> RowMajorTraversal<N> {
         index_from_flat(row * self.inner, &self.shape)
     }
 
+    #[cfg(feature = "parallel")]
     #[inline]
     pub(crate) fn chunk_rows_for(self, target_elements: usize) -> usize {
         (target_elements / self.inner.max(1)).max(1)
