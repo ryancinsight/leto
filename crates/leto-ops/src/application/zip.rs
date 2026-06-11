@@ -62,6 +62,46 @@ where
     Ok(())
 }
 
+/// Mutably zip-map elements in place with the logical row-major index.
+///
+/// This is the indexed analogue of [`zip_mut_with`] (`ndarray`'s
+/// `Zip::indexed`). The closure receives the logical index before the mutable
+/// and read-only operands, so Apollo/Coeus call sites can derive position-aware
+/// scaling, phase, or layout metadata without allocating an index array.
+pub fn indexed_zip_mut_with<T, U, F, const N: usize>(
+    lhs: &mut ArrayViewMut<'_, T, N>,
+    rhs: &ArrayView<'_, U, N>,
+    mut f: F,
+) -> Result<()>
+where
+    F: FnMut([usize; N], &mut T, &U),
+{
+    if lhs.shape() != rhs.shape() {
+        return Err(LetoError::ShapeMismatch {
+            lhs: lhs.shape().to_vec(),
+            rhs: rhs.shape().to_vec(),
+        });
+    }
+
+    validate_zip_storage(lhs, rhs)?;
+
+    let size = lhs.layout().checked_size()?;
+    let shape = lhs.shape();
+    let lhs_layout = lhs.layout();
+    let rhs_layout = rhs.layout();
+    let lhs_data = lhs.data_mut();
+    let rhs_data = rhs.data();
+
+    for flat_idx in 0..size {
+        let index = index_from_flat(flat_idx, &shape);
+        let lhs_offset = lhs_layout.offset_of(index)?;
+        let rhs_offset = rhs_layout.offset_of(index)?;
+        f(index, &mut lhs_data[lhs_offset], &rhs_data[rhs_offset]);
+    }
+
+    Ok(())
+}
+
 /// Mutably zip-map a view with elements from two read-only views in place.
 ///
 /// The three-operand analogue of [`zip_mut_with`] (`ndarray`'s
@@ -117,6 +157,60 @@ where
         let a_offset = a_layout.offset_of(index)?;
         let b_offset = b_layout.offset_of(index)?;
         f(
+            &mut lhs_data[lhs_offset],
+            &a_data[a_offset],
+            &b_data[b_offset],
+        );
+    }
+
+    Ok(())
+}
+
+/// Mutably zip-map a view with two read-only operands and the logical index.
+///
+/// This combines [`zip2_mut_with`] with `Zip::indexed`-style logical coordinate
+/// access while preserving the same shape and storage validation contract.
+pub fn indexed_zip2_mut_with<T, A, B, F, const N: usize>(
+    lhs: &mut ArrayViewMut<'_, T, N>,
+    a: &ArrayView<'_, A, N>,
+    b: &ArrayView<'_, B, N>,
+    mut f: F,
+) -> Result<()>
+where
+    F: FnMut([usize; N], &mut T, &A, &B),
+{
+    if lhs.shape() != a.shape() || lhs.shape() != b.shape() {
+        return Err(LetoError::ShapeMismatch {
+            lhs: lhs.shape().to_vec(),
+            rhs: a.shape().to_vec(),
+        });
+    }
+
+    lhs.layout().validate_storage_len(lhs.data().len())?;
+    a.layout().validate_storage_len(a.data().len())?;
+    b.layout().validate_storage_len(b.data().len())?;
+    if lhs.layout().has_zero_stride_aliasing() {
+        return Err(LetoError::StorageError {
+            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
+        });
+    }
+
+    let size = lhs.layout().checked_size()?;
+    let shape = lhs.shape();
+    let lhs_layout = lhs.layout();
+    let a_layout = a.layout();
+    let b_layout = b.layout();
+    let lhs_data = lhs.data_mut();
+    let a_data = a.data();
+    let b_data = b.data();
+
+    for flat_idx in 0..size {
+        let index = index_from_flat(flat_idx, &shape);
+        let lhs_offset = lhs_layout.offset_of(index)?;
+        let a_offset = a_layout.offset_of(index)?;
+        let b_offset = b_layout.offset_of(index)?;
+        f(
+            index,
             &mut lhs_data[lhs_offset],
             &a_data[a_offset],
             &b_data[b_offset],

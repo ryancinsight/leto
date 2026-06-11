@@ -1,6 +1,6 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-Audit date: 2026-06-10. Evidence tier: codebase scan of `leto` (rev fd1d87b),
+Audit date: 2026-06-11. Evidence tier: codebase scan of `leto` (0.11.0),
 `D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, and upstream Atlas crates.
 Counterparts: `ndarray 0.16`, `nalgebra` (already removed from Apollo).
 
@@ -40,7 +40,7 @@ matmul, CoW storage, Mnemosyne storage, ndarray-compat conversions.
 | Gap | ndarray counterpart | Consumer driver | Class |
 | --- | --- | --- | --- |
 | Contiguous-slice access on views (`as_slice`, `as_slice_mut`, memory-order variant) | `as_slice_memory_order_mut`, `is_standard_layout` | Apollo FFT butterfly kernels require contiguous mutable slices (~20 call sites) | Closed |
-| Multi-array zip (3+ operands) and `Zip::indexed` | `Zip::from(..).and(..).and(..)` | Apollo precision-downgrade and scaling paths | `zip2_mut_with` Closed; `Zip::indexed` still [minor] |
+| Multi-array zip (3+ operands) and `Zip::indexed` | `Zip::from(..).and(..).and(..)`, `Zip::indexed` | Apollo precision-downgrade, scaling, and position-aware paths | Closed (`zip2_mut_with`, `indexed_zip_mut_with`, `indexed_zip2_mut_with`) |
 | `mapv_inplace` / in-place unary mutation | `mapv_inplace` | Apollo normalization (1/N scaling) (~5 sites) | Closed |
 | Reshape / `into_shape` on contiguous arrays | `into_shape_with_order` | Apollo (low frequency), Coeus `reshape` (required) | Closed |
 | Scalar–array elementwise ops (array + scalar, array * scalar) | `&a + 1.0`, `mapv` shortcuts | Apollo scaling, Coeus bias/scale paths | Closed |
@@ -66,11 +66,12 @@ for Coeus/consumer needs, not blocking any current consumer.
 
 | Gap | nalgebra counterpart | Status |
 | --- | --- | --- |
-| Symmetric eigensolver | `SymmetricEigen` | **Closed** — `symmetric_eigen_jacobi` (+ tolerance variant), f64, Jacobi rotations |
-| Generic eigensolver over `T: Scalar` | `SymmetricEigen<T>` | Open — current impl is f64-only and returns `Vec<f64>`; violates generic-first authorship; [minor] |
-| LU / solve / inverse / determinant | `LU`, `try_inverse` | Open — no consumer driver yet; defer until a consumer files the requirement |
-| QR / Cholesky / SVD | `QR`, `Cholesky`, `SVD` | Open — same deferral rule |
-| Norms (L1/L2/Frobenius) | `norm`, `norm_squared` | Open — cheap; [patch] when needed |
+| Symmetric eigensolver | `SymmetricEigen` | **Closed** — `symmetric_eigen_jacobi` (+ tolerance variant), generic over `T: RealScalar`, native precision, Jacobi rotations |
+| LU / solve / inverse / determinant | `LU`, `try_inverse` | **Closed** — `lu_decompose`, `solve`, `det`, and `inv`, generic over `T: RealScalar`; CFDrs dense solver driver |
+| QR + least squares | `QR` | **Closed** — Householder `qr_decompose` and `solve_least_squares`; CFDrs least-squares driver |
+| Cholesky | `Cholesky` | **Closed** — SPD `cholesky_decompose` and solve; CFDrs SPD driver |
+| SVD / pseudoinverse | `SVD` | Open — [major], requires ADR before implementation |
+| Norms (L1/L2/Frobenius) | `norm`, `norm_squared` | **Closed** — `NormKind` ZSTs with `norm_l1`, `norm_l2`, and `norm_max` |
 | Small fixed-size matrix/vector types | `Matrix3`, `Vector3` | Non-goal — const-rank `Array<T, S, 2>` covers the layout; no consumer driver |
 
 Policy: linalg routines enter leto-ops only with a named consumer driver and
@@ -93,16 +94,17 @@ Integration path (recorded as the plan of record in backlog Phase 6):
 3. Coeus keeps `ComputeBackend` ownership, GPU backends, autodiff, NN
    kernels, sparse, optimizers.
 
-Blocking sub-gaps for step 1: broadcast-aware binary writing through an
-output layout (Coeus passes `a_layout`, `b_layout`, `c_layout` — leto's
-`binary_map` currently requires shape-matched views), unary ZST op suite,
-concat/pad/split, batched matmul, seeded RNG fill.
+Step 1 Leto-side capability gaps are closed: broadcast-aware binary writing
+through an output layout, unary ZST op suite, concat/pad/split/stack, batched
+matmul, seeded RNG fill, and indexed mutable zip traversal. Remaining work is
+consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-10 (v0.7.0): all §A/§B/§C leto-side capability gaps closed — see
-CHANGELOG and the two ADRs in `docs/adr/`. Remaining work is cross-cutting: the
-Coeus re-base and Apollo/Coeus consumer migration with differential coverage.
+Update 2026-06-11 (v0.11.0): §A indexed zip parity and the Stage A1
+consumer-driven nalgebra surface are closed except SVD. See CHANGELOG and the
+two ADRs in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base and
+Apollo/Coeus consumer migration with differential coverage.
 
 - `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
   rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
@@ -123,6 +125,9 @@ Coeus re-base and Apollo/Coeus consumer migration with differential coverage.
 - std::ops operator overloading: DEFERRED ([arch]) in
   `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule). `scalar_map`
   covers array–scalar arithmetic; no consumer blocked.
+- Indexed zip parity: CLOSED ([minor]) — `indexed_zip_mut_with` and
+  `indexed_zip2_mut_with` provide `Zip::indexed`-style logical coordinates for
+  one- and two-input mutable zip traversals.
 - Coverage of new ops: value-semantic tests plus ndarray differential oracles
   now cover the unary math suite (`exp`/`sqrt`), `scalar_map`, `concat`,
   `stack`, `batched_matmul` (per-batch ndarray `dot`), and `cumsum` (reference
@@ -131,8 +136,8 @@ Coeus re-base and Apollo/Coeus consumer migration with differential coverage.
   Remaining: differential coverage is leto-internal; consumer-side (Apollo/Coeus)
   migration tests are the next cross-repo step.
 - `leto-python` rustdoc ICE via `numpy 0.23` still open (tracked in backlog).
-- Differential coverage: ndarray oracle covers map/reductions/matmul; no
-  oracle yet for future unary suite, concat/stack, RNG (use closed-form
-  references for RNG, ndarray for the rest).
+- Differential coverage: ndarray oracle covers map/reductions/matmul, unary
+  suite, concat/stack, batched matmul, and cumsum. RNG uses closed-form
+  references. Indexed zip currently rests on value-semantic traversal tests.
 - Evidence tier of this audit: codebase scan + existing test suites; no new
   proofs or benchmarks performed in this audit.

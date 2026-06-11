@@ -116,11 +116,14 @@ Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto`
 - [x] [minor] Add scalar–array elementwise ops: `scalar_map`/`scalar_map_into` reusing `BinaryOp` markers.
 - [ ] [arch] std::ops operator overloading on arrays/views: DEFERRED, see `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule; revisit when a consumer driver exists; `scalar_map` covers the scalar case meanwhile).
 - [x] [minor] Add 3+-operand zip traversal: `zip2_mut_with` (one mutable output + two read inputs), the `Zip::from(out).and(a).and(b)` analogue. Verification: fused multiply-add and strided-input value tests.
+- [x] [minor] Add indexed mutable zip traversal: `indexed_zip_mut_with` and `indexed_zip2_mut_with`, the `Zip::indexed` analogue for one- and two-input mutable zip paths. Verification: dense logical-index and strided-transposed value tests.
 
 ## Phase 8: nalgebra Successor Policy [minor]
 Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is demand-driven.
 - [x] [minor] Generalize `symmetric_eigen_jacobi`/`SymmetricEigenDecomposition` over `T: RealScalar`; runs in native precision with no hidden widening (the wider-accumulator path is intentionally not introduced — a consumer needing higher working precision converts first). f32 genericity test added; f64 path unchanged. `RealScalar` is a segregated transcendental extension of `Scalar` (ISP).
-- [ ] Policy: LU/QR/Cholesky/SVD/solve/norms enter leto-ops only with a named consumer driver and a differential oracle as dev-dependency; no speculative linalg surface.
+- [x] [minor] LU/solve/det/inv, QR + least squares, Cholesky, and norms entered `leto-ops` with named CFDrs consumer drivers and nalgebra differential oracles.
+- [ ] [major] SVD/pseudoinverse requires an ADR before implementation.
+- [ ] [minor] Non-symmetric eigensolver enters only with a named consumer driver and a differential oracle as dev-dependency; no speculative linalg surface.
 
 ## Apollo Migration Gate [arch]
 - [x] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates. Apollo pins Leto by Git rev with `["std", "ndarray-compat"]` and exposes `forward_leto`/`inverse_leto` API boundaries on FFT, CZT, DHT, NUFFT, SHT, Radon, and STFT.

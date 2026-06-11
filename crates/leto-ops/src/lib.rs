@@ -43,4 +43,6 @@ pub use application::unary::{
     PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
 };
 pub use application::vector::dot;
-pub use application::zip::{zip2_mut_with, zip_mut_with};
+pub use application::zip::{
+    indexed_zip2_mut_with, indexed_zip_mut_with, zip2_mut_with, zip_mut_with,
+};

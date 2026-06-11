@@ -4,6 +4,25 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.11.0] - 2026-06-11
+
+Stage A2 ndarray-parity increment: indexed mutable zip traversal for
+position-aware Apollo/Coeus migration paths.
+
+### Added
+
+- `leto-ops`: `indexed_zip_mut_with` — `zip_mut_with` plus logical
+  row-major `[usize; N]` coordinates passed into the closure, matching the
+  `ndarray::Zip::indexed` use case without allocation or runtime dispatch.
+- `leto-ops`: `indexed_zip2_mut_with` — indexed three-operand mutable zip for
+  caller-owned outputs with two read-only inputs.
+
+### Tests
+
+- Value-semantic indexed zip tests cover logical coordinate use on dense
+  rank-2 arrays and transposed strided views, including three-operand indexed
+  traversal.
+
 ## [0.10.0] - 2026-06-10
 
 Stage A1 third increment: Householder QR + least squares, and Cholesky (SPD).

@@ -1,13 +1,17 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.10.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). In-flight item: none.
+Sprint phase: Execution. Target version: 0.11.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). In-flight item: indexed zip parity delivered.
 
 Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least squares
 and Cholesky (0.10.0) all delivered with nalgebra differential oracles —
 `linalg/` now covers the consumer-driven nalgebra surface except SVD. Next
 (Stage A1): SVD [major] requires an ADR before implementation; otherwise Stage
 A1 is closed pending a consumer driver for the non-symmetric eigensolver.
+
+Stage A2 progress: indexed zip parity (0.11.0) delivered through
+`indexed_zip_mut_with` and `indexed_zip2_mut_with`, closing the current
+`Zip::indexed` Apollo/Coeus migration blocker.
 
 Parallel cross-repo track: Coeus CPU consolidation onto coeus-leto; the shared
 GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
@@ -52,6 +56,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [patch] Fix reduction module rustdoc links so `cargo doc -p leto --features mnemosyne-alloc,ndarray-compat --no-deps` is warning-clean.
 - [x] [patch] Match ndarray retained single-element range stride metadata by setting the sliced axis stride to `0` when `SliceArg::range` selects exactly one logical element; empty ranges keep their computed stride.
 - [x] [patch] Add Apollo migration test coverage for Mnemosyne-backed Leto owned constructors as the first FFT replacement prerequisite.
+- [x] [minor] Add indexed mutable zip traversal (`indexed_zip_mut_with`, `indexed_zip2_mut_with`) to cover ndarray `Zip::indexed`-style Apollo/Coeus position-aware call sites without allocation.
 - [ ] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings.
 - [ ] [patch] Add Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and gradient-adjacent non-differentiable storage boundaries.
 - [x] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.
@@ -74,6 +79,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [minor] `concat`/`pad`/`split` (leto core `structure/`), batched rank-3 `matmul`, `cumsum`/`scan_axis`, seeded RNG (`uniform_with_seed`/`normal_with_seed`), and `zip2_mut_with` (3-operand). Value tests for each; RNG validated against closed-form mean/variance. `stack` deferred (needs `InsertAxis` rank helper — stable Rust lacks const-generic `N+1`).
 - [x] [minor] `stack` via an `InsertAxis` rank helper mirroring `RemoveAxis` (rank `N -> N+1`, ranks 0..=7). Value tests: new leading/trailing axis, rank-2→3, transposed-input logical order, shape-mismatch rejection.
 - [x] [patch] Leto-internal ndarray differential coverage for the new ops: `unary_map` (exp/sqrt), `scalar_map`, `concat`, `stack`, `batched_matmul` (per-batch ndarray dot), and `cumsum` (reference accumulate). `ops_tests` differential suite now 57 green.
+- [x] [minor] Indexed zip parity: `indexed_zip_mut_with` and `indexed_zip2_mut_with` pass logical row-major `[usize; N]` coordinates into zip closures while preserving zero-copy view traversal and mutable-output alias rejection.
 - [x] [arch] Push Leto rev 9d5a2bf (0.7.0) and verify consumers: Apollo (already pinned at 9d5a2bf) builds clean — `apollo-frft`/`apollo-gft` eigensolver consumers check green against the generic eigensolver. Coeus integration started — new `coeus-leto` const-rank dispatch shim (ADR 0002) committed+pushed (coeus cdaaeb9) with 6 cross-repo contract tests; leto/leto-ops pinned at 9d5a2bf.
 - [ ] [arch] Coeus consolidation: route `coeus-ops` CPU backend through `coeus-leto` and retire the duplicated `coeus-tensor` traversal once parity is proven (tracked in coeus docs/backlog MS-59).
 - [ ] [minor] Apollo internal FFT-kernel migration off ndarray using the new memory-order slice access (boundary `forward_leto`/`inverse_leto` APIs already in place).

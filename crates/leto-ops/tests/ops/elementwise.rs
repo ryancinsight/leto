@@ -1,5 +1,8 @@
 use leto::{Array, Layout, Storage, VecStorage};
-use leto_ops::{add, binary_map, div, map, map_into, mapv, mul, sub, zip_mut_with, AddOp, MulOp};
+use leto_ops::{
+    add, binary_map, div, indexed_zip2_mut_with, indexed_zip_mut_with, map, map_into, mapv, mul,
+    sub, zip_mut_with, AddOp, MulOp,
+};
 
 #[test]
 fn test_elementwise_binary_ops() {
@@ -201,4 +204,42 @@ fn test_zip_mut_with_handles_strided_transposed_views() {
     .unwrap();
 
     assert_eq!(lhs_storage.as_slice(), &[11, 22, 33, 44, 55, 66]);
+}
+
+#[test]
+fn test_indexed_zip_mut_with_uses_logical_indices() {
+    let rhs = Array::from_shape_vec([2, 3], vec![10i32, 20, 30, 40, 50, 60]).unwrap();
+    let mut lhs = Array::zeros([2, 3]);
+
+    indexed_zip_mut_with(
+        &mut lhs.view_mut(),
+        &rhs.view(),
+        |[row, col], left, right| {
+            *left = *right + (row as i32) * 100 + (col as i32);
+        },
+    )
+    .unwrap();
+
+    assert_eq!(lhs.storage().as_slice(), &[10, 21, 32, 140, 151, 162]);
+}
+
+#[test]
+fn test_indexed_zip2_mut_with_handles_strided_transposed_views() {
+    let layout = Layout::c_contiguous([2, 3]).unwrap();
+    let a = Array::new(layout, VecStorage::new(vec![1i32, 2, 3, 4, 5, 6])).unwrap();
+    let b = Array::new(layout, VecStorage::new(vec![10i32, 20, 30, 40, 50, 60])).unwrap();
+    let mut out_storage = vec![0i32; 6];
+    let mut out = leto::ArrayViewMut::try_new(layout, out_storage.as_mut_slice())
+        .unwrap()
+        .transpose_mut([1, 0])
+        .unwrap();
+    let a_t = a.transpose([1, 0]).unwrap();
+    let b_t = b.transpose([1, 0]).unwrap();
+
+    indexed_zip2_mut_with(&mut out, &a_t, &b_t, |[row, col], left, av, bv| {
+        *left = *av + *bv + (row as i32) * 10 + (col as i32);
+    })
+    .unwrap();
+
+    assert_eq!(out_storage.as_slice(), &[11, 32, 53, 45, 66, 87]);
 }
