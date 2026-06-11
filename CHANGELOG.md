@@ -4,6 +4,38 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.14.2] - 2026-06-11
+
+Patch nalgebra-parity increment.
+
+### Changed
+
+- `leto-ops`: `singular_values` now computes only the smaller Gram-matrix
+  spectrum and returns zero singular values for rank-deficient finite inputs.
+  `svd_decompose` still rejects rank-deficient matrices because full singular
+  vector completion requires a rank-revealing SVD contract.
+
+### Tests
+
+- Added value-semantic tall and wide rank-deficient singular-value coverage,
+  while preserving explicit `svd_decompose` rejection tests.
+
+## [0.14.1] - 2026-06-11
+
+Patch nalgebra-parity increment.
+
+### Changed
+
+- `leto-ops`: `svd_decompose` and `singular_values` now accept wide
+  full-row-rank matrices by diagonalizing `A A^T` and deriving right singular
+  vectors with `V = A^T U Σ^-1`. Tall and square inputs keep the existing
+  `A^T A` path; rank-deficient inputs still reject explicitly.
+
+### Tests
+
+- Added value-semantic wide SVD coverage proving reconstruction, singular
+  values, and right singular-vector orthonormality.
+
 ## [0.14.0] - 2026-06-11
 
 Minor nalgebra-parity and eigensolver memory-efficiency increment.
@@ -16,6 +48,11 @@ Minor nalgebra-parity and eigensolver memory-efficiency increment.
 
 ### Changed
 
+- All package manifests now default both `parallel` and `mnemosyne-memory`.
+  `leto` maps Mnemosyne memory to the existing Mnemosyne-backed storage
+  implementation, `leto-ops` forwards memory into `leto`, and `leto-python`
+  forwards both provider features to its Rust dependencies.
+
 - `leto-ops`: the symmetric Jacobi implementation now routes rotations through
   a monomorphized `RotationTarget` strategy. Full decomposition uses an
   eigenvector workspace; eigenvalues-only uses a zero-sized no-vector target.
@@ -27,6 +64,9 @@ Minor nalgebra-parity and eigensolver memory-efficiency increment.
 - Added value-semantic coverage proving the eigenvalues-only path matches the
   full decomposition, preserves strided-view semantics, and rejects the same
   invalid inputs.
+- Added Apollo migration fixture coverage for mutable rank-1 lanes sliced out
+  of rank-3 Leto arrays along all three axes, matching the ndarray-free 3D FFT
+  axis-pass access pattern.
 
 ## [0.13.1] - 2026-06-11
 
