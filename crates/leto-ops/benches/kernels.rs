@@ -1,0 +1,103 @@
+//! Criterion baselines for the leto-ops hot kernels.
+//!
+//! These baselines are the prerequisite gate for the cache-aware tiling work
+//! (atlas ADR 0002 leto slice): per `performance_engineering`, no change is
+//! labeled an optimization without a recorded baseline comparison. Inputs are
+//! pinned; report median + CI from criterion's standard output.
+
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use leto::Array;
+use leto_ops::{matmul, norm_l2, sum, AddOp};
+use std::hint::black_box;
+
+fn pinned_values(len: usize, scale: f64) -> Vec<f64> {
+    // Deterministic, non-trivial values (no RNG: reproducible inputs).
+    (0..len).map(|i| (i as f64 * 0.731 + 1.0) * scale).collect()
+}
+
+fn bench_matmul(c: &mut Criterion) {
+    let mut group = c.benchmark_group("matmul");
+    for &n in &[64usize, 256] {
+        let a = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0e-3)).unwrap();
+        let b = Array::from_shape_vec([n, n], pinned_values(n * n, 2.0e-3)).unwrap();
+        group.bench_function(format!("dense_{n}x{n}"), |bencher| {
+            bencher.iter_batched(
+                || Array::zeros([n, n]),
+                |mut out| {
+                    matmul(
+                        black_box(&a.view()),
+                        black_box(&b.view()),
+                        &mut out.view_mut(),
+                    )
+                    .unwrap();
+                    out
+                },
+                BatchSize::LargeInput,
+            );
+        });
+    }
+    group.finish();
+}
+
+fn bench_elementwise(c: &mut Criterion) {
+    let mut group = c.benchmark_group("elementwise_add");
+    let len = 1usize << 16;
+    let a = Array::from_shape_vec([len], pinned_values(len, 1.0)).unwrap();
+    let b = Array::from_shape_vec([len], pinned_values(len, 0.5)).unwrap();
+    group.bench_function("contiguous_64k", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([len]),
+            |mut out| {
+                leto_ops::binary_map::<AddOp, f64, 1>(
+                    black_box(&a.view()),
+                    black_box(&b.view()),
+                    &mut out.view_mut(),
+                )
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    let n = 256usize;
+    let sq_a = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0)).unwrap();
+    let sq_b = Array::from_shape_vec([n, n], pinned_values(n * n, 0.5)).unwrap();
+    group.bench_function("transposed_256x256", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([n, n]),
+            |mut out| {
+                let at = sq_a.transpose([1, 0]).unwrap();
+                leto_ops::binary_map::<AddOp, f64, 2>(
+                    black_box(&at),
+                    black_box(&sq_b.view()),
+                    &mut out.view_mut(),
+                )
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.finish();
+}
+
+fn bench_reductions(c: &mut Criterion) {
+    let mut group = c.benchmark_group("reductions");
+    let len = 1usize << 16;
+    let a = Array::from_shape_vec([len], pinned_values(len, 1.0)).unwrap();
+    group.bench_function("sum_64k", |bencher| {
+        bencher.iter(|| sum(black_box(&a.view())));
+    });
+    group.bench_function("norm_l2_64k", |bencher| {
+        bencher.iter(|| norm_l2(black_box(&a.view())).unwrap());
+    });
+    group.finish();
+}
+
+criterion_group! {
+    name = kernels;
+    config = Criterion::default().sample_size(20);
+    targets = bench_matmul, bench_elementwise, bench_reductions
+}
+criterion_main!(kernels);

@@ -32,6 +32,27 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [ ] [patch] Audit leto-ops hot kernels (matmul inner loop, reductions, scans,
   unary math) to ensure they dispatch through hermes `SimdOps` rather than
   ad-hoc scalar loops; file hermes coverage requests for any missing op/dtype.
+  First measured instance: `norm_l2` is ~7.8× slower than `sum` over the same
+  64k elements (28.06 µs vs 3.61 µs, benchmark_results.md) because the norm
+  fold is scalar while sum uses hermes `sum_slice` — needs a fused
+  square-accumulate hermes path.
+
+### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
+Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every
+item below must show a statistically significant improvement against them —
+no unmeasured "optimization" per performance_engineering.
+- [ ] [minor] Tiled strided traversal: the strided elementwise fallback is
+  ~87× slower than contiguous for the same element count
+  (transposed_256x256 = 1.206 ms vs contiguous_64k = 13.85 µs). Replace
+  per-element `index_from_flat`/`offset_of` with blocked traversal over
+  L1-sized tiles along the fastest axis (const-generic tile size, selected
+  from themis `CacheLevel` data at dispatch).
+- [ ] [minor] Blocked matmul: 256³ at ~2.38 ms (≈14 GFLOP/s) is memory-bound;
+  L1/L2 cache blocking with const-generic tile shapes (one authoritative
+  kernel monomorphized per tile shape, per the structural-const-generics
+  rule), tile sizes from themis topology.
+- [ ] [patch] Wire themis as an optional leto-ops dependency for `CacheLevel`
+  queries (feature-gated; default tile constants when absent).
 
 ## Replacement Position
 - [x] [arch] Use `leto` as the Atlas shared N-dimensional strided-array and layout crate. It sits below Apollo and Coeus and above Mnemosyne/Moirai/Hermes. It should replace `ndarray` only after parity and verification gates are met.

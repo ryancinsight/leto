@@ -25,6 +25,11 @@ thiserror = { workspace = true }
 [dev-dependencies]
 ndarray = "0.16"
 nalgebra = "0.33"
+criterion = { workspace = true }
+
+[[bench]]
+name = "kernels"
+harness = false
 
 [features]
 default = ["std", "simd", "parallel"]
