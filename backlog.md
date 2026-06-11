@@ -32,14 +32,23 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   crates never depend on it in production.
 
 ### Stage C2 — hermes SIMD coverage audit
-- [ ] [patch] Audit leto-ops hot kernels (matmul inner loop, reductions, scans,
+- [x] [patch] Audit leto-ops hot kernels (matmul inner loop, reductions, scans,
   unary math) to ensure they dispatch through hermes `SimdOps` rather than
   ad-hoc scalar loops; file hermes coverage requests for any missing op/dtype.
   Dense f32/f64 `norm_l2` now routes `Σx²` through Hermes dot via
   `Scalar::dot_slice` (28.07 µs → 5.508 µs for 64k elements). Remaining
   coverage gaps: non-dense strided norm fallback, scans, unary math, matmul
   inner loops, and a future Hermes fused square-accumulate kernel if profiling
-  shows dot self-alias overhead is material.
+  shows dot self-alias overhead is material. Audit result (0.14.3): current
+  Hermes public surface covers dense pairwise elementwise ops and dense
+  sum/dot/min/max; no zero-allocation scalar-AXPY/fused row-update API is
+  available for matmul. Rejected measured Leto-local candidates: const-generic
+  dense blocking regressed `64x64` to ~48.5 µs and `256x256` to ~3.37 ms;
+  a generic `mul_add` hook regressed `64x64` to ~245.6 µs and `256x256` to
+  ~12.5 ms. Do not retry these paths without a changed kernel model.
+- [ ] [patch] Add or consume a Hermes scalar-AXPY / fused row-update provider
+  (`out[i] += alpha * x[i]`) before revisiting matmul SIMD dispatch; Leto must
+  not emulate it with temporary allocation.
 
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
 Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every

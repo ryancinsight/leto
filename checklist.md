@@ -1,7 +1,7 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.14.2 [patch] (Cargo.toml bumped;
-CHANGELOG synced). In-flight item: rank-deficient singular-values support
+Sprint phase: Execution. Target version: 0.14.3 [patch] (Cargo.toml bumped;
+CHANGELOG synced). In-flight item: Stage C2 Hermes SIMD coverage audit
 delivered and verified.
 
 Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least
@@ -22,6 +22,7 @@ GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
 consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 
 ## Atlas ndarray replacement readiness [arch]
+- [x] [patch] Complete Stage C2 Hermes SIMD coverage audit for leto-ops hot kernels. Current coverage: dense elementwise slice ops and dense sum/dot/min/max route through Hermes via `Scalar`; matmul remains scalar because the current Hermes public surface lacks a zero-allocation scalar-AXPY/fused row-update provider. Rejected measured candidates: const-generic dense blocking regressed matmul (`64x64` ~48.5 µs, `256x256` ~3.37 ms); generic `mul_add` regressed matmul (`64x64` ~245.6 µs, `256x256` ~12.5 ms). Verification: focused matmul tests passed during both experiments; regressing source changes reverted; final gate run recorded in CHANGELOG/backlog.
 - [x] [patch] Split `leto-ops::singular_values` from the full-vector `svd_decompose` contract so finite rank-deficient matrices return zero singular values through the smaller Gram-matrix eigenvalue path while `svd_decompose` still rejects rank-deficient inputs. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
 - [x] [patch] Generalized `leto-ops::svd_decompose`/`singular_values` from tall-or-square full-column-rank inputs to all full-rank thin SVD shapes, adding the wide full-row-rank `A A^T` path and deriving right singular vectors with `V = A^T U Σ^-1`. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
 - [x] [patch] All Leto package manifests now default both `parallel` and `mnemosyne-memory`; `leto` maps Mnemosyne memory to its existing Mnemosyne-backed storage implementation, `leto-ops` forwards memory into `leto`, and `leto-python` forwards both provider features to its Rust dependencies. Verification: manifest audit confirmed every package default includes both feature contracts; `cargo metadata --no-deps --locked`; `cargo fmt --check`; `cargo check --workspace --all-features`; `cargo test --workspace --all-features`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`.

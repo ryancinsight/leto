@@ -22,6 +22,20 @@ statistically significant regression in a touched kernel blocks merge.
 
 | zip/zip_mut_with_transposed_256x256 | 553.4 µs (pre row-walk, 0.13.0) | 55.9 µs (0.13.1) | **−89.9% (9.9×), p < 0.05** |
 
+## Rejected Optimization Candidates
+
+- **Const-generic dense matmul blocking (0.14.3 audit, not shipped)**:
+  candidate tile shape `ROW_TILE=16`, `SHARED_TILE=32`, `COL_TILE=32` routed
+  only dense row-major views through a zero-allocation blocked path. Criterion
+  measured `matmul/dense_64x64` at 46.169-50.686 µs and
+  `matmul/dense_256x256` at 3.3176-3.4166 ms, regressing the retained
+  baselines (~28.34 µs and ~2.245 ms). Source reverted.
+- **Generic `Scalar::mul_add` matmul accumulation hook (0.14.3 audit, not
+  shipped)**: candidate routed matmul accumulation through a trait hook using
+  native `f32`/`f64::mul_add`. Criterion measured `matmul/dense_64x64` at
+  232.66-255.99 µs and `matmul/dense_256x256` at 11.346-13.303 ms. Source
+  reverted.
+
 ## Observations (drive the optimization backlog)
 
 - **Row-walk policy complete (0.13.1)**: every strided fallback (binary,

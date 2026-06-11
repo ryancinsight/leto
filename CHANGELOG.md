@@ -4,6 +4,25 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.14.3] - 2026-06-11
+
+Patch audit increment for Stage C2 Hermes SIMD coverage.
+
+### Changed
+
+- Recorded the leto-ops SIMD coverage audit in backlog/checklist artifacts.
+  Current Hermes-backed coverage is dense elementwise slice arithmetic and
+  dense reductions/dot/min/max through `Scalar`; matmul remains scalar because
+  Hermes does not expose a zero-allocation scalar-AXPY/fused row-update API
+  through the current dependency surface.
+
+### Performance
+
+- Rejected two measured matmul candidates instead of shipping regressions:
+  const-generic dense blocking measured `64x64` at ~48.5 µs and `256x256` at
+  ~3.37 ms versus the existing ~28.3 µs and ~2.25 ms baselines; a generic
+  `mul_add` hook measured `64x64` at ~245.6 µs and `256x256` at ~12.5 ms.
+
 ## [0.14.2] - 2026-06-11
 
 Patch nalgebra-parity increment.
