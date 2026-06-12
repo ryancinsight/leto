@@ -10,6 +10,13 @@ comparison.
 
 ## Current state (full sweep, 0.17.0, 2026-06-12)
 
+0.18.0 adds the optional `leto_ops::CacheGeometry` topology API only. Current
+hot kernels do not call topology detection, so no speedup is claimed for
+0.18.0; the 0.17.0 full sweep remains the active kernel baseline. Focused
+regression smoke check with all features enabled:
+`matmul/dense_64x64` 25.416-28.244 µs, change CI -10.575% to +11.967%,
+p = 0.94, no change detected.
+
 | Benchmark | Median | Note |
 | --- | --- | --- |
 | matmul/dense_64x64 | 28.1 µs | i-k-j kernel, hermes AXPY rows (0.16.0); within noise of 27.4 µs |

@@ -1,11 +1,12 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.17.0 [minor] (Cargo.toml/Cargo.lock
-bumped; CHANGELOG synced). Delivered this cycle: hermes abs-sum/abs-max
-consumption for dense norm_l1/norm_max (0.17.0, −88%/−87% vs scalar fold).
-Remaining open: matmul blocking only on top of the AXPY row kernel with
-criterion evidence; truly non-dense strided reductions still row-walk
-(per-lane accumulators needed); melinoe ThreadCached consolidation filed.
+Sprint phase: Execution. Target version: 0.18.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered this cycle: optional themis topology wiring for
+`leto_ops::CacheGeometry`, a documented zero-copy cache-level slice reader for
+future cache-sized matmul blocking. Remaining open: matmul blocking only on
+top of the AXPY row kernel with criterion evidence; truly non-dense strided
+reductions still row-walk (per-lane accumulators needed); melinoe ThreadCached
+consolidation filed.
 
 Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least
 squares (0.10.0), Cholesky factor/solve/det/inv (0.12.0), thin SVD for

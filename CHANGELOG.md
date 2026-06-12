@@ -4,6 +4,22 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.18.0] - 2026-06-12
+
+### Added
+
+- `leto-ops`: optional `topology` feature, direct optional `themis`
+  dependency, and public `CacheGeometry`/`cache_geometry` API for reading L1,
+  L2, and cache-line geometry. With `topology` enabled, L1/L2 capacities are
+  selected by walking the borrowed `themis::CacheLevel` slice; without the
+  feature, documented fallback constants are returned.
+
+### Changed
+
+- Stage C3 matmul blocking now has a typed topology source but no hot-kernel
+  dispatch change. No performance claim is attached to this release; blocking
+  remains gated on criterion evidence against the AXPY row kernel.
+
 ## [0.17.0] - 2026-06-12
 
 Dense `norm_l1`/`norm_max` route through the new hermes abs-reduction

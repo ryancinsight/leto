@@ -12,6 +12,7 @@ leto = { workspace = true }
 # ── Systems and Parallelization ──
 moirai = { workspace = true, optional = true }
 hermes-simd = { workspace = true, optional = true }
+themis = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
 num-traits = { workspace = true }
@@ -37,3 +38,4 @@ simd = ["dep:hermes-simd"]
 parallel = ["dep:moirai"]
 mnemosyne-memory = ["leto/mnemosyne-memory"]
 ndarray-compat = ["leto/ndarray-compat"]
+topology = ["std", "dep:themis", "themis/std"]

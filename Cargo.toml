@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.17.0"
+version = "0.18.0"
 edition = "2021"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -22,6 +22,7 @@ leto-ops = { path = "crates/leto-ops" }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "43a02f38ba4593b407f9dc674267126c6a4240e1" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "d2ea0fe13338ba0c66806ba3812957d70ebae78e" }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", package = "hermes-simd" }
+themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
 num-traits = "0.2"

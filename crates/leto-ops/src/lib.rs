@@ -12,6 +12,7 @@ pub use domain::real::RealScalar;
 pub use domain::rng::Xorshift64;
 pub use domain::scalar::Scalar;
 pub use domain::strategy::{ExecutionStrategy, ScalarStrategy};
+pub use infrastructure::cache::{cache_geometry, CacheGeometry};
 
 #[cfg(feature = "simd")]
 pub use domain::strategy::SimdStrategy;

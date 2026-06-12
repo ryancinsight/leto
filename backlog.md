@@ -104,8 +104,11 @@ no unmeasured "optimization" per performance_engineering.
   L1/L2 cache blocking with const-generic tile shapes (one authoritative
   kernel monomorphized per tile shape, per the structural-const-generics
   rule), tile sizes from themis topology.
-- [ ] [patch] Wire themis as an optional leto-ops dependency for `CacheLevel`
-  queries (feature-gated; default tile constants when absent).
+- [x] [minor] (0.18.0) Wire themis as an optional leto-ops dependency for
+  `CacheLevel` queries through `leto_ops::CacheGeometry` and the `topology`
+  feature. The public API is additive; when the feature is disabled, callers
+  get the documented fallback L1/L2/line constants. The `themis` cache-level
+  reader walks the borrowed slice directly and does not allocate copies.
 
 ## Replacement Position
 - [x] [arch] Use `leto` as the Atlas shared N-dimensional strided-array and layout crate. It sits below Apollo and Coeus and above Mnemosyne/Moirai/Hermes. It should replace `ndarray` only after parity and verification gates are met.
