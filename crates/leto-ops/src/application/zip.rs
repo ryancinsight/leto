@@ -19,8 +19,11 @@ fn validate_zip_storage<T, U, const N: usize>(
 /// Mutably zip-map elements of a view with elements from another view in place.
 ///
 /// `lhs` owns mutation, `rhs` is read-only, and both views must have identical
-/// logical shapes. Strided inputs are traversed by logical row-major index so
-/// the result is independent of the backing storage layout.
+/// logical shapes. Every logical element pair is visited exactly once, so the
+/// resulting array values are independent of the backing storage layout; the
+/// traversal *order* is unspecified (column-walk layouts run cache-line
+/// tiled), so a stateful closure must not rely on row-major visitation —
+/// use [`indexed_zip_mut_with`] when the logical index matters.
 pub fn zip_mut_with<T, U, F, const N: usize>(
     lhs: &mut ArrayViewMut<'_, T, N>,
     rhs: &ArrayView<'_, U, N>,
