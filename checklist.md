@@ -1,9 +1,11 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.15.0 [minor] (Cargo.toml/Cargo.lock
-bumped; CHANGELOG synced). In-flight item: Stage C3 unary strided
-micro-tiling delivered; next increment is the blocked-matmul cache hierarchy
-planning item.
+Sprint phase: Execution. Target version: 0.16.1 [patch] (Cargo.toml/Cargo.lock
+bumped; CHANGELOG synced). Delivered this cycle: hermes AXPY matmul rows +
+dense memory-order sum (0.16.0, Stage C2 gate closed), zip line micro-tiling
+(0.16.1). Next increment: hermes abs-sum/abs-max kernels would vectorize the
+norm_l1/norm_max dense scalar fold (file in hermes Stage C2); matmul blocking
+may be revisited only on top of the AXPY row kernel with criterion evidence.
 
 Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least
 squares (0.10.0), Cholesky factor/solve/det/inv (0.12.0), thin SVD for
