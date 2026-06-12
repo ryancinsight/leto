@@ -32,6 +32,8 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     fn sum_slice(s: &[Self]) -> Self;
     /// Dot product reduction over two equal-length slices.
     fn dot_slice(a: &[Self], b: &[Self]) -> Self;
+    /// Fused row update over equal-length slices: `out[i] += alpha * x[i]`.
+    fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]);
     /// Min reduction over a slice.
     fn min_slice(s: &[Self]) -> Self;
     /// Max reduction over a slice.
@@ -124,6 +126,16 @@ macro_rules! impl_scalar_native {
                         .copied()
                         .zip(b.iter().copied())
                         .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
+                }
+            }
+
+            #[inline]
+            fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_slice(alpha, x, out).is_ok() {
+                    return;
+                }
+                for (o, &xv) in out.iter_mut().zip(x.iter()) {
+                    *o += alpha * xv;
                 }
             }
 
@@ -241,6 +253,16 @@ macro_rules! impl_scalar_half {
             }
 
             #[inline]
+            fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_slice(alpha, x, out).is_ok() {
+                    return;
+                }
+                for (o, &xv) in out.iter_mut().zip(x.iter()) {
+                    *o += alpha * xv;
+                }
+            }
+
+            #[inline]
             fn min_slice(s: &[Self]) -> Self {
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
                     res
@@ -336,6 +358,13 @@ macro_rules! impl_scalar_int {
                     .copied()
                     .zip(b.iter().copied())
                     .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
+            }
+
+            #[inline]
+            fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
+                for (o, &xv) in out.iter_mut().zip(x.iter()) {
+                    *o += alpha * xv;
+                }
             }
 
             #[inline]

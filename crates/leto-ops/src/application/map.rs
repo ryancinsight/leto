@@ -514,7 +514,9 @@ where
 
 /// Sum reduction over all elements of the view.
 pub fn sum<T: Scalar, const N: usize>(arr: &ArrayView<'_, T, N>) -> T {
-    if let Some(slice) = arr.as_slice() {
+    // Sum is logically order-independent, so any dense memory-order slice
+    // (C, F, or permuted-contiguous) feeds the vectorized reduction directly.
+    if let Some(slice) = arr.as_slice_memory_order() {
         return T::sum_slice(slice);
     }
 

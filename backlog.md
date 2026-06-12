@@ -46,9 +46,13 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   dense blocking regressed `64x64` to ~48.5 µs and `256x256` to ~3.37 ms;
   a generic `mul_add` hook regressed `64x64` to ~245.6 µs and `256x256` to
   ~12.5 ms. Do not retry these paths without a changed kernel model.
-- [ ] [patch] Add or consume a Hermes scalar-AXPY / fused row-update provider
-  (`out[i] += alpha * x[i]`) before revisiting matmul SIMD dispatch; Leto must
-  not emulate it with temporary allocation.
+- [x] [minor] (0.16.0) Consume the Hermes scalar-AXPY / fused row-update
+  provider (`hermes_simd::axpy`, delivered hermes 51131a6): `Scalar::axpy_slice`
+  routes the matmul unit-stride row update through Hermes fmadd lanes with no
+  temporary allocation. Measured: `matmul/dense_256x256` 2.210 ms → 1.529 ms
+  (−31%); `dense_64x64` unchanged within noise. The sum reduction also gained a
+  dense memory-order fast path: `sum_transposed_256x256` 44.9 µs → 4.48 µs
+  (−90%), matching the norm path.
 
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
 Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every

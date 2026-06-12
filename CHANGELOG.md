@@ -4,6 +4,36 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.16.0] - 2026-06-12
+
+Stage C2 closure: matmul row updates dispatch through the new Hermes AXPY
+provider; sum gains the dense memory-order fast path norms already had.
+
+### Added
+
+- `leto-ops`: `Scalar::axpy_slice` (`out[i] += alpha * x[i]`) with
+  `SimdOperations::axpy_slice` strategy routing — f32/f64 through
+  `hermes_simd::axpy` (fmadd lanes, scalar tail, zero temporaries), half and
+  integer types through the scalar fallback loop.
+
+### Changed
+
+- `leto-ops`: matmul `multiply_row` unit-stride fast path now calls
+  `Scalar::axpy_slice` over the row slices instead of the per-element
+  read-modify-write loop. Strided (non-unit column stride) rows keep the
+  pointer walk.
+- `leto-ops`: `sum` detects any dense memory-order slice
+  (`as_slice_memory_order`) and feeds `T::sum_slice` directly; summation is
+  logically order-independent, so memory order is a valid evaluation order
+  (same justification as the 0.11.3 norm path).
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `matmul/dense_256x256`: 2.210 ms → 1.529 ms median (**−31%**,
+  non-overlapping CIs). `dense_64x64` 27.4 µs → 28.1 µs (within noise).
+- `reductions/sum_transposed_256x256`: 44.9 µs → 4.48 µs (**−90%**), now at
+  the dense-detection level of `norm_l2_transposed`.
+
 ## [0.15.0] - 2026-06-12
 
 Minor performance increment: cache-line micro-tiling for column-walk unary

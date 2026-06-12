@@ -8,19 +8,19 @@ workstation (AVX2-class). These baselines gate optimization work (atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
-## Current state (full sweep, 0.15.0, 2026-06-11)
+## Current state (full sweep, 0.16.0, 2026-06-12)
 
 | Benchmark | Median | Note |
 | --- | --- | --- |
-| matmul/dense_64x64 | 27.4 µs | scalar i-k-j kernel; blocked candidates rejected (see below) |
-| matmul/dense_256x256 | 2.210 ms | ≈ 15 GFLOP/s, memory-bound at this size |
+| matmul/dense_64x64 | 28.1 µs | i-k-j kernel, hermes AXPY rows (0.16.0); within noise of 27.4 µs |
+| matmul/dense_256x256 | 1.529 ms | hermes AXPY unit-stride rows (0.16.0) |
 | elementwise_add/contiguous_64k | 15.8 µs | hermes SIMD slice path |
 | elementwise_add/transposed_256x256 | 34.8 µs | line-tiled (0.14.4) |
 | unary_map/map_into_contiguous_64k | 13.0 µs | dense slice path |
 | unary_map/map_into_transposed_256x256 | 23.4 µs | line-tiled (0.15.0) |
 | reductions/sum_64k | 3.44 µs | hermes `sum_slice` |
 | reductions/norm_l2_64k | 4.67 µs | hermes dot via `dot_slice` (0.11.3) |
-| reductions/sum_transposed_256x256 | 44.9 µs | row-walk (not yet tiled) |
+| reductions/sum_transposed_256x256 | 4.48 µs | dense memory-order slice → hermes sum (0.16.0) |
 | reductions/norm_l2_transposed_256x256 | 4.67 µs | dense memory-order slice → hermes dot |
 | reductions/sum_reverse_last_axis_256x256 | 26.1 µs | unit-magnitude stride; row-walk by design |
 | reductions/norm_l2_reverse_last_axis_256x256 | 25.0 µs | non-dense; row-walk fallback |
@@ -36,6 +36,8 @@ comparison.
 | Row-walk zip/scan/map_inplace (0.13.1) | zip transposed 256² | 553.4 µs → 55.9 µs | **−89.9% (9.9×)** |
 | Line micro-tiling, binary (0.14.4) | elementwise transposed 256² | 50.7 µs → 28.4 µs | **−43.5%** |
 | Line micro-tiling, unary (0.15.0) | map_into transposed 256² | ~50 µs class → 23.4 µs | tiled level |
+| Hermes AXPY matmul rows (0.16.0) | matmul dense 256² | 2.210 ms → 1.529 ms | **−31%** |
+| Sum memory-order fast path (0.16.0) | sum transposed 256² | 44.9 µs → 4.48 µs | **−90% (10×)** |
 
 Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 ~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×
@@ -55,8 +57,11 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 
 ## Open measured targets
 
-- `sum_transposed_256x256` (44.9 µs) and serial `zip` transposed (47.6 µs)
-  are the remaining un-tiled column-walk paths; same `TileGeometry` applies
-  if a measured win is shown (reductions accumulate, so tiling needs
-  per-lane partial accumulators — different shape from the map case).
-- matmul blocking: gated on the hermes AXPY provider per the audit.
+- Serial `zip` transposed (47.6 µs) is the remaining un-tiled column-walk
+  path; same `TileGeometry` applies if a measured win is shown.
+- Truly non-dense strided reductions (reverse-axis cases) still row-walk;
+  tiling them needs per-lane partial accumulators — different shape from
+  the map case.
+- matmul: AXPY gate closed (0.16.0, −31% at 256²); revisiting blocking is
+  permitted only on top of the AXPY row kernel (changed model) with
+  criterion evidence.

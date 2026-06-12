@@ -38,6 +38,8 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn sum_slice(s: &[T]) -> Option<T>;
     /// Vectorized dot product reduction.
     fn dot_slice(a: &[T], b: &[T]) -> Option<T>;
+    /// Vectorized fused row update: `out[i] += alpha * x[i]`.
+    fn axpy_slice(alpha: T, x: &[T], out: &mut [T]) -> Result<(), &'static str>;
     /// Vectorized min reduction.
     fn min_slice(s: &[T]) -> Option<T>;
     /// Vectorized max reduction.
@@ -71,6 +73,10 @@ macro_rules! impl_simd_ops_native {
             #[inline(always)]
             fn dot_slice(a: &[$t], b: &[$t]) -> Option<$t> {
                 hermes_simd::dot::<$t>(a, b).ok()
+            }
+            #[inline(always)]
+            fn axpy_slice(alpha: $t, x: &[$t], out: &mut [$t]) -> Result<(), &'static str> {
+                hermes_simd::axpy::<$t>(alpha, x, out).map_err(|_| "simd axpy failed")
             }
             #[inline(always)]
             fn min_slice(s: &[$t]) -> Option<$t> {
@@ -118,6 +124,10 @@ macro_rules! impl_simd_ops_fallback {
                 None
             }
             #[inline(always)]
+            fn axpy_slice(_alpha: $t, _x: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
+                Err("simd disabled")
+            }
+            #[inline(always)]
             fn min_slice(_s: &[$t]) -> Option<$t> {
                 None
             }
@@ -161,6 +171,10 @@ macro_rules! impl_simd_ops_unsupported {
             #[inline(always)]
             fn dot_slice(_a: &[$t], _b: &[$t]) -> Option<$t> {
                 None
+            }
+            #[inline(always)]
+            fn axpy_slice(_alpha: $t, _x: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
+                Err("simd unsupported for type")
             }
             #[inline(always)]
             fn min_slice(_s: &[$t]) -> Option<$t> {

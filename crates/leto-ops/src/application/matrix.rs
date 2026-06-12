@@ -153,17 +153,15 @@ fn multiply_row<T: Scalar>(
     layout: MatmulLayout,
 ) {
     if layout.rhs_stride_col == 1 && layout.out_stride_col == 1 {
-        // SAFETY: `validate_matmul` validates both storage spans. The caller
-        // provides one `out_row_offset` at a time, and each `col` maps to the
-        // corresponding output row element.
+        // SAFETY: `validate_matmul` validates both storage spans, both rows
+        // are unit-stride over `cols` elements, and `rhs` (input view) and
+        // `out` (exclusive `&mut` output view) never alias, so the two raw
+        // rows are disjoint slices.
         unsafe {
-            let rhs_row = rhs_ptr.offset(rhs_row_offset);
-            let out_row = out_ptr.offset(out_row_offset);
-            for col in 0..layout.cols {
-                let rhs_value = *rhs_row.add(col);
-                let out_ref = out_row.add(col);
-                *out_ref = (*out_ref).add(lhs_value.mul(rhs_value));
-            }
+            let rhs_row = core::slice::from_raw_parts(rhs_ptr.offset(rhs_row_offset), layout.cols);
+            let out_row =
+                core::slice::from_raw_parts_mut(out_ptr.offset(out_row_offset), layout.cols);
+            T::axpy_slice(lhs_value, rhs_row, out_row);
         }
     } else {
         // SAFETY: `validate_matmul` validates all physical offsets spanned by
