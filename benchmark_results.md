@@ -8,9 +8,12 @@ workstation (AVX2-class). These baselines gate optimization work (atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
-## Current state (oracle benchmark hardening, 0.19.2, 2026-06-12)
+## Current state (dense-output zeroing update, 0.19.3, 2026-06-12)
 
-0.19.0 changes reverse-last-axis whole-array reductions by borrowing physical
+0.19.3 keeps the row-blocked Hermes AXPY matmul contraction and changes only
+the output zeroing phase: dense output storage and unit-stride output rows are
+filled through slices before strided fallback. 0.19.0 changes reverse-last-axis
+whole-array reductions by borrowing physical
 unit-stride row slices and feeding them to the dense slice reducers. Current
 hot matmul kernels do not call topology detection; row-blocking uses a fixed
 const-generic 32-row block chosen to fit 32 f64 output rows plus one RHS row
@@ -90,6 +93,14 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   run became unstable and showed a regressed median. Reverted; do not retry
   branch removal without a branch-miss profile showing the zero check is the
   bound.
+- **Packed RHS columns + `Scalar::dot_slice` (0.19.3 audit)**: packs RHS once
+  and computes each output through contiguous SIMD dot hooks, but regressed
+  `oracle_compare/matmul_leto_128x128` to 242.96 µs. Reverted; allocation plus
+  dot-call granularity loses to the zero-copy row-AXPY kernel.
+- **Inline scalar row update in the row-block path (0.19.3 audit)**: replacing
+  Hermes AXPY with a generic inlined loop regressed
+  `oracle_compare/matmul_leto_128x128` to 203.28 µs. Reverted; keep the Hermes
+  row update until a fused multi-row provider exists.
 - Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
   hermes scalar-AXPY / fused row-update provider; leto must not emulate one
   with temporary allocation.
@@ -105,6 +116,9 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 - matmul: fixed row-blocking on top of AXPY is closed (0.18.1). Remaining
   work is topology-adaptive tile sizing across row/block/column dimensions,
   not another unmeasured rewrite of the current row-block kernel.
+- matmul output zeroing now uses dense and unit-stride row slice fills before
+  the strided fallback. This is a memory-efficiency cleanup in the initialization
+  phase, not a parity claim; the contraction bottleneck remains open.
 - dense matmul oracle parity: 128x128 Leto median 124.87 µs vs ndarray
   78.247 µs and nalgebra 74.413 µs. Additional sequential investigation:
   64x64 medians were Leto 33.709 µs, ndarray 16.674 µs, nalgebra 15.651 µs;

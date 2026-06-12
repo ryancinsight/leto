@@ -4,6 +4,23 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.3] - 2026-06-12
+
+### Changed
+
+- `leto-ops`: matmul output initialization now fills dense output storage and
+  unit-stride output rows through slices before falling back to per-element
+  strided writes. This removes offset recomputation from the zeroing phase for
+  contiguous outputs without changing the contraction kernel or allocating
+  scratch buffers.
+
+### Validation
+
+- Rejected two dense-matmul kernel models: RHS-column packing plus
+  `Scalar::dot_slice` regressed 128x128, and replacing Hermes AXPY row updates
+  with an inlined scalar loop regressed 128x128. Dense matmul remains the active
+  ndarray/nalgebra parity gap.
+
 ## [0.19.2] - 2026-06-12
 
 ### Changed

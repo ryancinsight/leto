@@ -68,10 +68,26 @@ fn validate_matmul<T>(
 
 #[inline]
 fn zero_output<T: Scalar>(layout: MatmulLayout, out: &mut ArrayViewMut<'_, T, 2>) {
-    let out_ptr = out.data_mut().as_mut_ptr();
+    if layout.out_stride_col == 1 && layout.out_stride_row == layout.cols as isize {
+        let start = layout.out_offset as usize;
+        let len = layout.rows * layout.cols;
+        out.data_mut()[start..start + len].fill(T::ZERO);
+        return;
+    }
 
+    let out_ptr = out.data_mut().as_mut_ptr();
     for row in 0..layout.rows {
         let row_offset = layout.out_offset + row as isize * layout.out_stride_row;
+        if layout.out_stride_col == 1 {
+            // SAFETY: `validate_matmul` validated the output storage span and
+            // this row is unit-stride over `cols` elements.
+            unsafe {
+                core::slice::from_raw_parts_mut(out_ptr.offset(row_offset), layout.cols)
+                    .fill(T::ZERO);
+            }
+            continue;
+        }
+
         for col in 0..layout.cols {
             let offset = row_offset + col as isize * layout.out_stride_col;
             // SAFETY: `validate_matmul` validated the output storage span and
