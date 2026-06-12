@@ -8,19 +8,17 @@ workstation (AVX2-class). These baselines gate optimization work (atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
-## Current state (full sweep, 0.17.0, 2026-06-12)
+## Current state (focused matmul update, 0.18.1, 2026-06-12)
 
-0.18.0 adds the optional `leto_ops::CacheGeometry` topology API only. Current
-hot kernels do not call topology detection, so no speedup is claimed for
-0.18.0; the 0.17.0 full sweep remains the active kernel baseline. Focused
-regression smoke check with all features enabled:
-`matmul/dense_64x64` 25.416-28.244 µs, change CI -10.575% to +11.967%,
-p = 0.94, no change detected.
+0.18.1 changes dense matmul only. Current hot kernels do not call topology
+detection; row-blocking uses a fixed const-generic 32-row block chosen to fit
+32 f64 output rows plus one RHS row inside the conservative 256 KiB L2
+fallback at the 256-column benchmark shape.
 
 | Benchmark | Median | Note |
 | --- | --- | --- |
-| matmul/dense_64x64 | 28.1 µs | i-k-j kernel, hermes AXPY rows (0.16.0); within noise of 27.4 µs |
-| matmul/dense_256x256 | 1.529 ms | hermes AXPY unit-stride rows (0.16.0) |
+| matmul/dense_64x64 | 22.536 µs | row-blocked Hermes AXPY rows (0.18.1), ~−19.8% vs recorded 28.1 µs table baseline |
+| matmul/dense_256x256 | 1.4016 ms | row-blocked Hermes AXPY rows (0.18.1), ~−8.3% vs recorded 1.529 ms table baseline |
 | elementwise_add/contiguous_64k | 15.8 µs | hermes SIMD slice path |
 | elementwise_add/transposed_256x256 | 34.8 µs | line-tiled (0.14.4) |
 | unary_map/map_into_contiguous_64k | 13.0 µs | dense slice path |
@@ -49,6 +47,7 @@ p = 0.94, no change detected.
 | Sum memory-order fast path (0.16.0) | sum transposed 256² | 44.9 µs → 4.48 µs | **−90% (10×)** |
 | Line micro-tiling, zip (0.16.1) | zip_mut_with transposed 256² | 47.6 µs → 40.7 µs | **−14.5%** |
 | Hermes abs-reductions (0.17.0) | norm_l1 64k / norm_max 64k | 34.174 µs → 4.069 µs / 39.961 µs → 5.293 µs | **−88.1% / −86.8%** |
+| Row-blocked matmul (0.18.1) | matmul dense 64² / 256² | 28.1 µs → 22.536 µs / 1.529 ms → 1.4016 ms | **~−19.8% / ~−8.3%** |
 
 Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 ~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×
@@ -74,6 +73,6 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 - Truly non-dense strided reductions (reverse-axis cases) still row-walk;
   tiling them needs per-lane partial accumulators — different shape from
   the map case.
-- matmul: AXPY gate closed (0.16.0, −31% at 256²); revisiting blocking is
-  permitted only on top of the AXPY row kernel (changed model) with
-  criterion evidence.
+- matmul: fixed row-blocking on top of AXPY is closed (0.18.1). Remaining
+  work is topology-adaptive tile sizing across row/block/column dimensions,
+  not another unmeasured rewrite of the current row-block kernel.

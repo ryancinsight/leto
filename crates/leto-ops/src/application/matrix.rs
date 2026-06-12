@@ -3,6 +3,10 @@ use leto::{ArrayView, ArrayViewMut, Layout, LetoError, Result};
 
 #[cfg(feature = "parallel")]
 const PARALLEL_ROW_THRESHOLD: usize = 16;
+// Thirty-two f64 output rows plus one RHS row fit inside the conservative
+// 256 KiB L2 fallback at the 256-column benchmark shape while preserving a
+// single const-generic kernel instantiation.
+const MATMUL_ROW_BLOCK: usize = 32;
 
 #[derive(Clone, Copy)]
 struct MatmulLayout {
@@ -82,9 +86,10 @@ fn zero_output<T: Scalar>(layout: MatmulLayout, out: &mut ArrayViewMut<'_, T, 2>
 /// Perform matrix multiplication `out = lhs * rhs` for 2D views.
 ///
 /// The output is caller-owned. The implementation uses `i-k-j` loop ordering
-/// for row-major output locality, handles strided and transposed inputs, and
-/// dispatches row partitions through Moirai when the `parallel` feature is
-/// enabled and the row count is large enough.
+/// for row-major output locality, row-blocks dense RHS/output rows to reuse
+/// each RHS row across a small output-row block, handles strided and
+/// transposed inputs, and dispatches row partitions through Moirai when the
+/// `parallel` feature is enabled and the row count is large enough.
 pub fn matmul<T: Scalar>(
     lhs: &ArrayView<'_, T, 2>,
     rhs: &ArrayView<'_, T, 2>,
@@ -112,6 +117,18 @@ fn serial_matmul<T: Scalar>(
     out: &mut ArrayViewMut<'_, T, 2>,
     layout: MatmulLayout,
 ) {
+    if can_row_block(layout) {
+        row_blocked_matmul::<T, MATMUL_ROW_BLOCK>(
+            lhs.data().as_ptr(),
+            rhs.data().as_ptr(),
+            out.data_mut().as_mut_ptr(),
+            0,
+            layout.rows,
+            layout,
+        );
+        return;
+    }
+
     let lhs_ptr = lhs.data().as_ptr();
     let rhs_ptr = rhs.data().as_ptr();
     let out_ptr = out.data_mut().as_mut_ptr();
@@ -139,6 +156,59 @@ fn serial_matmul<T: Scalar>(
                 out_row_offset,
                 layout,
             );
+        }
+    }
+}
+
+#[inline]
+fn can_row_block(layout: MatmulLayout) -> bool {
+    layout.rows > 1
+        && layout.shared > 0
+        && layout.cols > 0
+        && layout.rhs_stride_col == 1
+        && layout.out_stride_col == 1
+}
+
+#[inline]
+fn row_blocked_matmul<T: Scalar, const ROW_BLOCK: usize>(
+    lhs_ptr: *const T,
+    rhs_ptr: *const T,
+    out_ptr: *mut T,
+    start_row: usize,
+    end_row: usize,
+    layout: MatmulLayout,
+) {
+    debug_assert!(ROW_BLOCK > 0);
+
+    for row_block_start in (start_row..end_row).step_by(ROW_BLOCK) {
+        let row_block_end = (row_block_start + ROW_BLOCK).min(end_row);
+        for shared in 0..layout.shared {
+            let rhs_row_offset = layout.rhs_offset + shared as isize * layout.rhs_stride_row;
+            // SAFETY: `validate_matmul` validates the RHS storage span, and
+            // row blocking is enabled only for unit-stride RHS rows.
+            let rhs_row =
+                unsafe { core::slice::from_raw_parts(rhs_ptr.offset(rhs_row_offset), layout.cols) };
+
+            for row in row_block_start..row_block_end {
+                let lhs_row_offset = layout.lhs_offset + row as isize * layout.lhs_stride_row;
+                // SAFETY: `validate_matmul` validates every logical LHS index
+                // used by this row/shared loop nest.
+                let lhs_value = unsafe {
+                    *lhs_ptr.offset(lhs_row_offset + shared as isize * layout.lhs_stride_col)
+                };
+                if lhs_value == T::ZERO {
+                    continue;
+                }
+
+                let out_row_offset = layout.out_offset + row as isize * layout.out_stride_row;
+                // SAFETY: `validate_matmul` validates the output storage span,
+                // rejects zero-stride output aliasing, and each row in this
+                // block is updated through a distinct unit-stride row slice.
+                let out_row = unsafe {
+                    core::slice::from_raw_parts_mut(out_ptr.offset(out_row_offset), layout.cols)
+                };
+                T::axpy_slice(lhs_value, rhs_row, out_row);
+            }
         }
     }
 }
@@ -184,6 +254,25 @@ fn parallel_matmul<T: Scalar>(
     out: &mut ArrayViewMut<'_, T, 2>,
     layout: MatmulLayout,
 ) {
+    if can_row_block(layout) {
+        let lhs_ptr = lhs.data().as_ptr() as usize;
+        let rhs_ptr = rhs.data().as_ptr() as usize;
+        let out_ptr = out.data_mut().as_mut_ptr() as usize;
+        let block_count = layout.rows.div_ceil(MATMUL_ROW_BLOCK);
+
+        crate::infrastructure::parallel::parallel_for(0, block_count, move |block| {
+            let lhs_ptr = lhs_ptr as *const T;
+            let rhs_ptr = rhs_ptr as *const T;
+            let out_ptr = out_ptr as *mut T;
+            let start_row = block * MATMUL_ROW_BLOCK;
+            let end_row = (start_row + MATMUL_ROW_BLOCK).min(layout.rows);
+            row_blocked_matmul::<T, MATMUL_ROW_BLOCK>(
+                lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout,
+            );
+        });
+        return;
+    }
+
     let lhs_ptr = lhs.data().as_ptr() as usize;
     let rhs_ptr = rhs.data().as_ptr() as usize;
     let out_ptr = out.data_mut().as_mut_ptr() as usize;

@@ -100,10 +100,16 @@ no unmeasured "optimization" per performance_engineering.
   (34.221–36.468 µs CI), −38.7% median with non-overlapping confidence
   intervals. Contiguous `map_into` remains within observed run-to-run noise;
   no contiguous speedup is claimed.
-- [ ] [minor] Blocked matmul: 256³ at ~2.38 ms (≈14 GFLOP/s) is memory-bound;
-  L1/L2 cache blocking with const-generic tile shapes (one authoritative
-  kernel monomorphized per tile shape, per the structural-const-generics
-  rule), tile sizes from themis topology.
+- [x] [patch] (0.18.1) Row-block dense matmul on top of the Hermes AXPY row
+  kernel: one authoritative const-generic row-block kernel reuses each RHS row
+  across 32 output rows, writes caller-owned output in place, and allocates no
+  temporaries. Criterion all-features current medians:
+  `dense_64x64` 22.536 µs (~−19.8% vs recorded 28.1 µs table baseline);
+  `dense_256x256` 1.4016 ms (~−8.3% vs recorded 1.529 ms table baseline).
+- [ ] [minor] Add topology-adaptive matmul tile sizing from `CacheGeometry`
+  once the row/block/column tile policy is benchmarked across matrix sizes.
+  Current 0.18.1 row block is a fixed L2-fit const-generic specialization, not
+  runtime topology selection.
 - [x] [minor] (0.18.0) Wire themis as an optional leto-ops dependency for
   `CacheLevel` queries through `leto_ops::CacheGeometry` and the `topology`
   feature. The public API is additive; when the feature is disabled, callers

@@ -4,6 +4,22 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.18.1] - 2026-06-12
+
+### Changed
+
+- `leto-ops`: dense `matmul` now routes unit-stride RHS/output rows through a
+  const-generic row-block kernel on top of the existing Hermes AXPY row
+  update. The kernel reuses each RHS row across 32 output rows and writes
+  caller-owned output in place with no temporary allocation.
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `matmul/dense_64x64`: 28.1 µs recorded table baseline → 22.536 µs
+  current median (**~−19.8%**).
+- `matmul/dense_256x256`: 1.529 ms recorded table baseline → 1.4016 ms
+  current median (**~−8.3%**).
+
 ## [0.18.0] - 2026-06-12
 
 ### Added
