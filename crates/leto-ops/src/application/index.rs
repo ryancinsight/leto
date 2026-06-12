@@ -129,6 +129,7 @@ impl<const N: usize> TileGeometry<N> {
     }
 
     /// Row blocks per slab: `ceil(height / tile)`.
+    #[cfg(feature = "parallel")]
     #[inline]
     pub(crate) const fn row_blocks(self) -> usize {
         self.height.div_ceil(self.tile)

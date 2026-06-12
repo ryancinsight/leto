@@ -2,7 +2,7 @@
 
 Sprint phase: Execution. Target version: 0.17.0 [minor] (Cargo.toml/Cargo.lock
 bumped; CHANGELOG synced). Delivered this cycle: hermes abs-sum/abs-max
-consumption for dense norm_l1/norm_max (0.17.0, −82%/−91% vs scalar fold).
+consumption for dense norm_l1/norm_max (0.17.0, −88%/−87% vs scalar fold).
 Remaining open: matmul blocking only on top of the AXPY row kernel with
 criterion evidence; truly non-dense strided reductions still row-walk
 (per-lane accumulators needed); melinoe ThreadCached consolidation filed.

@@ -109,10 +109,11 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-12 (v0.15.0): §A indexed zip parity, the Stage A1
-consumer-driven nalgebra surface, and Stage C3 unary/binary column-walk
-line micro-tiling are closed through symmetric eigenvalues-only, LU, QR,
-Cholesky, norms, full-rank thin SVD, rank-deficient singular values, and
+Update 2026-06-12 (v0.17.0): §A indexed zip parity, the Stage A1
+consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
+Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
+symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
+rank-deficient singular values, Hermes-backed dense reductions, and
 cache-line tiled strided elementwise traversal. See CHANGELOG and the two ADRs
 in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base and
 Apollo/Coeus consumer migration with differential coverage; full
@@ -145,10 +146,17 @@ rank-revealing SVD vectors and non-symmetric eigen are demand-driven only.
   `indexed_zip2_mut_with` provide `Zip::indexed`-style logical coordinates for
   one- and two-input mutable zip traversals.
 - Stage C3 column-walk elementwise traversal: CLOSED for binary and unary
-  `map_into` ([patch]/[minor]) — both use shared cache-line `TileGeometry`.
+  `map_into` plus `zip_mut_with` ([patch]/[minor]) — all use shared cache-line
+  `TileGeometry`.
   Evidence tier: value-semantic strided tests plus criterion differential
   timing before/after the optimization. Remaining cache-aware CPU kernel work
   is blocked matmul cache hierarchy selection and themis topology wiring.
+- Stage C2 dense norm SIMD coverage: CLOSED for `norm_l1`/`norm_l2`/`norm_max`
+  over dense memory-order slices. `norm_l1` and `norm_max` now route f32/f64
+  through Hermes absolute-value reductions; reduced precision keeps the native
+  scalar fallback. Evidence tier: value-semantic norm tests plus criterion
+  in-run scalar-reference comparison. Remaining reduction work is truly
+  non-dense strided reductions, which need per-lane partial accumulators.
 - Coverage of new ops: value-semantic tests plus ndarray differential oracles
   now cover the unary math suite (`exp`/`sqrt`), `scalar_map`, `concat`,
   `stack`, `batched_matmul` (per-batch ndarray `dot`), and `cumsum` (reference
@@ -160,8 +168,8 @@ rank-revealing SVD vectors and non-symmetric eigen are demand-driven only.
 - Differential coverage: ndarray oracle covers map/reductions/matmul, unary
   suite, concat/stack, batched matmul, and cumsum. RNG uses closed-form
   references. Indexed zip currently rests on value-semantic traversal tests.
-- Evidence tier of this audit: codebase scan + existing test suites; no new
-  proofs or benchmarks performed in this audit.
+- Evidence tier of this audit: codebase scan + existing test suites +
+  criterion benchmark measurements. No machine-checked proof was performed.
 
 ## Leto rank-deficient singular-values parity [patch]
 - Performed: split `leto-ops::singular_values` from the full-vector `svd_decompose` path. Singular-values-only now diagonalizes the smaller Gram matrix and maps near-zero eigenvalues to zero singular values for finite rank-deficient inputs.

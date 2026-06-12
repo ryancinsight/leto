@@ -53,6 +53,13 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   (−31%); `dense_64x64` unchanged within noise. The sum reduction also gained a
   dense memory-order fast path: `sum_transposed_256x256` 44.9 µs → 4.48 µs
   (−90%), matching the norm path.
+- [x] [minor] (0.17.0) Consume Hermes absolute-value reductions for dense
+  `norm_l1`/`norm_max`: defaulted `RealScalar::{abs_sum_slice, abs_max_slice}`
+  hooks keep reduced-precision scalar fallback while f32/f64 route through
+  `SimdOperations` to `hermes_simd::{abs_sum, abs_max}` with no temporary
+  allocation. Measured in-run against scalar-fold references:
+  `norm_l1_64k` 34.174 µs → 4.069 µs (−88.1%, 8.4×);
+  `norm_max_64k` 39.961 µs → 5.293 µs (−86.8%, 7.5×).
 
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
 Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every

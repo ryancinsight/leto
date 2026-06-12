@@ -20,8 +20,8 @@ comparison.
 | unary_map/map_into_transposed_256x256 | 23.4 µs | line-tiled (0.15.0) |
 | reductions/sum_64k | 3.44 µs | hermes `sum_slice` |
 | reductions/norm_l2_64k | 4.67 µs | hermes dot via `dot_slice` (0.11.3) |
-| reductions/norm_l1_64k | 5.71 µs | hermes abs-sum (0.17.0); scalar ref 31.0 µs |
-| reductions/norm_max_64k | 5.74 µs | hermes abs-max (0.17.0); scalar ref 60.9 µs |
+| reductions/norm_l1_64k | 4.069 µs | hermes abs-sum (0.17.0); scalar ref 34.174 µs |
+| reductions/norm_max_64k | 5.293 µs | hermes abs-max (0.17.0); scalar ref 39.961 µs |
 | reductions/sum_transposed_256x256 | 4.48 µs | dense memory-order slice → hermes sum (0.16.0) |
 | reductions/norm_l2_transposed_256x256 | 4.67 µs | dense memory-order slice → hermes dot |
 | reductions/sum_reverse_last_axis_256x256 | 26.1 µs | unit-magnitude stride; row-walk by design |
@@ -41,7 +41,7 @@ comparison.
 | Hermes AXPY matmul rows (0.16.0) | matmul dense 256² | 2.210 ms → 1.529 ms | **−31%** |
 | Sum memory-order fast path (0.16.0) | sum transposed 256² | 44.9 µs → 4.48 µs | **−90% (10×)** |
 | Line micro-tiling, zip (0.16.1) | zip_mut_with transposed 256² | 47.6 µs → 40.7 µs | **−14.5%** |
-| Hermes abs-reductions (0.17.0) | norm_l1 64k / norm_max 64k | 31.0 µs → 5.71 µs / 60.9 µs → 5.74 µs | **−81.6% / −90.6%** |
+| Hermes abs-reductions (0.17.0) | norm_l1 64k / norm_max 64k | 34.174 µs → 4.069 µs / 39.961 µs → 5.293 µs | **−88.1% / −86.8%** |
 
 Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 ~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×

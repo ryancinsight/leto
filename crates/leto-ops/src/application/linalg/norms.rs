@@ -13,8 +13,7 @@ use leto::{ArrayView, Result};
 pub trait NormKind<T: RealScalar>: Copy + Send + Sync + 'static {
     /// Optional dense-slice fast path for norms with a fused reduction kernel.
     #[inline]
-    fn accumulate_slice(slice: &[T]) -> Option<T> {
-        let _ = slice;
+    fn accumulate_slice(_slice: &[T]) -> Option<T> {
         None
     }
     /// Fold one element's contribution into the accumulator.

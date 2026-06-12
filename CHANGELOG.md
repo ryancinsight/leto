@@ -27,10 +27,10 @@ kernels, closing the last scalar-fold dense norm paths.
 
 ### Performance (criterion, recorded in benchmark_results.md)
 
-- `reductions/norm_l1_64k`: 31.0 µs (scalar-fold reference) → 5.71 µs
-  (**−81.6%, 5.4×**).
-- `reductions/norm_max_64k`: 60.9 µs (scalar-fold reference) → 5.74 µs
-  (**−90.6%, 10.6×**).
+- `reductions/norm_l1_64k`: 34.174 µs (scalar-fold reference) → 4.069 µs
+  (**−88.1%, 8.4×**).
+- `reductions/norm_max_64k`: 39.961 µs (scalar-fold reference) → 5.293 µs
+  (**−86.8%, 7.5×**).
 
 ## [0.16.1] - 2026-06-12
 
