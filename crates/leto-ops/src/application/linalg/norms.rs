@@ -38,6 +38,11 @@ pub struct NormL2;
 pub struct NormMax;
 
 impl<T: RealScalar> NormKind<T> for NormL1 {
+    #[inline]
+    fn accumulate_slice(slice: &[T]) -> Option<T> {
+        Some(T::abs_sum_slice(slice))
+    }
+
     #[inline(always)]
     fn accumulate(acc: T, x: T) -> T {
         acc.add(x.abs())
@@ -65,6 +70,11 @@ impl<T: RealScalar> NormKind<T> for NormL2 {
 }
 
 impl<T: RealScalar> NormKind<T> for NormMax {
+    #[inline]
+    fn accumulate_slice(slice: &[T]) -> Option<T> {
+        Some(T::abs_max_slice(slice))
+    }
+
     #[inline(always)]
     fn accumulate(acc: T, x: T) -> T {
         let magnitude = x.abs();

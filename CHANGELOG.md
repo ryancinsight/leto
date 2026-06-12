@@ -4,6 +4,34 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.17.0] - 2026-06-12
+
+Dense `norm_l1`/`norm_max` route through the new hermes abs-reduction
+kernels, closing the last scalar-fold dense norm paths.
+
+### Added
+
+- `leto-ops`: `RealScalar::{abs_sum_slice, abs_max_slice}` with scalar-fold
+  defaults; f32/f64 override through `SimdOperations::{abs_sum_slice,
+  abs_max_slice}` → `hermes_simd::{abs_sum, abs_max}` (lane-wise `abs` fused
+  into the fold, delivered hermes 7f01309).
+- `leto-ops`: criterion cases `norm_l1_64k`, `norm_max_64k` plus pinned
+  scalar-fold reference series preserving the pre-0.17.0 dense-path body as
+  the in-run before-number.
+
+### Changed
+
+- `NormL1`/`NormMax` implement `NormKind::accumulate_slice`, so any dense
+  memory-order view reduces through hermes instead of the element fold
+  (the path `NormL2` has used since 0.11.3).
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `reductions/norm_l1_64k`: 31.0 µs (scalar-fold reference) → 5.71 µs
+  (**−81.6%, 5.4×**).
+- `reductions/norm_max_64k`: 60.9 µs (scalar-fold reference) → 5.74 µs
+  (**−90.6%, 10.6×**).
+
 ## [0.16.1] - 2026-06-12
 
 ### Changed

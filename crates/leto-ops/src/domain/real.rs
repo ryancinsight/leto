@@ -40,6 +40,31 @@ pub trait RealScalar: Scalar {
     /// sampling, mathematical constants), not a compute-path widen-narrow: it
     /// turns a host-provided or PRNG-derived `f64` into the storage precision.
     fn from_f64(value: f64) -> Self;
+
+    /// `Σ |x|` over a dense slice (L1-norm accumulator).
+    ///
+    /// Default: scalar fold in the precision of `Self`. Native impls override
+    /// to route through the hermes abs-sum kernel.
+    #[inline]
+    fn abs_sum_slice(s: &[Self]) -> Self {
+        s.iter().fold(Self::ZERO, |acc, &x| acc.add(x.abs()))
+    }
+
+    /// `max |x|` over a dense slice (∞-norm accumulator); `ZERO` for empty.
+    ///
+    /// Default: scalar fold. Native impls override to route through the
+    /// hermes abs-max kernel.
+    #[inline]
+    fn abs_max_slice(s: &[Self]) -> Self {
+        s.iter().fold(Self::ZERO, |acc, &x| {
+            let magnitude = x.abs();
+            if magnitude > acc {
+                magnitude
+            } else {
+                acc
+            }
+        })
+    }
 }
 
 macro_rules! impl_real_native {
@@ -92,6 +117,26 @@ macro_rules! impl_real_native {
             #[inline(always)]
             fn from_f64(value: f64) -> Self {
                 value as $t
+            }
+
+            #[inline]
+            fn abs_sum_slice(s: &[Self]) -> Self {
+                use crate::domain::strategy::{SimdOperations, SimdStrategy};
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::abs_sum_slice(s) {
+                    res
+                } else {
+                    s.iter().fold(Self::ZERO, |acc, &x| acc + x.abs())
+                }
+            }
+
+            #[inline]
+            fn abs_max_slice(s: &[Self]) -> Self {
+                use crate::domain::strategy::{SimdOperations, SimdStrategy};
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::abs_max_slice(s) {
+                    res
+                } else {
+                    s.iter().fold(Self::ZERO, |acc, &x| acc.max(x.abs()))
+                }
             }
         }
     };

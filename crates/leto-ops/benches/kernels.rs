@@ -7,7 +7,7 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
-use leto_ops::{map_into, matmul, norm_l2, sum, zip_mut_with, AddOp};
+use leto_ops::{map_into, matmul, norm_l1, norm_l2, norm_max, sum, zip_mut_with, AddOp};
 use std::hint::black_box;
 
 fn pinned_values(len: usize, scale: f64) -> Vec<f64> {
@@ -128,6 +128,31 @@ fn bench_reductions(c: &mut Criterion) {
     });
     group.bench_function("norm_l2_64k", |bencher| {
         bencher.iter(|| norm_l2(black_box(&a.view())).unwrap());
+    });
+    group.bench_function("norm_l1_64k", |bencher| {
+        bencher.iter(|| norm_l1(black_box(&a.view())).unwrap());
+    });
+    group.bench_function("norm_max_64k", |bencher| {
+        bencher.iter(|| norm_max(black_box(&a.view())).unwrap());
+    });
+    // Scalar-fold reference series: the exact pre-0.17.0 dense-path body for
+    // norm_l1/norm_max, kept as the in-run before-number for the hermes
+    // abs-reduction routing.
+    group.bench_function("norm_l1_64k_scalar_ref", |bencher| {
+        let data = a.view();
+        bencher.iter(|| {
+            let slice = black_box(data.as_slice_memory_order().unwrap());
+            slice.iter().fold(0.0f64, |acc, &x| acc + x.abs())
+        });
+    });
+    group.bench_function("norm_max_64k_scalar_ref", |bencher| {
+        let data = a.view();
+        bencher.iter(|| {
+            let slice = black_box(data.as_slice_memory_order().unwrap());
+            slice
+                .iter()
+                .fold(0.0f64, |acc, &x| if x.abs() > acc { x.abs() } else { acc })
+        });
     });
 
     let n = 256usize;

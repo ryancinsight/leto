@@ -89,10 +89,7 @@ where
                             let mut lhs_off = lhs_base + r * lhs_rs + c0 * lhs_step;
                             let mut rhs_off = rhs_base + r * rhs_rs + c0 * rhs_step;
                             for _ in cb..cend {
-                                f(
-                                    &mut lhs_data[lhs_off as usize],
-                                    &rhs_data[rhs_off as usize],
-                                );
+                                f(&mut lhs_data[lhs_off as usize], &rhs_data[rhs_off as usize]);
                                 lhs_off += lhs_step;
                                 rhs_off += rhs_step;
                             }
