@@ -4,6 +4,26 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.1] - 2026-06-12
+
+### Added
+
+- `leto-ops`: ndarray/nalgebra oracle parity tests for LU solve/determinant/
+  inverse, symmetric eigenvalues, Cholesky lower factors, singular values, and
+  reverse-last-axis reductions.
+- `leto-ops`: criterion oracle comparison benchmarks for dense 128x128 matmul
+  against ndarray/nalgebra and reverse-last-axis 256x256 reductions against
+  ndarray.
+
+### Validation
+
+- Results parity is covered by value-semantic differential tests against
+  nalgebra and ndarray.
+- Performance parity is not yet satisfied for dense 128x128 matmul:
+  Leto median 259.03 µs vs ndarray 114.60 µs and nalgebra 103.68 µs.
+  Reverse-last-axis reductions are at parity or faster than ndarray on the
+  recorded benchmark shapes.
+
 ## [0.19.0] - 2026-06-12
 
 ### Added

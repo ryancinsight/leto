@@ -1,14 +1,16 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.19.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered this cycle: reverse-last-axis sum/norm
-reductions route unit-stride physical rows through borrowed row slices, so
-reverse rows reuse existing Hermes dense reducers without materializing copies.
-Criterion current medians: `sum_reverse_last_axis_256x256` 5.203 µs;
-`norm_l2_reverse_last_axis_256x256` 9.615 µs. Remaining open:
-topology-adaptive matmul tile sizing; non-unit truly strided reductions still
-row-walk (per-lane accumulators needed); melinoe ThreadCached consolidation
-filed.
+Sprint phase: Execution. Target version: 0.19.1 [patch] (Cargo.toml bumped;
+CHANGELOG synced). Delivered this cycle: ndarray/nalgebra oracle validation
+for Leto result parity and criterion oracle comparison benchmarks. Result
+parity is covered for LU solve/determinant/inverse, symmetric eigenvalues,
+Cholesky lower factors, singular values, and reverse-last-axis reductions.
+Performance parity is mixed: reverse reductions are at parity or faster than
+ndarray, but dense 128x128 matmul is slower (Leto 259.03 µs median vs ndarray
+114.60 µs and nalgebra 103.68 µs). Remaining open: close dense matmul oracle
+performance gap before claiming replacement performance parity; non-unit
+truly strided reductions still row-walk (per-lane accumulators needed);
+melinoe ThreadCached consolidation filed.
 
 Stage A1 progress: norms (0.8.0), LU/solve/det/inv (0.9.0), QR + least
 squares (0.10.0), Cholesky factor/solve/det/inv (0.12.0), thin SVD for
@@ -102,6 +104,21 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [ ] [arch] Coeus consolidation: route `coeus-ops` CPU backend through `coeus-leto` and retire the duplicated `coeus-tensor` traversal once parity is proven (tracked in coeus docs/backlog MS-59).
 - [ ] [minor] Apollo internal FFT-kernel migration off ndarray using the new memory-order slice access (boundary `forward_leto`/`inverse_leto` APIs already in place).
 - [x] [patch] Current Leto 0.5.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Full `cargo doc --workspace --all-features --no-deps` remains blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`.
+- [x] [patch] Add ndarray/nalgebra oracle validation gates for current linalg
+  and reduction contracts. Verification: `oracle_parity` compares Leto LU,
+  Cholesky, symmetric eigenvalues, singular values, and reverse reductions
+  against nalgebra/ndarray with value-semantic assertions. Gates run:
+  `cargo fmt --check`; `cargo test -p leto-ops --test ops_tests oracle_parity
+  --all-features`; `cargo check -p leto-ops --benches --all-features`;
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`;
+  `cargo test --workspace --all-features`; `cargo nextest run --workspace
+  --all-features`; `cargo doc --workspace --exclude leto-python
+  --all-features --no-deps`; `cargo test --doc --workspace --all-features`;
+  `git diff --check`.
+- [ ] [minor] Close dense matmul oracle performance gap: criterion oracle
+  comparison records Leto 128x128 median 259.03 µs vs ndarray 114.60 µs and
+  nalgebra 103.68 µs. Next kernel increment should test RHS packing,
+  row/block/column micro-kernel shape, and cache-geometry selection.
 
 ## Naming decision [patch]
 - [x] Keep `leto` as the crate name. Functionally, Leto is a non-differentiable shared strided-array substrate between Coeus and Apollo; mythologically, Leto bridges Coeus and Apollo as parent/child context. The name is appropriate if the crate remains the shared array/memory vocabulary, not an autodiff engine or spectral-transform crate.

@@ -110,6 +110,12 @@ no unmeasured "optimization" per performance_engineering.
   once the row/block/column tile policy is benchmarked across matrix sizes.
   Current 0.18.1 row block is a fixed L2-fit const-generic specialization, not
   runtime topology selection.
+- [ ] [minor] Close dense matmul oracle performance parity before any
+  replacement claim: criterion oracle comparison records Leto 128x128 median
+  259.03 µs vs ndarray 114.60 µs and nalgebra 103.68 µs. Investigate RHS
+  packing, row/block/column micro-kernel geometry, and cache-topology-selected
+  tile shapes. Do not retry the rejected 0.14.3 const-generic blocking or
+  generic `mul_add` hook without a changed kernel model.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted
@@ -128,6 +134,12 @@ no unmeasured "optimization" per performance_engineering.
 - [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
 
 ## Current Evidence
+- [x] [patch] ndarray/nalgebra oracle gates added for current Leto replacement
+  claims. `leto-ops` oracle tests compare LU solve/determinant/inverse,
+  symmetric eigenvalues, Cholesky lower factors, singular values, and
+  reverse-last-axis reductions against nalgebra/ndarray. Criterion oracle
+  comparison shows reverse reductions at parity or faster than ndarray, while
+  dense 128x128 matmul is slower than ndarray/nalgebra and remains open.
 - [x] [patch] `cargo test --all-features` passes: 34 `leto` core tests, 28 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, property, differential, PyO3 boundary, and downstream-shape migration fixture tests.
 - [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
