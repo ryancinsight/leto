@@ -144,7 +144,11 @@ impl<const N: usize> TileGeometry<N> {
 /// Elements of `T` per 64-byte cache line (≥ 1): the analytic micro-tile side.
 #[inline]
 pub(crate) const fn line_elements<T>() -> usize {
-    let lane = 64 / core::mem::size_of::<T>();
+    let size = core::mem::size_of::<T>();
+    if size == 0 {
+        return usize::MAX;
+    }
+    let lane = 64 / size;
     if lane == 0 {
         1
     } else {

@@ -153,6 +153,36 @@ fn test_map_into_handles_strided_transposed_input() {
 }
 
 #[test]
+fn test_map_into_handles_cache_line_transposed_input() {
+    let n = 16usize;
+    let input =
+        Array::from_shape_vec([n, n], (0..n * n).map(|value| value as f64).collect()).unwrap();
+    let transposed = input.transpose([1, 0]).unwrap();
+    let mut output = Array::zeros([n, n]);
+
+    map_into(&transposed, &mut output.view_mut(), |value| {
+        value * 2.0 + 1.0
+    })
+    .unwrap();
+
+    let expected = (0..n)
+        .flat_map(|row| (0..n).map(move |col| ((col * n + row) as f64) * 2.0 + 1.0))
+        .collect::<Vec<_>>();
+    assert_eq!(output.storage().as_slice(), expected.as_slice());
+}
+
+#[test]
+fn test_map_into_strided_zero_sized_input() {
+    let input = Array::from_shape_vec([2, 2], vec![(); 4]).unwrap();
+    let transposed = input.transpose([1, 0]).unwrap();
+    let mut output = Array::zeros([2, 2]);
+
+    map_into(&transposed, &mut output.view_mut(), |_| 7usize).unwrap();
+
+    assert_eq!(output.storage().as_slice(), &[7, 7, 7, 7]);
+}
+
+#[test]
 fn test_mapping_and_zipping() {
     let layout = Layout::c_contiguous([2, 3]).unwrap();
     let arr = Array::new(layout, VecStorage::new(vec![1, 2, 3, 4, 5, 6])).unwrap();

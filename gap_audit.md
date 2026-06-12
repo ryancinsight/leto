@@ -1,6 +1,6 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-Audit date: 2026-06-11. Evidence tier: codebase scan of `leto` (0.14.2),
+Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.15.0),
 `D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, current docs.rs pages for
 `ndarray 0.16` and `nalgebra`, and upstream Atlas crates. Counterparts:
 `ndarray 0.16`, `nalgebra` (already removed from Apollo).
@@ -109,13 +109,14 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-11 (v0.14.2): §A indexed zip parity and the Stage A1
-consumer-driven nalgebra surface are closed through symmetric eigenvalues-only,
-LU, QR, Cholesky, norms, full-rank thin SVD, and rank-deficient singular values.
-See CHANGELOG and the two ADRs in `docs/adr/`. Remaining work is cross-cutting:
-the Coeus re-base and Apollo/Coeus consumer migration with differential
-coverage; full rank-revealing SVD vectors and non-symmetric eigen are
-demand-driven only.
+Update 2026-06-12 (v0.15.0): §A indexed zip parity, the Stage A1
+consumer-driven nalgebra surface, and Stage C3 unary/binary column-walk
+line micro-tiling are closed through symmetric eigenvalues-only, LU, QR,
+Cholesky, norms, full-rank thin SVD, rank-deficient singular values, and
+cache-line tiled strided elementwise traversal. See CHANGELOG and the two ADRs
+in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base and
+Apollo/Coeus consumer migration with differential coverage; full
+rank-revealing SVD vectors and non-symmetric eigen are demand-driven only.
 
 - `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
   rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
@@ -143,6 +144,11 @@ demand-driven only.
 - Indexed zip parity: CLOSED ([minor]) — `indexed_zip_mut_with` and
   `indexed_zip2_mut_with` provide `Zip::indexed`-style logical coordinates for
   one- and two-input mutable zip traversals.
+- Stage C3 column-walk elementwise traversal: CLOSED for binary and unary
+  `map_into` ([patch]/[minor]) — both use shared cache-line `TileGeometry`.
+  Evidence tier: value-semantic strided tests plus criterion differential
+  timing before/after the optimization. Remaining cache-aware CPU kernel work
+  is blocked matmul cache hierarchy selection and themis topology wiring.
 - Coverage of new ops: value-semantic tests plus ndarray differential oracles
   now cover the unary math suite (`exp`/`sqrt`), `scalar_map`, `concat`,
   `stack`, `batched_matmul` (per-batch ndarray `dot`), and `cumsum` (reference

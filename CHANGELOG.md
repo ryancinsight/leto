@@ -4,6 +4,31 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.15.0] - 2026-06-12
+
+Minor performance increment: cache-line micro-tiling for column-walk unary
+`map_into` traversal (Stage C3, atlas ADR 0002 leto slice).
+
+### Changed
+
+- `leto-ops`: unary `map_into` strided fallbacks (serial + parallel) now use
+  the shared `TileGeometry`/`line_elements` policy when input or output
+  last-axis walks skip whole cache lines. Mixed input/output scalar maps choose
+  the smaller element-per-line count, preserving a single generic traversal
+  without type-specific variants.
+- `line_elements` now treats zero-sized element types as non-tiling operands,
+  preserving generic `map_into` support for strided ZST inputs without a
+  divide-by-zero path.
+- `leto-ops` criterion baselines now include unary contiguous and transposed
+  `map_into` cases.
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `unary_map/map_into_transposed_256x256`: 57.631 µs
+  (56.477–58.379 µs CI) → 35.303 µs (34.221–36.468 µs CI), **−38.7%**
+  median with non-overlapping confidence intervals. Contiguous `map_into`
+  remains within observed run-to-run noise; no contiguous speedup is claimed.
+
 ## [0.14.4] - 2026-06-11
 
 Patch performance increment: cache-line micro-tiling for column-walk strided

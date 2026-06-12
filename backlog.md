@@ -81,8 +81,14 @@ no unmeasured "optimization" per performance_engineering.
   now applies to the L1/L2-sized matmul blocking below. Residual ~1.8× is
   TLB/prefetch behavior of large-stride walks; revisit only with profile
   evidence.
-- [ ] [minor] Extend line micro-tiling to the unary strided fallbacks
-  (map_into serial + parallel) — same geometry SSOT, measured gate.
+- [x] [minor] (0.15.0) Extend line micro-tiling to the unary strided
+  fallbacks (`map_into` serial + parallel) through the same `TileGeometry`
+  SSOT. Mixed input/output scalar maps use the smaller
+  `line_elements::<T/U>()` value. Measured: transposed unary
+  `map_into` 57.631 µs (56.477–58.379 µs CI) → 35.303 µs
+  (34.221–36.468 µs CI), −38.7% median with non-overlapping confidence
+  intervals. Contiguous `map_into` remains within observed run-to-run noise;
+  no contiguous speedup is claimed.
 - [ ] [minor] Blocked matmul: 256³ at ~2.38 ms (≈14 GFLOP/s) is memory-bound;
   L1/L2 cache blocking with const-generic tile shapes (one authoritative
   kernel monomorphized per tile shape, per the structural-const-generics

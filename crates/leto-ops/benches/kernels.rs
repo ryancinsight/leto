@@ -7,7 +7,7 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
-use leto_ops::{matmul, norm_l2, sum, zip_mut_with, AddOp};
+use leto_ops::{map_into, matmul, norm_l2, sum, zip_mut_with, AddOp};
 use std::hint::black_box;
 
 fn pinned_values(len: usize, scale: f64) -> Vec<f64> {
@@ -82,6 +82,43 @@ fn bench_elementwise(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_unary_map(c: &mut Criterion) {
+    let mut group = c.benchmark_group("unary_map");
+    let len = 1usize << 16;
+    let input = Array::from_shape_vec([len], pinned_values(len, 1.0)).unwrap();
+    group.bench_function("map_into_contiguous_64k", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([len]),
+            |mut out| {
+                map_into(black_box(&input.view()), &mut out.view_mut(), |value| {
+                    value + 0.5
+                })
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    let n = 256usize;
+    let square = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0)).unwrap();
+    let transposed = square.transpose([1, 0]).unwrap();
+    group.bench_function("map_into_transposed_256x256", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([n, n]),
+            |mut out| {
+                map_into(black_box(&transposed), &mut out.view_mut(), |value| {
+                    value + 0.5
+                })
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.finish();
+}
+
 fn bench_reductions(c: &mut Criterion) {
     let mut group = c.benchmark_group("reductions");
     let len = 1usize << 16;
@@ -137,6 +174,6 @@ fn bench_zip(c: &mut Criterion) {
 criterion_group! {
     name = kernels;
     config = Criterion::default().sample_size(20);
-    targets = bench_matmul, bench_elementwise, bench_reductions, bench_zip
+    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip
 }
 criterion_main!(kernels);

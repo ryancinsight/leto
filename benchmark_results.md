@@ -7,12 +7,14 @@ Machine class: Windows 11 x86_64 dev workstation (AVX2-class), 2026-06-11.
 Baselines gate the cache-aware tiling work (atlas ADR 0002 leto slice): a
 statistically significant regression in a touched kernel blocks merge.
 
-| Benchmark | Baseline (pre row-walk, 0.11.0) | Row-walk maps (0.11.1) | Row-walk reductions (0.11.2) | Hermes dot norm (0.11.3) | Change |
+| Benchmark | Baseline (pre row-walk, 0.11.0) | Row-walk maps (0.11.1) | Row-walk reductions (0.11.2) | Current / touched-kernel result | Change |
 | --- | --- | --- | --- | --- | --- |
 | matmul/dense_64x64 | 28.42 µs | unchanged (untouched kernel) | 29.80 µs | 28.34 µs | no attributed change; untouched kernel |
 | matmul/dense_256x256 | 2.376 ms | unchanged (untouched kernel) | 2.401 ms | 2.245 ms | no attributed change; untouched kernel |
 | elementwise_add/contiguous_64k | 13.85 µs | 13.59 µs | 14.85 µs | 15.11 µs | no attributed change; untouched in 0.11.3 |
 | elementwise_add/transposed_256x256 | 1.206 ms | 50.98 µs → 49.19 µs | 55.30 µs | 50.65 µs | 0.11.1: **−95.9% (23.7×), p < 0.05** |
+| unary_map/map_into_contiguous_64k | not measured | not measured | not measured | 15.718 µs (pre unary tiling, 0.14.4); post-change rerun 14.998 µs | no claimed change; observed run-to-run noise |
+| unary_map/map_into_transposed_256x256 | not measured | not measured | not measured | 57.631 µs (56.477–58.379 µs CI, pre unary tiling, 0.14.4) → 35.303 µs (34.221–36.468 µs CI, 0.15.0) | **−38.7% median; non-overlapping CIs** |
 | reductions/sum_64k | 3.607 µs | unchanged (untouched; ±9% run-to-run noise observed and reversed on rerun) | 3.789 µs | 3.653 µs | no change (p = 0.97 vs 0.11.2 sample) |
 | reductions/norm_l2_64k | 28.06 µs | unchanged (untouched) | 28.07 µs | 5.508 µs | **−80.0%, p < 0.05** |
 | reductions/sum_transposed_256x256 | not measured | not measured | 40.73 µs | 40.24 µs | no change (p = 0.67) |
@@ -44,6 +46,14 @@ statistically significant regression in a touched kernel blocks merge.
   contiguous unchanged (p = 0.40); strided-vs-contiguous gap now ~1.8×
   (cumulative 42× vs the original 1.206 ms). Residual is large-stride
   TLB/prefetch behavior — profile before further work.
+
+- **Unary line micro-tiling landed (0.15.0)**: column-walk strided
+  `map_into` uses the same `TileGeometry` SSOT as binary map, with tile side
+  set to the smaller input/output element-per-line count for mixed scalar
+  maps. Criterion measured transposed unary `map_into` 57.631 µs
+  (56.477–58.379 µs CI) → 35.303 µs (34.221–36.468 µs CI), −38.7% median
+  with non-overlapping confidence intervals. Contiguous `map_into` remains
+  within observed run-to-run noise; no contiguous speedup is claimed.
 
 
 - **Row-walk policy complete (0.13.1)**: every strided fallback (binary,

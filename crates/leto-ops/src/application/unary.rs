@@ -1,4 +1,4 @@
-use crate::application::index::RowMajorTraversal;
+use crate::application::index::{line_elements, RowMajorTraversal, TileGeometry};
 use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -94,12 +94,48 @@ where
     }
 
     // Row-walk traversal: one offset computation per innermost row, then a
-    // stride-increment walk (see binary_map for rationale + baselines).
+    // stride-increment walk. Column-walk views use cache-line micro-tiles from
+    // the same geometry policy as binary_map.
     let Some(traversal) = RowMajorTraversal::new(size, shape) else {
         return Ok(());
     };
     let in_step = traversal.last_axis_stride(input_layout);
     let out_step = traversal.last_axis_stride(output_layout);
+    let input_tile = line_elements::<T>();
+    let output_tile = line_elements::<U>();
+    if in_step.unsigned_abs() >= input_tile || out_step.unsigned_abs() >= output_tile {
+        let tile = input_tile.min(output_tile);
+        if let Some(geometry) = TileGeometry::new(size, shape, tile) {
+            let input_row_step = input_layout.strides[N - 2];
+            let output_row_step = output_layout.strides[N - 2];
+            for slab in 0..geometry.slabs() {
+                let slab_idx = geometry.slab_base_index(slab);
+                let input_slab_base = input_layout.offset_of(slab_idx)? as isize;
+                let output_slab_base = output_layout.offset_of(slab_idx)? as isize;
+                for row_block in (0..geometry.height()).step_by(geometry.tile()) {
+                    let row_end = (row_block + geometry.tile()).min(geometry.height());
+                    for col_block in (0..geometry.width()).step_by(geometry.tile()) {
+                        let col_end = (col_block + geometry.tile()).min(geometry.width());
+                        for row in row_block..row_end {
+                            let mut input_offset = input_slab_base
+                                + (row as isize * input_row_step)
+                                + (col_block as isize * in_step);
+                            let mut output_offset = output_slab_base
+                                + (row as isize * output_row_step)
+                                + (col_block as isize * out_step);
+                            for _ in col_block..col_end {
+                                output_data[output_offset as usize] =
+                                    f(input_data[input_offset as usize]);
+                                input_offset += in_step;
+                                output_offset += out_step;
+                            }
+                        }
+                    }
+                }
+            }
+            return Ok(());
+        }
+    }
     for row in 0..traversal.rows() {
         let base_idx = traversal.base_index(row);
         let mut input_offset = input_layout.offset_of(base_idx)? as isize;
@@ -362,13 +398,73 @@ where
     let output_ptr = ctx.output_data.as_mut_ptr() as usize;
 
     // Row-walk parallel traversal: workers own disjoint innermost rows; one
-    // offset computation per row, then stride-increment walks (see binary_map
-    // for rationale + baselines).
+    // offset computation per row, then stride-increment walks. Column-walk
+    // views use the same cache-line micro-tile geometry as binary_map.
     let Some(traversal) = RowMajorTraversal::new(ctx.size, ctx.shape) else {
         return;
     };
     let in_step = traversal.last_axis_stride(ctx.input_layout);
     let out_step = traversal.last_axis_stride(ctx.output_layout);
+    let input_tile = line_elements::<T>();
+    let output_tile = line_elements::<U>();
+    if in_step.unsigned_abs() >= input_tile || out_step.unsigned_abs() >= output_tile {
+        let tile = input_tile.min(output_tile);
+        if let Some(geometry) = TileGeometry::new(ctx.size, ctx.shape, tile) {
+            let input_row_step = ctx.input_layout.strides[N - 2];
+            let output_row_step = ctx.output_layout.strides[N - 2];
+            let blocks = geometry.slabs() * geometry.row_blocks();
+            let block_chunk = (4096 / (geometry.tile() * geometry.width()).max(1)).max(1);
+
+            crate::infrastructure::parallel::parallel_for_chunks(
+                blocks,
+                block_chunk,
+                move |start, end| {
+                    for block in start..end {
+                        let slab = block / geometry.row_blocks();
+                        let row_block = block % geometry.row_blocks();
+                        let slab_idx = geometry.slab_base_index(slab);
+                        let input_slab_base = ctx
+                            .input_layout
+                            .offset_of(slab_idx)
+                            .expect("validated input layout must map every slab base")
+                            as isize;
+                        let output_slab_base = ctx
+                            .output_layout
+                            .offset_of(slab_idx)
+                            .expect("validated output layout must map every slab base")
+                            as isize;
+                        let row_start = row_block * geometry.tile();
+                        let row_end = (row_start + geometry.tile()).min(geometry.height());
+
+                        // SAFETY: storage spans are validated before dispatch;
+                        // each offset is the affine image of a validated logical
+                        // index; workers own disjoint output row blocks and
+                        // zero-stride output aliasing is rejected.
+                        unsafe {
+                            for col_block in (0..geometry.width()).step_by(geometry.tile()) {
+                                let col_end = (col_block + geometry.tile()).min(geometry.width());
+                                for row in row_start..row_end {
+                                    let mut input_offset = input_slab_base
+                                        + (row as isize * input_row_step)
+                                        + (col_block as isize * in_step);
+                                    let mut output_offset = output_slab_base
+                                        + (row as isize * output_row_step)
+                                        + (col_block as isize * out_step);
+                                    for _ in col_block..col_end {
+                                        let value = *(input_ptr as *const T).offset(input_offset);
+                                        *(output_ptr as *mut U).offset(output_offset) = f(value);
+                                        input_offset += in_step;
+                                        output_offset += out_step;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            );
+            return;
+        }
+    }
     let row_chunk = traversal.chunk_rows_for(4096);
 
     crate::infrastructure::parallel::parallel_for_chunks(
