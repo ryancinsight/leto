@@ -4,6 +4,21 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.2] - 2026-06-12
+
+### Changed
+
+- `leto-ops`: criterion benchmarks now disable plot generation and borrow the
+  ndarray reverse view in oracle reduction cases, keeping long oracle runs on
+  the timing path instead of the Windows plotters/view-move failure path.
+
+### Validation
+
+- Sequential oracle investigation confirms dense matmul remains behind
+  ndarray/nalgebra at 64x64, 128x128, and 256x256. A row-block branch-removal
+  experiment was rejected after the canonical dense 256x256 benchmark showed
+  unstable/regressed behavior.
+
 ## [0.19.1] - 2026-06-12
 
 ### Added

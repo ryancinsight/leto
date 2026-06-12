@@ -246,14 +246,14 @@ fn bench_oracle_compare(c: &mut Criterion) {
         bencher.iter(|| sum(black_box(&leto_reversed)));
     });
     group.bench_function("sum_reverse_ndarray_256x256", |bencher| {
-        bencher.iter(|| black_box(ndarray_reversed).sum());
+        bencher.iter(|| black_box(&ndarray_reversed).sum());
     });
     group.bench_function("norm_l2_reverse_leto_256x256", |bencher| {
         bencher.iter(|| norm_l2(black_box(&leto_reversed)).unwrap());
     });
     group.bench_function("norm_l2_reverse_ndarray_256x256", |bencher| {
         bencher.iter(|| {
-            black_box(ndarray_reversed)
+            black_box(&ndarray_reversed)
                 .iter()
                 .map(|value| value * value)
                 .sum::<f64>()
@@ -265,7 +265,7 @@ fn bench_oracle_compare(c: &mut Criterion) {
 
 criterion_group! {
     name = kernels;
-    config = Criterion::default().sample_size(20);
+    config = Criterion::default().sample_size(20).without_plots();
     targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare
 }
 criterion_main!(kernels);

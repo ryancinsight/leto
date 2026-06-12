@@ -109,7 +109,7 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-12 (v0.19.1): §A indexed zip parity, the Stage A1
+Update 2026-06-12 (v0.19.2): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
 symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
@@ -120,9 +120,10 @@ measured fixed row-block kernel; reverse-last-axis whole-array reductions now
 borrow unit-stride physical row slices. Current ndarray/nalgebra oracle tests
 cover LU solve/determinant/inverse, symmetric eigenvalues, Cholesky lower
 factors, singular values, and reverse-last-axis reductions. Criterion oracle
-comparison shows reverse reductions at parity or faster than ndarray, but
-dense 128x128 matmul is slower than ndarray/nalgebra (Leto 259.03 µs median vs
-ndarray 114.60 µs and nalgebra 103.68 µs). Topology-adaptive tile sizing and
+comparison shows reverse reductions faster than ndarray, but dense 128x128
+matmul is slower than ndarray/nalgebra (Leto 124.87 µs median vs ndarray
+78.247 µs and nalgebra 74.413 µs). Sequential 64x64 and 256x256 checks show
+the same gap class. Topology-adaptive tile sizing and
 non-unit truly strided reductions remain open. See CHANGELOG and the two ADRs
 in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base,
 Apollo/Coeus consumer migration with differential coverage, and dense matmul
@@ -181,7 +182,9 @@ eigen are demand-driven only.
 - Oracle performance parity: reverse-last-axis `sum`/`norm_l2` is at parity or
   faster than ndarray on the recorded 256x256 benchmark. Dense 128x128 matmul
   is not at parity with ndarray/nalgebra and blocks replacement-performance
-  claims until a measured kernel change closes the gap.
+  claims until a measured kernel change closes the gap. The 0.19.2 zero-skip
+  branch-removal experiment was rejected after canonical dense 256x256
+  instability/regression; next work needs a changed kernel model.
 - Locked dependency resolution: `--locked` focused gates and
   `cargo generate-lockfile` are blocked by the current upstream Git dependency
   set: `mnemosyne-arena` requires `themis ^0.8.0`, while the resolved themis Git

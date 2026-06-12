@@ -112,10 +112,12 @@ no unmeasured "optimization" per performance_engineering.
   runtime topology selection.
 - [ ] [minor] Close dense matmul oracle performance parity before any
   replacement claim: criterion oracle comparison records Leto 128x128 median
-  259.03 µs vs ndarray 114.60 µs and nalgebra 103.68 µs. Investigate RHS
-  packing, row/block/column micro-kernel geometry, and cache-topology-selected
-  tile shapes. Do not retry the rejected 0.14.3 const-generic blocking or
-  generic `mul_add` hook without a changed kernel model.
+  124.87 µs vs ndarray 78.247 µs and nalgebra 74.413 µs. Sequential 64x64 and
+  256x256 checks show the same gap class. Investigate RHS packing,
+  row/block/column micro-kernel geometry, and cache-topology-selected tile
+  shapes. Do not retry the rejected 0.14.3 const-generic blocking, generic
+  `mul_add` hook, or 0.19.2 zero-skip branch removal without a changed kernel
+  model and profile evidence.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted
