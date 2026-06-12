@@ -4,6 +4,21 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.16.1] - 2026-06-12
+
+### Changed
+
+- `leto-ops`: `zip_mut_with` strided fallback applies the shared
+  `TileGeometry`/`line_elements` cache-line micro-tiling when either operand's
+  last-axis walk skips whole lines, mirroring the binary/unary map paths.
+  Mixed `T`/`U` element sizes choose the smaller elements-per-line count.
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `zip/zip_mut_with_transposed_256x256`: 47.6 µs → 40.7 µs (**−14.5%**,
+  non-overlapping CIs). Residual vs the binary tiled map is the opaque
+  closure body.
+
 ## [0.16.0] - 2026-06-12
 
 Stage C2 closure: matmul row updates dispatch through the new Hermes AXPY

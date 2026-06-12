@@ -24,7 +24,7 @@ comparison.
 | reductions/norm_l2_transposed_256x256 | 4.67 µs | dense memory-order slice → hermes dot |
 | reductions/sum_reverse_last_axis_256x256 | 26.1 µs | unit-magnitude stride; row-walk by design |
 | reductions/norm_l2_reverse_last_axis_256x256 | 25.0 µs | non-dense; row-walk fallback |
-| zip/zip_mut_with_transposed_256x256 | 47.6 µs | row-walk (serial; not yet tiled) |
+| zip/zip_mut_with_transposed_256x256 | 40.7 µs | line-tiled (0.16.1); closure-opaque body limits further gain |
 
 ## Measured optimization history
 
@@ -38,6 +38,7 @@ comparison.
 | Line micro-tiling, unary (0.15.0) | map_into transposed 256² | ~50 µs class → 23.4 µs | tiled level |
 | Hermes AXPY matmul rows (0.16.0) | matmul dense 256² | 2.210 ms → 1.529 ms | **−31%** |
 | Sum memory-order fast path (0.16.0) | sum transposed 256² | 44.9 µs → 4.48 µs | **−90% (10×)** |
+| Line micro-tiling, zip (0.16.1) | zip_mut_with transposed 256² | 47.6 µs → 40.7 µs | **−14.5%** |
 
 Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 ~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×
@@ -57,8 +58,9 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 
 ## Open measured targets
 
-- Serial `zip` transposed (47.6 µs) is the remaining un-tiled column-walk
-  path; same `TileGeometry` applies if a measured win is shown.
+- `zip_mut_with` transposed now tiled at 40.7 µs; the residual vs the binary
+  map (~28 µs) is the opaque `FnMut` body — no further structural target
+  without an op-ZST zip variant, which no caller currently needs.
 - Truly non-dense strided reductions (reverse-axis cases) still row-walk;
   tiling them needs per-lane partial accumulators — different shape from
   the map case.

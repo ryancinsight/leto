@@ -1,4 +1,4 @@
-use crate::application::index::RowMajorTraversal;
+use crate::application::index::{line_elements, RowMajorTraversal, TileGeometry};
 use leto::{ArrayView, ArrayViewMut, LetoError, Result};
 
 #[inline]
@@ -60,6 +60,49 @@ where
     };
     let lhs_step = traversal.last_axis_stride(lhs_layout);
     let rhs_step = traversal.last_axis_stride(rhs_layout);
+
+    // Cache-line micro-tiling, mirroring binary_map: pays exactly when some
+    // operand's last-axis walk skips whole lines. Mixed element sizes choose
+    // the smaller elements-per-line count so both operands stay line-resident
+    // inside a tile.
+    let tile = line_elements::<T>().min(line_elements::<U>());
+    let column_walk = lhs_step.unsigned_abs() >= tile || rhs_step.unsigned_abs() >= tile;
+    if column_walk && N >= 2 {
+        if let Some(geometry) = TileGeometry::new(size, shape, tile) {
+            let (lhs_rs, rhs_rs) = (lhs_layout.strides[N - 2], rhs_layout.strides[N - 2]);
+            for slab in 0..geometry.slabs() {
+                let base_idx = geometry.slab_base_index(slab);
+                let lhs_base = lhs_layout.offset_of(base_idx)? as isize;
+                let rhs_base = rhs_layout.offset_of(base_idx)? as isize;
+                let mut rb = 0;
+                while rb < geometry.height() {
+                    let rend = (rb + geometry.tile()).min(geometry.height());
+                    let mut cb = 0;
+                    while cb < geometry.width() {
+                        let cend = (cb + geometry.tile()).min(geometry.width());
+                        for r in rb..rend {
+                            let r = r as isize;
+                            let c0 = cb as isize;
+                            let mut lhs_off = lhs_base + r * lhs_rs + c0 * lhs_step;
+                            let mut rhs_off = rhs_base + r * rhs_rs + c0 * rhs_step;
+                            for _ in cb..cend {
+                                f(
+                                    &mut lhs_data[lhs_off as usize],
+                                    &rhs_data[rhs_off as usize],
+                                );
+                                lhs_off += lhs_step;
+                                rhs_off += rhs_step;
+                            }
+                        }
+                        cb = cend;
+                    }
+                    rb = rend;
+                }
+            }
+            return Ok(());
+        }
+    }
+
     for row in 0..traversal.rows() {
         let base = traversal.base_index(row);
         let mut lhs_offset = lhs_layout.offset_of(base)? as isize;
