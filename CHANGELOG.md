@@ -4,6 +4,26 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.0] - 2026-06-12
+
+### Added
+
+- `leto-ops`: `NormKind::combine` default method for combining partial
+  accumulators without forcing row partials through the final norm transform.
+
+### Changed
+
+- `leto-ops`: whole-array `sum` and `norm` now borrow physical row slices when
+  the last-axis stride is `±1`, including reverse-last-axis views. Reverse rows
+  route through existing dense slice reducers with no materialized copy.
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `reductions/sum_reverse_last_axis_256x256`: 5.1575-5.2534 µs
+  (**−21.56% median**, p < 0.05).
+- `reductions/norm_l2_reverse_last_axis_256x256`: 9.1467-9.9752 µs
+  (**−18.00% median**, p < 0.05).
+
 ## [0.18.1] - 2026-06-12
 
 ### Changed

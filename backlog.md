@@ -110,6 +110,13 @@ no unmeasured "optimization" per performance_engineering.
   once the row/block/column tile policy is benchmarked across matrix sizes.
   Current 0.18.1 row block is a fixed L2-fit const-generic specialization, not
   runtime topology selection.
+- [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
+  borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
+  `norm` uses `NormKind::accumulate_slice` plus the new defaulted
+  `NormKind::combine` hook so row partials combine in accumulator space.
+  Criterion: `sum_reverse_last_axis_256x256` 5.1575-5.2534 µs (−21.56%
+  median, p < 0.05) and `norm_l2_reverse_last_axis_256x256` 9.1467-9.9752 µs
+  (−18.00% median, p < 0.05).
 - [x] [minor] (0.18.0) Wire themis as an optional leto-ops dependency for
   `CacheLevel` queries through `leto_ops::CacheGeometry` and the `topology`
   feature. The public API is additive; when the feature is disabled, callers

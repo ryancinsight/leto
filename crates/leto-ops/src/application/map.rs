@@ -1,4 +1,6 @@
-use crate::application::index::{line_elements, RowMajorTraversal, TileGeometry};
+use crate::application::index::{
+    line_elements, unit_stride_row_slice, RowMajorTraversal, TileGeometry,
+};
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -531,6 +533,10 @@ pub fn sum<T: Scalar, const N: usize>(arr: &ArrayView<'_, T, N>) -> T {
         for row in 0..traversal.rows() {
             let base_idx = traversal.base_index(row);
             if let Ok(mut offset) = layout.offset_of(base_idx).map(|offset| offset as isize) {
+                if let Some(slice) = unit_stride_row_slice(data, offset, step, traversal.inner()) {
+                    total = total.add(T::sum_slice(slice));
+                    continue;
+                }
                 for _ in 0..traversal.inner() {
                     if let Ok(index) = usize::try_from(offset) {
                         if let Some(value) = data.get(index) {

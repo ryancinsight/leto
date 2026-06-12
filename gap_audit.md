@@ -109,18 +109,19 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-12 (v0.18.1): §A indexed zip parity, the Stage A1
+Update 2026-06-12 (v0.19.0): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
 symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
 rank-deficient singular values, Hermes-backed dense reductions, and
 cache-line tiled strided elementwise traversal. The optional themis topology
 dependency is wired through `leto_ops::CacheGeometry`; dense matmul now has a
-measured fixed row-block kernel, while topology-adaptive tile sizing remains
-open. See CHANGELOG and the two ADRs in `docs/adr/`. Remaining work is
-cross-cutting: the Coeus re-base and Apollo/Coeus consumer migration with
-differential coverage; full rank-revealing SVD vectors and non-symmetric
-eigen are demand-driven only.
+measured fixed row-block kernel; reverse-last-axis whole-array reductions now
+borrow unit-stride physical row slices. Topology-adaptive tile sizing and
+non-unit truly strided reductions remain open. See CHANGELOG and the two ADRs
+in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base and
+Apollo/Coeus consumer migration with differential coverage; full rank-revealing
+SVD vectors and non-symmetric eigen are demand-driven only.
 
 - `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
   rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`

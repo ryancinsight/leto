@@ -1,12 +1,12 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.18.1 [patch] (Cargo.toml/Cargo.lock
-bumped; CHANGELOG synced). Delivered this cycle: dense matmul row-blocking on
-top of the Hermes AXPY row kernel with const-generic row blocks and no
-temporary allocation. Criterion current medians: `dense_64x64` 22.536 µs
-(~−19.8% vs recorded 28.1 µs table baseline); `dense_256x256` 1.4016 ms
-(~−8.3% vs recorded 1.529 ms table baseline). Remaining open:
-topology-adaptive tile sizing; truly non-dense strided reductions still
+Sprint phase: Execution. Target version: 0.19.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered this cycle: reverse-last-axis sum/norm
+reductions route unit-stride physical rows through borrowed row slices, so
+reverse rows reuse existing Hermes dense reducers without materializing copies.
+Criterion current medians: `sum_reverse_last_axis_256x256` 5.203 µs;
+`norm_l2_reverse_last_axis_256x256` 9.615 µs. Remaining open:
+topology-adaptive matmul tile sizing; non-unit truly strided reductions still
 row-walk (per-lane accumulators needed); melinoe ThreadCached consolidation
 filed.
 

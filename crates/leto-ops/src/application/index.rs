@@ -156,3 +156,26 @@ pub(crate) const fn line_elements<T>() -> usize {
         lane
     }
 }
+
+/// Borrow the physical row span for a logical row whose last-axis stride is ±1.
+#[inline]
+pub(crate) fn unit_stride_row_slice<T>(
+    data: &[T],
+    base_offset: isize,
+    step: isize,
+    len: usize,
+) -> Option<&[T]> {
+    if len == 0 {
+        return Some(&[]);
+    }
+
+    let start = match step {
+        1 => usize::try_from(base_offset).ok()?,
+        -1 => {
+            let tail = isize::try_from(len - 1).ok()?;
+            usize::try_from(base_offset.checked_sub(tail)?).ok()?
+        }
+        _ => return None,
+    };
+    data.get(start..start.checked_add(len)?)
+}

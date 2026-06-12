@@ -1,4 +1,4 @@
-use crate::application::index::RowMajorTraversal;
+use crate::application::index::{unit_stride_row_slice, RowMajorTraversal};
 use crate::domain::real::RealScalar;
 use leto::{ArrayView, Result};
 
@@ -18,6 +18,11 @@ pub trait NormKind<T: RealScalar>: Copy + Send + Sync + 'static {
     }
     /// Fold one element's contribution into the accumulator.
     fn accumulate(acc: T, x: T) -> T;
+    /// Combine two already-accumulated partial rows.
+    #[inline]
+    fn combine(acc: T, row_acc: T) -> T {
+        Self::accumulate(acc, Self::finish(row_acc))
+    }
     /// Map the final accumulator to the norm value.
     fn finish(acc: T) -> T;
 }
@@ -47,6 +52,10 @@ impl<T: RealScalar> NormKind<T> for NormL1 {
         acc.add(x.abs())
     }
     #[inline(always)]
+    fn combine(acc: T, row_acc: T) -> T {
+        acc.add(row_acc)
+    }
+    #[inline(always)]
     fn finish(acc: T) -> T {
         acc
     }
@@ -61,6 +70,10 @@ impl<T: RealScalar> NormKind<T> for NormL2 {
     #[inline(always)]
     fn accumulate(acc: T, x: T) -> T {
         acc.add(x.mul(x))
+    }
+    #[inline(always)]
+    fn combine(acc: T, row_acc: T) -> T {
+        acc.add(row_acc)
     }
     #[inline(always)]
     fn finish(acc: T) -> T {
@@ -79,6 +92,14 @@ impl<T: RealScalar> NormKind<T> for NormMax {
         let magnitude = x.abs();
         if magnitude > acc {
             magnitude
+        } else {
+            acc
+        }
+    }
+    #[inline(always)]
+    fn combine(acc: T, row_acc: T) -> T {
+        if row_acc > acc {
+            row_acc
         } else {
             acc
         }
@@ -126,6 +147,12 @@ where
         for row in 0..traversal.rows() {
             let base_idx = traversal.base_index(row);
             let mut offset = layout.offset_of(base_idx)? as isize;
+            if let Some(slice) = unit_stride_row_slice(data, offset, step, traversal.inner()) {
+                if let Some(row_acc) = K::accumulate_slice(slice) {
+                    acc = K::combine(acc, row_acc);
+                    continue;
+                }
+            }
             for _ in 0..traversal.inner() {
                 acc = K::accumulate(acc, data[offset as usize]);
                 offset += step;

@@ -8,12 +8,13 @@ workstation (AVX2-class). These baselines gate optimization work (atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
-## Current state (focused matmul update, 0.18.1, 2026-06-12)
+## Current state (focused reduction update, 0.19.0, 2026-06-12)
 
-0.18.1 changes dense matmul only. Current hot kernels do not call topology
-detection; row-blocking uses a fixed const-generic 32-row block chosen to fit
-32 f64 output rows plus one RHS row inside the conservative 256 KiB L2
-fallback at the 256-column benchmark shape.
+0.19.0 changes reverse-last-axis whole-array reductions by borrowing physical
+unit-stride row slices and feeding them to the dense slice reducers. Current
+hot matmul kernels do not call topology detection; row-blocking uses a fixed
+const-generic 32-row block chosen to fit 32 f64 output rows plus one RHS row
+inside the conservative 256 KiB L2 fallback at the 256-column benchmark shape.
 
 | Benchmark | Median | Note |
 | --- | --- | --- |
@@ -29,8 +30,8 @@ fallback at the 256-column benchmark shape.
 | reductions/norm_max_64k | 5.293 µs | hermes abs-max (0.17.0); scalar ref 39.961 µs |
 | reductions/sum_transposed_256x256 | 4.48 µs | dense memory-order slice → hermes sum (0.16.0) |
 | reductions/norm_l2_transposed_256x256 | 4.67 µs | dense memory-order slice → hermes dot |
-| reductions/sum_reverse_last_axis_256x256 | 26.1 µs | unit-magnitude stride; row-walk by design |
-| reductions/norm_l2_reverse_last_axis_256x256 | 25.0 µs | non-dense; row-walk fallback |
+| reductions/sum_reverse_last_axis_256x256 | 5.203 µs | borrowed unit-stride row slices (0.19.0), −21.56% median in criterion run |
+| reductions/norm_l2_reverse_last_axis_256x256 | 9.615 µs | borrowed unit-stride row slices (0.19.0), −18.00% median in criterion run |
 | zip/zip_mut_with_transposed_256x256 | 40.7 µs | line-tiled (0.16.1); closure-opaque body limits further gain |
 
 ## Measured optimization history
@@ -48,6 +49,7 @@ fallback at the 256-column benchmark shape.
 | Line micro-tiling, zip (0.16.1) | zip_mut_with transposed 256² | 47.6 µs → 40.7 µs | **−14.5%** |
 | Hermes abs-reductions (0.17.0) | norm_l1 64k / norm_max 64k | 34.174 µs → 4.069 µs / 39.961 µs → 5.293 µs | **−88.1% / −86.8%** |
 | Row-blocked matmul (0.18.1) | matmul dense 64² / 256² | 28.1 µs → 22.536 µs / 1.529 ms → 1.4016 ms | **~−19.8% / ~−8.3%** |
+| Reverse-row reduction slices (0.19.0) | sum / norm_l2 reverse-last-axis 256² | 6.517 µs → 5.203 µs / 11.775 µs → 9.615 µs | **−21.56% / −18.00% median in criterion run** |
 
 Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 ~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×
@@ -70,9 +72,9 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 - `zip_mut_with` transposed now tiled at 40.7 µs; the residual vs the binary
   map (~28 µs) is the opaque `FnMut` body — no further structural target
   without an op-ZST zip variant, which no caller currently needs.
-- Truly non-dense strided reductions (reverse-axis cases) still row-walk;
-  tiling them needs per-lane partial accumulators — different shape from
-  the map case.
+- Truly non-dense strided reductions with |last-axis stride| > 1 still
+  row-walk; tiling them needs per-lane partial accumulators — different shape
+  from the unit-stride row-slice case closed in 0.19.0.
 - matmul: fixed row-blocking on top of AXPY is closed (0.18.1). Remaining
   work is topology-adaptive tile sizing across row/block/column dimensions,
   not another unmeasured rewrite of the current row-block kernel.
