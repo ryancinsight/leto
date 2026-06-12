@@ -2,90 +2,61 @@
 
 Harness: `crates/leto-ops/benches/kernels.rs` (`cargo bench -p leto-ops`).
 Methodology: criterion, sample_size 20, median + 95% CI; pinned deterministic
-inputs (no RNG); default features (`std`, `simd`, `parallel`); f64.
-Machine class: Windows 11 x86_64 dev workstation (AVX2-class), 2026-06-11.
-Baselines gate the cache-aware tiling work (atlas ADR 0002 leto slice): a
-statistically significant regression in a touched kernel blocks merge.
+inputs (no RNG); default features; f64. Machine class: Windows 11 x86_64 dev
+workstation (AVX2-class). These baselines gate optimization work (atlas ADR
+0002 leto slice): a statistically significant regression in a touched kernel
+blocks merge, and no change is labeled an optimization without a recorded
+comparison.
 
-| Benchmark | Baseline (pre row-walk, 0.11.0) | Row-walk maps (0.11.1) | Row-walk reductions (0.11.2) | Current / touched-kernel result | Change |
-| --- | --- | --- | --- | --- | --- |
-| matmul/dense_64x64 | 28.42 µs | unchanged (untouched kernel) | 29.80 µs | 28.34 µs | no attributed change; untouched kernel |
-| matmul/dense_256x256 | 2.376 ms | unchanged (untouched kernel) | 2.401 ms | 2.245 ms | no attributed change; untouched kernel |
-| elementwise_add/contiguous_64k | 13.85 µs | 13.59 µs | 14.85 µs | 15.11 µs | no attributed change; untouched in 0.11.3 |
-| elementwise_add/transposed_256x256 | 1.206 ms | 50.98 µs → 49.19 µs | 55.30 µs | 50.65 µs | 0.11.1: **−95.9% (23.7×), p < 0.05** |
-| unary_map/map_into_contiguous_64k | not measured | not measured | not measured | 15.718 µs (pre unary tiling, 0.14.4); post-change rerun 14.998 µs | no claimed change; observed run-to-run noise |
-| unary_map/map_into_transposed_256x256 | not measured | not measured | not measured | 57.631 µs (56.477–58.379 µs CI, pre unary tiling, 0.14.4) → 35.303 µs (34.221–36.468 µs CI, 0.15.0) | **−38.7% median; non-overlapping CIs** |
-| reductions/sum_64k | 3.607 µs | unchanged (untouched; ±9% run-to-run noise observed and reversed on rerun) | 3.789 µs | 3.653 µs | no change (p = 0.97 vs 0.11.2 sample) |
-| reductions/norm_l2_64k | 28.06 µs | unchanged (untouched) | 28.07 µs | 5.508 µs | **−80.0%, p < 0.05** |
-| reductions/sum_transposed_256x256 | not measured | not measured | 40.73 µs | 40.24 µs | no change (p = 0.67) |
-| reductions/norm_l2_transposed_256x256 | not measured | not measured | 28.67 µs | 5.550 µs | **−80.7%, p < 0.05** |
-| reductions/sum_reverse_last_axis_256x256 | not measured | not measured | 30.55 µs | 31.36 µs | no change (p = 0.60) |
-| reductions/norm_l2_reverse_last_axis_256x256 | not measured | not measured | 30.21 µs | 30.82 µs | no change (p = 0.15); non-dense negative stride still row-walks |
+## Current state (full sweep, 0.15.0, 2026-06-11)
 
-| zip/zip_mut_with_transposed_256x256 | 553.4 µs (pre row-walk, 0.13.0) | 55.9 µs (0.13.1) | **−89.9% (9.9×), p < 0.05** |
+| Benchmark | Median | Note |
+| --- | --- | --- |
+| matmul/dense_64x64 | 27.4 µs | scalar i-k-j kernel; blocked candidates rejected (see below) |
+| matmul/dense_256x256 | 2.210 ms | ≈ 15 GFLOP/s, memory-bound at this size |
+| elementwise_add/contiguous_64k | 15.8 µs | hermes SIMD slice path |
+| elementwise_add/transposed_256x256 | 34.8 µs | line-tiled (0.14.4) |
+| unary_map/map_into_contiguous_64k | 13.0 µs | dense slice path |
+| unary_map/map_into_transposed_256x256 | 23.4 µs | line-tiled (0.15.0) |
+| reductions/sum_64k | 3.44 µs | hermes `sum_slice` |
+| reductions/norm_l2_64k | 4.67 µs | hermes dot via `dot_slice` (0.11.3) |
+| reductions/sum_transposed_256x256 | 44.9 µs | row-walk (not yet tiled) |
+| reductions/norm_l2_transposed_256x256 | 4.67 µs | dense memory-order slice → hermes dot |
+| reductions/sum_reverse_last_axis_256x256 | 26.1 µs | unit-magnitude stride; row-walk by design |
+| reductions/norm_l2_reverse_last_axis_256x256 | 25.0 µs | non-dense; row-walk fallback |
+| zip/zip_mut_with_transposed_256x256 | 47.6 µs | row-walk (serial; not yet tiled) |
 
-## Rejected Optimization Candidates
+## Measured optimization history
 
-- **Const-generic dense matmul blocking (0.14.3 audit, not shipped)**:
-  candidate tile shape `ROW_TILE=16`, `SHARED_TILE=32`, `COL_TILE=32` routed
-  only dense row-major views through a zero-allocation blocked path. Criterion
-  measured `matmul/dense_64x64` at 46.169-50.686 µs and
-  `matmul/dense_256x256` at 3.3176-3.4166 ms, regressing the retained
-  baselines (~28.34 µs and ~2.245 ms). Source reverted.
-- **Generic `Scalar::mul_add` matmul accumulation hook (0.14.3 audit, not
-  shipped)**: candidate routed matmul accumulation through a trait hook using
-  native `f32`/`f64::mul_add`. Criterion measured `matmul/dense_64x64` at
-  232.66-255.99 µs and `matmul/dense_256x256` at 11.346-13.303 ms. Source
-  reverted.
+| Change | Benchmark | Before → After | Delta |
+| --- | --- | --- | --- |
+| Row-walk strided maps (0.11.1) | elementwise transposed 256² | 1.206 ms → ~50 µs | **−95.9% (23.7×)** |
+| Row-walk strided reductions (0.11.2) | first strided reduction baselines | — | baselines |
+| Hermes dot norms (0.11.3) | norm_l2 64k / dense transposed | 28.1 µs → 5.5 µs | **−80%** |
+| Row-walk zip/scan/map_inplace (0.13.1) | zip transposed 256² | 553.4 µs → 55.9 µs | **−89.9% (9.9×)** |
+| Line micro-tiling, binary (0.14.4) | elementwise transposed 256² | 50.7 µs → 28.4 µs | **−43.5%** |
+| Line micro-tiling, unary (0.15.0) | map_into transposed 256² | ~50 µs class → 23.4 µs | tiled level |
 
-## Observations (drive the optimization backlog)
+Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
+~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×
+(large-stride TLB/prefetch behavior — revisit only with profile evidence).
 
-- **Line micro-tiling landed (0.14.4)**: column-walk strided binary
-  elementwise tiles the last two axes at one cache line per side
-  (8×8 for f64). Transposed add 50.65 µs → 28.4 µs (−43.5%, p < 0.05),
-  contiguous unchanged (p = 0.40); strided-vs-contiguous gap now ~1.8×
-  (cumulative 42× vs the original 1.206 ms). Residual is large-stride
-  TLB/prefetch behavior — profile before further work.
+## Rejected optimization candidates (do not retry without a changed model)
 
-- **Unary line micro-tiling landed (0.15.0)**: column-walk strided
-  `map_into` uses the same `TileGeometry` SSOT as binary map, with tile side
-  set to the smaller input/output element-per-line count for mixed scalar
-  maps. Criterion measured transposed unary `map_into` 57.631 µs
-  (56.477–58.379 µs CI) → 35.303 µs (34.221–36.468 µs CI), −38.7% median
-  with non-overlapping confidence intervals. Contiguous `map_into` remains
-  within observed run-to-run noise; no contiguous speedup is claimed.
+- **Const-generic dense matmul blocking (0.14.3 audit)**: ROW_TILE=16 /
+  SHARED_TILE=32 / COL_TILE=32 over dense row-major views regressed
+  `64x64` to ~48.5 µs and `256x256` to ~3.37 ms vs the ~28 µs / ~2.25 ms
+  baselines. Reverted.
+- **Generic `Scalar::mul_add` matmul accumulation hook (0.14.3 audit)**:
+  regressed `64x64` to ~245.6 µs and `256x256` to ~12.5 ms. Reverted.
+- Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
+  hermes scalar-AXPY / fused row-update provider; leto must not emulate one
+  with temporary allocation.
 
+## Open measured targets
 
-- **Row-walk policy complete (0.13.1)**: every strided fallback (binary,
-  unary map/mapv/map_inplace, all four zips, whole-array reductions/norms,
-  scan lanes) routes through `RowMajorTraversal`. The serial zip fallback —
-  previously per-element with two offset products — measured 553.4 µs →
-  55.9 µs on the transposed 256×256 case. Remaining strided cost is the
-  L1-tile blocking item.
-
-- **Row-walk traversal landed (0.11.1)**: the strided elementwise paths now
-  compute offsets once per innermost row (`RowMajorTraversal`) and walk the
-  last axis by stride increments, eliminating per-element div/mod index
-  decomposition and per-element offset products. Measured: transposed add
-  1.206 ms → 49–51 µs (−95.9%, 23.7×, p < 0.05) with contiguous unchanged.
-  The residual ~3.6× gap vs contiguous (49 µs vs 13.6 µs) is genuine
-  cache-line behavior of column-stride walks — the remaining L1-tile
-  blocking item targets it.
-- **Whole-array strided reductions/norms use row-walk traversal (0.11.2)**:
-  transposed and reverse-last-axis reductions are now separately measured.
-  The new criterion cases establish first baselines for strided whole-array
-  reductions: transposed `sum` 40.73 µs, transposed `norm_l2` 28.67 µs,
-  reverse-last-axis `sum` 30.55 µs, and reverse-last-axis `norm_l2` 30.21 µs.
-- **Dense L2/Frobenius norm uses Hermes dot (0.11.3)**: the contiguous fast
-  path computes `Σ x²` through the generic `Scalar::dot_slice` hook. Native
-  f32/f64 dispatch through Hermes; f16/bf16 retain the existing scalar
-  fallback. Measured: `norm_l2_64k` 28.07 µs → 5.508 µs (−80.0%,
-  p < 0.05), and dense-memory transposed `norm_l2` 28.67 µs → 5.550 µs
-  (−80.7%, p < 0.05). Reverse-last-axis views are not dense memory slices and
-  remain on the row-walk fallback.
-- matmul 256³ at ~2.38 ms ≈ 14 GFLOP/s (2·n³/t): memory-bound at this size
-  on this machine class; blocking (L1/L2 tiles from themis `CacheLevel`)
-  is the standard remedy and is backlogged behind these baselines.
-- norm_l2 now dispatches dense f32/f64 square accumulation through Hermes dot.
-  Remaining norm work is the non-dense strided path and any future Hermes
-  fused square-accumulate kernel that avoids dot self-alias dispatch overhead.
+- `sum_transposed_256x256` (44.9 µs) and serial `zip` transposed (47.6 µs)
+  are the remaining un-tiled column-walk paths; same `TileGeometry` applies
+  if a measured win is shown (reductions accumulate, so tiling needs
+  per-lane partial accumulators — different shape from the map case).
+- matmul blocking: gated on the hermes AXPY provider per the audit.
