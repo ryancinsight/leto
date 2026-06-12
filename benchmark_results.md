@@ -8,7 +8,7 @@ workstation (AVX2-class). These baselines gate optimization work (atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
-## Current state (dense-output zeroing update, 0.19.3, 2026-06-12)
+## Current state (matmul investigation update, 0.19.4, 2026-06-12)
 
 0.19.3 keeps the row-blocked Hermes AXPY matmul contraction and changes only
 the output zeroing phase: dense output storage and unit-stride output rows are
@@ -101,6 +101,15 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   Hermes AXPY with a generic inlined loop regressed
   `oracle_compare/matmul_leto_128x128` to 203.28 µs. Reverted; keep the Hermes
   row update until a fused multi-row provider exists.
+- **Hermes `tiled_gemm` f64 dense path (0.19.4 audit)**: wiring the existing
+  Hermes row-major tiled GEMM facade into Leto's dense C-contiguous matmul path
+  was value-correct but regressed `oracle_compare/matmul_leto_128x128` to
+  317.46 µs. Reverted; the current Hermes tiled GEMM surface is not the f64
+  replacement kernel for Leto dense matmul.
+- **Raise/disable parallel row-block scheduling for small dense matmul
+  (0.19.4 audit)**: rejected. All-features row-block parallelism beat the
+  serial-SIMD build for the current oracle sizes: 128x128 144.15 µs vs
+  170.25 µs, and 64x64 21.759 µs vs 23.665 µs.
 - Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
   hermes scalar-AXPY / fused row-update provider; leto must not emulate one
   with temporary allocation.
@@ -126,3 +135,7 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   Next kernel work targets RHS packing,
   row/block/column micro-kernel shape, and cache-geometry selection; no
   replacement-performance claim is valid until this comparison is closed.
+  Rejected paths now include local row-loop rewrites, existing Hermes tiled
+  GEMM, and reduced parallelism. The next candidate needs a new fused multi-row
+  row-update provider or an allocation-controlled packing API with reusable
+  scratch.

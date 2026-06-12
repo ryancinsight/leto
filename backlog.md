@@ -117,7 +117,8 @@ no unmeasured "optimization" per performance_engineering.
   row/block/column micro-kernel geometry, and cache-topology-selected tile
   shapes. Do not retry the rejected 0.14.3 const-generic blocking, generic
   `mul_add` hook, 0.19.2 zero-skip branch removal, 0.19.3 packed RHS dot path,
-  or 0.19.3 scalar row-update path without a changed kernel model and profile
+  0.19.3 scalar row-update path, 0.19.4 Hermes `tiled_gemm` path, or reduced
+  small-matrix parallel scheduling without a changed kernel model and profile
   evidence. Candidate next model: a Hermes fused multi-row/micro-kernel
   provider, or a caller-owned scratch API that makes packing allocation
   explicit and reusable.

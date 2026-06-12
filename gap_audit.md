@@ -109,7 +109,7 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-12 (v0.19.3): §A indexed zip parity, the Stage A1
+Update 2026-06-12 (v0.19.4): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
 symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
@@ -185,8 +185,10 @@ eigen are demand-driven only.
   claims until a measured kernel change closes the gap. The 0.19.2 zero-skip
   branch-removal experiment was rejected after canonical dense 256x256
   instability/regression. The 0.19.3 packed-RHS dot and scalar-row-update
-  experiments also regressed 128x128. Next work needs a changed contraction
-  model, not another local rewrite of the row-AXPY loop.
+  experiments also regressed 128x128. The 0.19.4 Hermes `tiled_gemm` f64 dense
+  path regressed 128x128, and small-matrix serial scheduling was slower than
+  row-block parallelism. Next work needs a changed contraction model, not
+  another local rewrite of the row-AXPY loop.
 - Locked dependency resolution: `--locked` focused gates and
   `cargo generate-lockfile` are blocked by the current upstream Git dependency
   set: `mnemosyne-arena` requires `themis ^0.8.0`, while the resolved themis Git

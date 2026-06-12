@@ -1,8 +1,8 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.19.3 [patch] (Cargo.toml bumped;
-CHANGELOG synced). Delivered this cycle: matmul output-zeroing memory
-efficiency and a measured dense-matmul kernel investigation. Result
+Sprint phase: Execution. Target version: 0.19.4 [patch] (Cargo.toml bumped;
+CHANGELOG synced). Delivered this cycle: measured dense-matmul kernel and
+scheduling investigation. Result
 parity remains covered for LU solve/determinant/inverse, symmetric eigenvalues,
 Cholesky lower factors, singular values, and reverse-last-axis reductions.
 Performance parity remains mixed: reverse reductions are faster than ndarray,
@@ -120,8 +120,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   nalgebra 74.413 µs. Sequential 64x64 and 256x256 checks show the same gap
   class. Rejected: removing the dense row-block zero-skip branch, RHS-column
   packing plus `Scalar::dot_slice`, and replacing Hermes AXPY with a generic
-  scalar row update. Next kernel increment should require a changed contraction
-  model, likely a Hermes fused multi-row/micro-kernel provider or a caller-owned
+  scalar row update. Rejected this cycle: existing Hermes `tiled_gemm` for f64
+  dense matmul and reducing parallel row-block scheduling for small dense
+  matrices. Next kernel increment should require a changed contraction model,
+  likely a Hermes fused multi-row/micro-kernel provider or a caller-owned
   scratch API with measured allocation control.
 
 ## Naming decision [patch]

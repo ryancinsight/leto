@@ -4,6 +4,17 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.4] - 2026-06-12
+
+### Validation
+
+- Dense matmul investigation continued against ndarray/nalgebra. Hermes
+  `tiled_gemm` integration for f64 dense row-major matmul was rejected after
+  `oracle_compare/matmul_leto_128x128` regressed to 317.46 µs.
+- Parallel row-block scheduling remains beneficial for current small dense
+  oracle cases: all-features 128x128 median 144.15 µs vs serial-SIMD
+  170.25 µs; all-features 64x64 median 21.759 µs vs serial-SIMD 23.665 µs.
+
 ## [0.19.3] - 2026-06-12
 
 ### Changed
