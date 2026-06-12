@@ -1,4 +1,4 @@
-use crate::application::index::RowMajorTraversal;
+use crate::application::index::{line_elements, RowMajorTraversal, TileGeometry};
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -200,6 +200,56 @@ where
     let rhs_step = traversal.last_axis_stride(rhs_layout);
     let out_step = traversal.last_axis_stride(out_layout);
 
+    // Cache-line micro-tiling pays exactly when some operand's last-axis
+    // walk skips whole lines (|stride| >= elements-per-line); unit and
+    // reverse-unit strides already consume lines fully and keep row-walk.
+    let tile = line_elements::<T>();
+    let column_walk = lhs_step.unsigned_abs() >= tile
+        || rhs_step.unsigned_abs() >= tile
+        || out_step.unsigned_abs() >= tile;
+    if column_walk {
+        if let Some(geometry) = TileGeometry::new(size, shape, tile) {
+            let (lhs_rs, rhs_rs, out_rs) = (
+                lhs_layout.strides[N - 2],
+                rhs_layout.strides[N - 2],
+                out_layout.strides[N - 2],
+            );
+            for slab in 0..geometry.slabs() {
+                let base_idx = geometry.slab_base_index(slab);
+                let lhs_base = lhs_layout.offset_of(base_idx)? as isize;
+                let rhs_base = rhs_layout.offset_of(base_idx)? as isize;
+                let out_base = out_layout.offset_of(base_idx)? as isize;
+                let mut rb = 0;
+                while rb < geometry.height() {
+                    let rend = (rb + geometry.tile()).min(geometry.height());
+                    let mut cb = 0;
+                    while cb < geometry.width() {
+                        let cend = (cb + geometry.tile()).min(geometry.width());
+                        for r in rb..rend {
+                            let r = r as isize;
+                            let c0 = cb as isize;
+                            let mut lhs_off = lhs_base + r * lhs_rs + c0 * lhs_step;
+                            let mut rhs_off = rhs_base + r * rhs_rs + c0 * rhs_step;
+                            let mut out_off = out_base + r * out_rs + c0 * out_step;
+                            for _ in cb..cend {
+                                out_data[out_off as usize] = Op::apply(
+                                    lhs_data[lhs_off as usize],
+                                    rhs_data[rhs_off as usize],
+                                );
+                                lhs_off += lhs_step;
+                                rhs_off += rhs_step;
+                                out_off += out_step;
+                            }
+                        }
+                        cb = cend;
+                    }
+                    rb = rend;
+                }
+            }
+            return Ok(());
+        }
+    }
+
     for row in 0..traversal.rows() {
         let base_idx = traversal.base_index(row);
         let mut lhs_off = lhs_layout.offset_of(base_idx)? as isize;
@@ -266,6 +316,80 @@ where
     let lhs_step = traversal.last_axis_stride(ctx.lhs_layout);
     let rhs_step = traversal.last_axis_stride(ctx.rhs_layout);
     let out_step = traversal.last_axis_stride(ctx.out_layout);
+
+    // Cache-line micro-tiling for column walks (see the serial path): workers
+    // own disjoint (slab, row-block) pairs, so no two workers share an output
+    // row and the aliasing-rejection guarantee carries over unchanged.
+    let tile = line_elements::<T>();
+    let column_walk = lhs_step.unsigned_abs() >= tile
+        || rhs_step.unsigned_abs() >= tile
+        || out_step.unsigned_abs() >= tile;
+    if column_walk {
+        if let Some(geometry) = TileGeometry::new(ctx.size, ctx.shape, tile) {
+            let (lhs_rs, rhs_rs, out_rs) = (
+                ctx.lhs_layout.strides[N - 2],
+                ctx.rhs_layout.strides[N - 2],
+                ctx.out_layout.strides[N - 2],
+            );
+            let blocks = geometry.slabs() * geometry.row_blocks();
+            let block_chunk = (4096 / (geometry.tile() * geometry.width()).max(1)).max(1);
+            crate::infrastructure::parallel::parallel_for_chunks(
+                blocks,
+                block_chunk,
+                move |start, end| {
+                    for block in start..end {
+                        let slab = block / geometry.row_blocks();
+                        let rb = (block % geometry.row_blocks()) * geometry.tile();
+                        let rend = (rb + geometry.tile()).min(geometry.height());
+                        let base_idx = geometry.slab_base_index(slab);
+                        let lhs_base = ctx
+                            .lhs_layout
+                            .offset_of(base_idx)
+                            .expect("validated lhs layout must map every logical index")
+                            as isize;
+                        let rhs_base = ctx
+                            .rhs_layout
+                            .offset_of(base_idx)
+                            .expect("validated rhs layout must map every logical index")
+                            as isize;
+                        let out_base = ctx
+                            .out_layout
+                            .offset_of(base_idx)
+                            .expect("validated output layout must map every logical index")
+                            as isize;
+                        let mut cb = 0;
+                        while cb < geometry.width() {
+                            let cend = (cb + geometry.tile()).min(geometry.width());
+                            for r in rb..rend {
+                                let r = r as isize;
+                                let c0 = cb as isize;
+                                let mut lhs_off = lhs_base + r * lhs_rs + c0 * lhs_step;
+                                let mut rhs_off = rhs_base + r * rhs_rs + c0 * rhs_step;
+                                let mut out_off = out_base + r * out_rs + c0 * out_step;
+                                // SAFETY: spans validated before dispatch; every
+                                // walked offset equals offset_of of a validated
+                                // logical index; workers own disjoint row blocks
+                                // and zero-stride output aliasing is rejected.
+                                unsafe {
+                                    for _ in cb..cend {
+                                        let lhs_val = *(lhs_ptr as *const T).offset(lhs_off);
+                                        let rhs_val = *(rhs_ptr as *const T).offset(rhs_off);
+                                        *(out_ptr as *mut T).offset(out_off) =
+                                            Op::apply(lhs_val, rhs_val);
+                                        lhs_off += lhs_step;
+                                        rhs_off += rhs_step;
+                                        out_off += out_step;
+                                    }
+                                }
+                            }
+                            cb = cend;
+                        }
+                    }
+                },
+            );
+            return;
+        }
+    }
     // Keep roughly the previous elements-per-chunk granularity.
     let row_chunk = traversal.chunk_rows_for(4096);
 

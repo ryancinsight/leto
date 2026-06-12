@@ -68,3 +68,86 @@ impl<const N: usize> RowMajorTraversal<N> {
         }
     }
 }
+
+/// Cache-line micro-tile geometry over the last two axes (rank ≥ 2).
+///
+/// A column-strided operand (|last-axis stride| ≥ elements-per-line) touches
+/// a fresh cache line per element under plain row-walk, wasting
+/// `1 - 1/lane` of every line. Tiling the last two axes at
+/// `lane = 64 / size_of::<T>()` elements per side makes each touched line
+/// fully consumed before eviction: within a tile the strided operand revisits
+/// the same `tile` lines across `tile` rows. The tile size is derived from
+/// the 64-byte line, not tuned.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TileGeometry<const N: usize> {
+    shape: [usize; N],
+    slabs: usize,
+    height: usize,
+    width: usize,
+    tile: usize,
+}
+
+impl<const N: usize> TileGeometry<N> {
+    /// `None` when rank < 2 or the space is empty (callers keep row-walk).
+    #[inline]
+    pub(crate) fn new(size: usize, shape: [usize; N], tile: usize) -> Option<Self> {
+        if N < 2 || size == 0 {
+            return None;
+        }
+        let height = shape[N - 2];
+        let width = shape[N - 1];
+        if height == 0 || width == 0 || tile == 0 {
+            return None;
+        }
+        Some(Self {
+            shape,
+            slabs: size / (height * width),
+            height,
+            width,
+            tile,
+        })
+    }
+
+    #[inline]
+    pub(crate) const fn slabs(self) -> usize {
+        self.slabs
+    }
+
+    #[inline]
+    pub(crate) const fn height(self) -> usize {
+        self.height
+    }
+
+    #[inline]
+    pub(crate) const fn width(self) -> usize {
+        self.width
+    }
+
+    #[inline]
+    pub(crate) const fn tile(self) -> usize {
+        self.tile
+    }
+
+    /// Row blocks per slab: `ceil(height / tile)`.
+    #[inline]
+    pub(crate) const fn row_blocks(self) -> usize {
+        self.height.div_ceil(self.tile)
+    }
+
+    /// Logical index of a slab's `[.., 0, 0]` corner.
+    #[inline]
+    pub(crate) fn slab_base_index(self, slab: usize) -> [usize; N] {
+        index_from_flat(slab * self.height * self.width, &self.shape)
+    }
+}
+
+/// Elements of `T` per 64-byte cache line (≥ 1): the analytic micro-tile side.
+#[inline]
+pub(crate) const fn line_elements<T>() -> usize {
+    let lane = 64 / core::mem::size_of::<T>();
+    if lane == 0 {
+        1
+    } else {
+        lane
+    }
+}

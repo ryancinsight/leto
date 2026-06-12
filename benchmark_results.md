@@ -38,6 +38,14 @@ statistically significant regression in a touched kernel blocks merge.
 
 ## Observations (drive the optimization backlog)
 
+- **Line micro-tiling landed (0.14.4)**: column-walk strided binary
+  elementwise tiles the last two axes at one cache line per side
+  (8×8 for f64). Transposed add 50.65 µs → 28.4 µs (−43.5%, p < 0.05),
+  contiguous unchanged (p = 0.40); strided-vs-contiguous gap now ~1.8×
+  (cumulative 42× vs the original 1.206 ms). Residual is large-stride
+  TLB/prefetch behavior — profile before further work.
+
+
 - **Row-walk policy complete (0.13.1)**: every strided fallback (binary,
   unary map/mapv/map_inplace, all four zips, whole-array reductions/norms,
   scan lanes) routes through `RowMajorTraversal`. The serial zip fallback —

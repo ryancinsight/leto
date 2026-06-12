@@ -4,6 +4,32 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.14.4] - 2026-06-11
+
+Patch performance increment: cache-line micro-tiling for column-walk strided
+elementwise traversal (Stage C3, atlas ADR 0002 leto slice).
+
+### Changed
+
+- `leto-ops`: the binary strided fallbacks (serial + parallel) micro-tile the
+  last two axes at `64 / size_of::<T>()` elements per side (8 for f64; the
+  tile is derived from the 64-byte cache line, not tuned) when some operand's
+  last-axis walk skips whole lines (`|stride| ≥ elements-per-line`). Within a
+  tile the column-strided operand revisits the same lines across tile rows,
+  restoring full line utilization. Unit and reverse-unit strides already
+  consume lines fully and keep the cheaper row-walk; rank < 2 keeps row-walk.
+  Parallel workers own disjoint (slab, row-block) pairs, preserving the
+  aliasing-rejection guarantee.
+- New `TileGeometry`/`line_elements` helpers in `application/index.rs` beside
+  `RowMajorTraversal` (one geometry SSOT for tiled traversal).
+
+### Performance (criterion, recorded in benchmark_results.md)
+
+- `elementwise_add/transposed_256x256`: 50.65 µs → 28.4 µs (**−43.5%,
+  p < 0.05**); `contiguous_64k` statistically unchanged (p = 0.40). The
+  strided-vs-contiguous gap closes from ~3.6× to ~1.8×; the cumulative
+  improvement from the original 1.206 ms baseline is **42×**.
+
 ## [0.14.3] - 2026-06-11
 
 Patch audit increment for Stage C2 Hermes SIMD coverage.

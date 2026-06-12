@@ -71,9 +71,18 @@ no unmeasured "optimization" per performance_engineering.
   `RowMajorTraversal`. Measured: transposed zip 553.4 µs → 55.9 µs (−89.9%,
   9.9×, p < 0.05). Axis-reduction output-index decomposition is amortized
   over the axis length (cost 1/axis_len per element) and deliberately left.
-- [ ] [minor] L1-tile blocking on top of row-walk for the residual
-  column-walk gap (const-generic tile size, selected from themis
-  `CacheLevel` data).
+- [x] [patch] (0.14.4) Cache-line micro-tiling for column-walk strided
+  elementwise (binary serial + parallel): tile side = 64-byte line /
+  `size_of::<T>()` (analytic, not tuned); applied only when some operand's
+  |last-axis stride| ≥ elements-per-line. Measured: transposed add
+  50.65 µs → 28.4 µs (−43.5%, p < 0.05), contiguous unchanged; gap vs
+  contiguous now ~1.8× (cumulative 42× from the 1.206 ms origin). Line
+  tiling needs only the line size, so the themis `CacheLevel` wiring item
+  now applies to the L1/L2-sized matmul blocking below. Residual ~1.8× is
+  TLB/prefetch behavior of large-stride walks; revisit only with profile
+  evidence.
+- [ ] [minor] Extend line micro-tiling to the unary strided fallbacks
+  (map_into serial + parallel) — same geometry SSOT, measured gate.
 - [ ] [minor] Blocked matmul: 256³ at ~2.38 ms (≈14 GFLOP/s) is memory-bound;
   L1/L2 cache blocking with const-generic tile shapes (one authoritative
   kernel monomorphized per tile shape, per the structural-const-generics
