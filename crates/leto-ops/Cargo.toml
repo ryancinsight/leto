@@ -24,8 +24,8 @@ half = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-ndarray = "0.16"
-nalgebra = { version = "0.34", default-features = false, features = ["std"] }
+ndarray = { workspace = true }
+nalgebra = { workspace = true }
 criterion = { workspace = true }
 
 [[bench]]

@@ -200,7 +200,9 @@ no unmeasured "optimization" per performance_engineering.
 
 ## Phase 5: Python and Interop [minor]
 - [ ] Keep Python as a thin PyO3/NumPy boundary over Rust operations.
-- [ ] Resolve or route around the `numpy-0.23.0` rustdoc ICE for `leto-python` without weakening Rust crate documentation gates.
+- [x] [patch] Resolve the `numpy-0.23.0` rustdoc ICE by updating the Python FFI
+  dependency pair to NumPy 0.28/PyO3 0.28 and migrating GIL-release calls to
+  `Python::detach`; full workspace docs are now part of the verification gate.
 - [x] Replace current Python result construction that clones through `Vec` after computation. Verification: `leto-python` now transfers owned `VecStorage` with `Array::into_vec()` and `PyArray1::from_vec`, then reshapes without the former `as_mut_slice().to_vec()` clone path.
 - [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 

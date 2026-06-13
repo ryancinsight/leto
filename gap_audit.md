@@ -1,9 +1,9 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.15.0),
+Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
 `D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, current docs.rs pages for
-`ndarray 0.16` and `nalgebra`, and upstream Atlas crates. Counterparts:
-`ndarray 0.16`, `nalgebra` (already removed from Apollo).
+`ndarray 0.17` and `nalgebra`, and upstream Atlas crates. Counterparts:
+`ndarray 0.17`, `nalgebra` (already removed from Apollo).
 
 ## Consumer Position
 
@@ -109,7 +109,7 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-13 (v0.19.5): §A indexed zip parity, the Stage A1
+Update 2026-06-13 (v0.19.6): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
 symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
@@ -175,7 +175,8 @@ eigen are demand-driven only.
   validated against closed-form mean/variance (correct per policy, not ndarray).
   Remaining: differential coverage is leto-internal; consumer-side (Apollo/Coeus)
   migration tests are the next cross-repo step.
-- `leto-python` rustdoc ICE via `numpy 0.23` still open (tracked in backlog).
+- `leto-python` rustdoc ICE via `numpy 0.23`: CLOSED by 0.19.6 dependency
+  update to NumPy 0.28/PyO3 0.28 and full workspace doc verification.
 - Differential coverage: ndarray oracle covers map/reductions/matmul, unary
   suite, concat/stack, batched matmul, and cumsum. RNG uses closed-form
   references. Indexed zip currently rests on value-semantic traversal tests.

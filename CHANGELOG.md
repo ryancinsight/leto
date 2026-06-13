@@ -4,6 +4,21 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.6] - 2026-06-13
+
+### Changed
+
+- Updated direct registry dependency constraints: `bytemuck` 1.25, `ndarray`
+  0.17, `nalgebra` 0.35, `pyo3` 0.28, `numpy` 0.28, `proptest` 1.11, and
+  `criterion` 0.8.
+- Migrated the thin PyO3 binding GIL-release calls from `Python::allow_threads`
+  to `Python::detach` for PyO3 0.28 compatibility.
+
+### Validation
+
+- Full Git dependency update remains blocked upstream: pinned Mnemosyne still
+  requires `themis ^0.8.0`, while Themis main reports `0.9.5`.
+
 ## [0.19.5] - 2026-06-13
 
 ### Added
