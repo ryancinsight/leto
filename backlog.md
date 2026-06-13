@@ -118,8 +118,9 @@ no unmeasured "optimization" per performance_engineering.
   shapes. Do not retry the rejected 0.14.3 const-generic blocking, generic
   `mul_add` hook, 0.19.2 zero-skip branch removal, 0.19.3 packed RHS dot path,
   0.19.3 scalar row-update path, 0.19.4 Hermes `tiled_gemm` path, or reduced
-  small-matrix parallel scheduling without a changed kernel model and profile
-  evidence. Candidate next model: a Hermes fused multi-row/micro-kernel
+  small-matrix parallel scheduling, 0.19.5 `MATMUL_ROW_BLOCK=16`, or 0.19.5
+  first-shared-row output initialization without a changed kernel model and
+  profile evidence. Candidate next model: a Hermes fused multi-row/micro-kernel
   provider, or a caller-owned scratch API that makes packing allocation
   explicit and reusable.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through

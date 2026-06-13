@@ -1,14 +1,14 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.19.4 [patch] (Cargo.toml bumped;
-CHANGELOG synced). Delivered this cycle: measured dense-matmul kernel and
-scheduling investigation. Result
+Sprint phase: Execution. Target version: 0.19.5 [patch] (Cargo.toml bumped;
+CHANGELOG synced). Delivered this cycle: expanded dense-matmul oracle
+benchmarks and measured kernel initialization/block-size investigations. Result
 parity remains covered for LU solve/determinant/inverse, symmetric eigenvalues,
 Cholesky lower factors, singular values, and reverse-last-axis reductions.
 Performance parity remains mixed: reverse reductions are faster than ndarray,
-but dense 128x128 matmul is slower (Leto 124.87 µs median vs ndarray 78.247 µs
-and nalgebra 74.413 µs). Remaining open: close dense matmul oracle performance
-gap before claiming replacement performance parity; non-unit truly strided
+but dense 64x64/128x128/256x256 matmul is slower than ndarray/nalgebra.
+Remaining open: close dense matmul oracle performance gap before claiming
+replacement performance parity; non-unit truly strided
 reductions still row-walk (per-lane accumulators needed); melinoe ThreadCached
 consolidation filed.
 
@@ -124,7 +124,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   dense matmul and reducing parallel row-block scheduling for small dense
   matrices. Next kernel increment should require a changed contraction model,
   likely a Hermes fused multi-row/micro-kernel provider or a caller-owned
-  scratch API with measured allocation control.
+  scratch API with measured allocation control. Rejected this cycle:
+  `MATMUL_ROW_BLOCK=16` and first-shared-row output initialization; both kept
+  focused tests green but failed release benchmark stability, and the
+  initialization path also regressed 64x64.
 
 ## Naming decision [patch]
 - [x] Keep `leto` as the crate name. Functionally, Leto is a non-differentiable shared strided-array substrate between Coeus and Apollo; mythologically, Leto bridges Coeus and Apollo as parent/child context. The name is appropriate if the crate remains the shared array/memory vocabulary, not an autodiff engine or spectral-transform crate.

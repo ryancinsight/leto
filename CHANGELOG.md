@@ -4,6 +4,21 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.5] - 2026-06-13
+
+### Added
+
+- Extended dense matmul oracle benchmarks to compare Leto, ndarray, and
+  nalgebra at 64x64, 128x128, and 256x256.
+
+### Validation
+
+- Rejected `MATMUL_ROW_BLOCK=16`: focused matmul tests passed, but the release
+  benchmark process ended with `STATUS_ACCESS_VIOLATION`.
+- Rejected first-shared-row output initialization: focused matmul tests passed,
+  but 64x64 dense matmul regressed to 26.807 µs median and the release
+  benchmark process ended with `STATUS_ACCESS_VIOLATION`.
+
 ## [0.19.4] - 2026-06-12
 
 ### Validation

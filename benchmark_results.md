@@ -8,7 +8,7 @@ workstation (AVX2-class). These baselines gate optimization work (atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
-## Current state (matmul investigation update, 0.19.4, 2026-06-12)
+## Current state (oracle matrix expansion, 0.19.5, 2026-06-13)
 
 0.19.3 keeps the row-blocked Hermes AXPY matmul contraction and changes only
 the output zeroing phase: dense output storage and unit-stride output rows are
@@ -37,27 +37,35 @@ inside the conservative 256 KiB L2 fallback at the 256-column benchmark shape.
 | reductions/norm_l2_reverse_last_axis_256x256 | 9.615 µs | borrowed unit-stride row slices (0.19.0), −18.00% median in criterion run |
 | zip/zip_mut_with_transposed_256x256 | 40.7 µs | line-tiled (0.16.1); closure-opaque body limits further gain |
 
-## Oracle comparison gate (ndarray / nalgebra, 0.19.2, 2026-06-12)
+## Oracle comparison gate (ndarray / nalgebra, 0.19.5, 2026-06-13)
 
 Methodology: `cargo bench -p leto-ops --bench kernels --all-features
-oracle_compare -- --sample-size 10`; criterion medians + 95% CI; deterministic
-f64 inputs; same process and machine class as the current baselines above.
+"oracle_compare/matmul_(leto|ndarray|nalgebra)_(64|128|256)x(64|128|256)"
+-- --sample-size 10`; criterion medians + 95% CI; deterministic f64 inputs;
+same process and machine class as the current baselines above.
 Evidence tier: empirical benchmark comparison, not a proof.
 
 | Benchmark | Median | Oracle conclusion |
 | --- | --- | --- |
-| oracle_compare/matmul_leto_128x128 | 124.87 µs | slower than ndarray/nalgebra |
-| oracle_compare/matmul_ndarray_128x128 | 78.247 µs | oracle baseline |
-| oracle_compare/matmul_nalgebra_128x128 | 74.413 µs | oracle baseline |
+| oracle_compare/matmul_leto_64x64 | 21.443 µs | slower than ndarray/nalgebra |
+| oracle_compare/matmul_ndarray_64x64 | 11.566 µs | oracle baseline |
+| oracle_compare/matmul_nalgebra_64x64 | 12.241 µs | oracle baseline |
+| oracle_compare/matmul_leto_128x128 | 127.63 µs | slower than ndarray/nalgebra |
+| oracle_compare/matmul_ndarray_128x128 | 106.16 µs | oracle baseline |
+| oracle_compare/matmul_nalgebra_128x128 | 108.70 µs | oracle baseline |
+| oracle_compare/matmul_leto_256x256 | 2.4357 ms | slower than ndarray/nalgebra |
+| oracle_compare/matmul_ndarray_256x256 | 606.89 µs | oracle baseline |
+| oracle_compare/matmul_nalgebra_256x256 | 848.08 µs | oracle baseline |
 | oracle_compare/sum_reverse_leto_256x256 | 4.7805 µs | faster than ndarray |
 | oracle_compare/sum_reverse_ndarray_256x256 | 6.0717 µs | oracle baseline |
 | oracle_compare/norm_l2_reverse_leto_256x256 | 9.3496 µs | faster than ndarray |
 | oracle_compare/norm_l2_reverse_ndarray_256x256 | 30.877 µs | oracle baseline |
 
 Result: reverse-last-axis reductions satisfy current ndarray performance parity
-on this benchmark shape. Dense 128x128 matmul does not: Leto is ~1.60x slower
-than ndarray and ~1.68x slower than nalgebra by median. Replacement claims must
-exclude dense matmul performance parity until the open target below is closed.
+on this benchmark shape. Dense matmul does not: Leto is ~1.85x slower than
+ndarray at 64x64, ~1.20x slower at 128x128, and ~4.01x slower at 256x256 by
+median. Replacement claims must exclude dense matmul performance parity until
+the open target below is closed.
 
 ## Measured optimization history
 
@@ -110,6 +118,15 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   (0.19.4 audit)**: rejected. All-features row-block parallelism beat the
   serial-SIMD build for the current oracle sizes: 128x128 144.15 µs vs
   170.25 µs, and 64x64 21.759 µs vs 23.665 µs.
+- **`MATMUL_ROW_BLOCK=16` (0.19.5 audit)**: rejected. Focused matmul tests
+  passed, but the release benchmark process ended with
+  `STATUS_ACCESS_VIOLATION`; no source change retained.
+- **First-shared-row output initialization (0.19.5 audit)**: rejected. The path
+  skipped the separate output-zero pass for row-blocked matmul and initialized
+  each row from the first shared row before AXPY accumulation. Focused matmul
+  tests passed, but `matmul/dense_64x64` regressed to 26.807 µs median and the
+  release benchmark process ended with `STATUS_ACCESS_VIOLATION`; no source
+  change retained.
 - Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
   hermes scalar-AXPY / fused row-update provider; leto must not emulate one
   with temporary allocation.
@@ -128,14 +145,11 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 - matmul output zeroing now uses dense and unit-stride row slice fills before
   the strided fallback. This is a memory-efficiency cleanup in the initialization
   phase, not a parity claim; the contraction bottleneck remains open.
-- dense matmul oracle parity: 128x128 Leto median 124.87 µs vs ndarray
-  78.247 µs and nalgebra 74.413 µs. Additional sequential investigation:
-  64x64 medians were Leto 33.709 µs, ndarray 16.674 µs, nalgebra 15.651 µs;
-  256x256 medians were Leto 1.3653 ms, ndarray 535.66 µs, nalgebra 519.63 µs.
-  Next kernel work targets RHS packing,
+- dense matmul oracle parity: 64x64, 128x128, and 256x256 Leto medians remain
+  slower than ndarray/nalgebra. Next kernel work targets RHS packing,
   row/block/column micro-kernel shape, and cache-geometry selection; no
   replacement-performance claim is valid until this comparison is closed.
   Rejected paths now include local row-loop rewrites, existing Hermes tiled
-  GEMM, and reduced parallelism. The next candidate needs a new fused multi-row
-  row-update provider or an allocation-controlled packing API with reusable
-  scratch.
+  GEMM, reduced parallelism, smaller row blocks, and first-row initialization.
+  The next candidate needs a new fused multi-row row-update provider or an
+  allocation-controlled packing API with reusable scratch.

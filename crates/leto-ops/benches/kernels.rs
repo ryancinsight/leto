@@ -200,37 +200,39 @@ fn bench_zip(c: &mut Criterion) {
 
 fn bench_oracle_compare(c: &mut Criterion) {
     let mut group = c.benchmark_group("oracle_compare");
-    let n = 128usize;
-    let lhs_values = pinned_values(n * n, 1.0e-3);
-    let rhs_values = pinned_values(n * n, 2.0e-3);
-    let leto_lhs = Array::from_shape_vec([n, n], lhs_values.clone()).unwrap();
-    let leto_rhs = Array::from_shape_vec([n, n], rhs_values.clone()).unwrap();
-    let ndarray_lhs = NdArray2::from_shape_vec((n, n), lhs_values.clone()).unwrap();
-    let ndarray_rhs = NdArray2::from_shape_vec((n, n), rhs_values.clone()).unwrap();
-    let nalgebra_lhs = DMatrix::from_row_slice(n, n, &lhs_values);
-    let nalgebra_rhs = DMatrix::from_row_slice(n, n, &rhs_values);
 
-    group.bench_function("matmul_leto_128x128", |bencher| {
-        bencher.iter_batched(
-            || Array::zeros([n, n]),
-            |mut out| {
-                matmul(
-                    black_box(&leto_lhs.view()),
-                    black_box(&leto_rhs.view()),
-                    &mut out.view_mut(),
-                )
-                .unwrap();
-                out
-            },
-            BatchSize::LargeInput,
-        );
-    });
-    group.bench_function("matmul_ndarray_128x128", |bencher| {
-        bencher.iter(|| black_box(&ndarray_lhs).dot(black_box(&ndarray_rhs)));
-    });
-    group.bench_function("matmul_nalgebra_128x128", |bencher| {
-        bencher.iter(|| black_box(&nalgebra_lhs) * black_box(&nalgebra_rhs));
-    });
+    for &n in &[64usize, 128, 256] {
+        let lhs_values = pinned_values(n * n, 1.0e-3);
+        let rhs_values = pinned_values(n * n, 2.0e-3);
+        let leto_lhs = Array::from_shape_vec([n, n], lhs_values.clone()).unwrap();
+        let leto_rhs = Array::from_shape_vec([n, n], rhs_values.clone()).unwrap();
+        let ndarray_lhs = NdArray2::from_shape_vec((n, n), lhs_values.clone()).unwrap();
+        let ndarray_rhs = NdArray2::from_shape_vec((n, n), rhs_values.clone()).unwrap();
+        let nalgebra_lhs = DMatrix::from_row_slice(n, n, &lhs_values);
+        let nalgebra_rhs = DMatrix::from_row_slice(n, n, &rhs_values);
+
+        group.bench_function(format!("matmul_leto_{n}x{n}"), |bencher| {
+            bencher.iter_batched(
+                || Array::zeros([n, n]),
+                |mut out| {
+                    matmul(
+                        black_box(&leto_lhs.view()),
+                        black_box(&leto_rhs.view()),
+                        &mut out.view_mut(),
+                    )
+                    .unwrap();
+                    out
+                },
+                BatchSize::LargeInput,
+            );
+        });
+        group.bench_function(format!("matmul_ndarray_{n}x{n}"), |bencher| {
+            bencher.iter(|| black_box(&ndarray_lhs).dot(black_box(&ndarray_rhs)));
+        });
+        group.bench_function(format!("matmul_nalgebra_{n}x{n}"), |bencher| {
+            bencher.iter(|| black_box(&nalgebra_lhs) * black_box(&nalgebra_rhs));
+        });
+    }
 
     let reduce_n = 256usize;
     let reduce_values = pinned_values(reduce_n * reduce_n, 1.0);
