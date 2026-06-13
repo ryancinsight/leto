@@ -8,21 +8,21 @@ workstation (AVX2-class). These baselines gate optimization work (atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
-## Current state (oracle matrix expansion, 0.19.5, 2026-06-13)
+## Current state (fused multi-row AXPY, 0.19.7, 2026-06-13)
 
-0.19.3 keeps the row-blocked Hermes AXPY matmul contraction and changes only
-the output zeroing phase: dense output storage and unit-stride output rows are
-filled through slices before strided fallback. 0.19.0 changes reverse-last-axis
-whole-array reductions by borrowing physical
-unit-stride row slices and feeding them to the dense slice reducers. Current
-hot matmul kernels do not call topology detection; row-blocking uses a fixed
-const-generic 32-row block chosen to fit 32 f64 output rows plus one RHS row
-inside the conservative 256 KiB L2 fallback at the 256-column benchmark shape.
+0.19.7 keeps the row-blocked matmul contraction and replaces repeated per-row
+Hermes AXPY dispatches with Hermes fused multi-row AXPY for positive-stride
+output row blocks. 0.19.0 changes reverse-last-axis whole-array reductions by
+borrowing physical unit-stride row slices and feeding them to the dense slice
+reducers. Current hot matmul kernels do not call topology detection;
+row-blocking uses a fixed const-generic 32-row block chosen to fit 32 f64
+output rows plus one RHS row inside the conservative 256 KiB L2 fallback at
+the 256-column benchmark shape.
 
 | Benchmark | Median | Note |
 | --- | --- | --- |
-| matmul/dense_64x64 | 22.536 µs | row-blocked Hermes AXPY rows (0.18.1), ~−19.8% vs recorded 28.1 µs table baseline |
-| matmul/dense_256x256 | 1.4016 ms | row-blocked Hermes AXPY rows (0.18.1), ~−8.3% vs recorded 1.529 ms table baseline |
+| matmul/dense_64x64 | 17.430 µs | oracle comparison median; fused multi-row Hermes AXPY (0.19.7) |
+| matmul/dense_256x256 | 1.0631 ms | oracle comparison median; fused multi-row Hermes AXPY (0.19.7) |
 | elementwise_add/contiguous_64k | 15.8 µs | hermes SIMD slice path |
 | elementwise_add/transposed_256x256 | 34.8 µs | line-tiled (0.14.4) |
 | unary_map/map_into_contiguous_64k | 13.0 µs | dense slice path |
@@ -37,7 +37,7 @@ inside the conservative 256 KiB L2 fallback at the 256-column benchmark shape.
 | reductions/norm_l2_reverse_last_axis_256x256 | 9.615 µs | borrowed unit-stride row slices (0.19.0), −18.00% median in criterion run |
 | zip/zip_mut_with_transposed_256x256 | 40.7 µs | line-tiled (0.16.1); closure-opaque body limits further gain |
 
-## Oracle comparison gate (ndarray / nalgebra, 0.19.5, 2026-06-13)
+## Oracle comparison gate (ndarray / nalgebra, 0.19.7, 2026-06-13)
 
 Methodology: `cargo bench -p leto-ops --bench kernels --all-features
 "oracle_compare/matmul_(leto|ndarray|nalgebra)_(64|128|256)x(64|128|256)"
@@ -47,23 +47,23 @@ Evidence tier: empirical benchmark comparison, not a proof.
 
 | Benchmark | Median | Oracle conclusion |
 | --- | --- | --- |
-| oracle_compare/matmul_leto_64x64 | 21.443 µs | slower than ndarray/nalgebra |
-| oracle_compare/matmul_ndarray_64x64 | 11.566 µs | oracle baseline |
-| oracle_compare/matmul_nalgebra_64x64 | 12.241 µs | oracle baseline |
-| oracle_compare/matmul_leto_128x128 | 127.63 µs | slower than ndarray/nalgebra |
-| oracle_compare/matmul_ndarray_128x128 | 106.16 µs | oracle baseline |
-| oracle_compare/matmul_nalgebra_128x128 | 108.70 µs | oracle baseline |
-| oracle_compare/matmul_leto_256x256 | 2.4357 ms | slower than ndarray/nalgebra |
-| oracle_compare/matmul_ndarray_256x256 | 606.89 µs | oracle baseline |
-| oracle_compare/matmul_nalgebra_256x256 | 848.08 µs | oracle baseline |
+| oracle_compare/matmul_leto_64x64 | 17.430 µs | slower than ndarray/nalgebra; improved vs 0.19.5 |
+| oracle_compare/matmul_ndarray_64x64 | 8.4923 µs | oracle baseline |
+| oracle_compare/matmul_nalgebra_64x64 | 8.7752 µs | oracle baseline |
+| oracle_compare/matmul_leto_128x128 | 108.98 µs | slower than ndarray/nalgebra; improved vs 0.19.5 |
+| oracle_compare/matmul_ndarray_128x128 | 66.527 µs | oracle baseline |
+| oracle_compare/matmul_nalgebra_128x128 | 62.935 µs | oracle baseline |
+| oracle_compare/matmul_leto_256x256 | 1.0631 ms | slower than ndarray/nalgebra; improved vs 0.19.5 |
+| oracle_compare/matmul_ndarray_256x256 | 495.95 µs | oracle baseline |
+| oracle_compare/matmul_nalgebra_256x256 | 505.35 µs | oracle baseline |
 | oracle_compare/sum_reverse_leto_256x256 | 4.7805 µs | faster than ndarray |
 | oracle_compare/sum_reverse_ndarray_256x256 | 6.0717 µs | oracle baseline |
 | oracle_compare/norm_l2_reverse_leto_256x256 | 9.3496 µs | faster than ndarray |
 | oracle_compare/norm_l2_reverse_ndarray_256x256 | 30.877 µs | oracle baseline |
 
 Result: reverse-last-axis reductions satisfy current ndarray performance parity
-on this benchmark shape. Dense matmul does not: Leto is ~1.85x slower than
-ndarray at 64x64, ~1.20x slower at 128x128, and ~4.01x slower at 256x256 by
+on this benchmark shape. Dense matmul does not: Leto is ~2.05x slower than
+ndarray at 64x64, ~1.64x slower at 128x128, and ~2.14x slower at 256x256 by
 median. Replacement claims must exclude dense matmul performance parity until
 the open target below is closed.
 
@@ -83,6 +83,7 @@ the open target below is closed.
 | Hermes abs-reductions (0.17.0) | norm_l1 64k / norm_max 64k | 34.174 µs → 4.069 µs / 39.961 µs → 5.293 µs | **−88.1% / −86.8%** |
 | Row-blocked matmul (0.18.1) | matmul dense 64² / 256² | 28.1 µs → 22.536 µs / 1.529 ms → 1.4016 ms | **~−19.8% / ~−8.3%** |
 | Reverse-row reduction slices (0.19.0) | sum / norm_l2 reverse-last-axis 256² | 6.517 µs → 5.203 µs / 11.775 µs → 9.615 µs | **−21.56% / −18.00% median in criterion run** |
+| Fused multi-row Hermes AXPY (0.19.7) | oracle matmul dense 64² / 128² / 256² | 21.443 µs → 17.430 µs / 127.63 µs → 108.98 µs / 2.4357 ms → 1.0631 ms | **−18.7% / −14.6% / −56.4% by median** |
 
 Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 ~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×
@@ -146,8 +147,9 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   the strided fallback. This is a memory-efficiency cleanup in the initialization
   phase, not a parity claim; the contraction bottleneck remains open.
 - dense matmul oracle parity: 64x64, 128x128, and 256x256 Leto medians remain
-  slower than ndarray/nalgebra. Next kernel work targets RHS packing,
-  row/block/column micro-kernel shape, and cache-geometry selection; no
+  slower than ndarray/nalgebra after the fused multi-row AXPY improvement. Next
+  kernel work targets row/block/column micro-kernel shape, cache-geometry
+  selection, and allocation-controlled reusable packing scratch; no
   replacement-performance claim is valid until this comparison is closed.
   Rejected paths now include local row-loop rewrites, existing Hermes tiled
   GEMM, reduced parallelism, smaller row blocks, and first-row initialization.

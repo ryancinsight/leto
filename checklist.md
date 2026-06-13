@@ -1,12 +1,14 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.19.6 [patch] (Cargo.toml bumped;
-CHANGELOG synced). Delivered this cycle: direct registry dependency updates and
-PyO3 binding API migration. Result
+Sprint phase: Execution. Target version: 0.19.7 [patch] (Cargo.toml bumped;
+CHANGELOG synced). Delivered this cycle: Hermes fused multi-row AXPY consumed
+by dense row-blocked matmul and direct Hermes pinned to the pushed provider
+revision. Result
 parity remains covered for LU solve/determinant/inverse, symmetric eigenvalues,
 Cholesky lower factors, singular values, and reverse-last-axis reductions.
 Performance parity remains mixed: reverse reductions are faster than ndarray,
-but dense 64x64/128x128/256x256 matmul is slower than ndarray/nalgebra.
+and dense 64x64/128x128/256x256 matmul improved materially, but it remains
+slower than ndarray/nalgebra.
 Remaining open: close dense matmul oracle performance gap before claiming
 replacement performance parity; non-unit truly strided
 reductions still row-walk (per-lane accumulators needed); melinoe ThreadCached
@@ -115,19 +117,17 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   --all-features`; `cargo doc --workspace --exclude leto-python
   --all-features --no-deps`; `cargo test --doc --workspace --all-features`;
   `git diff --check`.
-- [ ] [minor] Close dense matmul oracle performance gap: criterion oracle
-  comparison records Leto 128x128 median 124.87 µs vs ndarray 78.247 µs and
-  nalgebra 74.413 µs. Sequential 64x64 and 256x256 checks show the same gap
-  class. Rejected: removing the dense row-block zero-skip branch, RHS-column
-  packing plus `Scalar::dot_slice`, and replacing Hermes AXPY with a generic
-  scalar row update. Rejected this cycle: existing Hermes `tiled_gemm` for f64
-  dense matmul and reducing parallel row-block scheduling for small dense
-  matrices. Next kernel increment should require a changed contraction model,
-  likely a Hermes fused multi-row/micro-kernel provider or a caller-owned
-  scratch API with measured allocation control. Rejected this cycle:
-  `MATMUL_ROW_BLOCK=16` and first-shared-row output initialization; both kept
-  focused tests green but failed release benchmark stability, and the
-  initialization path also regressed 64x64.
+- [ ] [minor] Close dense matmul oracle performance gap: 0.19.7 consumes
+  Hermes fused multi-row AXPY and improves Leto medians to 17.430 µs
+  (64x64), 108.98 µs (128x128), and 1.0631 ms (256x256), but ndarray/nalgebra
+  remain faster at 8.492/8.775 µs, 66.527/62.935 µs, and 495.95/505.35 µs.
+  Rejected: removing the dense row-block zero-skip branch, RHS-column packing
+  plus `Scalar::dot_slice`, replacing Hermes AXPY with a generic scalar row
+  update, existing Hermes `tiled_gemm` for f64 dense matmul, reducing parallel
+  row-block scheduling for small dense matrices, `MATMUL_ROW_BLOCK=16`, and
+  first-shared-row output initialization. Next kernel increment should target
+  row/block/column micro-kernel geometry or allocation-controlled reusable
+  packing scratch with profile evidence.
 - [x] [patch] Update direct registry dependencies: workspace manifests now use
   `bytemuck` 1.25, `ndarray` 0.17, `nalgebra` 0.35, `pyo3` 0.28, `numpy`
   0.28, `proptest` 1.11, and `criterion` 0.8. PyO3 bindings now use

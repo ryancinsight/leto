@@ -40,6 +40,15 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn dot_slice(a: &[T], b: &[T]) -> Option<T>;
     /// Vectorized fused row update: `out[i] += alpha * x[i]`.
     fn axpy_slice(alpha: T, x: &[T], out: &mut [T]) -> Result<(), &'static str>;
+    /// Vectorized fused multi-row update: `out[row, i] += alphas[row] * x[i]`.
+    fn axpy_rows(
+        alphas: &[T],
+        x: &[T],
+        out: &mut [T],
+        row_stride: usize,
+        rows: usize,
+        cols: usize,
+    ) -> Result<(), &'static str>;
     /// Vectorized absolute-sum reduction: `Σ |x|`.
     fn abs_sum_slice(s: &[T]) -> Option<T>;
     /// Vectorized absolute-max reduction: `max |x|`.
@@ -81,6 +90,18 @@ macro_rules! impl_simd_ops_native {
             #[inline(always)]
             fn axpy_slice(alpha: $t, x: &[$t], out: &mut [$t]) -> Result<(), &'static str> {
                 hermes_simd::axpy::<$t>(alpha, x, out).map_err(|_| "simd axpy failed")
+            }
+            #[inline(always)]
+            fn axpy_rows(
+                alphas: &[$t],
+                x: &[$t],
+                out: &mut [$t],
+                row_stride: usize,
+                rows: usize,
+                cols: usize,
+            ) -> Result<(), &'static str> {
+                hermes_simd::axpy_rows::<$t>(alphas, x, out, row_stride, rows, cols)
+                    .map_err(|_| "simd axpy rows failed")
             }
             #[inline(always)]
             fn abs_sum_slice(s: &[$t]) -> Option<$t> {
@@ -140,6 +161,17 @@ macro_rules! impl_simd_ops_fallback {
                 Err("simd disabled")
             }
             #[inline(always)]
+            fn axpy_rows(
+                _alphas: &[$t],
+                _x: &[$t],
+                _out: &mut [$t],
+                _row_stride: usize,
+                _rows: usize,
+                _cols: usize,
+            ) -> Result<(), &'static str> {
+                Err("simd disabled")
+            }
+            #[inline(always)]
             fn abs_sum_slice(_s: &[$t]) -> Option<$t> {
                 None
             }
@@ -194,6 +226,17 @@ macro_rules! impl_simd_ops_unsupported {
             }
             #[inline(always)]
             fn axpy_slice(_alpha: $t, _x: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
+                Err("simd unsupported for type")
+            }
+            #[inline(always)]
+            fn axpy_rows(
+                _alphas: &[$t],
+                _x: &[$t],
+                _out: &mut [$t],
+                _row_stride: usize,
+                _rows: usize,
+                _cols: usize,
+            ) -> Result<(), &'static str> {
                 Err("simd unsupported for type")
             }
             #[inline(always)]

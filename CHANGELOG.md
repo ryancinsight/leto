@@ -4,6 +4,36 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.19.7] - 2026-06-13
+
+### Changed
+
+- Pinned `hermes-simd` to pushed Hermes revision `efac045`, which exposes the
+  fused multi-row AXPY dispatch used by `leto-ops` dense matmul.
+- `leto-ops` dense row-blocked matmul now routes positive-stride output row
+  blocks through Hermes fused multi-row AXPY, reducing per-row SIMD dispatch
+  overhead while preserving zero-copy caller-owned output.
+
+### Performance
+
+- Criterion oracle comparison (`--sample-size 10`) improved Leto dense matmul
+  medians versus 0.19.5 baselines: 64x64 21.443 µs → 17.430 µs, 128x128
+  127.63 µs → 108.98 µs, and 256x256 2.4357 ms → 1.0631 ms.
+- Dense matmul still does not meet replacement-performance parity:
+  ndarray/nalgebra medians were 8.492/8.775 µs at 64x64, 66.527/62.935 µs at
+  128x128, and 495.95/505.35 µs at 256x256.
+
+### Validation
+
+- `cargo test -p leto-ops matmul --all-features`
+- `cargo bench -p leto-ops --bench kernels --all-features
+  "oracle_compare/matmul_(leto|ndarray|nalgebra)_(64|128|256)x(64|128|256)"
+  -- --sample-size 10`
+- `cargo fmt --check`; `cargo clippy --workspace --all-targets
+  --all-features -- -D warnings`; `cargo test --workspace --all-features`;
+  `cargo nextest run --workspace --all-features`; `cargo doc --workspace
+  --exclude leto-python --all-features --no-deps`; `git diff --check`
+
 ## [0.19.6] - 2026-06-13
 
 ### Changed

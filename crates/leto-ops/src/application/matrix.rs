@@ -195,15 +195,54 @@ fn row_blocked_matmul<T: Scalar, const ROW_BLOCK: usize>(
     layout: MatmulLayout,
 ) {
     debug_assert!(ROW_BLOCK > 0);
+    let fused_out_stride = if layout.out_stride_row >= layout.cols as isize {
+        Some(layout.out_stride_row as usize)
+    } else {
+        None
+    };
 
     for row_block_start in (start_row..end_row).step_by(ROW_BLOCK) {
         let row_block_end = (row_block_start + ROW_BLOCK).min(end_row);
+        let block_rows = row_block_end - row_block_start;
         for shared in 0..layout.shared {
             let rhs_row_offset = layout.rhs_offset + shared as isize * layout.rhs_stride_row;
             // SAFETY: `validate_matmul` validates the RHS storage span, and
             // row blocking is enabled only for unit-stride RHS rows.
             let rhs_row =
                 unsafe { core::slice::from_raw_parts(rhs_ptr.offset(rhs_row_offset), layout.cols) };
+
+            if let Some(out_stride_row) = fused_out_stride {
+                let mut alphas = [T::ZERO; ROW_BLOCK];
+                for (block_row, alpha) in alphas.iter_mut().take(block_rows).enumerate() {
+                    let row = row_block_start + block_row;
+                    let lhs_row_offset = layout.lhs_offset + row as isize * layout.lhs_stride_row;
+                    // SAFETY: `validate_matmul` validates every logical LHS
+                    // index used by this row/shared loop nest.
+                    *alpha = unsafe {
+                        *lhs_ptr.offset(lhs_row_offset + shared as isize * layout.lhs_stride_col)
+                    };
+                }
+
+                let out_block_offset =
+                    layout.out_offset + row_block_start as isize * layout.out_stride_row;
+                let out_block_len = (block_rows - 1) * out_stride_row + layout.cols;
+                // SAFETY: `validate_matmul` validates the full output storage
+                // span, row blocking is enabled only for unit-stride columns,
+                // and this fused path requires a positive non-overlapping row
+                // stride of at least `cols`.
+                let out_block = unsafe {
+                    core::slice::from_raw_parts_mut(out_ptr.offset(out_block_offset), out_block_len)
+                };
+                T::axpy_rows(
+                    &alphas[..block_rows],
+                    rhs_row,
+                    out_block,
+                    out_stride_row,
+                    block_rows,
+                    layout.cols,
+                );
+                continue;
+            }
 
             for row in row_block_start..row_block_end {
                 let lhs_row_offset = layout.lhs_offset + row as isize * layout.lhs_stride_row;

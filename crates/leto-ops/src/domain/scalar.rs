@@ -34,6 +34,17 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     fn dot_slice(a: &[Self], b: &[Self]) -> Self;
     /// Fused row update over equal-length slices: `out[i] += alpha * x[i]`.
     fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]);
+    /// Fused multi-row update: `out[row, i] += alphas[row] * x[i]`.
+    fn axpy_rows(
+        alphas: &[Self],
+        x: &[Self],
+        out: &mut [Self],
+        row_stride: usize,
+        rows: usize,
+        cols: usize,
+    ) {
+        scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
+    }
     /// Min reduction over a slice.
     fn min_slice(s: &[Self]) -> Self;
     /// Max reduction over a slice.
@@ -137,6 +148,25 @@ macro_rules! impl_scalar_native {
                 for (o, &xv) in out.iter_mut().zip(x.iter()) {
                     *o += alpha * xv;
                 }
+            }
+
+            #[inline]
+            fn axpy_rows(
+                alphas: &[Self],
+                x: &[Self],
+                out: &mut [Self],
+                row_stride: usize,
+                rows: usize,
+                cols: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_rows(
+                    alphas, x, out, row_stride, rows, cols,
+                )
+                .is_ok()
+                {
+                    return;
+                }
+                scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
             }
 
             #[inline]
@@ -260,6 +290,25 @@ macro_rules! impl_scalar_half {
                 for (o, &xv) in out.iter_mut().zip(x.iter()) {
                     *o += alpha * xv;
                 }
+            }
+
+            #[inline]
+            fn axpy_rows(
+                alphas: &[Self],
+                x: &[Self],
+                out: &mut [Self],
+                row_stride: usize,
+                rows: usize,
+                cols: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_rows(
+                    alphas, x, out, row_stride, rows, cols,
+                )
+                .is_ok()
+                {
+                    return;
+                }
+                scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
             }
 
             #[inline]
@@ -394,3 +443,34 @@ impl_scalar_int!(i64);
 impl_scalar_int!(u64);
 impl_scalar_int!(isize);
 impl_scalar_int!(usize);
+
+#[inline]
+fn scalar_axpy_rows_fallback<T: Scalar>(
+    alphas: &[T],
+    x: &[T],
+    out: &mut [T],
+    row_stride: usize,
+    rows: usize,
+    cols: usize,
+) {
+    if rows == 0 || cols == 0 {
+        return;
+    }
+    let Some(last_row_offset) = rows
+        .checked_sub(1)
+        .and_then(|row| row.checked_mul(row_stride))
+    else {
+        return;
+    };
+    let Some(required_out_len) = last_row_offset.checked_add(cols) else {
+        return;
+    };
+    if alphas.len() < rows || x.len() < cols || row_stride < cols || out.len() < required_out_len {
+        return;
+    }
+
+    for (row, alpha) in alphas.iter().copied().take(rows).enumerate() {
+        let start = row * row_stride;
+        T::axpy_slice(alpha, x, &mut out[start..start + cols]);
+    }
+}

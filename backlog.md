@@ -60,6 +60,14 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   allocation. Measured in-run against scalar-fold references:
   `norm_l1_64k` 34.174 µs → 4.069 µs (−88.1%, 8.4×);
   `norm_max_64k` 39.961 µs → 5.293 µs (−86.8%, 7.5×).
+- [x] [patch] (0.19.7) Consume Hermes fused multi-row AXPY
+  (`hermes_simd::axpy_rows`, delivered hermes `efac045`) in Leto dense
+  row-blocked matmul. The fused path updates a positive-stride output row
+  block through one runtime-dispatched SIMD kernel per RHS row and keeps
+  strided/transposed layouts on the existing value-correct path. Criterion
+  oracle medians improved: 64x64 21.443 µs → 17.430 µs, 128x128 127.63 µs →
+  108.98 µs, and 256x256 2.4357 ms → 1.0631 ms. Dense matmul remains slower
+  than ndarray/nalgebra, so replacement-performance parity is still open.
 
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
 Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every
@@ -111,18 +119,17 @@ no unmeasured "optimization" per performance_engineering.
   Current 0.18.1 row block is a fixed L2-fit const-generic specialization, not
   runtime topology selection.
 - [ ] [minor] Close dense matmul oracle performance parity before any
-  replacement claim: criterion oracle comparison records Leto 128x128 median
-  124.87 µs vs ndarray 78.247 µs and nalgebra 74.413 µs. Sequential 64x64 and
-  256x256 checks show the same gap class. Investigate RHS packing,
-  row/block/column micro-kernel geometry, and cache-topology-selected tile
-  shapes. Do not retry the rejected 0.14.3 const-generic blocking, generic
-  `mul_add` hook, 0.19.2 zero-skip branch removal, 0.19.3 packed RHS dot path,
-  0.19.3 scalar row-update path, 0.19.4 Hermes `tiled_gemm` path, or reduced
-  small-matrix parallel scheduling, 0.19.5 `MATMUL_ROW_BLOCK=16`, or 0.19.5
-  first-shared-row output initialization without a changed kernel model and
-  profile evidence. Candidate next model: a Hermes fused multi-row/micro-kernel
-  provider, or a caller-owned scratch API that makes packing allocation
-  explicit and reusable.
+  replacement claim: 0.19.7 fused multi-row AXPY improves Leto but still trails
+  ndarray/nalgebra at 64x64, 128x128, and 256x256. Current medians:
+  Leto 17.430 µs / 108.98 µs / 1.0631 ms; ndarray 8.4923 µs / 66.527 µs /
+  495.95 µs; nalgebra 8.7752 µs / 62.935 µs / 505.35 µs. Investigate
+  row/block/column micro-kernel geometry, cache-topology-selected tile shapes,
+  and allocation-controlled reusable packing scratch. Do not retry the
+  rejected 0.14.3 const-generic blocking, generic `mul_add` hook, 0.19.2
+  zero-skip branch removal, 0.19.3 packed RHS dot path, 0.19.3 scalar
+  row-update path, 0.19.4 Hermes `tiled_gemm` path, reduced small-matrix
+  parallel scheduling, 0.19.5 `MATMUL_ROW_BLOCK=16`, or 0.19.5 first-shared-row
+  output initialization without a changed kernel model and profile evidence.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted

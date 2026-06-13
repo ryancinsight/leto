@@ -109,21 +109,22 @@ consumer-side Coeus re-base and Apollo migration verification.
 
 ## D. Residual Risk Register
 
-Update 2026-06-13 (v0.19.6): §A indexed zip parity, the Stage A1
+Update 2026-06-13 (v0.19.7): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
 symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
 rank-deficient singular values, Hermes-backed dense reductions, and
 cache-line tiled strided elementwise traversal. The optional themis topology
 dependency is wired through `leto_ops::CacheGeometry`; dense matmul now has a
-measured fixed row-block kernel; reverse-last-axis whole-array reductions now
-borrow unit-stride physical row slices. Current ndarray/nalgebra oracle tests
-cover LU solve/determinant/inverse, symmetric eigenvalues, Cholesky lower
-factors, singular values, and reverse-last-axis reductions. Criterion oracle
-comparison shows reverse reductions faster than ndarray, but dense 128x128
-matmul is slower than ndarray/nalgebra (Leto 124.87 µs median vs ndarray
-78.247 µs and nalgebra 74.413 µs). Sequential 64x64 and 256x256 checks show
-the same gap class. Topology-adaptive tile sizing and
+measured fixed row-block kernel backed by Hermes fused multi-row AXPY;
+reverse-last-axis whole-array reductions now borrow unit-stride physical row
+slices. Current ndarray/nalgebra oracle tests cover LU solve/determinant/
+inverse, symmetric eigenvalues, Cholesky lower factors, singular values, and
+reverse-last-axis reductions. Criterion oracle comparison shows reverse
+reductions faster than ndarray, but dense matmul is still slower than
+ndarray/nalgebra: Leto 17.430 µs / 108.98 µs / 1.0631 ms for
+64x64/128x128/256x256 vs ndarray 8.4923 µs / 66.527 µs / 495.95 µs and
+nalgebra 8.7752 µs / 62.935 µs / 505.35 µs. Topology-adaptive tile sizing and
 non-unit truly strided reductions remain open. See CHANGELOG and the two ADRs
 in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base,
 Apollo/Coeus consumer migration with differential coverage, and dense matmul
@@ -181,19 +182,20 @@ eigen are demand-driven only.
   suite, concat/stack, batched matmul, and cumsum. RNG uses closed-form
   references. Indexed zip currently rests on value-semantic traversal tests.
 - Oracle performance parity: reverse-last-axis `sum`/`norm_l2` is at parity or
-  faster than ndarray on the recorded 256x256 benchmark. Dense 128x128 matmul
-  is not at parity with ndarray/nalgebra and blocks replacement-performance
-  claims until a measured kernel change closes the gap. The 0.19.2 zero-skip
-  branch-removal experiment was rejected after canonical dense 256x256
-  instability/regression. The 0.19.3 packed-RHS dot and scalar-row-update
-  experiments also regressed 128x128. The 0.19.4 Hermes `tiled_gemm` f64 dense
-  path regressed 128x128, and small-matrix serial scheduling was slower than
-  row-block parallelism. The 0.19.5 `MATMUL_ROW_BLOCK=16` and first-shared-row
-  output initialization experiments did not meet the release benchmark
-  stability/performance gate. Oracle comparison now covers 64x64, 128x128, and
-  256x256 against ndarray and nalgebra; Leto remains slower on all three dense
-  sizes. Next work needs a changed contraction model, not another local rewrite
-  of the row-AXPY loop.
+  faster than ndarray on the recorded 256x256 benchmark. Dense matmul is not
+  at parity with ndarray/nalgebra and blocks replacement-performance claims.
+  The 0.19.7 Hermes fused multi-row AXPY path improved Leto medians from
+  21.443 µs / 127.63 µs / 2.4357 ms to 17.430 µs / 108.98 µs / 1.0631 ms for
+  64x64/128x128/256x256, but ndarray/nalgebra remain faster. The 0.19.2
+  zero-skip branch-removal experiment was rejected after canonical dense
+  256x256 instability/regression. The 0.19.3 packed-RHS dot and
+  scalar-row-update experiments also regressed 128x128. The 0.19.4 Hermes
+  `tiled_gemm` f64 dense path regressed 128x128, and small-matrix serial
+  scheduling was slower than row-block parallelism. The 0.19.5
+  `MATMUL_ROW_BLOCK=16` and first-shared-row output initialization experiments
+  did not meet the release benchmark stability/performance gate. Next work
+  needs row/block/column micro-kernel geometry or allocation-controlled
+  reusable packing scratch with profile evidence.
 - Locked dependency resolution: `--locked` focused gates and
   `cargo generate-lockfile` are blocked by the current upstream Git dependency
   set: `mnemosyne-arena` requires `themis ^0.8.0`, while the resolved themis Git
