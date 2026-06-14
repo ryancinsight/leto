@@ -196,7 +196,9 @@ eigen are demand-driven only.
   did not meet the release benchmark stability/performance gate. Post-0.19.7
   Hermes column-chunk `axpy_rows` regressed 64x64/128x128/256x256 and ended
   with `STATUS_ACCESS_VIOLATION`; `MATMUL_ROW_BLOCK=64` also regressed against
-  the 32-row baseline. Next work needs a true register micro-kernel or
+  the 32-row baseline. Row-block fused-branch/alpha-buffer hoisting produced
+  no statistically significant 128x128 improvement and also ended with
+  `STATUS_ACCESS_VIOLATION`. Next work needs a true register micro-kernel or
   allocation-controlled reusable packing scratch with profile evidence.
 - Locked dependency resolution: `--locked` focused gates and
   `cargo generate-lockfile` are blocked by the current upstream Git dependency

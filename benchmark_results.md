@@ -139,6 +139,11 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   passed, but oracle matmul regressed versus 0.19.7 to 22.085 µs / 187.79 µs /
   2.1801 ms at 64x64/128x128/256x256. The 32-row block remains the measured
   best row-block geometry among tested 16/32/64 variants.
+- **Row-block fused-branch and alpha-buffer hoist (post-0.19.7 audit)**:
+  rejected. Focused matmul tests passed, but 128x128 oracle timing showed no
+  statistically significant Leto improvement (275.97 µs median in the current
+  dependency state) and the benchmark process ended with
+  `STATUS_ACCESS_VIOLATION`. No source change retained.
 - Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
   hermes scalar-AXPY / fused row-update provider; leto must not emulate one
   with temporary allocation.
