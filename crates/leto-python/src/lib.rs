@@ -89,7 +89,7 @@ where
     let shape = [a.shape()[0], a.shape()[1]];
     let mut out_arr = output_array(shape)?;
 
-    py.detach(|| {
+    py.allow_threads(|| {
         op(&a_view, &b_view, &mut out_arr.view_mut())
             .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
@@ -142,7 +142,7 @@ fn div_py<'py>(
 fn sum_py(py: Python<'_>, a: PyReadonlyArray2<'_, f32>) -> PyResult<f32> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    Ok(py.detach(|| sum(&a_view)))
+    Ok(py.allow_threads(|| sum(&a_view)))
 }
 
 #[pyfunction]
@@ -170,7 +170,7 @@ fn matmul_py<'py>(
     let out_shape = [shape_a[0], shape_b[1]];
     let mut out_arr = output_array(out_shape)?;
 
-    py.detach(|| {
+    py.allow_threads(|| {
         matmul(&a_view, &b_view, &mut out_arr.view_mut())
             .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
@@ -199,7 +199,7 @@ mod tests {
     static INIT_PYTHON: Once = Once::new();
 
     fn prepare_python() {
-        INIT_PYTHON.call_once(Python::initialize);
+        INIT_PYTHON.call_once(pyo3::prepare_freethreaded_python);
     }
 
     fn array2<'py>(py: Python<'py>, values: &[Vec<f32>]) -> Bound<'py, PyArray2<f32>> {
@@ -210,7 +210,7 @@ mod tests {
     fn add_returns_numpy_array_with_value_semantics() {
         prepare_python();
 
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             let lhs = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
             let rhs = array2(py, &[vec![10.0, 20.0, 30.0], vec![40.0, 50.0, 60.0]]);
 
@@ -228,7 +228,7 @@ mod tests {
     fn matmul_returns_numpy_array_with_value_semantics() {
         prepare_python();
 
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             let lhs = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
             let rhs = array2(py, &[vec![7.0, 8.0], vec![9.0, 10.0], vec![11.0, 12.0]]);
 
@@ -246,7 +246,7 @@ mod tests {
     fn sum_releases_boundary_and_returns_scalar_value() {
         prepare_python();
 
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             let input = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
 
             let total = sum_py(py, input.readonly()).unwrap();
@@ -259,7 +259,7 @@ mod tests {
     fn matmul_rejects_shape_mismatch() {
         prepare_python();
 
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             let lhs = array2(py, &[vec![1.0, 2.0, 3.0]]);
             let rhs = array2(py, &[vec![4.0, 5.0, 6.0]]);
 
@@ -273,7 +273,7 @@ mod tests {
     fn operations_reject_non_contiguous_numpy_inputs() {
         prepare_python();
 
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             let view = py
                 .eval(
                     c_str!("__import__('numpy').arange(6, dtype='float32').reshape(2, 3).T"),

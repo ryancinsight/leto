@@ -39,8 +39,8 @@ thiserror = "2"
 anyhow = "1.0"
 
 # ── Python FFI ──
-pyo3 = { version = "0.28", features = ["extension-module"] }
-numpy = "0.28"
+pyo3 = { version = "0.23", features = ["extension-module"] }
+numpy = "0.23"
 
 # ── Testing / Benchmarking ──
 proptest = "1.11"
