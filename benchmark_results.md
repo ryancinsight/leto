@@ -128,6 +128,17 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   tests passed, but `matmul/dense_64x64` regressed to 26.807 µs median and the
   release benchmark process ended with `STATUS_ACCESS_VIOLATION`; no source
   change retained.
+- **Hermes column-chunk `axpy_rows` RHS reuse (post-0.19.7 audit)**: rejected.
+  The loop loaded each RHS SIMD chunk once and applied it across the row block.
+  Hermes AXPY tests and Leto focused matmul tests passed, but oracle matmul
+  regressed to 29.913 µs / 671.87 µs / 9.0392 ms at 64x64/128x128/256x256 and
+  the benchmark process ended with `STATUS_ACCESS_VIOLATION`. Hermes was
+  restored to the row-major `axpy_rows` loop in `96c871b`; Leto remains pinned
+  to the measured-good `efac045`.
+- **`MATMUL_ROW_BLOCK=64` (post-0.19.7 audit)**: rejected. Focused matmul tests
+  passed, but oracle matmul regressed versus 0.19.7 to 22.085 µs / 187.79 µs /
+  2.1801 ms at 64x64/128x128/256x256. The 32-row block remains the measured
+  best row-block geometry among tested 16/32/64 variants.
 - Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
   hermes scalar-AXPY / fused row-update provider; leto must not emulate one
   with temporary allocation.
@@ -153,5 +164,5 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   replacement-performance claim is valid until this comparison is closed.
   Rejected paths now include local row-loop rewrites, existing Hermes tiled
   GEMM, reduced parallelism, smaller row blocks, and first-row initialization.
-  The next candidate needs a new fused multi-row row-update provider or an
+  The next candidate needs a true register micro-kernel or an
   allocation-controlled packing API with reusable scratch.

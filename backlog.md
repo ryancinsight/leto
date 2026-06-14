@@ -129,7 +129,9 @@ no unmeasured "optimization" per performance_engineering.
   zero-skip branch removal, 0.19.3 packed RHS dot path, 0.19.3 scalar
   row-update path, 0.19.4 Hermes `tiled_gemm` path, reduced small-matrix
   parallel scheduling, 0.19.5 `MATMUL_ROW_BLOCK=16`, or 0.19.5 first-shared-row
-  output initialization without a changed kernel model and profile evidence.
+  output initialization, post-0.19.7 Hermes column-chunk `axpy_rows`, or
+  post-0.19.7 `MATMUL_ROW_BLOCK=64` without a changed kernel model and profile
+  evidence.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted

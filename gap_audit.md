@@ -193,9 +193,11 @@ eigen are demand-driven only.
   `tiled_gemm` f64 dense path regressed 128x128, and small-matrix serial
   scheduling was slower than row-block parallelism. The 0.19.5
   `MATMUL_ROW_BLOCK=16` and first-shared-row output initialization experiments
-  did not meet the release benchmark stability/performance gate. Next work
-  needs row/block/column micro-kernel geometry or allocation-controlled
-  reusable packing scratch with profile evidence.
+  did not meet the release benchmark stability/performance gate. Post-0.19.7
+  Hermes column-chunk `axpy_rows` regressed 64x64/128x128/256x256 and ended
+  with `STATUS_ACCESS_VIOLATION`; `MATMUL_ROW_BLOCK=64` also regressed against
+  the 32-row baseline. Next work needs a true register micro-kernel or
+  allocation-controlled reusable packing scratch with profile evidence.
 - Locked dependency resolution: `--locked` focused gates and
   `cargo generate-lockfile` are blocked by the current upstream Git dependency
   set: `mnemosyne-arena` requires `themis ^0.8.0`, while the resolved themis Git

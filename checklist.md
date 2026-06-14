@@ -125,9 +125,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   plus `Scalar::dot_slice`, replacing Hermes AXPY with a generic scalar row
   update, existing Hermes `tiled_gemm` for f64 dense matmul, reducing parallel
   row-block scheduling for small dense matrices, `MATMUL_ROW_BLOCK=16`, and
-  first-shared-row output initialization. Next kernel increment should target
-  row/block/column micro-kernel geometry or allocation-controlled reusable
-  packing scratch with profile evidence.
+  first-shared-row output initialization. Rejected after 0.19.7:
+  Hermes column-chunk `axpy_rows` and `MATMUL_ROW_BLOCK=64`. Next kernel
+  increment should target a true register micro-kernel or
+  allocation-controlled reusable packing scratch with profile evidence.
 - [x] [patch] Update direct registry dependencies: workspace manifests now use
   `bytemuck` 1.25, `ndarray` 0.17, `nalgebra` 0.35, `pyo3` 0.28, `numpy`
   0.28, `proptest` 1.11, and `criterion` 0.8. PyO3 bindings now use
