@@ -31,7 +31,7 @@ bytemuck = { version = "1.25", features = ["derive"] }
 half = { version = "2.7", features = ["num-traits", "bytemuck"] }
 
 # ── Optional Compatibility ──
-ndarray = "0.17"
+ndarray = "0.16"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
 # ── Error and Utility ──
