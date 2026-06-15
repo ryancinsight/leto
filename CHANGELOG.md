@@ -4,6 +4,79 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.27.0] - 2026-06-15
+
+### Added
+
+- Zero-copy sliding-window iteration (`Array::windows`/`ArrayView::windows` →
+  `Windows`) in a new `application/iter/windows.rs` leaf (ndarray `windows`
+  parity). Yields every `ArrayView<'a, T, N>` of a fixed window shape by sliding
+  one step per axis; each window reuses the parent's strides and only shifts the
+  offset (no element read or copy, overlapping windows share storage via shared
+  borrows). Documents the window-count theorem `∏ᵢ (sᵢ − wᵢ + 1)` with proof.
+  `DoubleEndedIterator` + `ExactSizeIterator` over a linear window-start counter
+  decoded with `index_from_flat` (SSOT). Verified: count theorem across window
+  shapes, row-major window content, full-window-equals-original, transposed/
+  strided zero-copy correctness, double-ended meet-once, and zero/oversize-extent
+  rejection.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto --test core_tests windows --all-features` (6 tests)
+
+## [0.26.0] - 2026-06-15
+
+### Added
+
+- Logical-order element iteration (`Array::iter`/`indexed_iter`,
+  `ArrayView::iter`/`indexed_iter` → `ElementIter`/`IndexedIter`) and
+  `IntoIterator for &ArrayView` (ndarray `iter`/`indexed_iter` parity).
+  `ElementIter` yields `&T`; `IndexedIter` yields `([usize; N], &T)`. Both walk
+  every logical element in row-major order through the view's strides, so a
+  transposed/strided/broadcast view iterates in the same logical order as its
+  contiguous materialization. Both are `DoubleEndedIterator` (shared
+  `[front, back)` cursor) and `ExactSizeIterator`; `fold`/`rev`/`map` etc. come
+  free from the std `Iterator` blanket surface. A shared `elem_at` helper resolves
+  offsets (SSOT). Verified: row-major order, transposed logical order, indexed
+  pairs, double-ended meet-once + `rev`-equals-reverse, `&view` for-loop, and
+  empty arrays.
+
+### Changed
+
+- Refactored the single `application/iter.rs` into a vertical `application/iter/`
+  leaf hierarchy (`axis.rs`, `element.rs`, `mod.rs`) by iteration concern. The
+  public paths (`leto::AxisIter`/`AxisIterMut`, `leto::application::iter::*`) are
+  unchanged; all existing consumers compile and pass without edits.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto` (23 lib + 86 core_tests + others)
+- `cargo test -p leto-ops` (156 ops_tests + others, AxisIter consumers green)
+
+## [0.25.0] - 2026-06-15
+
+### Added
+
+- Whole-array argmin/argmax (`argmin_all`, `argmax_all`) in `leto` core
+  `application/reduction/min_max.rs` (ndarray-stats `argmin`/`argmax` parity),
+  returning the N-dimensional index `[usize; N]` of the global extremum (const-
+  generic rank, so the multi-index is statically sized). Scans logical row-major
+  order; first occurrence wins on ties. A single `arg_reduce_all` kernel backs
+  both via a strict-comparison predicate (SSOT, mirroring the existing axis
+  `axis_arg_reduce`). Verified by rank-1/rank-2 multi-index oracles, first-
+  occurrence tie-break, a value-agrees-with-`min_all`/`max_all` cross-check, and
+  empty-array rejection. This promotes the argmin/argmax parity row to Verified.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy -p leto --all-targets --all-features -- -D warnings`
+- `cargo test -p leto --lib reduction::tests --all-features` (23 tests)
+
 ## [0.24.0] - 2026-06-15
 
 ### Added

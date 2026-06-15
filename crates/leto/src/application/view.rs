@@ -1,5 +1,6 @@
 use crate::application::array::Array;
 use crate::application::index::index_from_flat;
+use crate::application::iter::{ElementIter, IndexedIter, Windows};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
@@ -69,6 +70,32 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     #[inline]
     pub const fn data(&self) -> &'a [T] {
         self.data
+    }
+
+    /// Iterator over the view's elements in logical row-major order
+    /// (ndarray `iter` parity). The iterator borrows the view's data for `'a`,
+    /// so it outlives a temporary view produced by `array.view().iter()`.
+    #[inline]
+    pub fn iter(&self) -> ElementIter<'a, T, N> {
+        ElementIter::new(self)
+    }
+
+    /// Iterator over `(multi-index, &element)` pairs in logical row-major order
+    /// (ndarray `indexed_iter` parity).
+    #[inline]
+    pub fn indexed_iter(&self) -> IndexedIter<'a, T, N> {
+        IndexedIter::new(self)
+    }
+
+    /// Zero-copy iterator over every sliding window of shape `window_shape`
+    /// (ndarray `windows` parity). Each yielded view shares this view's strides
+    /// and backing storage.
+    ///
+    /// # Errors
+    /// [`LetoError`] if any `window_shape[i]` is `0` or exceeds `shape[i]`.
+    #[inline]
+    pub fn windows(&self, window_shape: [usize; N]) -> Result<Windows<'a, T, N>> {
+        Windows::new(self, window_shape)
     }
 
     /// Get a reference to the element at the specified index.

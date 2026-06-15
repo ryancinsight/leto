@@ -64,6 +64,41 @@ where
     Ok(acc)
 }
 
+/// Multi-index of the minimum element of the whole array (ndarray-stats
+/// `argmin` parity).
+///
+/// Returns the N-dimensional index `[usize; N]` of the smallest element in
+/// logical row-major order. On ties the **first** (lowest row-major index)
+/// occurrence wins, matching ndarray-stats. The companion [`min_all`] returns
+/// the value at this index.
+///
+/// # Errors
+/// [`LetoError`] if `arr` is empty.
+pub fn argmin_all<T, S, const N: usize>(arr: &Array<T, S, N>) -> Result<[usize; N]>
+where
+    T: PartialOrd + Copy,
+    S: Storage<T>,
+{
+    arg_reduce_all(arr, |best, candidate| candidate < best)
+}
+
+/// Multi-index of the maximum element of the whole array (ndarray-stats
+/// `argmax` parity).
+///
+/// Returns the N-dimensional index `[usize; N]` of the largest element in
+/// logical row-major order. On ties the **first** occurrence wins. The
+/// companion [`max_all`] returns the value at this index.
+///
+/// # Errors
+/// [`LetoError`] if `arr` is empty.
+pub fn argmax_all<T, S, const N: usize>(arr: &Array<T, S, N>) -> Result<[usize; N]>
+where
+    T: PartialOrd + Copy,
+    S: Storage<T>,
+{
+    arg_reduce_all(arr, |best, candidate| candidate > best)
+}
+
 // ── Axis-reduce ───────────────────────────────────────────────────────────────
 
 /// Minimum along `axis`, reducing rank by one.
@@ -139,6 +174,40 @@ where
 }
 
 // ── Internal kernels ──────────────────────────────────────────────────────────
+
+/// Whole-array argreduce: scan every logical element in row-major order,
+/// tracking the running best value and its flat index, then convert the winning
+/// flat index to a multi-index.
+///
+/// `is_better(current_best, candidate) -> bool` is strict, so the first
+/// occurrence wins on ties (logical row-major order).
+fn arg_reduce_all<T, S, const N: usize>(
+    arr: &Array<T, S, N>,
+    is_better: impl Fn(T, T) -> bool,
+) -> Result<[usize; N]>
+where
+    T: Copy,
+    S: Storage<T>,
+{
+    if arr.size() == 0 {
+        return Err(LetoError::StorageError {
+            reason: "argreduce over empty array is undefined".to_string(),
+        });
+    }
+    let view = arr.view();
+    let shape = view.layout().shape;
+    let mut it = iter_elements(&view).enumerate();
+    let (_, first) = it.next().expect("non-empty array has at least one element");
+    let mut best_val = *first;
+    let mut best_flat = 0usize;
+    for (flat, elem) in it {
+        if is_better(best_val, *elem) {
+            best_val = *elem;
+            best_flat = flat;
+        }
+    }
+    Ok(index_from_flat(best_flat, &shape))
+}
 
 /// Generic axis-reduce kernel applying a binary `fold` elementwise across lanes.
 ///

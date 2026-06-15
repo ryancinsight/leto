@@ -1,7 +1,37 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.24.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.24.0: covariance and Pearson correlation
+Sprint phase: Execution. Target version: 0.27.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.27.0: zero-copy sliding-window iteration
+(`Array`/`ArrayView::windows` → `Windows`) in `application/iter/windows.rs`
+(ndarray `windows` parity). Each window reuses parent strides + shifted offset
+(no copy; overlapping windows share storage via shared borrows);
+`DoubleEndedIterator`+`ExactSizeIterator` over a linear start counter decoded by
+`index_from_flat` (SSOT). Documents the `∏(sᵢ−wᵢ+1)` window-count theorem with
+proof. Evidence tier: count theorem across shapes, row-major content,
+full-window-equals-original, transposed/strided zero-copy correctness,
+double-ended meet-once, zero/oversize rejection (6 tests, 92 core_tests green).
+Remaining §A iterator gap narrowed to `lanes`/`lanes_mut` (1-D lane views,
+GAT lending follow-up); remaining §A: `IxDyn` (ADR 0002). Delivered 0.26.0:
+logical-order element iteration
+(`Array`/`ArrayView::iter`/`indexed_iter` → `ElementIter`/`IndexedIter`,
+`IntoIterator for &ArrayView`; ndarray `iter`/`indexed_iter` parity), both
+`DoubleEndedIterator`+`ExactSizeIterator`, strided/transposed logical order via
+the view strides; shared `elem_at` (SSOT). Refactored `application/iter.rs` into
+a vertical `application/iter/{axis,element,mod}.rs` leaf hierarchy with stable
+public paths (all AxisIter consumers, incl. leto-ops 156 ops_tests, green).
+Evidence tier: row-major/transposed-order oracles, indexed pairs, double-ended
+meet-once + rev-equals-reverse, `&view` for-loop, empty (7 tests). Remaining §A
+iterator gap: `windows`/`lanes` (sliding windows + 1-D lane views, GAT lending
+follow-up); remaining §A: `IxDyn` (ADR 0002). Delivered 0.25.0: whole-array
+argmin/argmax (`argmin_all`/`argmax_all`) in `leto` core
+`application/reduction/min_max.rs` (ndarray-stats
+`argmin`/`argmax` parity), returning the const-generic `[usize; N]` multi-index
+of the global extremum; first-occurrence tie-break; one shared `arg_reduce_all`
+kernel (SSOT). Evidence tier: rank-1/rank-2 multi-index oracles, tie-break,
+value-agrees-with-`min_all`/`max_all` cross-check, empty rejection (5 new tests,
+23 reduction lib tests green). Promotes the argmin/argmax parity row to Verified;
+the §A array/stats surface now has only `IxDyn` (ADR 0002) and the full iterator
+surface audit open. Delivered 0.24.0: covariance and Pearson correlation
 (`covariance`/`pearson_correlation`) in `leto` core
 `application/statistics/`, following the ndarray-stats / numpy `rowvar = true`
 contract. Evidence tier: theorem/proof sketches in rustdoc plus closed-form

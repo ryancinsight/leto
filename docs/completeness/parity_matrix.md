@@ -32,7 +32,7 @@ Evidence column: `parity.rs` / `oracle_parity.rs` = differential test file;
 | Multi-array zip (3+), indexed zip | `Zip`, `Zip::indexed` | `zip2_mut_with`, `indexed_*` | Verified | ops tests |
 | sum / mean / min / max (all) | `.sum/.mean/...` | `sum`, leto `*_all` | Complete (sum) | parity.rs, kernels.rs `sum_*` |
 | sum/mean/min/max axis (keep-dim) | `sum_axis(Axis)` | `sum_axis`/`mean_axis`/… | Verified | parity.rs |
-| argmin / argmax | ndarray-stats | `leto::argmin/argmax` | Partial | core reductions |
+| argmin / argmax (axis index-array + whole-array multi-index) | ndarray-stats | `argmin`/`argmax` (axis) + `argmin_all`/`argmax_all` (`[usize; N]`) | Verified | core reductions — axis variants + whole-array multi-index; first-occurrence tie-break; value-agrees-with-`min_all`/`max_all` cross-check |
 | cumsum / prefix scan | (no native) | `cumsum`/`scan_axis` | Verified | parity.rs |
 | matmul 2D | `.dot()` | `matmul` | Complete | parity.rs, kernels.rs matmul |
 | matmul transposed/strided | `.dot(t())` | `matmul` | Verified | parity.rs |
@@ -43,7 +43,9 @@ Evidence column: `parity.rs` / `oracle_parity.rs` = differential test file;
 | Random (uniform/normal, seeded) | ndarray-rand | `uniform/normal_with_seed` | Partial | closed-form ref |
 | std::ops operator overloads | `+ - * /` on arrays, `-` neg, scalar ops | `&a op &b`, `&a op s`, `-&a` | Verified | core/arithmetic (ADR 0004; `*` elementwise) |
 | Dynamic rank `IxDyn` | `IxDyn` | — | **Missing** | ADR 0002 reopened |
-| Full iterator surface (`indexed_iter`, windows, lanes, fold/accumulate) | ndarray iters | partial | **Partial→audit** | Stage 1 |
+| Element iteration `iter`/`indexed_iter` (logical-order, double-ended) | ndarray `iter`/`indexed_iter` | `Array`/`ArrayView::iter`/`indexed_iter` → `ElementIter`/`IndexedIter`; `IntoIterator for &ArrayView` | Verified | core/iteration — row-major order, transposed/strided logical order, `([usize;N], &T)` pairs, `DoubleEndedIterator`+`ExactSizeIterator`, empty |
+| Iterator surface: sliding `windows` | ndarray `windows` | `Array`/`ArrayView::windows` → `Windows` | Verified | core/windows — zero-copy `∏(sᵢ−wᵢ+1)` window-count theorem+proof; row-major content; transposed/strided zero-copy correctness; `DoubleEndedIterator`+`ExactSizeIterator`; zero/oversize rejection |
+| Iterator surface: `lanes`/`lanes_mut` | ndarray `lanes` | — (axis subviews via `AxisIter` only) | **Missing** | Stage 1 — 1-D lane views over the complement axes (GAT lending follow-up) |
 | Stats: variance / std (population + sample, axis) | ndarray-stats / ndarray `var` | `var_all`/`std_all`/`var_axis`/`std_axis` (leto core) | Verified | core/variance — two-pass; closed-form + ndarray `var`/`std`/`var_axis` differential; ddof |
 | Stats: quantile / median (all + axis, 5 interpolations) | ndarray-stats / numpy | `quantile_all`/`median_all`/`quantile_axis`/`median_axis` + `Interpolation` | Verified | core/quantile — fractional-rank `h=q·(n−1)`; closed-form linear/lower/higher/nearest/midpoint oracles; per-lane equivalence; NaN/range rejection |
 | Stats: covariance / Pearson correlation (rowvar) | ndarray-stats `cov`/`pearson_correlation` | `covariance` / `pearson_correlation` (leto core `statistics/`) | Verified | core/statistics — two-pass centered cross-products; closed-form sample/population oracles; diagonal == `var_axis`; symmetry; perfect ±1 correlation; ddof/empty rejection |

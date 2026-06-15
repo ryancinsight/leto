@@ -25,11 +25,11 @@ pub use aliases::{
 };
 pub use arithmetic::ScalarOperand;
 pub use array::Array;
-pub use iter::{AxisIter, AxisIterMut};
+pub use iter::{AxisIter, AxisIterMut, ElementIter, IndexedIter, Windows};
 pub use reduction::{
-    argmax, argmin, max_all, max_axis, mean_all, mean_axis, median_all, median_axis, min_all,
-    min_axis, quantile_all, quantile_axis, std_all, std_axis, sum_all, sum_axis, var_all, var_axis,
-    Interpolation,
+    argmax, argmax_all, argmin, argmin_all, max_all, max_axis, mean_all, mean_axis, median_all,
+    median_axis, min_all, min_axis, quantile_all, quantile_axis, std_all, std_axis, sum_all,
+    sum_axis, var_all, var_axis, Interpolation,
 };
 pub use statistics::{covariance, pearson_correlation};
 pub use structure::{concat, pad, split, stack, PadWidth};

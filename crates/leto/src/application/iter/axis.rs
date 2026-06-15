@@ -1,3 +1,5 @@
+//! Subview iteration along a single axis (read-only and mutable).
+
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::layout::Layout;
 use crate::domain::remove_axis::RemoveAxis;

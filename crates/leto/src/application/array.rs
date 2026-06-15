@@ -1,3 +1,4 @@
+use crate::application::iter::{ElementIter, IndexedIter, Windows};
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::Result;
 use crate::domain::layout::Layout;
@@ -77,6 +78,31 @@ where
     #[inline]
     pub fn view(&self) -> ArrayView<'_, T, N> {
         ArrayView::new(self.layout, self.storage.as_slice())
+    }
+
+    /// Iterator over the array's elements in logical row-major order
+    /// (ndarray `iter` parity), respecting arbitrary strides.
+    #[inline]
+    pub fn iter(&self) -> ElementIter<'_, T, N> {
+        ElementIter::new(&self.view())
+    }
+
+    /// Iterator over `(multi-index, &element)` pairs in logical row-major order
+    /// (ndarray `indexed_iter` parity).
+    #[inline]
+    pub fn indexed_iter(&self) -> IndexedIter<'_, T, N> {
+        IndexedIter::new(&self.view())
+    }
+
+    /// Zero-copy iterator over every sliding window of shape `window_shape`
+    /// (ndarray `windows` parity).
+    ///
+    /// # Errors
+    /// [`LetoError`](crate::LetoError) if any `window_shape[i]` is `0` or exceeds
+    /// `shape[i]`.
+    #[inline]
+    pub fn windows(&self, window_shape: [usize; N]) -> Result<Windows<'_, T, N>> {
+        Windows::new(&self.view(), window_shape)
     }
 
     /// Slice the array, returning a read-only view.
