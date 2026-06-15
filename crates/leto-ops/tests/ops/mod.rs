@@ -1,8 +1,10 @@
 pub mod bidiagonal;
+pub mod col_piv_qr;
 pub mod differential;
 pub mod eigen;
 pub mod eigenvalues;
 pub mod elementwise;
+pub mod full_piv_lu;
 pub mod hessenberg;
 pub mod lu;
 pub mod matmul;

@@ -9,10 +9,14 @@
 pub mod bidiagonal;
 /// Cholesky factorization of symmetric positive-definite matrices.
 pub mod cholesky;
+/// QR with column pivoting: rank-revealing `A P = Q R`.
+pub mod col_piv_qr;
 /// Real symmetric eigensolver (Jacobi rotations).
 pub mod eigen;
 /// General (non-symmetric) eigenvalues via shifted complex QR.
 pub mod eigenvalues;
+/// LU with complete (full) pivoting: rank-revealing `P A Q = L U`.
+pub mod full_piv_lu;
 /// Upper Hessenberg reduction via Householder reflectors.
 pub mod hessenberg;
 /// Shared Householder reflector primitive (SSOT for orthogonal transforms).
@@ -36,12 +40,14 @@ pub use bidiagonal::{bidiagonalize, BidiagonalDecomposition};
 pub use cholesky::{
     cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, CholeskyDecomposition,
 };
+pub use col_piv_qr::{col_piv_qr, ColPivQrDecomposition};
 pub use eigen::SymmetricEigenDecomposition;
 pub use eigen::{
     symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
     symmetric_eigenvalues_jacobi_with_tolerance,
 };
 pub use eigenvalues::eigenvalues;
+pub use full_piv_lu::{full_piv_lu, FullPivLuDecomposition};
 pub use hessenberg::{hessenberg, HessenbergDecomposition};
 pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
 pub use matrix::{

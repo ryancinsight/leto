@@ -8,6 +8,22 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- QR with column pivoting `A P = Q R` (`col_piv_qr`,
+  `MatrixDecompose::col_piv_qr`) in `linalg/col_piv_qr/{mod,decompose}.rs` on the
+  shared Householder primitive (DRY), with the column-pivoted-QR theorem + rank
+  corollary. Rank-revealing (pivots the largest-tail-norm column, so the `R`
+  diagonal is non-increasing); exposes `q`/`r`/`permutation`/`rank` and a
+  full-column-rank `solve_least_squares`. Verified: reconstruction `A P = Q R`,
+  `Q` orthogonality, `R` upper-triangular, least squares vs leto's QR solver and
+  nalgebra normal equations, and rank-deficiency revelation.
+- LU with complete (full) pivoting `P A Q = L U` (`full_piv_lu`,
+  `MatrixDecompose::full_piv_lu`) in `linalg/full_piv_lu/{mod,decompose,solve}.rs`
+  with the complete-pivoting existence theorem + rank/determinant corollary.
+  Rank-revealing (orders pivots by decreasing magnitude) and maximally stable;
+  exposes `rank`/`det`/`l`/`u`/permutations/`solve`/`inv`. Verified against
+  nalgebra `FullPivLU` (det/solve/inverse), reconstruction `P A Q = L U`, and
+  robust rank-deficiency revelation (where it correctly reports rank 2 on a case
+  the Gram-spectrum `matrix_rank` inflates).
 - Golub–Kahan bidiagonalization `A = U B Vᵀ` (`bidiagonalize`,
   `MatrixDecompose::bidiagonalize`; ADR 0006, `m ≥ n`) — the classical SVD-prep
   reduction, in `linalg/bidiagonal/{mod,reduce}.rs` with the reduction theorem +

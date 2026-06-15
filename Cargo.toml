@@ -50,3 +50,30 @@ criterion = "0.8"
 codegen-units = 1
 lto = "thin"
 opt-level = 3
+
+# LOCAL-DEV ONLY (uncommitted): restores standalone buildability after the
+# themis default-branch drifted to 0.9.x while leto's pinned hermes/mnemosyne
+# require themis ^0.8.0 (so pure-git `cargo generate-lockfile` no longer
+# resolves; Cargo.lock is gitignored). Mirrors the path-patch set apollo/coeus/
+# hermes already use for the local stack. NOTE: this builds leto against the
+# themis-0.9 hermes (`e6761ac`), which regresses dense matmul 43–61% at 64²/128²
+# vs the `efac0454` baseline — do NOT commit / adopt in CI until hermes restores
+# the dispatch/AXPY perf on its themis-0.9 line. See gap_audit.md §D.
+[patch."https://github.com/ryancinsight/Mnemosyne.git"]
+mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
+mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
+mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
+mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
+mnemosyne-heap = { path = "../mnemosyne/crates/mnemosyne-heap" }
+
+[patch."https://github.com/ryancinsight/Moirai.git"]
+moirai = { path = "../moirai/moirai" }
+moirai-core = { path = "../moirai/moirai-core" }
+moirai-scheduler = { path = "../moirai/moirai-scheduler" }
+moirai-parallel = { path = "../moirai/moirai-parallel" }
+
+[patch."https://github.com/ryancinsight/hermes.git"]
+hermes-simd = { path = "../hermes/crates/hermes-simd" }
+
+[patch."https://github.com/ryancinsight/melinoe.git"]
+melinoe = { path = "../melinoe" }

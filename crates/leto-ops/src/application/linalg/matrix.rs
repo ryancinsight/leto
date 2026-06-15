@@ -17,9 +17,10 @@
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
-    bidiagonalize, cholesky_decompose, eigenvalues, hessenberg, lu_decompose, qr_decompose,
-    svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
-    BidiagonalDecomposition, CholeskyDecomposition, HessenbergDecomposition, LuDecomposition,
+    bidiagonalize, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu, hessenberg,
+    lu_decompose, qr_decompose, svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi,
+    symmetric_eigenvalues_jacobi, BidiagonalDecomposition, CholeskyDecomposition,
+    ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition,
     QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition,
 };
 use crate::{
@@ -170,11 +171,21 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-square or singular input.
     fn lu(&self) -> Result<LuDecomposition<T>>;
+    /// LU with complete (full) pivoting (`P A Q = L U`); rank-revealing.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square or non-finite input.
+    fn full_piv_lu(&self) -> Result<FullPivLuDecomposition<T>>;
     /// Householder QR decomposition (`A = Q·R`).
     ///
     /// # Errors
     /// [`LetoError`](leto::LetoError) on invalid shape.
     fn qr(&self) -> Result<QrDecomposition<T>>;
+    /// Column-pivoted (rank-revealing) QR (`A P = Q R`).
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-finite input.
+    fn col_piv_qr(&self) -> Result<ColPivQrDecomposition<T>>;
     /// Cholesky factorization of a symmetric positive-definite matrix.
     ///
     /// # Errors
@@ -232,8 +243,16 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
         lu_decompose(&self.as_matrix_view())
     }
     #[inline]
+    fn full_piv_lu(&self) -> Result<FullPivLuDecomposition<T>> {
+        full_piv_lu(&self.as_matrix_view())
+    }
+    #[inline]
     fn qr(&self) -> Result<QrDecomposition<T>> {
         qr_decompose(&self.as_matrix_view())
+    }
+    #[inline]
+    fn col_piv_qr(&self) -> Result<ColPivQrDecomposition<T>> {
+        col_piv_qr(&self.as_matrix_view())
     }
     #[inline]
     fn cholesky(&self) -> Result<CholeskyDecomposition<T>> {

@@ -72,7 +72,9 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | Hessenberg reduction | `Hessenberg` | `hessenberg` / `MatrixDecompose::hessenberg` | Verified | hessenberg/ (Householder; ADR 0006); reconstruction + orthogonality + structure + trace/Frobenius invariants + nalgebra Frobenius parity |
 | Real Schur form (Q, T with vectors) | `Schur` | — | **Missing** | [major] — eigenvalues above cover the spectrum; Schur *vectors* pending |
 | Bidiagonalization | `Bidiagonal` | `bidiagonalize` / `MatrixDecompose::bidiagonalize` | Verified | bidiagonal/ — Golub–Kahan two-sided Householder (ADR 0006); reconstruction + orthogonality + structure + singular-value preservation vs leto & nalgebra SVD |
-| ColPivQR / FullPivLU / UDU | nalgebra decomps | — | **Missing** | Stage 5 |
+| LU, complete pivoting (rank-revealing) | `FullPivLU` | `full_piv_lu` / `MatrixDecompose::full_piv_lu` | Verified | full_piv_lu/ — `P A Q = L U`; reconstruction + rank + det/solve/inv vs nalgebra `FullPivLU` + rank-deficiency revelation |
+| QR, column pivoting (rank-revealing) | `ColPivQR` | `col_piv_qr` / `MatrixDecompose::col_piv_qr` | Verified | col_piv_qr/ — `A P = Q R`; reconstruction + orthogonality + rank + full-rank least squares vs leto QR & nalgebra normal equations |
+| UDU / LDLᵀ (symmetric indefinite) | `UDU` | — | **Missing** | Stage 5 |
 | Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers) |
 | Numerical rank | `Matrix::rank` | `matrix_rank` / `MatrixProperties::rank` | Verified | properties (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall) |
 | Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`) |
