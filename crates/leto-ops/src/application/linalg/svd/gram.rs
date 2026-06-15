@@ -1,37 +1,30 @@
+//! Full-rank thin SVD via the Gram matrix and the symmetric Jacobi eigensolver.
+//!
+//! Tall/square inputs form `AᵀA` and derive `U = A V Σ⁻¹`; wide inputs form
+//! `AAᵀ` and derive `V = Aᵀ U Σ⁻¹`. Appropriate for small dense matrices; it
+//! squares the condition number (`κ(AᵀA) = κ(A)²`) and rejects rank-deficient
+//! input. For rank-deficient or ill-conditioned matrices use the rank-revealing
+//! [`super::jacobi`] path.
+
+use super::{default_tolerance, singular_value_or_zero, validate_input, SvdDecomposition};
+use crate::application::linalg::eigen::{
+    symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi_with_tolerance,
+};
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, LetoError, Result};
 
-use super::eigen::symmetric_eigen_jacobi_with_tolerance;
-
-/// Thin singular value decomposition of a full-rank matrix.
+/// Compute a thin SVD for a full-rank matrix (default tolerance).
 ///
-/// The decomposition stores `A = U * diag(singular_values) * V^T`, where
-/// `U` has shape `m x k`, `V` has shape `n x k`, `k = min(m, n)`, and singular
-/// values are sorted in descending order. Rank-deficient matrices are rejected
-/// instead of returning fabricated vectors for null-space components.
-#[derive(Debug, Clone)]
-pub struct SvdDecomposition<T> {
-    /// Singular values sorted descending.
-    pub singular_values: Vec<T>,
-    /// Thin left singular vectors, stored as columns.
-    pub left_singular_vectors: Array2<T>,
-    /// Right singular vectors, stored as columns.
-    pub right_singular_vectors: Array2<T>,
-}
-
-/// Compute a thin SVD for a full-rank matrix.
-///
-/// The implementation is generic over [`RealScalar`] and runs in the native
-/// precision of `T`: tall/square inputs form `A^T A` and derive
-/// `U = A V Σ^-1`; wide inputs form `A A^T` and derive `V = A^T U Σ^-1`. The
-/// method is appropriate for small dense matrices and consumer migration tests;
-/// it is not a replacement for a rank-revealing bidiagonal SVD on
-/// ill-conditioned large matrices.
+/// # Errors
+/// [`LetoError`](leto::LetoError) on empty, non-finite, or rank-deficient input.
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     svd_decompose_with_tolerance(matrix, default_tolerance::<T>())
 }
 
 /// Compute a thin SVD with an explicit eigensolver tolerance.
+///
+/// # Errors
+/// [`LetoError`](leto::LetoError) on empty, non-finite, or rank-deficient input.
 pub fn svd_decompose_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     tolerance: T,
@@ -139,11 +132,11 @@ fn svd_from_row_gram<T: RealScalar>(
     })
 }
 
-/// Return singular values for any finite non-empty matrix.
+/// Singular values of any finite non-empty matrix (spectrum of the smaller Gram
+/// matrix). Returns zeros for rank-deficient inputs without deriving vectors.
 ///
-/// This path computes only the spectrum of the smaller Gram matrix and does
-/// not derive singular vectors, so rank-deficient inputs return zero singular
-/// values instead of failing the full-vector SVD contract.
+/// # Errors
+/// [`LetoError`](leto::LetoError) on empty or non-finite input.
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     let tolerance = default_tolerance::<T>();
     validate_input(matrix, tolerance)?;
@@ -153,85 +146,12 @@ pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<
     } else {
         row_gram_matrix(matrix)?
     };
-    let mut eigenvalues =
-        super::eigen::symmetric_eigenvalues_jacobi_with_tolerance(&gram.view(), tolerance)?;
+    let mut eigenvalues = symmetric_eigenvalues_jacobi_with_tolerance(&gram.view(), tolerance)?;
     eigenvalues.reverse();
     eigenvalues
         .into_iter()
         .map(|eigenvalue| singular_value_or_zero(eigenvalue, tolerance))
         .collect()
-}
-
-/// Moore-Penrose pseudoinverse `A⁺` of a full-rank matrix, via the thin SVD.
-///
-/// For `A = U Σ Vᵀ` (full rank, so every `σ > 0`), `A⁺ = V Σ⁻¹ Uᵀ` with shape
-/// `n × m` (the transpose of the input shape). This is the numerically sound
-/// SVD route — it does not square the condition number the way the normal
-/// equations `(AᵀA)⁻¹Aᵀ` would.
-///
-/// Full-rank only: rank-deficient inputs are rejected by [`svd_decompose`] (the
-/// rank-revealing pseudoinverse that maps near-zero singular values to zero is
-/// gated on the full rank-revealing SVD contract; see `gap_audit.md` §B).
-///
-/// # Errors
-/// Propagates [`LetoError`](leto::LetoError) for empty, non-finite, or
-/// rank-deficient input (from [`svd_decompose`]).
-pub fn pinv<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
-    let [rows, cols] = matrix.shape();
-    let svd = svd_decompose(matrix)?;
-    // Full rank guaranteed by svd_decompose; reciprocals are finite.
-    let inv_sigma: Vec<T> = svd
-        .singular_values
-        .iter()
-        .map(|&sigma| T::ONE.div(sigma))
-        .collect();
-    let u = &svd.left_singular_vectors; // [rows, rank]
-    let v = &svd.right_singular_vectors; // [cols, rank]
-
-    // A⁺[i][j] = Σ_t V[i][t] · (1/σ_t) · U[j][t]
-    let mut values = vec![T::ZERO; cols * rows];
-    for i in 0..cols {
-        for j in 0..rows {
-            let mut acc = T::ZERO;
-            for (t, &inv_s) in inv_sigma.iter().enumerate() {
-                let v_it = *v.get([i, t])?;
-                let u_jt = *u.get([j, t])?;
-                acc = acc.add(v_it.mul(inv_s).mul(u_jt));
-            }
-            values[i * rows + j] = acc;
-        }
-    }
-    Ok(Array2::from_shape_vec([cols, rows], values)
-        .expect("pseudoinverse shape [cols, rows] matches storage"))
-}
-
-fn default_tolerance<T: RealScalar>() -> T {
-    T::ONE.div(T::from_usize(1_000_000_000_000))
-}
-
-fn validate_input<T: RealScalar>(matrix: &ArrayView2<'_, T>, tolerance: T) -> Result<()> {
-    let [rows, cols] = matrix.shape();
-    if rows == 0 || cols == 0 {
-        return Err(LetoError::ShapeMismatch {
-            lhs: vec![rows, cols],
-            rhs: vec![rows.max(1), cols.max(1)],
-        });
-    }
-    if !tolerance.is_finite() || tolerance < T::ZERO {
-        return Err(LetoError::StorageError {
-            reason: "SVD tolerance must be finite and non-negative".to_string(),
-        });
-    }
-    for row in 0..rows {
-        for col in 0..cols {
-            if !matrix.get([row, col])?.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "SVD input contains a non-finite value".to_string(),
-                });
-            }
-        }
-    }
-    Ok(())
 }
 
 fn column_gram_matrix<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
@@ -274,18 +194,6 @@ fn checked_singular_value<T: RealScalar>(eigenvalue: T, tolerance: T) -> Result<
         });
     }
     Ok(sigma)
-}
-
-fn singular_value_or_zero<T: RealScalar>(eigenvalue: T, tolerance: T) -> Result<T> {
-    if eigenvalue < T::ZERO {
-        if eigenvalue.neg() > tolerance {
-            return Err(LetoError::StorageError {
-                reason: "SVD normal matrix has a negative eigenvalue beyond tolerance".to_string(),
-            });
-        }
-        return Ok(T::ZERO);
-    }
-    Ok(eigenvalue.sqrt())
 }
 
 fn normalize_column<T: RealScalar>(

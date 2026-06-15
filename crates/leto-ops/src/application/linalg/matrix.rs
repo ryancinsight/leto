@@ -17,15 +17,17 @@
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
-    cholesky_decompose, lu_decompose, qr_decompose, svd_decompose, symmetric_eigen_jacobi,
-    symmetric_eigenvalues_jacobi, CholeskyDecomposition, LuDecomposition, QrDecomposition,
-    SvdDecomposition, SymmetricEigenDecomposition,
+    cholesky_decompose, hessenberg, lu_decompose, qr_decompose, svd_decompose, svd_rank_revealing,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, CholeskyDecomposition,
+    HessenbergDecomposition, LuDecomposition, QrDecomposition, SvdDecomposition,
+    SymmetricEigenDecomposition,
 };
 use crate::{
-    det as det_kernel, inv as inv_kernel, matmul as matmul_kernel, norm_l1 as norm_l1_kernel,
-    norm_l2 as norm_l2_kernel, norm_max as norm_max_kernel, pinv as pinv_kernel,
-    singular_values as singular_values_kernel, solve as solve_kernel,
-    solve_least_squares as solve_least_squares_kernel,
+    det as det_kernel, inv as inv_kernel, kron as kron_kernel, matmul as matmul_kernel,
+    matrix_rank as matrix_rank_kernel, matrix_rank_with_tolerance as matrix_rank_tol_kernel,
+    norm_l1 as norm_l1_kernel, norm_l2 as norm_l2_kernel, norm_max as norm_max_kernel,
+    pinv as pinv_kernel, singular_values as singular_values_kernel, solve as solve_kernel,
+    solve_least_squares as solve_least_squares_kernel, trace as trace_kernel,
 };
 use leto::{Array, Array1, Array2, ArrayView, ArrayView1, ArrayView2, Result, Storage};
 
@@ -78,6 +80,15 @@ pub trait MatrixProduct<T: Scalar> {
     /// # Errors
     /// Propagates [`LetoError`](leto::LetoError) on inner-dimension mismatch.
     fn matmul<R: AsMatrixView<T>>(&self, rhs: &R) -> Result<Array2<T>>;
+
+    /// Kronecker (tensor) product `self ⊗ rhs`, shape `[m·p, n·q]`.
+    ///
+    /// Composes shapes rather than contracting a shared dimension; see
+    /// [`kron`](crate::kron) for the mixed-product theorem.
+    ///
+    /// # Errors
+    /// Propagates [`LetoError`](leto::LetoError) on an invalid storage span.
+    fn kron<R: AsMatrixView<T>>(&self, rhs: &R) -> Result<Array2<T>>;
 }
 
 impl<T: Scalar, M: AsMatrixView<T>> MatrixProduct<T> for M {
@@ -90,6 +101,10 @@ impl<T: Scalar, M: AsMatrixView<T>> MatrixProduct<T> for M {
         let mut out = Array2::from_shape_vec([rows, cols], vec![T::ZERO; rows * cols])?;
         matmul_kernel(&lhs, &rhs, &mut out.view_mut())?;
         Ok(out)
+    }
+    #[inline]
+    fn kron<R: AsMatrixView<T>>(&self, rhs: &R) -> Result<Array2<T>> {
+        kron_kernel(&self.as_matrix_view(), &rhs.as_matrix_view())
     }
 }
 
@@ -164,11 +179,22 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-SPD or non-square input.
     fn cholesky(&self) -> Result<CholeskyDecomposition<T>>;
-    /// Thin SVD for finite full-rank matrices.
+    /// Upper Hessenberg reduction `A = Q H Qᵀ` (eigensolver prerequisite).
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square or non-finite input.
+    fn hessenberg(&self) -> Result<HessenbergDecomposition<T>>;
+    /// Thin SVD for finite full-rank matrices (Gram path; rejects rank-deficient).
     ///
     /// # Errors
     /// [`LetoError`](leto::LetoError) on rank-deficient or invalid input.
     fn svd(&self) -> Result<SvdDecomposition<T>>;
+    /// Rank-revealing SVD (one-sided Jacobi); accepts rank-deficient input and
+    /// surfaces zero singular values (ADR 0005).
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on empty or non-finite input.
+    fn svd_rank_revealing(&self) -> Result<SvdDecomposition<T>>;
     /// Singular values (ascending in the kernel's convention), including
     /// rank-deficient inputs.
     ///
@@ -201,8 +227,16 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
         cholesky_decompose(&self.as_matrix_view())
     }
     #[inline]
+    fn hessenberg(&self) -> Result<HessenbergDecomposition<T>> {
+        hessenberg(&self.as_matrix_view())
+    }
+    #[inline]
     fn svd(&self) -> Result<SvdDecomposition<T>> {
         svd_decompose(&self.as_matrix_view())
+    }
+    #[inline]
+    fn svd_rank_revealing(&self) -> Result<SvdDecomposition<T>> {
+        svd_rank_revealing(&self.as_matrix_view())
     }
     #[inline]
     fn singular_values(&self) -> Result<Vec<T>> {
@@ -281,5 +315,51 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixSolve<T> for M {
     #[inline]
     fn pinv(&self) -> Result<Array2<T>> {
         pinv_kernel(&self.as_matrix_view())
+    }
+}
+
+/// Scalar/integer matrix properties (queries reducing a matrix to a scalar or
+/// count). Bounded on [`RealScalar`] because `rank` consumes the singular-value
+/// spectrum; `trace` is also exposed as a [`Scalar`]-generic free function
+/// ([`crate::trace`]) for the integer case.
+///
+/// ```
+/// use leto::Array2;
+/// use leto_ops::MatrixProperties;
+///
+/// let a = Array2::from_shape_vec([2, 2], vec![1.0_f64, 2.0, 3.0, 4.0]).unwrap();
+/// assert_eq!(a.trace().unwrap(), 5.0); // 1 + 4
+/// assert_eq!(a.rank().unwrap(), 2);
+/// ```
+pub trait MatrixProperties<T: RealScalar> {
+    /// Trace `tr(A) = Σᵢ aᵢᵢ`.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square input.
+    fn trace(&self) -> Result<T>;
+    /// Numerical rank with the default relative singular-value tolerance.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on empty or non-finite input.
+    fn rank(&self) -> Result<usize>;
+    /// Numerical rank with an explicit relative tolerance.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on empty or non-finite input.
+    fn rank_with_tolerance(&self, relative_tolerance: T) -> Result<usize>;
+}
+
+impl<T: RealScalar, M: AsMatrixView<T>> MatrixProperties<T> for M {
+    #[inline]
+    fn trace(&self) -> Result<T> {
+        trace_kernel(&self.as_matrix_view())
+    }
+    #[inline]
+    fn rank(&self) -> Result<usize> {
+        matrix_rank_kernel(&self.as_matrix_view())
+    }
+    #[inline]
+    fn rank_with_tolerance(&self, relative_tolerance: T) -> Result<usize> {
+        matrix_rank_tol_kernel(&self.as_matrix_view(), relative_tolerance)
     }
 }

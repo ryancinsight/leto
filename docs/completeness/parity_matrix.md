@@ -63,16 +63,19 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | Cholesky factor/solve/det/inv | `Cholesky` | `cholesky_*` | Verified | oracle_parity.rs |
 | Symmetric eigen (values+vectors) | `SymmetricEigen` | `symmetric_eigen_jacobi` | Verified | eigen.rs |
 | Symmetric eigenvalues-only | `SymmetricEigen::eigenvalues` | `symmetric_eigenvalues_jacobi` | Verified | oracle_parity.rs |
-| Thin full-rank SVD | `SVD` subset | `svd_decompose` | Partial | svd.rs |
+| Thin full-rank SVD (Gram) | `SVD` subset | `svd_decompose` | Verified | svd/gram.rs (full-rank; rejects rank-deficient) |
+| Rank-revealing SVD (incl. rank-deficient U/V) | `SVD` | `svd_rank_revealing` / `MatrixDecompose::svd_rank_revealing` | Verified | svd/jacobi.rs — one-sided Jacobi (ADR 0005); vs nalgebra singular values (tall/wide/deficient) + reconstruction + orthonormal V |
 | Singular values (incl. rank-deficient) | `SVD::singular_values` | `singular_values` | Verified | oracle_parity.rs |
 | Norms L1/L2/max | `norm`/`norm_squared` | `norm_l1/l2/max` | Verified | norms.rs |
-| Full-rank pseudo-inverse | `pseudo_inverse` | `pinv` / `MatrixSolve::pinv` | Verified | matrix_traits (vs nalgebra `pseudo_inverse` + Moore-Penrose `A A⁺ A = A`; tall/wide/square; SVD-based `V Σ⁻¹ Uᵀ`) |
-| Full rank-revealing SVD (rank-deficient U/V) + rank-deficient pinv | `SVD`, `pseudo_inverse` | — | **Missing** | [major], ADR needed (full-rank pinv above covers the common case) |
+| Pseudo-inverse (full-rank **and** rank-deficient) | `pseudo_inverse` | `pinv` / `MatrixSolve::pinv` | Verified | svd/pseudoinverse.rs — rank-revealing via Jacobi SVD; vs nalgebra `pseudo_inverse` + Moore-Penrose `A A⁺ A = A`, `A⁺ A A⁺ = A⁺` |
 | Non-symmetric eigen / `complex_eigenvalues` | `eigenvalues` | — | **Missing** | Stage 5 |
-| Schur / Hessenberg | `Schur`/`Hessenberg` | — | **Missing** | Stage 5 |
+| Hessenberg reduction | `Hessenberg` | `hessenberg` / `MatrixDecompose::hessenberg` | Verified | hessenberg/ (Householder; ADR 0006); reconstruction + orthogonality + structure + trace/Frobenius invariants + nalgebra Frobenius parity |
+| Real Schur (Francis QR) | `Schur` | — | **Missing** | [major], next phase — builds on Hessenberg |
 | Bidiagonal / ColPivQR / FullPivLU / UDU | nalgebra decomps | — | **Missing** | Stage 5 |
-| Matrix exp / power / trace / rank | nalgebra inherent | trace/rank: — | **Missing/Partial** | Stage 1 |
-| Kronecker / outer product | `kronecker` | — | **Missing** | Stage 5 |
+| Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers) |
+| Numerical rank | `Matrix::rank` | `matrix_rank` / `MatrixProperties::rank` | Verified | properties (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall) |
+| Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`) |
+| Matrix exp / power | nalgebra inherent | — | **Missing** | Stage 5 |
 | Small fixed `MatrixN`/`VectorN` | `Matrix3`/`Vector3` | — | **Excluded?** | different abstraction; decide Stage 2 |
 | Geometry: Rotation/Isometry/Quaternion/Perspective | nalgebra geometry | — | **Excluded?** | not an array substrate; decide Stage 2 |
 

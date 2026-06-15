@@ -8,6 +8,34 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- Upper Hessenberg reduction `A = Q H Qᵀ` by Householder reflectors
+  (`hessenberg`, `MatrixDecompose::hessenberg`; ADR 0006) in a
+  leaf hierarchy `linalg/hessenberg/{mod,householder,reduce}.rs` with the
+  reduction theorem + spectrum-preservation corollary in rustdoc. Generic over
+  `RealScalar`, native precision. Verified on the convention-independent
+  contract (reconstruction, `Q` orthogonality, upper-Hessenberg structure,
+  symmetric→tridiagonal), orthogonal-similarity invariants (trace, Frobenius),
+  and nalgebra Frobenius parity. (The Francis double-shift QR for the real Schur
+  form / non-symmetric eigenvalues builds on this in the next phase.)
+- Rank-revealing SVD via one-sided Jacobi (`svd_rank_revealing` (+`_with_tolerance`),
+  `MatrixDecompose::svd_rank_revealing`; ADR 0005). Unlike the Gram-matrix
+  `svd_decompose`, it **accepts rank-deficient input** (surfaces zero singular
+  values, keeps `V` fully orthonormal) and never forms `AᵀA` (no condition-number
+  squaring). `linalg/svd.rs` refactored into a leaf hierarchy
+  (`svd/{mod,gram,jacobi,pseudoinverse}.rs`) with a monotone-convergence proof
+  sketch in rustdoc. `pinv` is now unified onto this path, so it handles
+  **rank-deficient** matrices too (`A⁺ = Σ_{σᵢ>τ} σᵢ⁻¹ vᵢ uᵢᵀ`). Differential vs
+  nalgebra `SVD`/`pseudo_inverse` across tall/wide/deficient shapes, plus
+  reconstruction, orthonormality, and both Moore-Penrose identities.
+- Matrix `trace`, numerical `matrix_rank` (+ `_with_tolerance`), and Kronecker
+  product `kron`, in a vertical leaf-module hierarchy (`linalg/properties/{trace,
+  rank}.rs`, `linalg/products/kronecker.rs`) with theorem/proof rustdoc.
+  `trace` is `Scalar`-generic (integers included); `rank` is SVD-spectrum-based
+  (SSOT delegation to `singular_values`, no second SVD path). Exposed both as
+  free functions and via fluent traits `MatrixProperties` (`trace`/`rank`/
+  `rank_with_tolerance`) and `MatrixProduct::kron`. Differential tests vs
+  nalgebra `trace`/`rank`/`kronecker` plus oracle-independent identities
+  (Kronecker mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`, `tr(A⊗B)=tr(A)·tr(B)`).
 - Moore-Penrose pseudoinverse `pinv` (free function + `MatrixSolve::pinv`) for
   full-rank matrices via the thin SVD (`A⁺ = V Σ⁻¹ Uᵀ`, numerically sound — no
   normal-equations condition-number squaring). Covers tall, wide, and square

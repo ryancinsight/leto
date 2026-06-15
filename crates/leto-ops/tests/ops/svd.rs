@@ -1,5 +1,6 @@
 use leto::{Array2, SliceArg, Storage};
-use leto_ops::{singular_values, svd_decompose};
+use leto_ops::{pinv, singular_values, svd_decompose, svd_rank_revealing, MatrixProduct};
+use nalgebra::DMatrix;
 
 fn assert_close(lhs: f64, rhs: f64, epsilon: f64) {
     assert!(
@@ -153,4 +154,87 @@ fn svd_rejects_unsupported_or_invalid_inputs() {
     let non_finite = Array2::from_shape_vec([2, 2], vec![1.0, f64::NAN, 0.0, 1.0]).unwrap();
     assert!(svd_decompose(&non_finite.view()).is_err());
     assert!(singular_values(&non_finite.view()).is_err());
+}
+
+// ── Rank-revealing one-sided Jacobi SVD (ADR 0005) ──────────────────────────
+
+#[test]
+fn svd_rank_revealing_reconstructs_rank_deficient_matrix() {
+    // Row 2 = 2 * row 1 → rank 1, one zero singular value.
+    let values = vec![1.0, 2.0, 2.0, 4.0];
+    let matrix = Array2::from_shape_vec([2, 2], values.clone()).unwrap();
+    let svd = svd_rank_revealing(&matrix.view()).unwrap();
+
+    assert_eq!(svd.singular_values.len(), 2);
+    assert!(svd.singular_values[0] >= svd.singular_values[1]);
+    assert_close(svd.singular_values[1], 0.0, 1.0e-9); // rank-deficient
+
+    // Reconstruction A = U Σ Vᵀ holds despite the zero singular value.
+    let reconstructed = reconstruct(&svd, 2);
+    for (actual, expected) in reconstructed.iter().zip(values.iter()) {
+        assert_close(*actual, *expected, 1.0e-9);
+    }
+
+    // V is fully orthonormal (the defining property the Gram path cannot give).
+    let v = svd.right_singular_vectors.storage().as_slice();
+    assert_close(column_norm(v, 2, 2, 0), 1.0, 1.0e-9);
+    assert_close(column_norm(v, 2, 2, 1), 1.0, 1.0e-9);
+    assert_close(column_dot(v, 2, 2, 0, 1), 0.0, 1.0e-9);
+}
+
+#[test]
+fn svd_rank_revealing_matches_nalgebra_singular_values() {
+    // Full-rank and rank-deficient, tall and wide.
+    let cases: [(usize, usize, Vec<f64>); 3] = [
+        (4, 2, vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0]),
+        (2, 2, vec![1.0, 2.0, 2.0, 4.0]),
+        (2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    ];
+    for (rows, cols, values) in cases {
+        let a = Array2::from_shape_vec([rows, cols], values.clone()).unwrap();
+        let mut leto_sv = svd_rank_revealing(&a.view()).unwrap().singular_values;
+        let mut na_sv = DMatrix::from_row_slice(rows, cols, &values)
+            .singular_values()
+            .as_slice()
+            .to_vec();
+        leto_sv.sort_by(|x, y| y.total_cmp(x));
+        na_sv.sort_by(|x, y| y.total_cmp(x));
+        assert_eq!(leto_sv.len(), na_sv.len());
+        for (l, n) in leto_sv.iter().zip(na_sv.iter()) {
+            assert_close(*l, *n, 1.0e-9);
+        }
+    }
+}
+
+#[test]
+fn pinv_rank_deficient_matches_nalgebra_and_moore_penrose() {
+    let values = vec![1.0, 2.0, 2.0, 4.0]; // rank 1
+    let a = Array2::from_shape_vec([2, 2], values.clone()).unwrap();
+    let a_pinv = pinv(&a.view()).unwrap();
+
+    // Differential vs nalgebra's SVD-based pseudo_inverse.
+    let na_pinv = DMatrix::from_row_slice(2, 2, &values)
+        .pseudo_inverse(1.0e-12)
+        .unwrap();
+    let leto_slice = a_pinv.storage().as_slice();
+    for r in 0..2 {
+        for c in 0..2 {
+            assert_close(leto_slice[r * 2 + c], na_pinv[(r, c)], 1.0e-9);
+        }
+    }
+
+    // Moore-Penrose conditions: A A⁺ A = A and A⁺ A A⁺ = A⁺.
+    let a_ap_a = a.matmul(&a_pinv).unwrap().matmul(&a).unwrap();
+    for (actual, expected) in a_ap_a.storage().as_slice().iter().zip(values.iter()) {
+        assert_close(*actual, *expected, 1.0e-9);
+    }
+    let ap_a_ap = a_pinv.matmul(&a).unwrap().matmul(&a_pinv).unwrap();
+    for (actual, expected) in ap_a_ap
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(a_pinv.storage().as_slice().iter())
+    {
+        assert_close(*actual, *expected, 1.0e-9);
+    }
 }

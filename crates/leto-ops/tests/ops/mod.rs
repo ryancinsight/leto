@@ -1,12 +1,14 @@
 pub mod differential;
 pub mod eigen;
 pub mod elementwise;
+pub mod hessenberg;
 pub mod lu;
 pub mod matmul;
 pub mod matrix_traits;
 pub mod norms;
 pub mod oracle_parity;
 pub mod parity;
+pub mod properties;
 pub mod qr_cholesky;
 pub mod reduction;
 pub mod structure_ops;
