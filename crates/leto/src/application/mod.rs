@@ -12,6 +12,8 @@ mod index;
 pub mod iter;
 /// Element-wise reduction operations (sum, mean, min, max, argmin, argmax).
 pub mod reduction;
+/// Multivariate summary statistics (covariance, correlation).
+pub mod statistics;
 /// Structural array operations (concat, pad, split).
 pub mod structure;
 /// Borrowed array view types.
@@ -25,8 +27,10 @@ pub use arithmetic::ScalarOperand;
 pub use array::Array;
 pub use iter::{AxisIter, AxisIterMut};
 pub use reduction::{
-    argmax, argmin, max_all, max_axis, mean_all, mean_axis, min_all, min_axis, std_all, std_axis,
-    sum_all, sum_axis, var_all, var_axis,
+    argmax, argmin, max_all, max_axis, mean_all, mean_axis, median_all, median_axis, min_all,
+    min_axis, quantile_all, quantile_axis, std_all, std_axis, sum_all, sum_axis, var_all, var_axis,
+    Interpolation,
 };
+pub use statistics::{covariance, pearson_correlation};
 pub use structure::{concat, pad, split, stack, PadWidth};
 pub use view::{ArrayView, ArrayViewMut};

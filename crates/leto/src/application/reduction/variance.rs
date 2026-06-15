@@ -90,18 +90,14 @@ where
     }
     let denom = degrees_of_freedom(axis_len, ddof)?;
 
-    // Per-output mean, gathered into flat (C-order) layout.
+    // Per-output mean: `mean_axis` returns a C-contiguous array (offset 0) whose
+    // `data()[flat]` is the mean at output position `flat` in C-order — index it
+    // directly, no second gather buffer.
     let means = mean_axis::<T, S, N, M>(arr, axis)?;
+    let means_view = means.view();
+    let mean_data = means_view.data();
     let out_shape = RankMarker::<N>.remove_shape(arr.shape(), axis)?;
     let out_size: usize = out_shape.iter().product();
-    let mut mean_buf = vec![T::zero(); out_size];
-    {
-        let mv = means.view();
-        let (layout, data, shape) = (mv.layout(), mv.data(), mv.layout().shape);
-        for (flat, slot) in mean_buf.iter_mut().enumerate() {
-            *slot = data[layout.offset_of(index_from_flat(flat, &shape))?];
-        }
-    }
 
     // Accumulate squared deviations over the axis lanes.
     let view = arr.view();
@@ -113,7 +109,7 @@ where
         let lane_shape = lane_layout.shape;
         for (flat, slot) in buf.iter_mut().enumerate() {
             let off = lane_layout.offset_of(index_from_flat(flat, &lane_shape))?;
-            let deviation = lane_data[off] - mean_buf[flat];
+            let deviation = lane_data[off] - mean_data[flat];
             *slot = *slot + deviation * deviation;
         }
     }
@@ -147,7 +143,10 @@ where
 }
 
 /// `count − ddof`, rejecting a non-positive (or non-representable) result.
-fn degrees_of_freedom<T: Float>(count: usize, ddof: T) -> Result<T> {
+///
+/// Shared by the variance reductions and the [`statistics`](crate::application::statistics)
+/// covariance kernel (SSOT for the degrees-of-freedom contract).
+pub(crate) fn degrees_of_freedom<T: Float>(count: usize, ddof: T) -> Result<T> {
     if !ddof.is_finite() {
         return Err(LetoError::StorageError {
             reason: "variance degrees of freedom must be finite".to_string(),

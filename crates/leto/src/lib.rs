@@ -25,8 +25,10 @@ pub use infrastructure::storage::MnemosyneStorage;
 pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};
 pub use application::{
-    concat, pad, split, stack, Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3,
-    ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter, AxisIterMut, PadWidth, ScalarOperand,
+    concat, covariance, median_all, median_axis, pad, pearson_correlation, quantile_all,
+    quantile_axis, split, stack, Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3,
+    ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter, AxisIterMut, Interpolation, PadWidth,
+    ScalarOperand,
 };
 
 #[cfg(feature = "ndarray-compat")]

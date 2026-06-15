@@ -4,6 +4,69 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.24.0] - 2026-06-15
+
+### Added
+
+- Multivariate covariance and Pearson correlation (`covariance`,
+  `pearson_correlation`) in a new `leto` core `application/statistics/`
+  bounded context (ndarray-stats `cov` / `pearson_correlation` parity). Both
+  follow the numpy/ndarray-stats `rowvar = true` convention (rows are variables,
+  columns observations) and return the symmetric `v × v` summary matrix.
+  `covariance` is two-pass numerically stable (variables centered before the
+  cross-products) and reuses the `degrees_of_freedom` contract shared with the
+  variance reductions (SSOT); `pearson_correlation` delegates to `covariance`
+  (SSOT) and documents the ddof-invariance theorem and the constant-variable
+  NaN contract. Verified by closed-form sample/population oracles, a
+  diagonal == `var_axis` cross-check, symmetry, perfect ±1 correlation cases,
+  the `R = C / (σσ)` normalization identity with the `|R| ≤ 1` bound, and
+  empty/excess-ddof rejection.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (295 tests)
+- `cargo test -p leto --test core_tests statistics --all-features` (7 tests)
+- `cargo test -p leto --test core_tests quantile --all-features` (7 tests)
+- `cargo test -p leto --test core_tests variance --all-features` (10 filtered tests;
+  includes covariance cross-checks)
+- `cargo test --doc --workspace --all-features` (5 doctests)
+- `cargo doc -p leto -p leto-ops --all-features --no-deps`
+- `git diff --check`
+
+## [0.23.0] - 2026-06-15
+
+### Added
+
+- Quantile and median reductions (`quantile_all`/`median_all`/`quantile_axis`/
+  `median_axis`) with an `Interpolation` strategy enum (Linear/Lower/Higher/
+  Nearest/Midpoint) in `leto` core `application/reduction/quantile.rs`
+  (ndarray-stats / numpy parity). Generic over `num_traits::Float`; documents the
+  fractional-rank `h = q·(n−1)` theorem. A single shared `quantile_of_slice`
+  kernel backs both the whole-array and per-axis paths (SSOT); the axis path
+  reuses one `out_size × axis_len` scratch buffer across all lanes. Verified by
+  closed-form analytical oracles for every interpolation method, per-lane
+  equivalence between `quantile_axis` and `quantile_all`, and rejection of
+  empty input, out-of-range `q`, and NaN data.
+
+### Changed
+
+- `var_axis` no longer allocates a redundant per-output gather buffer: it indexes
+  the C-contiguous `mean_axis` result directly, removing one `Vec` allocation per
+  call with no change in results.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (288 tests)
+- `cargo test -p leto --test core_tests quantile --all-features` (7 tests)
+- `cargo test -p leto --test core_tests variance --all-features` (5 tests)
+- `cargo test --doc --workspace --all-features` (5 doctests)
+- `cargo doc -p leto -p leto-ops --all-features --no-deps`
+- `git diff --check`
+
 ## [0.22.0] - 2026-06-15
 
 ### Added

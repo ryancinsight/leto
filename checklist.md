@@ -1,7 +1,23 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.22.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.22.0: variance and standard-deviation reductions
+Sprint phase: Execution. Target version: 0.24.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.24.0: covariance and Pearson correlation
+(`covariance`/`pearson_correlation`) in `leto` core
+`application/statistics/`, following the ndarray-stats / numpy `rowvar = true`
+contract. Evidence tier: theorem/proof sketches in rustdoc plus closed-form
+sample/population oracles, diagonal == `var_axis`, symmetry, perfect +/-1
+correlation, normalized-covariance identity, and exact empty/ddof rejection
+(7 tests). Delivered 0.23.0: quantile and median reductions
+(`quantile_all`/`median_all`/`quantile_axis`/`median_axis`) with an
+`Interpolation` strategy enum (Linear/Lower/Higher/Nearest/Midpoint) in `leto`
+core `application/reduction/quantile.rs` (ndarray-stats / numpy parity). One
+shared `quantile_of_slice` kernel backs both whole-array and per-axis paths
+(SSOT); axis path reuses one `out_size × axis_len` scratch buffer. Evidence
+tier: fractional-rank theorem in rustdoc plus closed-form analytical oracles for
+every interpolation method, per-lane equivalence, and empty/range/NaN rejection
+(7 tests). Also 0.23.0 [patch]: `var_axis` no longer allocates a redundant
+per-output gather buffer (indexes the C-contiguous `mean_axis` result directly).
+Delivered 0.22.0: variance and standard-deviation reductions
 (`var_all`/`std_all`/`var_axis`/`std_axis`) in `leto` core with finite `ddof`
 validation and a two-pass numerical-stability theorem in rustdoc. Evidence
 tier: theorem/proof sketch plus closed-form, invalid-input, and ndarray
@@ -53,8 +69,8 @@ value-semantic reconstruction, identity, or differential parity checks.
 Remaining nalgebra surface: Schur vectors/quasi-triangular form, pivoted
 symmetric-indefinite factorization, matrix functions, and consumer-driven
 fixed-size/geometry decisions.
-Array-statistics surface: variance/std is closed; quantile/correlation/
-covariance remain open until a consumer driver or parity sprint selects them.
+Array-statistics surface: variance/std, quantile/median, and
+covariance/correlation are closed for the current ndarray-stats parity rows.
 
 Stage A2 progress: indexed zip parity (0.11.0) delivered through
 `indexed_zip_mut_with` and `indexed_zip2_mut_with`, closing the current
@@ -168,7 +184,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   order (themis → mnemosyne → moirai/hermes → leto → apollo/coeus); apollo only
   builds on 0.9.11 today via local path-patches that bypass the git revs. Until
   then leto stays on the themis-0.8.0 lock (`--locked` builds/tests pass;
-  consumer rev-bumps to leto 0.22.0 wait on this cascade). See gap_audit §D.
+  consumer rev-bumps to leto 0.24.0 wait on this cascade). See gap_audit §D.
 - [x] [patch] Current Leto 0.5.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Historical note: full workspace docs were previously blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`; 0.19.6 updates the Python FFI dependencies and rechecks full docs.
 - [x] [patch] Add ndarray/nalgebra oracle validation gates for current linalg
   and reduction contracts. Verification: `oracle_parity` compares Leto LU,

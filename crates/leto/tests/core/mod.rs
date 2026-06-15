@@ -1,7 +1,9 @@
 pub mod arithmetic;
 pub mod indexing;
 pub mod layout;
+pub mod quantile;
 pub mod slicing;
+pub mod statistics;
 pub mod storage;
 pub mod structure;
 pub mod transform;

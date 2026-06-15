@@ -45,7 +45,8 @@ Evidence column: `parity.rs` / `oracle_parity.rs` = differential test file;
 | Dynamic rank `IxDyn` | `IxDyn` | — | **Missing** | ADR 0002 reopened |
 | Full iterator surface (`indexed_iter`, windows, lanes, fold/accumulate) | ndarray iters | partial | **Partial→audit** | Stage 1 |
 | Stats: variance / std (population + sample, axis) | ndarray-stats / ndarray `var` | `var_all`/`std_all`/`var_axis`/`std_axis` (leto core) | Verified | core/variance — two-pass; closed-form + ndarray `var`/`std`/`var_axis` differential; ddof |
-| Stats: quantile / corr / cov | ndarray-stats | — | **Missing** | Stage 1 column |
+| Stats: quantile / median (all + axis, 5 interpolations) | ndarray-stats / numpy | `quantile_all`/`median_all`/`quantile_axis`/`median_axis` + `Interpolation` | Verified | core/quantile — fractional-rank `h=q·(n−1)`; closed-form linear/lower/higher/nearest/midpoint oracles; per-lane equivalence; NaN/range rejection |
+| Stats: covariance / Pearson correlation (rowvar) | ndarray-stats `cov`/`pearson_correlation` | `covariance` / `pearson_correlation` (leto core `statistics/`) | Verified | core/statistics — two-pass centered cross-products; closed-form sample/population oracles; diagonal == `var_axis`; symmetry; perfect ±1 correlation; ddof/empty rejection |
 
 ## B. Linear algebra / nalgebra surface
 
@@ -103,8 +104,8 @@ Median, criterion sample-size 10, identical pinned f64 inputs.
 
 Counting only rows enumerated above (not yet the full oracle surface):
 
-- ndarray array families tested/present: ~23 of ~27 rows at Verified+ →
-  remaining: `IxDyn`, full iterator surface, quantile/correlation/covariance.
+- ndarray array families tested/present: ~25 of ~28 rows at Verified+ →
+  remaining: `IxDyn`, full iterator surface.
 - nalgebra dense-decomposition families: 8 of ~15 at Verified+ → remaining:
   rank-revealing SVD, non-symmetric/Schur/Hessenberg, secondary factorizations,
   Kron/trace/rank; geometry + small-fixed pending exclude-vs-implement decision.

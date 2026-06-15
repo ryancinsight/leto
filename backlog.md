@@ -31,6 +31,19 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   validation and two-pass accumulation. Verification: closed-form population
   and sample cases, ndarray `var`/`std`/`var_axis` differential, invalid empty
   and non-positive/non-finite degrees-of-freedom rejection.
+- [x] [minor] Add quantile/median parity for all-elements and axis reductions
+  (`quantile_all`, `median_all`, `quantile_axis`, `median_axis`) with an
+  `Interpolation` enum covering Linear/Lower/Higher/Nearest/Midpoint. Shared
+  SSOT kernel sorts a caller-owned scratch slice; axis path reuses one scratch
+  buffer across lanes. Verification: closed-form interpolation oracles,
+  per-lane equivalence, unsorted input, empty/range/NaN rejection.
+- [x] [minor] Add covariance/Pearson correlation parity for rowvar observation
+  matrices (`covariance`, `pearson_correlation`). Shared degrees-of-freedom
+  validation comes from the variance contract; covariance uses two-pass centered
+  cross-products and correlation delegates to covariance. Verification:
+  closed-form sample/population covariance, diagonal == `var_axis`, symmetry,
+  perfect +/-1 correlation, normalized covariance identity, empty/ddof
+  rejection.
 - [ ] [minor] Provide any CPU kernel `coeus-leto` needs to retire coeus's
   duplicate traversal (reductions incl. argmax/cumsum already present; add gaps
   as coeus integration surfaces them).
