@@ -144,6 +144,11 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   statistically significant Leto improvement (275.97 µs median in the current
   dependency state) and the benchmark process ended with
   `STATUS_ACCESS_VIOLATION`. No source change retained.
+- **Generic 4x4 registered dense tile (post-0.19.7 audit)**: rejected.
+  Focused matmul tests passed, but the array-accumulator implementation
+  regressed 64x64/128x128/256x256 to 75.684 µs / 695.06 µs / 6.2823 ms.
+  A follow-up attempt to skip the zeroing pass for the same overwrite kernel
+  regressed further or stayed unstable. No source change retained.
 - Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
   hermes scalar-AXPY / fused row-update provider; leto must not emulate one
   with temporary allocation.

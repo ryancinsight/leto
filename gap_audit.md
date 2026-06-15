@@ -176,8 +176,10 @@ eigen are demand-driven only.
   validated against closed-form mean/variance (correct per policy, not ndarray).
   Remaining: differential coverage is leto-internal; consumer-side (Apollo/Coeus)
   migration tests are the next cross-repo step.
-- `leto-python` rustdoc ICE via `numpy 0.23`: CLOSED by 0.19.6 dependency
-  update to NumPy 0.28/PyO3 0.28 and full workspace doc verification.
+- `leto-python` rustdoc ICE via `numpy 0.23`: REOPENED after the FFI
+  dependency alignment back to NumPy 0.23/PyO3 0.23. Full workspace docs fail
+  in rustdoc intra-doc link resolution inside `numpy 0.23.0`; `cargo doc -p
+  leto -p leto-ops --all-features --no-deps` passes.
 - Differential coverage: ndarray oracle covers map/reductions/matmul, unary
   suite, concat/stack, batched matmul, and cumsum. RNG uses closed-form
   references. Indexed zip currently rests on value-semantic traversal tests.
@@ -198,8 +200,10 @@ eigen are demand-driven only.
   with `STATUS_ACCESS_VIOLATION`; `MATMUL_ROW_BLOCK=64` also regressed against
   the 32-row baseline. Row-block fused-branch/alpha-buffer hoisting produced
   no statistically significant 128x128 improvement and also ended with
-  `STATUS_ACCESS_VIOLATION`. Next work needs a true register micro-kernel or
-  allocation-controlled reusable packing scratch with profile evidence.
+  `STATUS_ACCESS_VIOLATION`. Generic 4x4 registered dense tiles regressed the
+  oracle shapes and are not retained. Next work needs allocation-controlled
+  reusable packing scratch or a verified external micro-kernel provider with
+  profile evidence.
 - Locked dependency resolution: `--locked` focused gates and
   `cargo generate-lockfile` are blocked by the current upstream Git dependency
   set: `mnemosyne-arena` requires `themis ^0.8.0`, while the resolved themis Git

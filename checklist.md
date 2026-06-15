@@ -3,7 +3,8 @@
 Sprint phase: Execution. Target version: 0.19.7 [patch] (Cargo.toml bumped;
 CHANGELOG synced). Delivered this cycle: Hermes fused multi-row AXPY consumed
 by dense row-blocked matmul and direct Hermes pinned to the pushed provider
-revision. Result
+revision; post-0.19.7 generic 4x4 registered dense tiles rejected and removed
+after benchmark regression. Result
 parity remains covered for LU solve/determinant/inverse, symmetric eigenvalues,
 Cholesky lower factors, singular values, and reverse-last-axis reductions.
 Performance parity remains mixed: reverse reductions are faster than ndarray,
@@ -37,7 +38,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [patch] Split `leto-ops::singular_values` from the full-vector `svd_decompose` contract so finite rank-deficient matrices return zero singular values through the smaller Gram-matrix eigenvalue path while `svd_decompose` still rejects rank-deficient inputs. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
 - [x] [patch] Generalized `leto-ops::svd_decompose`/`singular_values` from tall-or-square full-column-rank inputs to all full-rank thin SVD shapes, adding the wide full-row-rank `A A^T` path and deriving right singular vectors with `V = A^T U Σ^-1`. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
 - [x] [patch] All Leto package manifests now default both `parallel` and `mnemosyne-memory`; `leto` maps Mnemosyne memory to its existing Mnemosyne-backed storage implementation, `leto-ops` forwards memory into `leto`, and `leto-python` forwards both provider features to its Rust dependencies. Verification: manifest audit confirmed every package default includes both feature contracts; `cargo metadata --no-deps --locked`; `cargo fmt --check`; `cargo check --workspace --all-features`; `cargo test --workspace --all-features`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`.
-- [x] [minor] Add `leto-ops` eigenvalues-only symmetric Jacobi entry points (`symmetric_eigenvalues_jacobi`, `symmetric_eigenvalues_jacobi_with_tolerance`) that share the full decomposition's diagonalization logic through a monomorphized `RotationTarget` strategy and a zero-sized no-vector target. Verification: `cargo fmt --check`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo nextest run --workspace --all-features`; `cargo doc -p leto -p leto-ops --all-features --no-deps`. Historical note: the earlier `numpy 0.23` rustdoc ICE is closed by the 0.19.6 NumPy/PyO3 update and full workspace doc gate.
+- [x] [minor] Add `leto-ops` eigenvalues-only symmetric Jacobi entry points (`symmetric_eigenvalues_jacobi`, `symmetric_eigenvalues_jacobi_with_tolerance`) that share the full decomposition's diagonalization logic through a monomorphized `RotationTarget` strategy and a zero-sized no-vector target. Verification: `cargo fmt --check`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo nextest run --workspace --all-features`; `cargo doc -p leto -p leto-ops --all-features --no-deps`. Current note: the `numpy 0.23` rustdoc ICE is reopened by the FFI dependency downgrade, so full workspace docs remain blocked.
 - [x] [minor] Add `leto-ops` thin SVD (`svd_decompose`, `svd_decompose_with_tolerance`, `singular_values`, `SvdDecomposition`) for tall/square full-column-rank matrices via `A^T A` + symmetric Jacobi; unsupported wide or rank-deficient inputs reject explicitly. Verification: `cargo fmt --check`; `cargo test -p leto-ops --test ops_tests svd --all-features`; `cargo test -p leto-ops --all-features`; `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`; `cargo test --workspace --all-features`.
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
 - [x] Core C/F-contiguous `Layout<const N: usize>` construction, offset lookup, slicing, transpose, and broadcast have value-semantic tests.
@@ -127,15 +128,21 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   row-block scheduling for small dense matrices, `MATMUL_ROW_BLOCK=16`, and
   first-shared-row output initialization. Rejected after 0.19.7:
   Hermes column-chunk `axpy_rows`, `MATMUL_ROW_BLOCK=64`, and row-block
-  fused-branch/alpha-buffer hoisting. Next kernel increment should target a
-  true register micro-kernel or allocation-controlled reusable packing scratch
-  with profile evidence.
-- [x] [patch] Update direct registry dependencies: workspace manifests now use
-  `bytemuck` 1.25, `ndarray` 0.17, `nalgebra` 0.35, `pyo3` 0.28, `numpy`
-  0.28, `proptest` 1.11, and `criterion` 0.8. PyO3 bindings now use
-  `Python::detach` at the GIL-release boundary. Full Git dependency update is
-  still blocked upstream by Mnemosyne's `themis ^0.8.0` requirement vs Themis
-  main 0.9.5.
+  fused-branch/alpha-buffer hoisting, and generic 4x4 registered dense tiles.
+  Current corrective gate: `cargo fmt --check`; `cargo clippy --workspace
+  --all-targets --all-features -- -D warnings`; `cargo test --workspace
+  --all-features`; `cargo nextest run --workspace --all-features`; `cargo doc
+  -p leto -p leto-ops --all-features --no-deps`; `git diff --check`. Full
+  workspace docs are blocked by the reopened `leto-python`/`numpy 0.23`
+  rustdoc ICE. Next kernel increment should target an allocation-controlled
+  reusable packing scratch or a verified external micro-kernel provider with
+  profile evidence.
+- [x] [patch] Direct registry dependencies were audited and later aligned with
+  the current NumPy FFI constraint: workspace manifests now use `ndarray` 0.16,
+  `pyo3` 0.23, and `numpy` 0.23. This reopens the `leto-python` rustdoc ICE;
+  keep full workspace docs recorded as blocked until the FFI constraint can
+  move forward again. Full Git dependency update is still blocked upstream by
+  Mnemosyne's `themis ^0.8.0` requirement vs Themis main 0.9.5.
 
 ## Naming decision [patch]
 - [x] Keep `leto` as the crate name. Functionally, Leto is a non-differentiable shared strided-array substrate between Coeus and Apollo; mythologically, Leto bridges Coeus and Apollo as parent/child context. The name is appropriate if the crate remains the shared array/memory vocabulary, not an autodiff engine or spectral-transform crate.

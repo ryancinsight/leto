@@ -7,8 +7,6 @@ const PARALLEL_ROW_THRESHOLD: usize = 16;
 // 256 KiB L2 fallback at the 256-column benchmark shape while preserving a
 // single const-generic kernel instantiation.
 const MATMUL_ROW_BLOCK: usize = 32;
-const MATMUL_REGISTER_ROWS: usize = 4;
-const MATMUL_REGISTER_COLS: usize = 4;
 
 #[derive(Clone, Copy)]
 struct MatmulLayout {
@@ -135,18 +133,6 @@ fn serial_matmul<T: Scalar>(
     out: &mut ArrayViewMut<'_, T, 2>,
     layout: MatmulLayout,
 ) {
-    if can_register_tile(layout) {
-        register_tiled_matmul::<T, MATMUL_REGISTER_ROWS, MATMUL_REGISTER_COLS>(
-            lhs.data().as_ptr(),
-            rhs.data().as_ptr(),
-            out.data_mut().as_mut_ptr(),
-            0,
-            layout.rows,
-            layout,
-        );
-        return;
-    }
-
     if can_row_block(layout) {
         row_blocked_matmul::<T, MATMUL_ROW_BLOCK>(
             lhs.data().as_ptr(),
@@ -191,89 +177,12 @@ fn serial_matmul<T: Scalar>(
 }
 
 #[inline]
-fn can_register_tile(layout: MatmulLayout) -> bool {
-    layout.rows > 0
-        && layout.cols > 0
-        && layout.shared > 0
-        && layout.lhs_stride_col == 1
-        && layout.lhs_stride_row == layout.shared as isize
-        && layout.rhs_stride_col == 1
-        && layout.rhs_stride_row == layout.cols as isize
-        && layout.out_stride_col == 1
-        && layout.out_stride_row == layout.cols as isize
-}
-
-#[inline]
 fn can_row_block(layout: MatmulLayout) -> bool {
     layout.rows > 1
         && layout.shared > 0
         && layout.cols > 0
         && layout.rhs_stride_col == 1
         && layout.out_stride_col == 1
-}
-
-#[inline]
-fn register_tiled_matmul<T: Scalar, const MR: usize, const NR: usize>(
-    lhs_ptr: *const T,
-    rhs_ptr: *const T,
-    out_ptr: *mut T,
-    start_row: usize,
-    end_row: usize,
-    layout: MatmulLayout,
-) {
-    debug_assert!(MR > 0);
-    debug_assert!(NR > 0);
-
-    for row_start in (start_row..end_row).step_by(MR) {
-        let tile_rows = (end_row - row_start).min(MR);
-        for col_start in (0..layout.cols).step_by(NR) {
-            let tile_cols = (layout.cols - col_start).min(NR);
-            let mut acc = [[T::ZERO; NR]; MR];
-
-            for shared in 0..layout.shared {
-                let rhs_offset = layout.rhs_offset
-                    + shared as isize * layout.rhs_stride_row
-                    + col_start as isize;
-                let mut rhs_values = [T::ZERO; NR];
-                for col in 0..tile_cols {
-                    // SAFETY: `validate_matmul` validates every RHS element,
-                    // and `can_register_tile` proves this RHS row is
-                    // physically unit-stride over columns.
-                    rhs_values[col] = unsafe { *rhs_ptr.offset(rhs_offset + col as isize) };
-                }
-
-                for row in 0..tile_rows {
-                    let logical_row = row_start + row;
-                    let lhs_offset = layout.lhs_offset
-                        + logical_row as isize * layout.lhs_stride_row
-                        + shared as isize;
-                    // SAFETY: `validate_matmul` validates every LHS element,
-                    // and `can_register_tile` proves this LHS row is
-                    // physically unit-stride over the shared dimension.
-                    let lhs_value = unsafe { *lhs_ptr.offset(lhs_offset) };
-                    for col in 0..tile_cols {
-                        acc[row][col] = acc[row][col].add(lhs_value.mul(rhs_values[col]));
-                    }
-                }
-            }
-
-            for row in 0..tile_rows {
-                let logical_row = row_start + row;
-                let out_offset = layout.out_offset
-                    + logical_row as isize * layout.out_stride_row
-                    + col_start as isize;
-                for col in 0..tile_cols {
-                    // SAFETY: `validate_matmul` validates every output
-                    // element, and `can_register_tile` proves this output row
-                    // is physically unit-stride over columns. Each tile writes
-                    // a disjoint output element exactly once.
-                    unsafe {
-                        *out_ptr.offset(out_offset + col as isize) = acc[row][col];
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[inline]
@@ -400,25 +309,6 @@ fn parallel_matmul<T: Scalar>(
     out: &mut ArrayViewMut<'_, T, 2>,
     layout: MatmulLayout,
 ) {
-    if can_register_tile(layout) {
-        let lhs_ptr = lhs.data().as_ptr() as usize;
-        let rhs_ptr = rhs.data().as_ptr() as usize;
-        let out_ptr = out.data_mut().as_mut_ptr() as usize;
-        let block_count = layout.rows.div_ceil(MATMUL_ROW_BLOCK);
-
-        crate::infrastructure::parallel::parallel_for(0, block_count, move |block| {
-            let lhs_ptr = lhs_ptr as *const T;
-            let rhs_ptr = rhs_ptr as *const T;
-            let out_ptr = out_ptr as *mut T;
-            let start_row = block * MATMUL_ROW_BLOCK;
-            let end_row = (start_row + MATMUL_ROW_BLOCK).min(layout.rows);
-            register_tiled_matmul::<T, MATMUL_REGISTER_ROWS, MATMUL_REGISTER_COLS>(
-                lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout,
-            );
-        });
-        return;
-    }
-
     if can_row_block(layout) {
         let lhs_ptr = lhs.data().as_ptr() as usize;
         let rhs_ptr = rhs.data().as_ptr() as usize;

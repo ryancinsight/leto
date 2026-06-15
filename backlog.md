@@ -131,8 +131,8 @@ no unmeasured "optimization" per performance_engineering.
   parallel scheduling, 0.19.5 `MATMUL_ROW_BLOCK=16`, or 0.19.5 first-shared-row
   output initialization, post-0.19.7 Hermes column-chunk `axpy_rows`, or
   post-0.19.7 `MATMUL_ROW_BLOCK=64`, or post-0.19.7 row-block
-  fused-branch/alpha-buffer hoisting without a changed kernel model and profile
-  evidence.
+  fused-branch/alpha-buffer hoisting, or post-0.19.7 generic 4x4 registered
+  dense tiles without a changed kernel model and profile evidence.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted
@@ -210,9 +210,11 @@ no unmeasured "optimization" per performance_engineering.
 
 ## Phase 5: Python and Interop [minor]
 - [ ] Keep Python as a thin PyO3/NumPy boundary over Rust operations.
-- [x] [patch] Resolve the `numpy-0.23.0` rustdoc ICE by updating the Python FFI
-  dependency pair to NumPy 0.28/PyO3 0.28 and migrating GIL-release calls to
-  `Python::detach`; full workspace docs are now part of the verification gate.
+- [ ] [patch] Resolve the reopened `numpy-0.23.0` rustdoc ICE in the Python FFI
+  documentation path. The prior NumPy 0.28/PyO3 0.28 update closed this gate,
+  but the current FFI alignment back to NumPy 0.23/PyO3 0.23 reopens it; full
+  workspace docs remain blocked while `cargo doc -p leto -p leto-ops
+  --all-features --no-deps` passes.
 - [x] Replace current Python result construction that clones through `Vec` after computation. Verification: `leto-python` now transfers owned `VecStorage` with `Array::into_vec()` and `PyArray1::from_vec`, then reshapes without the former `as_mut_slice().to_vec()` clone path.
 - [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 
