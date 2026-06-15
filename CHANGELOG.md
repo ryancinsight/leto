@@ -4,6 +4,28 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.22.0] - 2026-06-15
+
+### Added
+
+- Variance and standard-deviation reductions (`var_all`/`std_all`/`var_axis`/
+  `std_axis`) in `leto` core `application/reduction/variance.rs` (ndarray-stats
+  parity), generic over `num_traits::Float`, with `ddof` (population/sample) and
+  the numerically-stable two-pass theorem in rustdoc. Axis variants reduce rank
+  by one via the shared `AxisIter`/`RemoveAxis` machinery (SSOT). Verified by
+  closed-form references, invalid `ddof` rejection, and an ndarray
+  `var`/`std`/`var_axis` differential.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (281 tests)
+- `cargo test -p leto --test core_tests variance --all-features`
+- `cargo test --doc --workspace --all-features` (5 doctests)
+- `cargo doc -p leto -p leto-ops --all-features --no-deps`
+- `git diff --check`
+
 ## [0.21.0] - 2026-06-15
 
 ### Added

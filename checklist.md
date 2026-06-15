@@ -1,7 +1,11 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.21.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.21.0: unpivoted symmetric indefinite
+Sprint phase: Execution. Target version: 0.22.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.22.0: variance and standard-deviation reductions
+(`var_all`/`std_all`/`var_axis`/`std_axis`) in `leto` core with finite `ddof`
+validation and a two-pass numerical-stability theorem in rustdoc. Evidence
+tier: theorem/proof sketch plus closed-form, invalid-input, and ndarray
+differential tests. Delivered 0.21.0: unpivoted symmetric indefinite
 `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`) with
 determinant, solve, and inverse helpers in `linalg/udu/{mod,decompose,solve}.rs`.
 Evidence tier: theorem/proof sketch in rustdoc plus value-semantic tests for
@@ -49,6 +53,8 @@ value-semantic reconstruction, identity, or differential parity checks.
 Remaining nalgebra surface: Schur vectors/quasi-triangular form, pivoted
 symmetric-indefinite factorization, matrix functions, and consumer-driven
 fixed-size/geometry decisions.
+Array-statistics surface: variance/std is closed; quantile/correlation/
+covariance remain open until a consumer driver or parity sprint selects them.
 
 Stage A2 progress: indexed zip parity (0.11.0) delivered through
 `indexed_zip_mut_with` and `indexed_zip2_mut_with`, closing the current
@@ -67,6 +73,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [minor] Add `leto-ops` eigenvalues-only symmetric Jacobi entry points (`symmetric_eigenvalues_jacobi`, `symmetric_eigenvalues_jacobi_with_tolerance`) that share the full decomposition's diagonalization logic through a monomorphized `RotationTarget` strategy and a zero-sized no-vector target. Verification: `cargo fmt --check`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo nextest run --workspace --all-features`; `cargo doc -p leto -p leto-ops --all-features --no-deps`. Current note: the `numpy 0.23` rustdoc ICE is reopened by the FFI dependency downgrade, so full workspace docs remain blocked.
 - [x] [minor] Add `leto-ops` thin SVD (`svd_decompose`, `svd_decompose_with_tolerance`, `singular_values`, `SvdDecomposition`) for tall/square full-column-rank matrices via `A^T A` + symmetric Jacobi; unsupported wide or rank-deficient inputs reject explicitly. Verification: `cargo fmt --check`; `cargo test -p leto-ops --test ops_tests svd --all-features`; `cargo test -p leto-ops --all-features`; `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`; `cargo test --workspace --all-features`.
 - [x] [minor] Add unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`, `UduDecomposition`) with determinant, solve, and inverse helpers. Verification: `cargo test -p leto-ops --test ops_tests udu --all-features`.
+- [x] [minor] Add variance and standard-deviation reductions (`var_all`/`std_all`/`var_axis`/`std_axis`) with finite `ddof` validation. Verification: `cargo test -p leto --test core_tests variance --all-features`.
 - [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
 - [x] Core C/F-contiguous `Layout<const N: usize>` construction, offset lookup, slicing, transpose, and broadcast have value-semantic tests.
 - [x] Core storage exists for borrowed slices, mutable borrowed slices, `Vec`, and feature-gated Mnemosyne allocation.
@@ -161,7 +168,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   order (themis → mnemosyne → moirai/hermes → leto → apollo/coeus); apollo only
   builds on 0.9.11 today via local path-patches that bypass the git revs. Until
   then leto stays on the themis-0.8.0 lock (`--locked` builds/tests pass;
-  consumer rev-bumps to leto 0.21.0 wait on this cascade). See gap_audit §D.
+  consumer rev-bumps to leto 0.22.0 wait on this cascade). See gap_audit §D.
 - [x] [patch] Current Leto 0.5.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Historical note: full workspace docs were previously blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`; 0.19.6 updates the Python FFI dependencies and rechecks full docs.
 - [x] [patch] Add ndarray/nalgebra oracle validation gates for current linalg
   and reduction contracts. Verification: `oracle_parity` compares Leto LU,

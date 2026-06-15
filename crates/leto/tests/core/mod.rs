@@ -5,3 +5,4 @@ pub mod slicing;
 pub mod storage;
 pub mod structure;
 pub mod transform;
+pub mod variance;

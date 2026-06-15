@@ -25,7 +25,8 @@ pub use arithmetic::ScalarOperand;
 pub use array::Array;
 pub use iter::{AxisIter, AxisIterMut};
 pub use reduction::{
-    argmax, argmin, max_all, max_axis, mean_all, mean_axis, min_all, min_axis, sum_all, sum_axis,
+    argmax, argmin, max_all, max_axis, mean_all, mean_axis, min_all, min_axis, std_all, std_axis,
+    sum_all, sum_axis, var_all, var_axis,
 };
 pub use structure::{concat, pad, split, stack, PadWidth};
 pub use view::{ArrayView, ArrayViewMut};

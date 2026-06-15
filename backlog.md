@@ -26,6 +26,11 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [x] [minor] Unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`) with solve/inverse/determinant helpers. Verification: reconstruction, determinant/solve/inverse parity with nalgebra, invalid-input and zero-pivot rejection. Pivoted Bunch-Kaufman remains open for matrices requiring symmetric pivoting.
 
 ### Stage A2 — ndarray consolidation (support coeus/apollo)
+- [x] [minor] Add ndarray-stats variance/std parity for all-elements and axis
+  reductions (`var_all`, `std_all`, `var_axis`, `std_axis`) with finite `ddof`
+  validation and two-pass accumulation. Verification: closed-form population
+  and sample cases, ndarray `var`/`std`/`var_axis` differential, invalid empty
+  and non-positive/non-finite degrees-of-freedom rejection.
 - [ ] [minor] Provide any CPU kernel `coeus-leto` needs to retire coeus's
   duplicate traversal (reductions incl. argmax/cumsum already present; add gaps
   as coeus integration surfaces them).

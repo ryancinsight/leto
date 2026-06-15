@@ -44,7 +44,8 @@ Evidence column: `parity.rs` / `oracle_parity.rs` = differential test file;
 | std::ops operator overloads | `+ - * /` on arrays, `-` neg, scalar ops | `&a op &b`, `&a op s`, `-&a` | Verified | core/arithmetic (ADR 0004; `*` elementwise) |
 | Dynamic rank `IxDyn` | `IxDyn` | — | **Missing** | ADR 0002 reopened |
 | Full iterator surface (`indexed_iter`, windows, lanes, fold/accumulate) | ndarray iters | partial | **Partial→audit** | Stage 1 |
-| Stats (var/std/quantile/corr) | ndarray-stats | — | **Missing** | Stage 1 column |
+| Stats: variance / std (population + sample, axis) | ndarray-stats / ndarray `var` | `var_all`/`std_all`/`var_axis`/`std_axis` (leto core) | Verified | core/variance — two-pass; closed-form + ndarray `var`/`std`/`var_axis` differential; ddof |
+| Stats: quantile / corr / cov | ndarray-stats | — | **Missing** | Stage 1 column |
 
 ## B. Linear algebra / nalgebra surface
 
@@ -102,8 +103,8 @@ Median, criterion sample-size 10, identical pinned f64 inputs.
 
 Counting only rows enumerated above (not yet the full oracle surface):
 
-- ndarray array families tested/present: ~22 of ~26 rows at Verified+ →
-  remaining: operator overloading, `IxDyn`, full iterator surface, stats.
+- ndarray array families tested/present: ~23 of ~27 rows at Verified+ →
+  remaining: `IxDyn`, full iterator surface, quantile/correlation/covariance.
 - nalgebra dense-decomposition families: 8 of ~15 at Verified+ → remaining:
   rank-revealing SVD, non-symmetric/Schur/Hessenberg, secondary factorizations,
   Kron/trace/rank; geometry + small-fixed pending exclude-vs-implement decision.

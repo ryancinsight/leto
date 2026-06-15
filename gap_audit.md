@@ -44,7 +44,8 @@ aliases 1–3), C/F layouts, ndarray-style `SliceArg` slicing, transpose,
 broadcast, axis iteration, `zeros`/`ones`/`from_elem`/`from_vec`/
 `from_shape_vec`/`from_shape_fn`/`into_vec`, `map_into`/`mapv`/`map`,
 `zip_mut_with`, sum/mean/min/max (all + keep-dim axis), argmin/argmax, 2D
-matmul, CoW storage, Mnemosyne storage, ndarray-compat conversions.
+matmul, variance/std (all + axis, finite `ddof`), CoW storage, Mnemosyne
+storage, ndarray-compat conversions.
 
 | Gap | ndarray counterpart | Consumer driver | Class |
 | --- | --- | --- | --- |
@@ -63,6 +64,8 @@ matmul, CoW storage, Mnemosyne storage, ndarray-compat conversions.
 | Random constructors (uniform/normal, seeded) | `ndarray-rand` | Coeus init (`Xorshift64`, Box-Muller); keep deterministic, seed-based | Closed (`uniform_with_seed`, `normal_with_seed`) |
 | Pad / split along axis | (manual in ndarray) | Coeus shape ops | Closed (`pad`, `split`) |
 | Batched (rank-3) matmul | (via einsum/manual) | Coeus batched contraction — boundary decision places it in leto | Closed (`batched_matmul`, batch broadcast) |
+| Variance / standard deviation | ndarray-stats / ndarray `var` | Array statistics parity | Closed (`var_all`, `std_all`, `var_axis`, `std_axis`; two-pass, finite `ddof`) |
+| Quantile / correlation / covariance | ndarray-stats | No named Atlas consumer yet | Open — [minor] when selected by parity sprint or consumer |
 
 Non-goals confirmed: conv/pool/attention/optimizer kernels, sparse formats
 (COO/CSR, SpMV/SpMM), autodiff — these stay in Coeus. GPU buffers stay
@@ -125,18 +128,18 @@ dynamic-rank layout + `Storage` traits, converted at the `coeus-leto` boundary,
 are the intended ADR 0002 seam. No leto-side capability gap remains for the CPU
 re-base. Remaining cross-repo work is the apollo internal FFT-kernel migration
 (apollo-owned) and the themis-0.9 re-pin cascade (§D), which gates clean consumer
-rev-bumps to leto 0.21.0.
+rev-bumps to leto 0.22.0.
 
 ## D. Residual Risk Register
 
-Update 2026-06-15 (v0.21.0): §A indexed zip parity, the Stage A1
+Update 2026-06-15 (v0.22.0): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
 symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
 rank-deficient singular values, rank-revealing SVD/pseudoinverse,
 non-symmetric eigenvalues, Hessenberg/bidiagonal/full-pivot/column-pivot
-reductions, unpivoted UDU, Hermes-backed dense reductions, and cache-line tiled
-strided elementwise traversal. The optional themis topology
+reductions, unpivoted UDU, variance/std reductions, Hermes-backed dense
+reductions, and cache-line tiled strided elementwise traversal. The optional themis topology
 dependency is wired through `leto_ops::CacheGeometry`; dense matmul now has a
 measured fixed row-block kernel backed by Hermes fused multi-row AXPY;
 reverse-last-axis whole-array reductions now borrow unit-stride physical row
@@ -242,7 +245,7 @@ functions, and any consumer-driven fixed-size/geometry decisions.
      version-spec, and `[patch]` to the same git source is rejected — so no
      leto-local pin change resolves it. Builds worked only via a frozen
      pre-drift themis-0.8 lock (now superseded locally).
-  3. **The themis-0.9 path regresses matmul.** Built leto 0.21.0 against the
+  3. **The themis-0.9 path regresses matmul.** Built leto 0.22.0 against the
      local themis-0.9 stack (path-patches): all 122 tests + 4 doctests pass, but
      the required hermes bump `efac0454`→`e6761ac` (dispatch/AXPY refactor)
      regresses dense matmul **64² 17.4→24.9 µs (+43%)**, **128² 109→176 µs
@@ -255,9 +258,9 @@ functions, and any consumer-driven fixed-size/geometry decisions.
   leto-local. Process gap to fix alongside: either commit a frozen `Cargo.lock`
   (un-gitignore) or pin the whole stack so fresh resolution is reproducible.
   Interim: leto builds locally via the apollo/coeus-style path-patch set
-  (uncommitted, flagged in `Cargo.toml`); consumer rev-bumps to leto 0.21.0 wait
+  (uncommitted, flagged in `Cargo.toml`); consumer rev-bumps to leto 0.22.0 wait
   on the cascade (coeus already verified compatible — 22/22 contract tests green
-  against working-tree leto 0.21.0).
+  against working-tree leto 0.22.0).
 - Evidence tier of this audit: codebase scan + existing test suites +
   criterion benchmark measurements. No machine-checked proof was performed.
 
