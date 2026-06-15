@@ -68,10 +68,11 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | Singular values (incl. rank-deficient) | `SVD::singular_values` | `singular_values` | Verified | oracle_parity.rs |
 | Norms L1/L2/max | `norm`/`norm_squared` | `norm_l1/l2/max` | Verified | norms.rs |
 | Pseudo-inverse (full-rank **and** rank-deficient) | `pseudo_inverse` | `pinv` / `MatrixSolve::pinv` | Verified | svd/pseudoinverse.rs — rank-revealing via Jacobi SVD; vs nalgebra `pseudo_inverse` + Moore-Penrose `A A⁺ A = A`, `A⁺ A A⁺ = A⁺` |
-| Non-symmetric eigen / `complex_eigenvalues` | `eigenvalues` | — | **Missing** | Stage 5 |
+| Non-symmetric eigenvalues (real + complex) | `complex_eigenvalues` | `eigenvalues` / `MatrixDecompose::eigenvalues` | Verified | eigenvalues/ — shifted complex QR (ADR 0006); vs nalgebra `complex_eigenvalues` battery (real/complex/various sizes) + exact known spectra |
 | Hessenberg reduction | `Hessenberg` | `hessenberg` / `MatrixDecompose::hessenberg` | Verified | hessenberg/ (Householder; ADR 0006); reconstruction + orthogonality + structure + trace/Frobenius invariants + nalgebra Frobenius parity |
-| Real Schur (Francis QR) | `Schur` | — | **Missing** | [major], next phase — builds on Hessenberg |
-| Bidiagonal / ColPivQR / FullPivLU / UDU | nalgebra decomps | — | **Missing** | Stage 5 |
+| Real Schur form (Q, T with vectors) | `Schur` | — | **Missing** | [major] — eigenvalues above cover the spectrum; Schur *vectors* pending |
+| Bidiagonalization | `Bidiagonal` | `bidiagonalize` / `MatrixDecompose::bidiagonalize` | Verified | bidiagonal/ — Golub–Kahan two-sided Householder (ADR 0006); reconstruction + orthogonality + structure + singular-value preservation vs leto & nalgebra SVD |
+| ColPivQR / FullPivLU / UDU | nalgebra decomps | — | **Missing** | Stage 5 |
 | Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers) |
 | Numerical rank | `Matrix::rank` | `matrix_rank` / `MatrixProperties::rank` | Verified | properties (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall) |
 | Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`) |

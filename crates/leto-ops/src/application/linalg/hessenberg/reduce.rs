@@ -1,6 +1,6 @@
 //! The Householder reduction loop `A → (Q, H)` with `H = Qᵀ A Q`.
 
-use super::householder::{apply_left, apply_right, reflector_for_column};
+use crate::application::linalg::householder::{apply_left, apply_right, reflector};
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, Result};
 
@@ -11,7 +11,7 @@ use leto::{ArrayView2, Result};
 /// `H[k+2.. ][k]`; applying it on both sides (`H ← Pₖ H Pₖ`) is a similarity
 /// transform, so the spectrum is preserved while the subdiagonal structure is
 /// created. `Q = P₀ P₁ … P_{n-3}` is accumulated by right-multiplication.
-/// Below-subdiagonal entries are explicitly zeroed at the end (they are already
+/// Below-subdiagonal entries are explicitly zeroed at the end (already
 /// negligible by construction); this yields the exact upper-Hessenberg form.
 pub(super) fn reduce_to_hessenberg<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
@@ -32,10 +32,12 @@ pub(super) fn reduce_to_hessenberg<T: RealScalar>(
 
     // k runs to n−3 inclusive: the final subdiagonal entry needs no reflector.
     for k in 0..n.saturating_sub(2) {
-        if let Some(refl) = reflector_for_column(&h, n, k) {
-            apply_left(&refl, &mut h, n); // H ← Pₖ H
-            apply_right(&refl, &mut h, n); // H ← (Pₖ H) Pₖ
-            apply_right(&refl, &mut q, n); // Q ← Q Pₖ
+        // Sub-column below the subdiagonal: rows k+1..n of column k.
+        let x: Vec<T> = (k + 1..n).map(|i| h[i * n + k]).collect();
+        if let Some((refl, _alpha)) = reflector(&x) {
+            apply_left(&refl, &mut h, n, k + 1, 0, n); // H ← Pₖ H
+            apply_right(&refl, &mut h, n, k + 1, 0, n); // H ← (Pₖ H) Pₖ
+            apply_right(&refl, &mut q, n, k + 1, 0, n); // Q ← Q Pₖ
         }
     }
 

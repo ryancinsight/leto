@@ -21,10 +21,10 @@
 //! `H = Qᵀ A Q` is similar to `A`, so `H` and `A` have the same eigenvalues; in
 //! particular `tr(H) = tr(A)` and `‖H‖_F = ‖A‖_F` (orthogonal invariance).
 //!
-//! Leaf modules: [`householder`] (the reflector primitive) and [`reduce`] (the
-//! reduction loop). Generic over [`RealScalar`], native precision throughout.
+//! Uses the shared [`householder`](super::householder) reflector primitive
+//! (SSOT); [`reduce`] is the reduction loop. Generic over [`RealScalar`], native
+//! precision throughout.
 
-mod householder;
 mod reduce;
 
 use crate::domain::real::RealScalar;

@@ -27,11 +27,21 @@ landing a single large, hard-to-verify drop:
   classically-proven Householder algorithm with a clean contract
   (reconstruction, orthogonality, structure) — verifiable independently of the
   iteration. Leaf hierarchy `linalg/hessenberg/{mod, householder, reduce}.rs`.
-- **Phase 2 (next):** Francis double-shift QR producing the real Schur form and
-  the eigenvalue list (real + complex). It consumes Phase 1's `H`/`Q`. This is
-  the intricate part (deflation criteria, exceptional shifts, 2×2 block
-  eigenvalue extraction) and gets its own focused implementation + adversarial
-  differential tests against nalgebra `complex_eigenvalues`.
+- **Phase 2a (done): eigenvalues.** Rather than the real double-shift bulge-chase
+  (intricate index management — the #1 bug source), the eigenvalue list is
+  produced by a **single-shift Wilkinson QR in complex arithmetic** on the
+  Hessenberg `H`: Givens-triangularize `H − μI`, form `RQ + μI` (a unitary
+  similarity), and deflate one eigenvalue at a time; a 2×2 block is resolved by
+  the closed-form quadratic. Complex arithmetic handles real and complex
+  conjugate eigenvalues uniformly with a far smaller bug surface than the real
+  double-shift, and the lone fiddly primitive (the complex Givens rotation) is
+  derived and unit-tested in isolation. Verified against a nalgebra
+  `complex_eigenvalues` battery. A compute-local `Cplx<T>` is used because
+  `num_complex::Complex<T>`'s operators require `T: Num`, which the sealed
+  `RealScalar` does not provide.
+- **Phase 2b (next): Schur vectors.** Accumulating `Q`/`T` for the full real
+  Schur decomposition (eigen*vectors*) is the remaining piece; the eigenvalue
+  spectrum above already covers `complex_eigenvalues` parity.
 
 Rationale for phasing: the Francis QR is notoriously easy to get subtly wrong;
 shipping Hessenberg first (correct, foundational, independently tested) is the

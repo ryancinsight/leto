@@ -1,5 +1,7 @@
+pub mod bidiagonal;
 pub mod differential;
 pub mod eigen;
+pub mod eigenvalues;
 pub mod elementwise;
 pub mod hessenberg;
 pub mod lu;

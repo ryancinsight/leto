@@ -8,6 +8,27 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- Golub–Kahan bidiagonalization `A = U B Vᵀ` (`bidiagonalize`,
+  `MatrixDecompose::bidiagonalize`; ADR 0006, `m ≥ n`) — the classical SVD-prep
+  reduction, in `linalg/bidiagonal/{mod,reduce}.rs` with the reduction theorem +
+  singular-value-preservation corollary. Introduced a **shared Householder
+  reflector primitive** (`linalg/householder.rs`, SSOT) and refactored the
+  Hessenberg reduction onto it (DRY; no duplicated reflector code; Hessenberg
+  tests unchanged-green). Verified on the convention-independent contract
+  (reconstruction, `U`/`V` orthogonality, upper-bidiagonal structure) plus
+  singular-value preservation vs both leto's `singular_values` and nalgebra's SVD.
+- Non-symmetric eigenvalues, real and complex (`eigenvalues`,
+  `MatrixDecompose::eigenvalues` → `Vec<num_complex::Complex<T>>`; ADR 0006
+  Phase 2). Hessenberg-reduce (reused — SSOT) then a **single-shift Wilkinson
+  complex QR iteration** with one-eigenvalue-at-a-time deflation and exceptional
+  shifts, in a leaf hierarchy `linalg/eigenvalues/{mod,complex,qr}.rs`. A
+  compute-local `Cplx<T>` provides complex arithmetic over `RealScalar` (whose
+  sealed bound `num_complex`'s operators can't use); the complex Givens rotation
+  is derived in rustdoc and unit-tested in isolation (zeroes the off-element,
+  unitary). The Schur-form theorem + the QR-similarity argument are documented.
+  Verified against a nalgebra `complex_eigenvalues` battery (real/complex spectra,
+  sizes 2–5) plus exact known spectra (diagonal, `1±i`, `±i`) and symmetric
+  all-real agreement. (Schur *vectors* `Q`/`T` remain a follow-up.)
 - Upper Hessenberg reduction `A = Q H Qᵀ` by Householder reflectors
   (`hessenberg`, `MatrixDecompose::hessenberg`; ADR 0006) in a
   leaf hierarchy `linalg/hessenberg/{mod,householder,reduce}.rs` with the

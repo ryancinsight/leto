@@ -5,12 +5,18 @@
 //! path exists. Kernels are generic over `RealScalar` and run in native
 //! precision per the `Scalar` contract.
 
+/// Golub–Kahan bidiagonalization via two-sided Householder reflectors.
+pub mod bidiagonal;
 /// Cholesky factorization of symmetric positive-definite matrices.
 pub mod cholesky;
 /// Real symmetric eigensolver (Jacobi rotations).
 pub mod eigen;
+/// General (non-symmetric) eigenvalues via shifted complex QR.
+pub mod eigenvalues;
 /// Upper Hessenberg reduction via Householder reflectors.
 pub mod hessenberg;
+/// Shared Householder reflector primitive (SSOT for orthogonal transforms).
+pub(crate) mod householder;
 /// LU decomposition with partial pivoting, solve, determinant, inverse.
 pub mod lu;
 /// Fluent rank-2 linear-algebra trait surface over `Array2`/`ArrayView2`.
@@ -26,6 +32,7 @@ pub mod qr;
 /// Thin SVD and singular values for finite matrices.
 pub mod svd;
 
+pub use bidiagonal::{bidiagonalize, BidiagonalDecomposition};
 pub use cholesky::{
     cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, CholeskyDecomposition,
 };
@@ -34,6 +41,7 @@ pub use eigen::{
     symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
     symmetric_eigenvalues_jacobi_with_tolerance,
 };
+pub use eigenvalues::eigenvalues;
 pub use hessenberg::{hessenberg, HessenbergDecomposition};
 pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
 pub use matrix::{

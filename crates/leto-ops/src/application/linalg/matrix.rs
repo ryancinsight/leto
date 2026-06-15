@@ -17,10 +17,10 @@
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
-    cholesky_decompose, hessenberg, lu_decompose, qr_decompose, svd_decompose, svd_rank_revealing,
-    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, CholeskyDecomposition,
-    HessenbergDecomposition, LuDecomposition, QrDecomposition, SvdDecomposition,
-    SymmetricEigenDecomposition,
+    bidiagonalize, cholesky_decompose, eigenvalues, hessenberg, lu_decompose, qr_decompose,
+    svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi,
+    BidiagonalDecomposition, CholeskyDecomposition, HessenbergDecomposition, LuDecomposition,
+    QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition,
 };
 use crate::{
     det as det_kernel, inv as inv_kernel, kron as kron_kernel, matmul as matmul_kernel,
@@ -30,6 +30,7 @@ use crate::{
     solve_least_squares as solve_least_squares_kernel, trace as trace_kernel,
 };
 use leto::{Array, Array1, Array2, ArrayView, ArrayView1, ArrayView2, Result, Storage};
+use num_complex::Complex;
 
 /// Borrow any rank-2 receiver as a read-only [`ArrayView2`].
 ///
@@ -184,6 +185,11 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-square or non-finite input.
     fn hessenberg(&self) -> Result<HessenbergDecomposition<T>>;
+    /// Golub–Kahan bidiagonalization `A = U B Vᵀ` (`m ≥ n`; SVD prerequisite).
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on wide (`m < n`) or non-finite input.
+    fn bidiagonalize(&self) -> Result<BidiagonalDecomposition<T>>;
     /// Thin SVD for finite full-rank matrices (Gram path; rejects rank-deficient).
     ///
     /// # Errors
@@ -211,6 +217,13 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-symmetric or non-finite input.
     fn symmetric_eigenvalues(&self) -> Result<Vec<T>>;
+    /// All eigenvalues of a general (non-symmetric) matrix, real and complex
+    /// (shifted complex QR; ADR 0006). For symmetric input prefer the faster,
+    /// sorted-real [`symmetric_eigenvalues`](Self::symmetric_eigenvalues).
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square, non-finite, or non-converged input.
+    fn eigenvalues(&self) -> Result<Vec<Complex<T>>>;
 }
 
 impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
@@ -231,6 +244,10 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
         hessenberg(&self.as_matrix_view())
     }
     #[inline]
+    fn bidiagonalize(&self) -> Result<BidiagonalDecomposition<T>> {
+        bidiagonalize(&self.as_matrix_view())
+    }
+    #[inline]
     fn svd(&self) -> Result<SvdDecomposition<T>> {
         svd_decompose(&self.as_matrix_view())
     }
@@ -249,6 +266,10 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
     #[inline]
     fn symmetric_eigenvalues(&self) -> Result<Vec<T>> {
         symmetric_eigenvalues_jacobi(&self.as_matrix_view())
+    }
+    #[inline]
+    fn eigenvalues(&self) -> Result<Vec<Complex<T>>> {
+        eigenvalues(&self.as_matrix_view())
     }
 }
 
