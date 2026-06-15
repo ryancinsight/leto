@@ -10,12 +10,12 @@
 //! `A vᵢ = σᵢ uᵢ`, i.e. `A V = U Σ`. ∎
 //!
 //! Two paths share the [`SvdDecomposition`] contract (SSOT for the result type):
-//! - [`gram`] — full-rank thin SVD via the Gram matrix + symmetric Jacobi
+//! - `gram` — full-rank thin SVD via the Gram matrix + symmetric Jacobi
 //!   eigensolver; rejects rank-deficient input.
-//! - [`jacobi`] — **rank-revealing** one-sided Jacobi SVD; accepts rank-deficient
+//! - `jacobi` — **rank-revealing** one-sided Jacobi SVD; accepts rank-deficient
 //!   input and surfaces zero singular values honestly (ADR 0005).
 //!
-//! [`pseudoinverse`] builds the Moore-Penrose `A⁺` on the rank-revealing path.
+//! `pseudoinverse` builds the Moore-Penrose `A⁺` on the rank-revealing path.
 
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
@@ -36,7 +36,7 @@ pub use pseudoinverse::pinv;
 /// `singular_values` are sorted descending (length `k = min(m, n)`);
 /// `left_singular_vectors` is `U` (`m × k`, columns) and
 /// `right_singular_vectors` is `V` (`n × k`, columns). On the rank-revealing
-/// [`jacobi`] path, singular values may be zero, in which case the corresponding
+/// [`self::jacobi`] path, singular values may be zero, in which case the corresponding
 /// `U` column is zero (its direction lies in the left null space and is not
 /// materialized); `V` is always fully orthonormal.
 #[derive(Debug, Clone)]

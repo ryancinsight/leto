@@ -4,6 +4,37 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.21.0] - 2026-06-15
+
+### Added
+
+- Symmetric indefinite unpivoted `U D Uᵀ` factorization (`udu_decompose`,
+  `MatrixDecompose::udu`, `UduDecomposition`) in
+  `linalg/udu/{mod,decompose,solve}.rs`. The module documents the constructive
+  UDU theorem, determinant corollary, and triangular-solve contract; it exposes
+  `u`, `diagonal`, `det`, `solve`, and `inv`. Verification covers
+  reconstruction `A = U D Uᵀ`, determinant parity with nalgebra, solve/inverse
+  parity with nalgebra, and non-square/nonsymmetric/zero-pivot rejection.
+
+### Changed
+
+- Reconciled linalg PM artifacts: rank-revealing SVD, rank-deficient
+  pseudoinverse, non-symmetric eigenvalues, full-pivot LU, column-pivoted QR,
+  Hessenberg, trace, rank, and Kronecker are tracked as delivered surfaces;
+  remaining nalgebra gaps are Schur vectors, pivoted symmetric-indefinite
+  factorization, matrix functions, and consumer-driven fixed-size/geometry
+  decisions.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (276 tests)
+- `cargo test -p leto-ops --test ops_tests udu --all-features`
+- `cargo test --doc --workspace --all-features` (5 doctests)
+- `cargo doc -p leto -p leto-ops --all-features --no-deps`
+- `git diff --check`
+
 ## [0.20.0] - 2026-06-15
 
 ### Added
@@ -73,12 +104,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   `rank_with_tolerance`) and `MatrixProduct::kron`. Differential tests vs
   nalgebra `trace`/`rank`/`kronecker` plus oracle-independent identities
   (Kronecker mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`, `tr(A⊗B)=tr(A)·tr(B)`).
-- Moore-Penrose pseudoinverse `pinv` (free function + `MatrixSolve::pinv`) for
-  full-rank matrices via the thin SVD (`A⁺ = V Σ⁻¹ Uᵀ`, numerically sound — no
-  normal-equations condition-number squaring). Covers tall, wide, and square
-  full-rank inputs. Differential test vs nalgebra `pseudo_inverse` plus the
-  Moore-Penrose identity `A A⁺ A = A`. Rank-deficient pinv remains gated on the
-  full rank-revealing SVD contract (`gap_audit.md` §B / `docs/completeness`).
+- Moore-Penrose pseudoinverse `pinv` (free function + `MatrixSolve::pinv`) via
+  the rank-revealing one-sided Jacobi SVD (`A⁺ = V Σ⁺ Uᵀ`, numerically sound —
+  no normal-equations condition-number squaring). Covers tall, wide, square, and
+  rank-deficient inputs. Differential test vs nalgebra `pseudo_inverse` plus the
+  Moore-Penrose identities `A A⁺ A = A` and `A⁺ A A⁺ = A⁺`.
 
 - Fluent rank-2 linear-algebra trait layer over the existing strided matrix
   (`Array2`/`ArrayView2`), consolidating the ndarray "strided array" and

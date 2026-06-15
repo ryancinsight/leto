@@ -85,9 +85,11 @@ a named Atlas consumer driver.
 | Cholesky | `Cholesky` | **Closed** — SPD `cholesky_decompose` and solve; CFDrs SPD driver |
 | Thin full-rank SVD | `SVD` subset | **Closed through 0.14.1** — `svd_decompose` supports tall/square full-column-rank and wide full-row-rank matrices; full-vector decomposition rejects rank-deficient inputs explicitly |
 | Rank-deficient singular values | `SVD::singular_values` subset | **Closed in 0.14.2** — `singular_values` computes the smaller Gram-matrix spectrum and returns zero singular values without constructing missing null-space vectors |
-| Full rank-revealing SVD / pseudoinverse | `SVD`, pseudo-inverse helpers | Open — [major], requires ADR before implementation |
+| Full rank-revealing SVD / pseudoinverse | `SVD`, pseudo-inverse helpers | **Closed in 0.20.0** — ADR 0005 one-sided Jacobi SVD (`svd_rank_revealing`) plus rank-deficient `pinv`; verifies reconstruction, orthonormal `V`, nalgebra singular-value/pseudoinverse parity, and Moore-Penrose identities |
 | Norms (L1/L2/Frobenius) | `norm`, `norm_squared` | **Closed** — `NormKind` ZSTs with `norm_l1`, `norm_l2`, and `norm_max` |
-| Non-symmetric eigenvalues/eigenvectors | `eigenvalues`, `complex_eigenvalues`, Schur | Open only with a named consumer driver; current policy rejects speculative surface |
+| Non-symmetric eigenvalues | `eigenvalues`, `complex_eigenvalues` | **Closed in 0.20.0** — ADR 0006 shifted complex QR after Hessenberg reduction; verifies exact spectra and nalgebra `complex_eigenvalues` parity |
+| Real Schur vectors/form | `Schur` | Open — [major], eigenvalue spectrum is delivered; Schur vectors/quasi-triangular form require a consumer driver |
+| UDU / LDLᵀ | `UDU` | **Closed in 0.21.0 for unpivoted UDU** — `udu_decompose` / `MatrixDecompose::udu`; verifies reconstruction, determinant/solve/inverse parity, and zero-pivot rejection. Pivoted Bunch-Kaufman remains open |
 | Small fixed-size matrix/vector types | `Matrix3`, `Vector3` | Non-goal — const-rank `Array<T, S, 2>` covers the layout; no consumer driver |
 
 Policy: linalg routines enter leto-ops only with a named consumer driver and
@@ -123,16 +125,18 @@ dynamic-rank layout + `Storage` traits, converted at the `coeus-leto` boundary,
 are the intended ADR 0002 seam. No leto-side capability gap remains for the CPU
 re-base. Remaining cross-repo work is the apollo internal FFT-kernel migration
 (apollo-owned) and the themis-0.9 re-pin cascade (§D), which gates clean consumer
-rev-bumps to leto 0.20.0.
+rev-bumps to leto 0.21.0.
 
 ## D. Residual Risk Register
 
-Update 2026-06-13 (v0.19.7): §A indexed zip parity, the Stage A1
+Update 2026-06-15 (v0.21.0): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
 symmetric eigenvalues-only, LU, QR, Cholesky, norms, full-rank thin SVD,
-rank-deficient singular values, Hermes-backed dense reductions, and
-cache-line tiled strided elementwise traversal. The optional themis topology
+rank-deficient singular values, rank-revealing SVD/pseudoinverse,
+non-symmetric eigenvalues, Hessenberg/bidiagonal/full-pivot/column-pivot
+reductions, unpivoted UDU, Hermes-backed dense reductions, and cache-line tiled
+strided elementwise traversal. The optional themis topology
 dependency is wired through `leto_ops::CacheGeometry`; dense matmul now has a
 measured fixed row-block kernel backed by Hermes fused multi-row AXPY;
 reverse-last-axis whole-array reductions now borrow unit-stride physical row
@@ -144,10 +148,10 @@ ndarray/nalgebra: Leto 17.430 µs / 108.98 µs / 1.0631 ms for
 64x64/128x128/256x256 vs ndarray 8.4923 µs / 66.527 µs / 495.95 µs and
 nalgebra 8.7752 µs / 62.935 µs / 505.35 µs. Topology-adaptive tile sizing and
 non-unit truly strided reductions remain open. See CHANGELOG and the two ADRs
-in `docs/adr/`. Remaining work is cross-cutting: the Coeus re-base,
-Apollo/Coeus consumer migration with differential coverage, and dense matmul
-oracle performance parity; full rank-revealing SVD vectors and non-symmetric
-eigen are demand-driven only.
+in `docs/adr/`. Remaining work is cross-cutting: Apollo internal FFT-kernel
+migration, the themis-0.9 re-pin cascade, dense matmul oracle performance
+parity, Schur vectors, pivoted symmetric-indefinite factorization, matrix
+functions, and any consumer-driven fixed-size/geometry decisions.
 
 - `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
   rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
@@ -238,7 +242,7 @@ eigen are demand-driven only.
      version-spec, and `[patch]` to the same git source is rejected — so no
      leto-local pin change resolves it. Builds worked only via a frozen
      pre-drift themis-0.8 lock (now superseded locally).
-  3. **The themis-0.9 path regresses matmul.** Built leto 0.20.0 against the
+  3. **The themis-0.9 path regresses matmul.** Built leto 0.21.0 against the
      local themis-0.9 stack (path-patches): all 122 tests + 4 doctests pass, but
      the required hermes bump `efac0454`→`e6761ac` (dispatch/AXPY refactor)
      regresses dense matmul **64² 17.4→24.9 µs (+43%)**, **128² 109→176 µs
@@ -251,9 +255,9 @@ eigen are demand-driven only.
   leto-local. Process gap to fix alongside: either commit a frozen `Cargo.lock`
   (un-gitignore) or pin the whole stack so fresh resolution is reproducible.
   Interim: leto builds locally via the apollo/coeus-style path-patch set
-  (uncommitted, flagged in `Cargo.toml`); consumer rev-bumps to leto 0.20.0 wait
+  (uncommitted, flagged in `Cargo.toml`); consumer rev-bumps to leto 0.21.0 wait
   on the cascade (coeus already verified compatible — 22/22 contract tests green
-  against working-tree leto 0.20.0).
+  against working-tree leto 0.21.0).
 - Evidence tier of this audit: codebase scan + existing test suites +
   criterion benchmark measurements. No machine-checked proof was performed.
 

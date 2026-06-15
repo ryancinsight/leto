@@ -21,8 +21,9 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [x] [minor] Cholesky (SPD) factorization + solve/det/inv (`linalg/cholesky.rs`): lower-triangle-only reads, constructive positive-definiteness verification, determinant from `Π diag(L)^2`, inverse through identity-column solves over the same triangular substitution helper. Oracle: nalgebra cholesky().l()/determinant + LU cross-check + `A·A⁻¹=I` + strided symmetry invariance.
 - [x] [patch] Wide full-row-rank thin SVD support: `svd_decompose` uses `A Aᵀ` for wide matrices and derives `V = Aᵀ U Σ⁻¹`; tall/square inputs keep `Aᵀ A`. Verification: value-semantic wide reconstruction, singular-value ordering, and right singular-vector orthonormality tests.
 - [x] [patch] Rank-deficient singular-values-only support: `singular_values` diagonalizes the smaller Gram matrix and maps near-zero eigenvalues to zero singular values without constructing missing null-space vectors. `svd_decompose` still rejects rank-deficient matrices until a rank-revealing vector contract exists. Verification: tall and wide rank-deficient value tests.
-- [ ] [major] Full rank-revealing SVD (Golub-Kahan or equivalent) + pseudoinverse; ADR before implementation.
-- [ ] [minor] Non-symmetric eigensolver only if a consumer drives it.
+- [x] [major] Rank-revealing SVD via one-sided Jacobi plus rank-deficient pseudoinverse; ADR 0005 records the selected algorithm and verification plan. Verification: reconstruction, right-vector orthonormality, nalgebra singular-value parity, nalgebra `pseudo_inverse` parity, and Moore-Penrose identities.
+- [x] [minor] Non-symmetric eigenvalues (real + complex) through Hessenberg + shifted complex QR; ADR 0006 records the staged eigensolver track. Verification: nalgebra `complex_eigenvalues` battery and exact spectra. Schur vectors remain a separate open surface.
+- [x] [minor] Unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`) with solve/inverse/determinant helpers. Verification: reconstruction, determinant/solve/inverse parity with nalgebra, invalid-input and zero-pivot rejection. Pivoted Bunch-Kaufman remains open for matrices requiring symmetric pivoting.
 
 ### Stage A2 — ndarray consolidation (support coeus/apollo)
 - [ ] [minor] Provide any CPU kernel `coeus-leto` needs to retire coeus's
@@ -256,8 +257,9 @@ Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is
 - [x] [minor] Generalize `symmetric_eigen_jacobi`/`SymmetricEigenDecomposition` over `T: RealScalar`; runs in native precision with no hidden widening (the wider-accumulator path is intentionally not introduced — a consumer needing higher working precision converts first). f32 genericity test added; f64 path unchanged. `RealScalar` is a segregated transcendental extension of `Scalar` (ISP).
 - [x] [minor] Add eigenvalues-only symmetric Jacobi entry points so callers do not allocate eigenvectors when only sorted eigenvalues are needed. The implementation uses a `RotationTarget` strategy with a zero-sized no-vector target; no `dyn` dispatch and no fake generic widening.
 - [x] [minor] LU/solve/det/inv, QR + least squares, Cholesky, and norms entered `leto-ops` with named CFDrs consumer drivers and nalgebra differential oracles.
-- [ ] [major] Full rank-revealing SVD/pseudoinverse requires an ADR before implementation; current thin full-column-rank SVD is delivered as a bounded consumer-migration surface.
-- [ ] [minor] Non-symmetric eigensolver enters only with a named consumer driver and a differential oracle as dev-dependency; no speculative linalg surface.
+- [x] [major] Full rank-revealing SVD/pseudoinverse delivered by ADR 0005 through one-sided Jacobi SVD and Moore-Penrose construction; the legacy Gram SVD remains full-rank-only by contract.
+- [x] [minor] Non-symmetric eigenvalues delivered by ADR 0006 Phase 2a through shifted complex QR. Remaining [major] surface: Schur vectors (`Q`, quasi-triangular `T`) when a consumer needs them.
+- [x] [minor] Add unpivoted symmetric indefinite `U D Uᵀ` decomposition with determinant/solve/inverse helpers. Remaining [major] surface: pivoted symmetric-indefinite factorization for zero-pivot cases.
 
 ## Apollo Migration Gate [arch]
 - [x] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates. Apollo pins Leto by Git rev with `["std", "ndarray-compat"]` and exposes `forward_leto`/`inverse_leto` API boundaries on FFT, CZT, DHT, NUFFT, SHT, Radon, and STFT.

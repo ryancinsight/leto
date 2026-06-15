@@ -23,7 +23,7 @@ use leto::{Array2, ArrayView2, Result};
 /// and so does not square the condition number.
 ///
 /// # Errors
-/// [`LetoError`](leto::LetoError) on empty or non-finite input.
+/// [`leto::LetoError`] on empty or non-finite input.
 pub fn pinv<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     let [rows, cols] = matrix.shape();
     let tolerance = default_tolerance::<T>();

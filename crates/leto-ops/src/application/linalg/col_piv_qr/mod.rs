@@ -1,6 +1,6 @@
 //! QR with column pivoting: `A P = Q R` (rank-revealing).
 //!
-//! Plain Householder QR ([`super::qr`]) factors `A = Q R`; column pivoting adds
+//! Plain Householder QR ([`crate::qr_decompose`]) factors `A = Q R`; column pivoting adds
 //! a permutation `P` that, at each step, moves the column of largest remaining
 //! norm to the front. This forces `|R₀₀| ≥ |R₁₁| ≥ … ≥ |R_{r-1,r-1}| > 0` with
 //! the trailing diagonal ≈ 0, so the factorization is **rank-revealing**.
@@ -18,9 +18,9 @@
 //! diagonal means the first negligible one reveals the rank — more reliably than
 //! a Gram-spectrum count for borderline cases.
 //!
-//! Leaf modules: [`decompose`] (the pivoted reduction, on the shared
-//! [`householder`](super::householder) primitive) and the solve logic here.
-//! Generic over [`RealScalar`], native precision.
+//! Leaf modules: `decompose` (the pivoted reduction, on the shared
+//! `householder` primitive) and the solve logic here.
+//! Generic over [`crate::RealScalar`], native precision.
 
 mod decompose;
 
@@ -70,7 +70,7 @@ impl<T: RealScalar> ColPivQrDecomposition<T> {
     /// then `x = P y`.
     ///
     /// # Errors
-    /// [`LetoError`](leto::LetoError) on a rank-deficient matrix (rank-deficient
+    /// [`LetoError`] on a rank-deficient matrix (rank-deficient
     /// least squares is a follow-up) or shape mismatch.
     pub fn solve_least_squares(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
         let (m, n) = (self.m, self.n);

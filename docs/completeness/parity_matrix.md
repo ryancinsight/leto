@@ -74,7 +74,7 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | Bidiagonalization | `Bidiagonal` | `bidiagonalize` / `MatrixDecompose::bidiagonalize` | Verified | bidiagonal/ — Golub–Kahan two-sided Householder (ADR 0006); reconstruction + orthogonality + structure + singular-value preservation vs leto & nalgebra SVD |
 | LU, complete pivoting (rank-revealing) | `FullPivLU` | `full_piv_lu` / `MatrixDecompose::full_piv_lu` | Verified | full_piv_lu/ — `P A Q = L U`; reconstruction + rank + det/solve/inv vs nalgebra `FullPivLU` + rank-deficiency revelation |
 | QR, column pivoting (rank-revealing) | `ColPivQR` | `col_piv_qr` / `MatrixDecompose::col_piv_qr` | Verified | col_piv_qr/ — `A P = Q R`; reconstruction + orthogonality + rank + full-rank least squares vs leto QR & nalgebra normal equations |
-| UDU / LDLᵀ (symmetric indefinite) | `UDU` | — | **Missing** | Stage 5 |
+| UDU / LDLᵀ (symmetric indefinite) | `UDU` | `udu_decompose` / `MatrixDecompose::udu` | Verified | udu/ — unpivoted `A = U D Uᵀ`; reconstruction + determinant/solve/inverse vs nalgebra + zero-pivot rejection. Pivoted Bunch-Kaufman remains missing |
 | Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers) |
 | Numerical rank | `Matrix::rank` | `matrix_rank` / `MatrixProperties::rank` | Verified | properties (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall) |
 | Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`) |

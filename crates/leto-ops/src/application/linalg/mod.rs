@@ -35,6 +35,8 @@ pub mod properties;
 pub mod qr;
 /// Thin SVD and singular values for finite matrices.
 pub mod svd;
+/// Symmetric indefinite unpivoted `U D Uᵀ` factorization.
+pub mod udu;
 
 pub use bidiagonal::{bidiagonalize, BidiagonalDecomposition};
 pub use cholesky::{
@@ -61,3 +63,4 @@ pub use svd::{
     pinv, singular_values, svd_decompose, svd_decompose_with_tolerance, svd_rank_revealing,
     svd_rank_revealing_with_tolerance, SvdDecomposition,
 };
+pub use udu::{udu_decompose, UduDecomposition};

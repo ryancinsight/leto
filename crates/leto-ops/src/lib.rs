@@ -27,11 +27,11 @@ pub use application::linalg::{
     singular_values, solve, solve_least_squares, svd_decompose, svd_decompose_with_tolerance,
     svd_rank_revealing, svd_rank_revealing_with_tolerance, symmetric_eigen_jacobi,
     symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
-    symmetric_eigenvalues_jacobi_with_tolerance, trace, AsMatrixView, BidiagonalDecomposition,
-    CholeskyDecomposition, ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition,
-    LuDecomposition, MatrixDecompose, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
-    NormKind, NormL1, NormL2, NormMax, QrDecomposition, SvdDecomposition,
-    SymmetricEigenDecomposition,
+    symmetric_eigenvalues_jacobi_with_tolerance, trace, udu_decompose, AsMatrixView,
+    BidiagonalDecomposition, CholeskyDecomposition, ColPivQrDecomposition, FullPivLuDecomposition,
+    HessenbergDecomposition, LuDecomposition, MatrixDecompose, MatrixNorm, MatrixProduct,
+    MatrixProperties, MatrixSolve, NormKind, NormL1, NormL2, NormMax, QrDecomposition,
+    SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
 };
 pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,

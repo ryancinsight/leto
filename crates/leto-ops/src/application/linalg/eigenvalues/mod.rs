@@ -9,18 +9,18 @@
 //! are exactly the diagonal entries of `T`**.
 //!
 //! Algorithm (ADR 0006, Phase 2): reduce to upper Hessenberg
-//! ([`super::hessenberg`], reused — SSOT), promote to complex, then run the
-//! **single-shift Wilkinson QR iteration** ([`qr`]). Each shifted step
+//! ([`crate::hessenberg()`], reused — SSOT), promote to complex, then run the
+//! **single-shift Wilkinson QR iteration** (`qr`). Each shifted step
 //! `H ← Qᴴ H Q` with `QR = H − μI` is a unitary similarity (preserving the
 //! spectrum); the Wilkinson shift gives generically cubic convergence, driving a
 //! trailing subdiagonal to zero so one eigenvalue **deflates** at a time. A 2×2
 //! block is resolved by the closed-form quadratic, so real *and* complex
 //! conjugate pairs are produced without leaving real input behind.
 //!
-//! Leaf modules: [`complex`] (the `Cplx<T>` compute type) and [`qr`] (the
-//! iteration). Generic over [`RealScalar`]; complex values appear only in the
+//! Leaf modules: `complex` (the `Cplx<T>` compute type) and `qr` (the
+//! iteration). Generic over [`crate::RealScalar`]; complex values appear only in the
 //! result. For symmetric inputs prefer the dedicated Jacobi solver
-//! ([`super::eigen`]), which is faster and returns sorted real eigenvalues.
+//! ([`crate::symmetric_eigenvalues_jacobi`]), which is faster and returns sorted real eigenvalues.
 
 mod complex;
 mod qr;

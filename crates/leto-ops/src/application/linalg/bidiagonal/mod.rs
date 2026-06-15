@@ -20,8 +20,8 @@
 //! `B = Uᵀ A V` with `U, V` orthogonal, so `A` and `B` have identical singular
 //! values (and `‖B‖_F = ‖A‖_F`).
 //!
-//! Uses the shared [`householder`](super::householder) primitive (SSOT) and the
-//! [`reduce`] loop. Generic over [`RealScalar`], native precision. Wide inputs
+//! Uses the shared `householder` primitive (SSOT) and the
+//! `reduce` loop. Generic over [`crate::RealScalar`], native precision. Wide inputs
 //! (`m < n`) are rejected — transpose first (the bidiagonalization of `Aᵀ` is
 //! the lower-bidiagonal form of `A`).
 

@@ -19,9 +19,9 @@ use crate::domain::scalar::Scalar;
 use crate::{
     bidiagonalize, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu, hessenberg,
     lu_decompose, qr_decompose, svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi,
-    symmetric_eigenvalues_jacobi, BidiagonalDecomposition, CholeskyDecomposition,
+    symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition, CholeskyDecomposition,
     ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition,
-    QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition,
+    QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
 };
 use crate::{
     det as det_kernel, inv as inv_kernel, kron as kron_kernel, matmul as matmul_kernel,
@@ -191,6 +191,12 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-SPD or non-square input.
     fn cholesky(&self) -> Result<CholeskyDecomposition<T>>;
+    /// Symmetric indefinite unpivoted `U D Uᵀ` factorization.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square, nonsymmetric, non-finite,
+    /// or zero-pivot input requiring symmetric pivoting.
+    fn udu(&self) -> Result<UduDecomposition<T>>;
     /// Upper Hessenberg reduction `A = Q H Qᵀ` (eigensolver prerequisite).
     ///
     /// # Errors
@@ -257,6 +263,10 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
     #[inline]
     fn cholesky(&self) -> Result<CholeskyDecomposition<T>> {
         cholesky_decompose(&self.as_matrix_view())
+    }
+    #[inline]
+    fn udu(&self) -> Result<UduDecomposition<T>> {
+        udu_decompose(&self.as_matrix_view())
     }
     #[inline]
     fn hessenberg(&self) -> Result<HessenbergDecomposition<T>> {
@@ -326,12 +336,12 @@ pub trait MatrixSolve<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-square input.
     fn det(&self) -> Result<T>;
-    /// Moore-Penrose pseudoinverse `A⁺` of a full-rank matrix via the thin SVD
-    /// (`A⁺ = V Σ⁻¹ Uᵀ`, shape transposed). Works for tall, wide, and square
-    /// full-rank inputs.
+    /// Moore-Penrose pseudoinverse `A⁺` via the rank-revealing one-sided Jacobi
+    /// SVD (`A⁺ = V Σ⁺ Uᵀ`, shape transposed). Works for tall, wide, square, and
+    /// rank-deficient inputs.
     ///
     /// # Errors
-    /// [`LetoError`](leto::LetoError) on empty, non-finite, or rank-deficient input.
+    /// [`LetoError`](leto::LetoError) on empty or non-finite input.
     fn pinv(&self) -> Result<Array2<T>>;
 }
 
@@ -361,7 +371,7 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixSolve<T> for M {
 /// Scalar/integer matrix properties (queries reducing a matrix to a scalar or
 /// count). Bounded on [`RealScalar`] because `rank` consumes the singular-value
 /// spectrum; `trace` is also exposed as a [`Scalar`]-generic free function
-/// ([`crate::trace`]) for the integer case.
+/// ([`crate::trace()`]) for the integer case.
 ///
 /// ```
 /// use leto::Array2;

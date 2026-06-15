@@ -3,7 +3,7 @@
 //! Complete pivoting selects, at each step, the largest-magnitude entry of the
 //! entire trailing submatrix as the pivot — via both a row and a column swap —
 //! rather than only the largest in the pivot column (partial pivoting, see
-//! [`super::lu`]). This makes the factorization **rank-revealing** and maximally
+//! [`crate::lu_decompose`]). This makes the factorization **rank-revealing** and maximally
 //! stable, at the cost of the `O(n³)` pivot search.
 //!
 //! # Theorem (complete-pivoting LU)
@@ -19,8 +19,8 @@
 //! by decreasing magnitude, so the first negligible pivot reveals the rank.
 //! For full rank, `det(A) = sign(P)·sign(Q)·∏ₖ Uₖₖ`.
 //!
-//! Leaf modules: [`decompose`] (the elimination) and [`solve`] (forward/back
-//! substitution and inverse). Generic over [`RealScalar`], native precision.
+//! Leaf modules: `decompose` (the elimination) and `solve` (forward/back
+//! substitution and inverse). Generic over [`crate::RealScalar`], native precision.
 
 mod decompose;
 mod solve;
@@ -137,8 +137,8 @@ impl<T: RealScalar> FullPivLuDecomposition<T> {
 /// Factor a square matrix with complete (full) pivoting.
 ///
 /// # Errors
-/// [`LetoError::ShapeMismatch`] for non-square input;
-/// [`LetoError::StorageError`] for a non-finite entry.
+/// `LetoError::ShapeMismatch` for non-square input;
+/// `LetoError::StorageError` for a non-finite entry.
 pub fn full_piv_lu<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<FullPivLuDecomposition<T>> {
     let f = decompose::factor(matrix)?;
     Ok(FullPivLuDecomposition {

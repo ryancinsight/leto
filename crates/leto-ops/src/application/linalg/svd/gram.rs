@@ -4,7 +4,7 @@
 //! `AAᵀ` and derive `V = Aᵀ U Σ⁻¹`. Appropriate for small dense matrices; it
 //! squares the condition number (`κ(AᵀA) = κ(A)²`) and rejects rank-deficient
 //! input. For rank-deficient or ill-conditioned matrices use the rank-revealing
-//! [`super::jacobi`] path.
+//! [`super::svd_rank_revealing`] path.
 
 use super::{default_tolerance, singular_value_or_zero, validate_input, SvdDecomposition};
 use crate::application::linalg::eigen::{
@@ -16,7 +16,7 @@ use leto::{Array2, ArrayView2, LetoError, Result};
 /// Compute a thin SVD for a full-rank matrix (default tolerance).
 ///
 /// # Errors
-/// [`LetoError`](leto::LetoError) on empty, non-finite, or rank-deficient input.
+/// [`LetoError`] on empty, non-finite, or rank-deficient input.
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     svd_decompose_with_tolerance(matrix, default_tolerance::<T>())
 }
@@ -24,7 +24,7 @@ pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDec
 /// Compute a thin SVD with an explicit eigensolver tolerance.
 ///
 /// # Errors
-/// [`LetoError`](leto::LetoError) on empty, non-finite, or rank-deficient input.
+/// [`LetoError`] on empty, non-finite, or rank-deficient input.
 pub fn svd_decompose_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     tolerance: T,
@@ -136,7 +136,7 @@ fn svd_from_row_gram<T: RealScalar>(
 /// matrix). Returns zeros for rank-deficient inputs without deriving vectors.
 ///
 /// # Errors
-/// [`LetoError`](leto::LetoError) on empty or non-finite input.
+/// [`LetoError`] on empty or non-finite input.
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     let tolerance = default_tolerance::<T>();
     validate_input(matrix, tolerance)?;
