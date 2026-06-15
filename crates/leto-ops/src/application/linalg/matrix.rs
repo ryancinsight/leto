@@ -4,7 +4,7 @@
 //! `m.det()`, `m.matmul(&b)`) onto Leto's existing strided matrix
 //! (`Array2`/`ArrayView2`) without a second buffer type. Each method is a thin,
 //! monomorphized delegator to the authoritative free-function kernel in this
-//! module's siblings ([`lu`](super::lu), [`qr`](super::qr), etc.); the free
+//! module's siblings ([`lu`](crate::application::linalg::lu), [`qr`](crate::application::linalg::qr), etc.); the free
 //! functions remain the single source of truth, so no kernel is duplicated.
 //!
 //! The traits are role-segmented (interface segregation): construction/product,

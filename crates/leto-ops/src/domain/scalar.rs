@@ -45,6 +45,19 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     ) {
         scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
     }
+    /// Fused batched multi-row update:
+    /// `out[row, i] += sum_k alphas[k, row] * x_panel[k, i]`.
+    fn axpy_rows_batch(
+        alphas: &[Self],
+        x_panel: &[Self],
+        out: &mut [Self],
+        row_stride: usize,
+        rows: usize,
+        depth: usize,
+        cols: usize,
+    ) {
+        scalar_axpy_rows_batch_fallback(alphas, x_panel, out, row_stride, rows, depth, cols);
+    }
     /// Min reduction over a slice.
     fn min_slice(s: &[Self]) -> Self;
     /// Max reduction over a slice.
@@ -167,6 +180,28 @@ macro_rules! impl_scalar_native {
                     return;
                 }
                 scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
+            }
+
+            #[inline]
+            fn axpy_rows_batch(
+                alphas: &[Self],
+                x_panel: &[Self],
+                out: &mut [Self],
+                row_stride: usize,
+                rows: usize,
+                depth: usize,
+                cols: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_rows_batch(
+                    alphas, x_panel, out, row_stride, rows, depth, cols,
+                )
+                .is_ok()
+                {
+                    return;
+                }
+                scalar_axpy_rows_batch_fallback(
+                    alphas, x_panel, out, row_stride, rows, depth, cols,
+                );
             }
 
             #[inline]
@@ -312,6 +347,28 @@ macro_rules! impl_scalar_half {
             }
 
             #[inline]
+            fn axpy_rows_batch(
+                alphas: &[Self],
+                x_panel: &[Self],
+                out: &mut [Self],
+                row_stride: usize,
+                rows: usize,
+                depth: usize,
+                cols: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_rows_batch(
+                    alphas, x_panel, out, row_stride, rows, depth, cols,
+                )
+                .is_ok()
+                {
+                    return;
+                }
+                scalar_axpy_rows_batch_fallback(
+                    alphas, x_panel, out, row_stride, rows, depth, cols,
+                );
+            }
+
+            #[inline]
             fn min_slice(s: &[Self]) -> Self {
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
                     res
@@ -417,6 +474,21 @@ macro_rules! impl_scalar_int {
             }
 
             #[inline]
+            fn axpy_rows_batch(
+                alphas: &[Self],
+                x_panel: &[Self],
+                out: &mut [Self],
+                row_stride: usize,
+                rows: usize,
+                depth: usize,
+                cols: usize,
+            ) {
+                scalar_axpy_rows_batch_fallback(
+                    alphas, x_panel, out, row_stride, rows, depth, cols,
+                );
+            }
+
+            #[inline]
             fn min_slice(s: &[Self]) -> Self {
                 s.iter()
                     .copied()
@@ -472,5 +544,42 @@ fn scalar_axpy_rows_fallback<T: Scalar>(
     for (row, alpha) in alphas.iter().copied().take(rows).enumerate() {
         let start = row * row_stride;
         T::axpy_slice(alpha, x, &mut out[start..start + cols]);
+    }
+}
+
+#[inline]
+fn scalar_axpy_rows_batch_fallback<T: Scalar>(
+    alphas: &[T],
+    x_panel: &[T],
+    out: &mut [T],
+    row_stride: usize,
+    rows: usize,
+    depth: usize,
+    cols: usize,
+) {
+    if rows == 0 || depth == 0 || cols == 0 {
+        return;
+    }
+    let Some(alpha_len) = rows.checked_mul(depth) else {
+        return;
+    };
+    let Some(panel_len) = depth.checked_mul(cols) else {
+        return;
+    };
+    if alphas.len() < alpha_len || x_panel.len() < panel_len {
+        return;
+    }
+
+    for shared in 0..depth {
+        let alpha_start = shared * rows;
+        let x_start = shared * cols;
+        scalar_axpy_rows_fallback(
+            &alphas[alpha_start..alpha_start + rows],
+            &x_panel[x_start..x_start + cols],
+            out,
+            row_stride,
+            rows,
+            cols,
+        );
     }
 }

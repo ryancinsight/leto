@@ -25,8 +25,9 @@ after benchmark regression. Result
 parity remains covered for LU solve/determinant/inverse, symmetric eigenvalues,
 Cholesky lower factors, singular values, and reverse-last-axis reductions.
 Performance parity remains mixed: reverse reductions are faster than ndarray,
-and dense 64x64/128x128/256x256 matmul improved materially, but it remains
-slower than ndarray/nalgebra.
+and dense 64x64/128x128/256x256 matmul improved materially, including a
+post-0.19.7 128-row batched Hermes row-panel AXPY path, but it remains slower
+than ndarray/nalgebra.
 Remaining open: close dense matmul oracle performance gap before claiming
 replacement performance parity; non-unit truly strided
 reductions still row-walk (per-lane accumulators needed); melinoe ThreadCached
@@ -175,6 +176,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   first-shared-row output initialization. Rejected after 0.19.7:
   Hermes column-chunk `axpy_rows`, `MATMUL_ROW_BLOCK=64`, and row-block
   fused-branch/alpha-buffer hoisting, and generic 4x4 registered dense tiles.
+  Added after 0.19.7: `hermes_simd::axpy_rows_batch` is consumed only for the
+  measured 128-row dense regime (212.64 µs → 98.853 µs on the local themis-0.9
+  stack); broad depth-batched routing was rejected after 64x64/256x256
+  regression.
   Current corrective gate: `cargo fmt --check`; `cargo clippy --workspace
   --all-targets --all-features -- -D warnings`; `cargo test --workspace
   --all-features`; `cargo nextest run --workspace --all-features`; `cargo doc

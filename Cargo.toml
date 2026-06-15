@@ -21,7 +21,7 @@ leto-ops = { path = "crates/leto-ops" }
 # ── Systems and Parallelization ──
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "1e014d25461b322345c15fb3cf9467b5388616dd" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "03d9d0346f52b08946875ff54540431e178aa51d" }
-hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "efac0454a0d2477f23a82f8afdf483b7bebd883e", package = "hermes-simd" }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "d4a01bde1c8cfa9dbd09015b712573bb0046b991", package = "hermes-simd" }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──

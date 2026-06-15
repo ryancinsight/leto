@@ -68,6 +68,15 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   oracle medians improved: 64x64 21.443 µs → 17.430 µs, 128x128 127.63 µs →
   108.98 µs, and 256x256 2.4357 ms → 1.0631 ms. Dense matmul remains slower
   than ndarray/nalgebra, so replacement-performance parity is still open.
+- [x] [patch] Consume Hermes batched row-panel AXPY
+  (`hermes_simd::axpy_rows_batch`, delivered hermes `d4a01bd`) for the
+  measured 128-row dense matmul regime. The path keeps caller-owned output,
+  borrows contiguous RHS panels directly, and packs only the fixed-size alpha
+  panel on the stack. Local themis-0.9 stack criterion medians improved
+  `oracle_compare/matmul_leto_128x128` from 212.64 µs to 98.853 µs. Dense
+  matmul still trails nalgebra's recorded 128x128 median, so parity remains
+  open. Broad depth-batched routing across 64x64/256x256 was rejected after
+  regression.
 
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
 Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every
@@ -132,7 +141,8 @@ no unmeasured "optimization" per performance_engineering.
   output initialization, post-0.19.7 Hermes column-chunk `axpy_rows`, or
   post-0.19.7 `MATMUL_ROW_BLOCK=64`, or post-0.19.7 row-block
   fused-branch/alpha-buffer hoisting, or post-0.19.7 generic 4x4 registered
-  dense tiles without a changed kernel model and profile evidence.
+  dense tiles, or broad depth-batched row-panel AXPY routing without a changed
+  kernel model and profile evidence.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted

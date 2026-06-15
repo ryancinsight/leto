@@ -84,6 +84,7 @@ the open target below is closed.
 | Row-blocked matmul (0.18.1) | matmul dense 64² / 256² | 28.1 µs → 22.536 µs / 1.529 ms → 1.4016 ms | **~−19.8% / ~−8.3%** |
 | Reverse-row reduction slices (0.19.0) | sum / norm_l2 reverse-last-axis 256² | 6.517 µs → 5.203 µs / 11.775 µs → 9.615 µs | **−21.56% / −18.00% median in criterion run** |
 | Fused multi-row Hermes AXPY (0.19.7) | oracle matmul dense 64² / 128² / 256² | 21.443 µs → 17.430 µs / 127.63 µs → 108.98 µs / 2.4357 ms → 1.0631 ms | **−18.7% / −14.6% / −56.4% by median** |
+| Batched Hermes row-panel AXPY (post-0.19.7) | oracle matmul dense 128² | 212.64 µs → 98.853 µs on the local themis-0.9 stack | **−53.5% median** |
 
 Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 ~35 µs ≈ **35–42×** depending on run; residual vs contiguous is ~2.2×
@@ -149,6 +150,11 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   regressed 64x64/128x128/256x256 to 75.684 µs / 695.06 µs / 6.2823 ms.
   A follow-up attempt to skip the zeroing pass for the same overwrite kernel
   regressed further or stayed unstable. No source change retained.
+- **Broad depth-batched row-panel AXPY policy (post-0.19.7 audit)**:
+  rejected. Hermes `axpy_rows_batch` is retained, but routing all medium+
+  dense row-blocks through it regressed the 64x64/128x128/256x256 Leto-only
+  oracle rows to 21.695 µs / 126.73 µs / 1.8273 ms in the local themis-0.9
+  stack. Leto retains the measured 128-row gate only.
 - Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
   hermes scalar-AXPY / fused row-update provider; leto must not emulate one
   with temporary allocation.

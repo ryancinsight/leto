@@ -2,7 +2,7 @@
 //!
 //! These operators are the **allocating convenience tier**: `&a + &b`,
 //! `&a * scalar`, and `-&a` each produce a fresh C-contiguous array. They share
-//! one logical-order traversal ([`iter_elements`]) so no second elementwise loop
+//! one logical-order traversal (`iter_elements`) so no second elementwise loop
 //! exists in core. For hot paths that reuse an output buffer or need SIMD /
 //! broadcasting, use the `leto-ops` `binary_map` / `scalar_map` family (the
 //! performance tier) — the same two-tier split core already uses for reductions.

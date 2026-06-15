@@ -7,6 +7,8 @@ const PARALLEL_ROW_THRESHOLD: usize = 16;
 // 256 KiB L2 fallback at the 256-column benchmark shape while preserving a
 // single const-generic kernel instantiation.
 const MATMUL_ROW_BLOCK: usize = 32;
+const MATMUL_DEPTH_BLOCK: usize = 4;
+const MATMUL_DEPTH_BATCH_ROWS: usize = 128;
 
 #[derive(Clone, Copy)]
 struct MatmulLayout {
@@ -204,6 +206,74 @@ fn row_blocked_matmul<T: Scalar, const ROW_BLOCK: usize>(
     for row_block_start in (start_row..end_row).step_by(ROW_BLOCK) {
         let row_block_end = (row_block_start + ROW_BLOCK).min(end_row);
         let block_rows = row_block_end - row_block_start;
+
+        if layout.rows == MATMUL_DEPTH_BATCH_ROWS {
+            if let Some(out_stride_row) = fused_out_stride {
+                if layout.rhs_stride_row == layout.cols as isize {
+                    let out_block_offset =
+                        layout.out_offset + row_block_start as isize * layout.out_stride_row;
+                    let out_block_len = (block_rows - 1) * out_stride_row + layout.cols;
+                    // SAFETY: `validate_matmul` validates the full output storage
+                    // span, row blocking is enabled only for unit-stride columns,
+                    // and this fused path requires a positive non-overlapping row
+                    // stride of at least `cols`.
+                    let out_block = unsafe {
+                        core::slice::from_raw_parts_mut(
+                            out_ptr.offset(out_block_offset),
+                            out_block_len,
+                        )
+                    };
+
+                    for shared_start in (0..layout.shared).step_by(MATMUL_DEPTH_BLOCK) {
+                        let depth = (layout.shared - shared_start).min(MATMUL_DEPTH_BLOCK);
+                        let mut alphas = [T::ZERO; MATMUL_ROW_BLOCK * MATMUL_DEPTH_BLOCK];
+                        for shared_offset in 0..depth {
+                            let shared = shared_start + shared_offset;
+                            let alpha_start = shared_offset * block_rows;
+                            for (block_row, alpha) in alphas[alpha_start..alpha_start + block_rows]
+                                .iter_mut()
+                                .enumerate()
+                            {
+                                let row = row_block_start + block_row;
+                                let lhs_row_offset =
+                                    layout.lhs_offset + row as isize * layout.lhs_stride_row;
+                                // SAFETY: `validate_matmul` validates every logical LHS
+                                // index used by this row/shared loop nest.
+                                *alpha = unsafe {
+                                    *lhs_ptr.offset(
+                                        lhs_row_offset + shared as isize * layout.lhs_stride_col,
+                                    )
+                                };
+                            }
+                        }
+
+                        let rhs_panel_offset =
+                            layout.rhs_offset + shared_start as isize * layout.rhs_stride_row;
+                        // SAFETY: `validate_matmul` validates the RHS storage span,
+                        // row blocking is enabled only for unit-stride RHS rows,
+                        // and this batched path requires physically adjacent RHS
+                        // rows (`rhs_stride_row == cols`).
+                        let rhs_panel = unsafe {
+                            core::slice::from_raw_parts(
+                                rhs_ptr.offset(rhs_panel_offset),
+                                depth * layout.cols,
+                            )
+                        };
+                        T::axpy_rows_batch(
+                            &alphas[..depth * block_rows],
+                            rhs_panel,
+                            out_block,
+                            out_stride_row,
+                            block_rows,
+                            depth,
+                            layout.cols,
+                        );
+                    }
+                    continue;
+                }
+            }
+        }
+
         for shared in 0..layout.shared {
             let rhs_row_offset = layout.rhs_offset + shared as isize * layout.rhs_stride_row;
             // SAFETY: `validate_matmul` validates the RHS storage span, and

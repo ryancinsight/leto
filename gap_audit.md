@@ -219,7 +219,10 @@ eigen are demand-driven only.
   the 32-row baseline. Row-block fused-branch/alpha-buffer hoisting produced
   no statistically significant 128x128 improvement and also ended with
   `STATUS_ACCESS_VIOLATION`. Generic 4x4 registered dense tiles regressed the
-  oracle shapes and are not retained. Next work needs allocation-controlled
+  oracle shapes and are not retained. Hermes `axpy_rows_batch` improves the
+  local themis-0.9 128x128 Leto oracle median from 212.64 µs to 98.853 µs when
+  gated to that row regime, but broad depth-batched routing regressed other
+  oracle shapes and is not retained. Next work needs allocation-controlled
   reusable packing scratch or a verified external micro-kernel provider with
   profile evidence.
 - themis-0.9 migration + dependency resolution (re-diagnosed/MEASURED
