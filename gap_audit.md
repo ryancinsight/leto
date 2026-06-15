@@ -13,12 +13,20 @@ Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
   Radon, STFT; nalgebra removed (FrFT/GFT eigendecomposition now uses
   `leto_ops::symmetric_eigen_jacobi`, GFT adjacency uses `leto::Array2<f64>`).
   ndarray remains the internal CPU compute substrate and differential oracle.
-- **Coeus** (tensor/autodiff, burn replacement): zero references to leto
-  today. Coeus owns its own `coeus-core` storage traits (`Storage`,
-  `StorageMut`, COW), a sealed `ComputeBackend` (associated
-  `DeviceBuffer<T>`/`KernelDescriptor`/`DispatchFuture<T>`), dynamic-rank
-  `Layout`, and CPU (Moirai) + wgpu + CUDA backends. Replacing its array
-  backend with leto is an [arch] integration, not a drop-in.
+- **Coeus** (tensor/autodiff, burn replacement): CPU array layer **fully
+  consolidated onto leto** (re-verified 2026-06-15 against coeus HEAD
+  `037fdd5`; pins leto `d8d34c61`, older than current leto HEAD `723a63c`).
+  coeus's CPU `BackendOps` route every array primitive (elementwise, matmul +
+  batched, axis reductions, argmax/argmin, cumsum/suffix, concat/pad/split/
+  stack, seeded RNG, to_contiguous/reshape/permute, cross-backend transfer,
+  from_fn/eye/arange/linspace) through the `coeus-leto` const-rank dispatch shim
+  (ADR 0002) into leto/leto-ops, covered by `coeus-leto/tests/contract.rs` and
+  `coeus-ops`/`coeus-tensor` `*_leto_diff.rs` suites (coeus workspace 255 tests
+  green). Coeus retains its sealed `ComputeBackend`, autodiff, NN kernels
+  (conv/pool/attention/optimizers), sparse, and wgpu/CUDA backends. `coeus-core`
+  keeps a dynamic-rank `Layout` and `Storage`/`StorageMut` traits that
+  `coeus-leto` converts to leto's const-rank views at the boundary — this is the
+  intended ADR 0002 seam, not residual duplication.
 
 ## Layer Boundary Decision (proposed, [arch])
 
@@ -86,26 +94,36 @@ Policy: linalg routines enter leto-ops only with a named consumer driver and
 a differential oracle (ndarray-linalg/nalgebra as dev-dependency oracle, per
 the existing ndarray-oracle pattern).
 
-## C. Gaps vs Coeus backend integration ([arch])
+Driver-attribution correction (2026-06-15): the LU/QR/Cholesky/SVD "CFDrs
+…driver" attributions above are aspirational, not actual. CFDrs (HEAD `0f578e1a`)
+does **not** depend on `leto`/`leto-ops` today — it uses `nalgebra` 0.33 and
+`ndarray` directly. These decompositions are validated by the nalgebra/ndarray
+differential oracle (`oracle_parity.rs`) and stand on general-parity grounds;
+they are not currently exercised by a live Atlas consumer. A real CFDrs
+migration to leto dense linalg remains an unstarted, separately tracked item.
 
-Coeus's `ComputeBackend`/`Backend` traits and `coeus-tensor` duplicate
-leto's layout/storage/traversal layer (both built on Mnemosyne + Moirai).
-This is the structural-duplication trigger: shared logic in two repos
-consolidates to the deepest common ancestor — leto.
+## C. Coeus backend integration ([arch]) — COMPLETE (2026-06-15)
 
-Integration path (recorded as the plan of record in backlog Phase 6):
-1. Leto provides the CPU array kernels Coeus's CPU backend dispatches to
-   (unary math suite, broadcast-aware binary into caller-owned output,
-   reductions incl. argmax/cumsum, matmul, concat/pad/split).
-2. Coeus's `coeus-tensor` CPU storage/layout layer re-bases onto
-   `leto::Layout`/`Storage` (or thin adapters), deleting the duplicate.
-3. Coeus keeps `ComputeBackend` ownership, GPU backends, autodiff, NN
-   kernels, sparse, optimizers.
+The CPU array-kernel consolidation is done (verified against coeus HEAD
+`037fdd5`). The plan-of-record integration path resolved as:
+1. Leto provides the CPU array kernels (unary suite, broadcast-aware binary into
+   caller-owned output, reductions incl. argmax/cumsum, matmul + batched,
+   concat/pad/split/stack, seeded RNG). DONE.
+2. Coeus routes its CPU `BackendOps` through the `coeus-leto` const-rank dispatch
+   shim (ADR 0002) into those kernels — the duplicated array-primitive traversal
+   loops in coeus are retired. DONE, with `coeus-leto/tests/contract.rs` and
+   `*_leto_diff.rs` differential suites; coeus workspace 255 tests green.
+3. Coeus keeps `ComputeBackend` ownership, wgpu/CUDA backends, autodiff, NN
+   kernels (conv/pool/attention), sparse, optimizers. As designed.
 
-Step 1 Leto-side capability gaps are closed: broadcast-aware binary writing
-through an output layout, unary ZST op suite, concat/pad/split/stack, batched
-matmul, seeded RNG fill, and indexed mutable zip traversal. Remaining work is
-consumer-side Coeus re-base and Apollo migration verification.
+Framing correction: `coeus-tensor` is **not** a duplicate of leto to delete — it
+is the autodiff-integrated `Tensor`/COW wrapper over `coeus-core`'s dynamic-rank
+`Layout`, with CPU compute delegated to leto via `coeus-leto`. coeus-core's
+dynamic-rank layout + `Storage` traits, converted at the `coeus-leto` boundary,
+are the intended ADR 0002 seam. No leto-side capability gap remains for the CPU
+re-base. Remaining cross-repo work is the apollo internal FFT-kernel migration
+(apollo-owned) and the themis-0.9 re-pin cascade (§D), which gates clean consumer
+rev-bumps to leto 0.20.0.
 
 ## D. Residual Risk Register
 
@@ -204,24 +222,35 @@ eigen are demand-driven only.
   oracle shapes and are not retained. Next work needs allocation-controlled
   reusable packing scratch or a verified external micro-kernel provider with
   profile evidence.
-- Locked dependency resolution (re-verified 2026-06-15): `--locked` gates
-  PASS — `cargo metadata --locked`, `cargo build --locked`, and the test gate
-  all succeed because the committed `Cargo.lock` (themis 0.8.0 @ `7392d337`)
-  satisfies the floating themis spec. The earlier "`--locked` blocked" claim was
-  inaccurate; only fresh resolution (`cargo generate-lockfile` / `cargo update`)
-  is blocked. Root cause: BOTH `hermes-simd-core` (rev `efac0454`, the
-  measured-good fused-AXPY matmul pin) and `mnemosyne-arena` (rev `1e014d25`)
-  declare unpinned `themis = "^0.8.0"`, so fresh resolution floats themis to the
-  0.9.x default-branch HEAD (0.9.11) and fails `^0.8.0`. A leto-local fix is not
-  possible (`[patch]` to the same git source is rejected; pinning leto's direct
-  themis rev desyncs the lock without constraining the transitive requirement).
-  Resolution path is a coordinated co-evolution, and both upstream fixes are
-  already pushed to `origin/main`: bump `mnemosyne` to `0174b80` (requires
-  `themis 0.9`), bump `hermes` to a pushed themis-0.9 rev, and bump `themis` to
-  `7c38eb2` (0.9.11) together — then re-run the matmul oracle benchmarks because
-  the hermes pin is perf-critical. Deferred as a single coordinated supply-chain
-  item to avoid regressing the tuned dense-matmul path; `--locked` remains the
-  reproducible-build/CI gate in the interim.
+- themis-0.9 migration + dependency resolution (re-diagnosed/MEASURED
+  2026-06-15). Three coupled facts:
+  1. **`Cargo.lock` is gitignored** in leto (`.gitignore`), so there is no
+     committed lock — contrary to the prior "commit Cargo.lock" claim. leto's
+     standalone build depends on a locally-generated lock.
+  2. **Fresh pure-git resolution is broken.** `hermes-simd` (`efac0454`, the
+     measured-good fused-AXPY matmul pin) and `mnemosyne-arena`/`moirai-iter`
+     transitively require `themis ^0.8.0` with no rev, so `cargo
+     generate-lockfile` floats themis to the default-branch HEAD (0.9.11) and
+     fails `^0.8.0`. cargo will not unify a rev-pin with the transitive
+     version-spec, and `[patch]` to the same git source is rejected — so no
+     leto-local pin change resolves it. Builds worked only via a frozen
+     pre-drift themis-0.8 lock (now superseded locally).
+  3. **The themis-0.9 path regresses matmul.** Built leto 0.20.0 against the
+     local themis-0.9 stack (path-patches): all 122 tests + 4 doctests pass, but
+     the required hermes bump `efac0454`→`e6761ac` (dispatch/AXPY refactor)
+     regresses dense matmul **64² 17.4→24.9 µs (+43%)**, **128² 109→176 µs
+     (+61%)**, 256² ~unchanged. So themis-0.9 adoption is blocked not just by pin
+     coordination but by a **measured hermes matmul regression**.
+  Resolution = stack-wide re-pin cascade (themis → mnemosyne → moirai → hermes →
+  leto → apollo/coeus, in order, since each pins old revs of the others) PLUS a
+  hermes-side fix restoring the AXPY/dispatch perf on its themis-0.9 line; then
+  leto migrates and re-measures matmul. Owned at the meta/stack level, not
+  leto-local. Process gap to fix alongside: either commit a frozen `Cargo.lock`
+  (un-gitignore) or pin the whole stack so fresh resolution is reproducible.
+  Interim: leto builds locally via the apollo/coeus-style path-patch set
+  (uncommitted, flagged in `Cargo.toml`); consumer rev-bumps to leto 0.20.0 wait
+  on the cascade (coeus already verified compatible — 22/22 contract tests green
+  against working-tree leto 0.20.0).
 - Evidence tier of this audit: codebase scan + existing test suites +
   criterion benchmark measurements. No machine-checked proof was performed.
 

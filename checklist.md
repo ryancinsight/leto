@@ -97,7 +97,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [patch] Add Apollo migration test coverage for Mnemosyne-backed Leto owned constructors as the first FFT replacement prerequisite.
 - [x] [minor] Add indexed mutable zip traversal (`indexed_zip_mut_with`, `indexed_zip2_mut_with`) to cover ndarray `Zip::indexed`-style Apollo/Coeus position-aware call sites without allocation.
 - [x] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings. Added explicit Apollo FFT three-axis mutable rank-1 lane slicing over rank-3 Leto arrays so ndarray-free 3D axis-pass mutation is covered. Verification: `cargo fmt --check`; `cargo test -p leto-ops --test migration_fixtures --all-features`; `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`.
-- [ ] [patch] Add Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and gradient-adjacent non-differentiable storage boundaries.
+- [x] [patch] Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and non-differentiable storage boundaries: DONE on the coeus side as `coeus-leto/tests/contract.rs` (cross-repo behavior contracts) plus `coeus-ops/tests/*_leto_diff.rs` and `coeus-tensor/tests/*_leto_diff.rs` differential suites (verified 2026-06-15).
 - [x] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.
 - [ ] [minor] Publish a pushed Git revision only after `fmt`, `clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features`, docs, and differential ndarray parity tests pass.
 
@@ -121,8 +121,37 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [patch] Leto-internal ndarray differential coverage for the new ops: `unary_map` (exp/sqrt), `scalar_map`, `concat`, `stack`, `batched_matmul` (per-batch ndarray dot), and `cumsum` (reference accumulate). `ops_tests` differential suite now 57 green.
 - [x] [minor] Indexed zip parity: `indexed_zip_mut_with` and `indexed_zip2_mut_with` pass logical row-major `[usize; N]` coordinates into zip closures while preserving zero-copy view traversal and mutable-output alias rejection.
 - [x] [arch] Push Leto rev 9d5a2bf (0.7.0) and verify consumers: Apollo (already pinned at 9d5a2bf) builds clean — `apollo-frft`/`apollo-gft` eigensolver consumers check green against the generic eigensolver. Coeus integration started — new `coeus-leto` const-rank dispatch shim (ADR 0002) committed+pushed (coeus cdaaeb9) with 6 cross-repo contract tests; leto/leto-ops pinned at 9d5a2bf.
-- [ ] [arch] Coeus consolidation: route `coeus-ops` CPU backend through `coeus-leto` and retire the duplicated `coeus-tensor` traversal once parity is proven (tracked in coeus docs/backlog MS-59).
-- [ ] [minor] Apollo internal FFT-kernel migration off ndarray using the new memory-order slice access (boundary `forward_leto`/`inverse_leto` APIs already in place).
+- [x] [arch] Coeus consolidation: COMPLETE (verified 2026-06-15 against coeus
+  HEAD `037fdd5`). coeus's CPU `BackendOps` (elementwise binary/unary, matmul,
+  batched matmul, axis reductions, argmax/argmin, cumsum/suffix scan,
+  concat/pad/split/stack, seeded RNG, to_contiguous/reshape/permute,
+  cross-backend transfer, from_fn/eye/arange/linspace) all route through the
+  `coeus-leto` const-rank dispatch shim (ADR 0002) into leto/leto-ops kernels,
+  with cross-repo contract tests (`coeus-leto/tests/contract.rs`) and per-op
+  differential tests (`coeus-ops/tests/*_leto_diff.rs`); coeus workspace 255
+  tests green. Framing correction: `coeus-tensor` is NOT a duplicated layout
+  layer to retire — it is the autodiff-integrated `Tensor`/COW wrapper over
+  coeus-core's dynamic-rank layout, with CPU compute delegated to leto. The
+  array-primitive duplication is what was retired (routed to coeus-leto); the
+  tensor/autograd wrapper legitimately remains coeus-owned. coeus-specific NN
+  kernels (conv/pool/attention/optimizers/sparse) stay in coeus by the layer
+  boundary. No leto-side capability gap remains for the CPU re-base.
+- [ ] [minor] Apollo internal FFT-kernel migration off ndarray using the new
+  memory-order slice access (boundary `forward_leto`/`inverse_leto` APIs already
+  in place). Apollo (HEAD `db76ca2`) still uses ndarray as its internal CPU
+  compute substrate; leto boundaries exist but end-to-end kernel migration is
+  apollo-owned work.
+- [ ] [arch] Stack-wide themis-0.9 re-pin cascade (downstream-blocking,
+  meta/stack-owned). All leaf upstreams are pushed on themis-0.9
+  (themis `7c38eb2` 0.9.11; mnemosyne `0174b80`; moirai `4aa94f1`; hermes
+  `e6761ac` 0.9.9), and apollo already migrated. leto cannot move unilaterally:
+  fresh `cargo generate-lockfile` fails because the pinned upstream revs
+  cross-reference each other's OLD (themis `^0.8.0`) revs — e.g. hermes `e6761ac`
+  still pins mnemosyne `1e014d25`. Resolution must re-pin + re-push in dependency
+  order (themis → mnemosyne → moirai/hermes → leto → apollo/coeus); apollo only
+  builds on 0.9.11 today via local path-patches that bypass the git revs. Until
+  then leto stays on the themis-0.8.0 lock (`--locked` builds/tests pass;
+  consumer rev-bumps to leto 0.20.0 wait on this cascade). See gap_audit §D.
 - [x] [patch] Current Leto 0.5.0 artifact verification: `cargo fmt --check`; `cargo test --all-features`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`. Historical note: full workspace docs were previously blocked by the tracked `numpy 0.23`/rustdoc ICE in `leto-python`; 0.19.6 updates the Python FFI dependencies and rechecks full docs.
 - [x] [patch] Add ndarray/nalgebra oracle validation gates for current linalg
   and reduction contracts. Verification: `oracle_parity` compares Leto LU,

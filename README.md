@@ -251,16 +251,18 @@ Current value-semantic coverage includes:
   migration, contiguous-slice access on Leto views with memory-order
   guarantees, is closed in 0.3.0; Apollo still needs end-to-end internal kernel
   migration work.
-- **Coeus backend**: not started. Coeus currently carries its own
-  layout/storage/traversal stack (`coeus-tensor`, `coeus-core`) duplicating
-  Leto's layer over the same Mnemosyne/Moirai substrate. The plan of record
-  consolidates that non-differentiable layer into Leto while Coeus keeps
-  `ComputeBackend`, autodiff, NN kernels, and GPU backends. The const-rank vs
-  dynamic-rank boundary is decided in ADR 0002, and the unary math-op suite is
-  present. Broadcast-aware binary ops into caller-owned output layouts and
-  const-rank reshape/permute/to_contiguous materialization are also present.
-  Remaining blocking gaps: concat/pad/split, batched matmul, and seeded RNG
-  fill.
+- **Coeus backend**: CPU array layer consolidated onto Leto (verified
+  2026-06-15 against coeus HEAD `037fdd5`). Coeus's CPU `BackendOps` route every
+  array primitive (elementwise, matmul + batched, axis reductions,
+  argmax/argmin, cumsum/suffix, concat/pad/split/stack, seeded RNG,
+  to_contiguous/reshape/permute, cross-backend transfer) through the
+  `coeus-leto` const-rank dispatch shim (ADR 0002) into Leto/`leto-ops` kernels,
+  with cross-repo contract and per-op differential tests (coeus workspace 255
+  tests green). Coeus keeps `ComputeBackend`, autodiff, NN kernels
+  (conv/pool/attention), sparse, and wgpu/CUDA backends; `coeus-tensor` is the
+  autodiff-integrated tensor wrapper (not duplicated layout). Consumer rev-bump
+  to Leto 0.20.0 is pending the stack-wide themis-0.9 re-pin cascade
+  (`gap_audit.md` §D).
 
 The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
 `gap_audit.md`; the tracked migration plan lives in `checklist.md` and
