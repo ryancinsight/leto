@@ -9,6 +9,7 @@ pub mod domain;
 pub mod infrastructure;
 
 // Re-exports
+pub use domain::dynamic::LayoutDyn;
 pub use domain::error::{LetoError, Result};
 pub use domain::insert_axis::InsertAxis;
 pub use domain::layout::Layout;
@@ -26,9 +27,9 @@ pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};
 pub use application::{
     concat, covariance, median_all, median_axis, pad, pearson_correlation, quantile_all,
-    quantile_axis, split, stack, Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3,
-    ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter, AxisIterMut, ElementIter, IndexedIter,
-    Interpolation, Lanes, LanesMut, PadWidth, ScalarOperand, Windows,
+    quantile_axis, split, stack, Array1, Array2, Array3, ArrayD, ArrayView1, ArrayView2,
+    ArrayView3, ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter, AxisIterMut, ElementIter,
+    IndexedIter, Interpolation, Lanes, LanesMut, PadWidth, ScalarOperand, Windows,
 };
 
 #[cfg(feature = "ndarray-compat")]

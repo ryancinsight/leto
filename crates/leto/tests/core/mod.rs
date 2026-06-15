@@ -1,4 +1,5 @@
 pub mod arithmetic;
+pub mod dynamic;
 pub mod indexing;
 pub mod iteration;
 pub mod lanes;

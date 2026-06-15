@@ -1,12 +1,12 @@
 //! Array iteration.
 //!
 //! # Submodules
-//! - [`axis`] — [`AxisIter`], [`AxisIterMut`]: subview iteration along one axis.
-//! - [`element`] — [`ElementIter`], [`IndexedIter`]: logical-order element and
+//! - axis — [`AxisIter`], [`AxisIterMut`]: subview iteration along one axis.
+//! - element — [`ElementIter`], [`IndexedIter`]: logical-order element and
 //!   `(index, element)` iteration (ndarray `iter` / `indexed_iter` parity).
-//! - [`lanes`] — [`Lanes`], [`LanesMut`]: 1-D views along one axis (ndarray
+//! - lanes — [`Lanes`], [`LanesMut`]: 1-D views along one axis (ndarray
 //!   `lanes` / `lanes_mut` parity).
-//! - [`windows`] — [`Windows`]: zero-copy sliding-window subviews (ndarray
+//! - windows — [`Windows`]: zero-copy sliding-window subviews (ndarray
 //!   `windows` parity).
 
 pub mod axis;

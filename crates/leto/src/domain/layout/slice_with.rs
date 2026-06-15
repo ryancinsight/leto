@@ -6,34 +6,12 @@ use super::Layout;
 impl<const N: usize> Layout<N> {
     /// Compute the physical element offset for a given multi-dimensional index.
     pub fn offset_of(&self, index: [usize; N]) -> Result<usize> {
-        let mut offset = isize::try_from(self.offset).map_err(|_| LetoError::Overflow {
-            reason: "layout base offset conversion",
-        })?;
-        for i in 0..N {
-            if index[i] >= self.shape[i] {
-                return Err(LetoError::OutOfBounds {
-                    index: index.to_vec(),
-                    shape: self.shape.to_vec(),
-                });
-            }
-            let index = isize::try_from(index[i]).map_err(|_| LetoError::Overflow {
-                reason: "layout index conversion",
-            })?;
-            let delta = index
-                .checked_mul(self.strides[i])
-                .ok_or(LetoError::Overflow {
-                    reason: "layout offset multiplication",
-                })?;
-            offset = offset.checked_add(delta).ok_or(LetoError::Overflow {
-                reason: "layout offset accumulation",
-            })?;
-        }
-        if offset < 0 {
-            return Err(LetoError::StorageError {
-                reason: format!("layout index accesses negative physical offset {offset}"),
-            });
-        }
-        Ok(offset as usize)
+        crate::domain::layout::kernels::physical_offset(
+            &self.shape,
+            &self.strides,
+            self.offset,
+            &index,
+        )
     }
 
     /// Slice the layout on each axis given a slice definition `(start, end, step)`.

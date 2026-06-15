@@ -1,3 +1,5 @@
+/// Runtime-rank (dynamic) layout primitives (ADR 0007).
+pub mod dynamic;
 /// Error types and result alias.
 pub mod error;
 /// ZST-based compile-time rank expansion helper.
@@ -9,6 +11,7 @@ pub mod remove_axis;
 /// ndarray-style slicing arguments and normalization.
 pub mod slice;
 
+pub use dynamic::LayoutDyn;
 pub use error::{LetoError, Result};
 pub use insert_axis::InsertAxis;
 pub use layout::Layout;

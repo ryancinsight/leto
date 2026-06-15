@@ -1,5 +1,6 @@
 mod broadcast;
 mod contiguity;
+pub(crate) mod kernels;
 mod shape;
 mod slice_with;
 mod strides;

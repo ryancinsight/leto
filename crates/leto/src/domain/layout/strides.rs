@@ -6,27 +6,7 @@ impl<const N: usize> Layout<N> {
     /// Create a C-contiguous (row-major) layout for a given shape.
     pub fn c_contiguous(shape: [usize; N]) -> Result<Self> {
         let mut strides = [0isize; N];
-        let mut stride = 1isize;
-        for i in (0..N).rev() {
-            strides[i] = stride;
-            let dim = shape[i];
-            if dim == 0 {
-                // If any dimension is zero, strides are set but size is zero
-                stride = 0;
-            } else {
-                let dim = isize::try_from(dim).map_err(|_| LetoError::Overflow {
-                    reason: "C-contiguous dimension conversion",
-                })?;
-                stride = match stride.checked_mul(dim) {
-                    Some(s) => s,
-                    None => {
-                        return Err(LetoError::Overflow {
-                            reason: "C-contiguous stride multiplication",
-                        })
-                    }
-                };
-            }
-        }
+        crate::domain::layout::kernels::c_contiguous_strides(&shape, &mut strides)?;
         Ok(Self {
             shape,
             strides,

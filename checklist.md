@@ -1,7 +1,21 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.28.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.28.0: zero-copy lane iteration
+Sprint phase: Execution. Target version: 0.29.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.29.0: runtime-rank (`IxDyn`) support via a
+boundary carrier + zero-copy rank bridge (ADR 0007), NOT a parallel compute
+substrate (keeps ADR 0002's const-rank compute invariant). New `domain/dynamic/`
+(`LayoutDyn`) and `application/dynamic/` (`ArrayD<T,S>`, bridge) leaf hierarchies;
+`Array::into_dyn` / `ArrayD::into_dimensionality::<N>` move storage unchanged and
+translate only O(ndim) shape/stride scalars (allocation-free; compute via rank
+recovery → existing const-rank kernels, SSOT). Also refactored strided-layout
+arithmetic into shared slice-based kernels (`domain/layout/kernels.rs`) that both
+`Layout<N>` and `LayoutDyn` delegate to (SSOT; behavior-preserving — full suite +
+leto-ops 156 ops_tests regression-free). Evidence tier: 12 dynamic tests
+(round-trip, strided, runtime-rank dispatch, exact rejection contracts) + docs
+warning-clean. This closes the last **Missing** §A array/ndarray parity row; the
+remaining §A Partial row is random-constructor distribution-oracle depth.
+Remaining cross-cutting: PyO3 `ArrayD` interop (consumer-driven follow-up).
+Delivered 0.28.0: zero-copy lane iteration
 (`Array`/`ArrayView::lanes`/`lanes_mut` -> `Lanes`/`LanesMut`) in
 `application/iter/lanes.rs` (ndarray `lanes`/`lanes_mut` parity). Each lane along
 axis `a` is a 1-D view parallel to `a`; mut iteration enforces non-aliasing

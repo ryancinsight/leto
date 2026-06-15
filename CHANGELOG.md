@@ -4,6 +4,50 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.29.0] - 2026-06-15
+
+### Added
+
+- Runtime-rank (`IxDyn`) support via a boundary carrier + zero-copy rank bridge
+  (ADR 0007), in new `domain/dynamic/` and `application/dynamic/` leaf
+  hierarchies:
+  - `LayoutDyn` — a `Box<[_]>`-backed strided layout whose rank is a runtime
+    value, sharing all offset/size/validation arithmetic with `Layout<N>`.
+  - `ArrayD<T, S>` — a runtime-rank array carrier: construct (`from_shape_vec`,
+    `zeros`), inspect (`ndim`/`shape`/`strides`/`size`), index (`get(&[usize])`),
+    reshape (`into_shape`), and materialize (`to_vec`).
+  - Zero-copy bridge: `Array<T,S,N>::into_dyn()` and
+    `ArrayD::into_dimensionality::<N>()` move the storage unchanged and translate
+    only the `O(ndim)` shape/stride scalars (allocation-free theorem in the ADR),
+    so all compute reuses the existing const-rank kernels (SSOT — no dynamic
+    kernel duplication). Runtime-rank workflows dispatch via a bounded `match`
+    on `ndim()`.
+  Verified: construction/inspection/indexing, runtime-rank-as-value, arity/range
+  rejection, `to_vec` row-major (incl. strided), zero-copy `into_shape`, strided
+  `LayoutDyn` offsets, bridge round-trip, rank-mismatch rejection, compute via
+  recovery, and the dynamic-dispatch pattern (12 tests).
+
+### Changed
+
+- Extracted the strided-layout arithmetic into slice-based SSOT kernels
+  (`domain/layout/kernels.rs`: `shape_size`, `min_max_offsets`,
+  `physical_offset`, `validate_storage`, `c_contiguous_strides`,
+  `fill_index_from_flat`); `Layout<N>` and the new `LayoutDyn` both delegate, so
+  the dynamic layout reuses — rather than duplicates — the offset logic.
+  Behavior-preserving (existing suite unchanged).
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (333 tests)
+- `cargo test -p leto --test core_tests dynamic --all-features` (12 tests)
+- `cargo test -p leto --test core_tests layout --all-features` (11 filtered tests)
+- `cargo test -p leto-ops --test ops_tests --all-features` (156 tests)
+- `cargo test --doc --workspace --all-features` (5 doctests)
+- `cargo doc -p leto -p leto-ops --all-features --no-deps` (warning-clean)
+- `git diff --check`
+
 ## [0.28.0] - 2026-06-15
 
 ### Added
