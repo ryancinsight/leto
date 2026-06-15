@@ -132,6 +132,12 @@ caller-owned output shape, so `[N, 1]` and `[1, C]` views write directly into
 - `scalar_map` / `scalar_map_into` apply an array–scalar operation reusing the
   `BinaryOp` markers (`AddOp`/`SubOp`/`MulOp`/`DivOp`); no scalar-specific
   kernel exists.
+- Elementwise operators on `Array` (leto core, ADR 0004): `&a + &b`, `&a - &b`,
+  `&a * &b`, `&a / &b`, `&a op scalar` (scalar bounded by `ScalarOperand`), and
+  `-&a`. These are the allocating convenience tier (one shared `iter_elements`
+  traversal); `binary_map`/`scalar_map` above remain the SIMD/broadcasting
+  performance tier. `*` is elementwise (Hadamard), matching ndarray; matrix
+  product is the `matmul` method. Unequal-shape array operators panic.
 - `dot` computes a rank-1 dot product (contiguous fast path plus strided
   fallback) accumulating in native precision.
 - Contiguity queries (`is_c_contiguous`, `is_f_contiguous`, `is_contiguous`)
@@ -221,6 +227,16 @@ Current value-semantic coverage includes:
   FrFT/GFT eigendecomposition now runs on Leto.
 - Further decompositions (LU, QR, Cholesky, SVD) are added only with a named
   consumer driver and a differential oracle; see `gap_audit.md` §B.
+- A fluent rank-2 trait layer (ADR 0003) consolidates the ndarray strided-array
+  and nalgebra matrix-method models onto the existing `Array2`/`ArrayView2`: any
+  rank-2 receiver gains `matmul`, `norm_l1`/`norm_l2`/`norm_max`, `lu`, `qr`,
+  `cholesky`, `svd`, `singular_values`, `symmetric_eigen`,
+  `symmetric_eigenvalues`, `solve`, `solve_least_squares`, `inv`, and `det`
+  through the `MatrixProduct`/`MatrixNorm`/`MatrixDecompose`/`MatrixSolve`
+  traits. Each method is a zero-cost delegator to the free-function kernel above
+  (single source of truth); the `AsMatrixView` bridge lets owned arrays,
+  borrowed arrays, and strided views all carry the surface. The full ndarray
+  0.16 / nalgebra 0.35 completeness program lives in `docs/completeness/`.
 
 ## Replacement Status
 

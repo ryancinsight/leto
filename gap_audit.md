@@ -204,12 +204,24 @@ eigen are demand-driven only.
   oracle shapes and are not retained. Next work needs allocation-controlled
   reusable packing scratch or a verified external micro-kernel provider with
   profile evidence.
-- Locked dependency resolution: `--locked` focused gates and
-  `cargo generate-lockfile` are blocked by the current upstream Git dependency
-  set: `mnemosyne-arena` requires `themis ^0.8.0`, while the resolved themis Git
-  head reports `0.9.0`. Unlocked local verification passed for this patch; the
-  upstream dependency pin mismatch remains a supply-chain gate item before a
-  fully locked release.
+- Locked dependency resolution (re-verified 2026-06-15): `--locked` gates
+  PASS — `cargo metadata --locked`, `cargo build --locked`, and the test gate
+  all succeed because the committed `Cargo.lock` (themis 0.8.0 @ `7392d337`)
+  satisfies the floating themis spec. The earlier "`--locked` blocked" claim was
+  inaccurate; only fresh resolution (`cargo generate-lockfile` / `cargo update`)
+  is blocked. Root cause: BOTH `hermes-simd-core` (rev `efac0454`, the
+  measured-good fused-AXPY matmul pin) and `mnemosyne-arena` (rev `1e014d25`)
+  declare unpinned `themis = "^0.8.0"`, so fresh resolution floats themis to the
+  0.9.x default-branch HEAD (0.9.11) and fails `^0.8.0`. A leto-local fix is not
+  possible (`[patch]` to the same git source is rejected; pinning leto's direct
+  themis rev desyncs the lock without constraining the transitive requirement).
+  Resolution path is a coordinated co-evolution, and both upstream fixes are
+  already pushed to `origin/main`: bump `mnemosyne` to `0174b80` (requires
+  `themis 0.9`), bump `hermes` to a pushed themis-0.9 rev, and bump `themis` to
+  `7c38eb2` (0.9.11) together — then re-run the matmul oracle benchmarks because
+  the hermes pin is perf-critical. Deferred as a single coordinated supply-chain
+  item to avoid regressing the tuned dense-matmul path; `--locked` remains the
+  reproducible-build/CI gate in the interim.
 - Evidence tier of this audit: codebase scan + existing test suites +
   criterion benchmark measurements. No machine-checked proof was performed.
 

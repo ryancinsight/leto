@@ -1,3 +1,4 @@
+pub mod arithmetic;
 pub mod indexing;
 pub mod layout;
 pub mod slicing;

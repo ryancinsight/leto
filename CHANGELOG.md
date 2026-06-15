@@ -4,6 +4,41 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.20.0] - 2026-06-15
+
+### Added
+
+- Fluent rank-2 linear-algebra trait layer over the existing strided matrix
+  (`Array2`/`ArrayView2`), consolidating the ndarray "strided array" and
+  nalgebra "matrix methods" models into one type (ADR 0003). Role-segmented
+  traits — `MatrixProduct` (`matmul`), `MatrixNorm` (`norm_l1`/`norm_l2`
+  Frobenius/`norm_max`), `MatrixDecompose` (`lu`/`qr`/`cholesky`/`svd`/
+  `singular_values`/`symmetric_eigen`/`symmetric_eigenvalues`), and
+  `MatrixSolve` (`solve`/`solve_least_squares`/`inv`/`det`) — are blanket-impl'd
+  for any rank-2 receiver via the `AsMatrixView` bridge. Each method is a
+  zero-cost delegator to the existing free-function kernel (single source of
+  truth; no kernel duplicated). Operator overloading remains deferred (ADR 0001).
+- Elementwise arithmetic operators on `Array` (ADR 0004, supersedes ADR 0001's
+  deferral): `&a + &b`, `&a - &b`, `&a * &b`, `&a / &b` (equal-shape), `&a op
+  scalar` (bounded by the new sealed `ScalarOperand` marker), and `-&a`, all in
+  `leto` core as the allocating convenience tier over one shared `iter_elements`
+  traversal. `*` is **elementwise** (Hadamard, ndarray semantics); matrix product
+  remains the explicit `matmul` method. The leto-ops `binary_map`/`scalar_map`
+  family stays the SIMD/broadcasting performance tier. Unequal-shape array
+  operators panic (the sanctioned operator exception).
+- Completeness program against full ndarray 0.16 / nalgebra 0.35 parity:
+  `docs/completeness/PLAN.md` and `docs/completeness/parity_matrix.md`; a
+  differential-correctness harness (`tests/ops/parity.rs`) and a leto-vs-ndarray
+  performance comparison bench group (`bench_parity_oracle` in
+  `benches/kernels.rs`).
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-ops --all-features` (ops_tests 122 green)
+- `cargo test --doc -p leto-ops --all-features` (4 doctests green)
+
 ## [0.19.7] - 2026-06-13
 
 ### Changed

@@ -7,9 +7,12 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
-use leto_ops::{map_into, matmul, norm_l1, norm_l2, norm_max, sum, zip_mut_with, AddOp};
+use leto_ops::{
+    add, dot, map_into, matmul, norm_l1, norm_l2, norm_max, sum, unary_map, zip_mut_with, AddOp,
+    ExpOp,
+};
 use nalgebra::DMatrix;
-use ndarray::Array2 as NdArray2;
+use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
 use std::hint::black_box;
 
 fn pinned_values(len: usize, scale: f64) -> Vec<f64> {
@@ -265,9 +268,68 @@ fn bench_oracle_compare(c: &mut Criterion) {
     group.finish();
 }
 
+/// Broad leto-vs-ndarray oracle comparison across the elementwise, unary,
+/// reduction, and vector-dot families (the completeness-harness performance
+/// companion to `bench_oracle_compare`, which owns matmul and reverse
+/// reductions). Same pinned f64 inputs feed both sides; criterion reports
+/// median + CI per side so the ratio is a recorded empirical comparison.
+fn bench_parity_oracle(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parity_oracle");
+    let len = 1usize << 16;
+    let a_values = pinned_values(len, 1.0);
+    let b_values = pinned_values(len, 0.5);
+
+    let leto_a = Array::from_shape_vec([len], a_values.clone()).unwrap();
+    let leto_b = Array::from_shape_vec([len], b_values.clone()).unwrap();
+    let nd_a = NdArray1::from_vec(a_values.clone());
+    let nd_b = NdArray1::from_vec(b_values.clone());
+
+    group.bench_function("add_leto_64k", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([len]),
+            |mut out| {
+                add(
+                    black_box(&leto_a.view()),
+                    black_box(&leto_b.view()),
+                    &mut out.view_mut(),
+                )
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.bench_function("add_ndarray_64k", |bencher| {
+        bencher.iter(|| black_box(&nd_a) + black_box(&nd_b));
+    });
+
+    group.bench_function("exp_leto_64k", |bencher| {
+        bencher.iter(|| unary_map(ExpOp, black_box(&leto_a.view())).unwrap());
+    });
+    group.bench_function("exp_ndarray_64k", |bencher| {
+        bencher.iter(|| black_box(&nd_a).mapv(f64::exp));
+    });
+
+    group.bench_function("sum_leto_64k", |bencher| {
+        bencher.iter(|| sum(black_box(&leto_a.view())));
+    });
+    group.bench_function("sum_ndarray_64k", |bencher| {
+        bencher.iter(|| black_box(&nd_a).sum());
+    });
+
+    group.bench_function("dot_leto_64k", |bencher| {
+        bencher.iter(|| dot(black_box(&leto_a.view()), black_box(&leto_b.view())).unwrap());
+    });
+    group.bench_function("dot_ndarray_64k", |bencher| {
+        bencher.iter(|| black_box(&nd_a).dot(black_box(&nd_b)));
+    });
+
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default().sample_size(20).without_plots();
-    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare
+    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle
 }
 criterion_main!(kernels);

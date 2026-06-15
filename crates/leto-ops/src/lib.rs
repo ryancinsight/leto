@@ -25,8 +25,9 @@ pub use application::linalg::{
     norm_l1, norm_l2, norm_max, qr_decompose, singular_values, solve, solve_least_squares,
     svd_decompose, svd_decompose_with_tolerance, symmetric_eigen_jacobi,
     symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
-    symmetric_eigenvalues_jacobi_with_tolerance, CholeskyDecomposition, LuDecomposition, NormKind,
-    NormL1, NormL2, NormMax, QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition,
+    symmetric_eigenvalues_jacobi_with_tolerance, AsMatrixView, CholeskyDecomposition,
+    LuDecomposition, MatrixDecompose, MatrixNorm, MatrixProduct, MatrixSolve, NormKind, NormL1,
+    NormL2, NormMax, QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition,
 };
 pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,

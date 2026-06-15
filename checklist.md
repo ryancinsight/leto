@@ -1,7 +1,24 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.19.7 [patch] (Cargo.toml bumped;
-CHANGELOG synced). Delivered this cycle: Hermes fused multi-row AXPY consumed
+Sprint phase: Execution. Target version: 0.20.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.20.0: fluent rank-2 LA trait layer (ADR 0003)
+consolidating the ndarray strided-array and nalgebra matrix-method models onto
+the existing `Array2`/`ArrayView2` — `MatrixProduct`/`MatrixNorm`/
+`MatrixDecompose`/`MatrixSolve` blanket-impl'd via the `AsMatrixView` bridge,
+each method a zero-cost delegator to the existing free-function kernel (no kernel
+duplicated; operators still deferred per ADR 0001). Differential tests
+(`tests/ops/matrix_traits.rs`, 6) assert method == kernel == nalgebra/ndarray
+plus a strided transposed-receiver case; 4 doctests; full ndarray/nalgebra
+completeness program in `docs/completeness/`. Also in 0.20.0: elementwise
+operators on `Array` (ADR 0004, supersedes ADR 0001) — `&a op &b`, `&a op
+scalar` (sealed `ScalarOperand`), `-&a`, in leto core as the allocating
+convenience tier; `*` is elementwise (matmul stays a method); 7 differential
+tests in `tests/core/arithmetic.rs`. Dependency-resolution note re-verified:
+`--locked` gates PASS (lock satisfies the floating themis spec); only fresh
+`cargo generate-lockfile` is blocked because hermes (`efac0454`) and mnemosyne
+(`1e014d25`) both pin unpinned `themis ^0.8.0` transitively — a coordinated
+themis-0.9 co-evolution (upstream fixes already pushed) deferred to avoid
+regressing the tuned matmul (gap_audit §D). Prior 0.19.7 [patch]. Delivered this cycle: Hermes fused multi-row AXPY consumed
 by dense row-blocked matmul and direct Hermes pinned to the pushed provider
 revision; post-0.19.7 generic 4x4 registered dense tiles rejected and removed
 after benchmark regression. Result

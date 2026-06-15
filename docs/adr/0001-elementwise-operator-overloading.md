@@ -1,6 +1,6 @@
 # ADR 0001: Elementwise operator overloading on `Array`
 
-- Status: Accepted (defer)
+- Status: Superseded by ADR 0004 (2026-06-15)
 - Date: 2026-06-10
 - Class: [arch]
 

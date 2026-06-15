@@ -26,7 +26,7 @@ pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};
 pub use application::{
     concat, pad, split, stack, Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3,
-    ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter, AxisIterMut, PadWidth,
+    ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter, AxisIterMut, PadWidth, ScalarOperand,
 };
 
 #[cfg(feature = "ndarray-compat")]
