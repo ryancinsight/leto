@@ -1,7 +1,15 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.27.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.27.0: zero-copy sliding-window iteration
+Sprint phase: Execution. Target version: 0.28.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.28.0: zero-copy lane iteration
+(`Array`/`ArrayView::lanes`/`lanes_mut` -> `Lanes`/`LanesMut`) in
+`application/iter/lanes.rs` (ndarray `lanes`/`lanes_mut` parity). Each lane along
+axis `a` is a 1-D view parallel to `a`; mut iteration enforces non-aliasing
+layout to safely yield disjoint mutable views. Documents the lane partition
+theorem with proof. Evidence tier: partition theorem, count and content across
+shapes, dual to rows/columns equivalence, transposed/strided zero-copy
+correctness, double-ended iteration, and mutable write disjointness (8 tests,
+100 core_tests green). Remaining §A: `IxDyn` (ADR 0002). Delivered 0.27.0: zero-copy sliding-window iteration
 (`Array`/`ArrayView::windows` → `Windows`) in `application/iter/windows.rs`
 (ndarray `windows` parity). Each window reuses parent strides + shifted offset
 (no copy; overlapping windows share storage via shared borrows);
@@ -10,8 +18,7 @@ CHANGELOG synced). Delivered 0.27.0: zero-copy sliding-window iteration
 proof. Evidence tier: count theorem across shapes, row-major content,
 full-window-equals-original, transposed/strided zero-copy correctness,
 double-ended meet-once, zero/oversize rejection (6 tests, 92 core_tests green).
-Remaining §A iterator gap narrowed to `lanes`/`lanes_mut` (1-D lane views,
-GAT lending follow-up); remaining §A: `IxDyn` (ADR 0002). Delivered 0.26.0:
+remaining §A: `IxDyn` (ADR 0002). Delivered 0.26.0:
 logical-order element iteration
 (`Array`/`ArrayView::iter`/`indexed_iter` → `ElementIter`/`IndexedIter`,
 `IntoIterator for &ArrayView`; ndarray `iter`/`indexed_iter` parity), both

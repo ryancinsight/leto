@@ -4,6 +4,21 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.28.0] - 2026-06-15
+
+### Added
+
+- Zero-copy lane iteration (`Array::lanes`/`lanes_mut`, `ArrayView::lanes`/`ArrayViewMut::lanes_mut` → `Lanes`/`LanesMut`) in a new `application/iter/lanes.rs` leaf (ndarray `lanes`/`lanes_mut` parity). Yields 1-D lane views of shape `[shape[axis]]` along `axis` for each complement axis coordinate. Zero-copy implementation reuses the parent strides and offsets. Mut iteration enforces non-aliasing layout to safely yield disjoint mutable views. Documents the lane partition theorem with proof.
+  `Lanes` is `DoubleEndedIterator` + `ExactSizeIterator`. `LanesMut` is `ExactSizeIterator`. Verified: partition theorem, count and content across shapes, dual to rows/columns equivalence, transposed/strided zero-copy correctness, double-ended iteration, and mutable write disjointness.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto` (23 lib + 100 core_tests + others)
+- `cargo miri test -p leto --test core_tests lanes` (8 tests; `LanesMut` unsafe
+  disjointness machine-checked under miri)
+
 ## [0.27.0] - 2026-06-15
 
 ### Added

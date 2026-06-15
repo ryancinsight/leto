@@ -1,6 +1,7 @@
 pub mod arithmetic;
 pub mod indexing;
 pub mod iteration;
+pub mod lanes;
 pub mod layout;
 pub mod quantile;
 pub mod slicing;

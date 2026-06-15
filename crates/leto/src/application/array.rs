@@ -1,4 +1,4 @@
-use crate::application::iter::{ElementIter, IndexedIter, Windows};
+use crate::application::iter::{ElementIter, IndexedIter, Lanes, LanesMut, Windows};
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::Result;
 use crate::domain::layout::Layout;
@@ -105,6 +105,24 @@ where
         Windows::new(&self.view(), window_shape)
     }
 
+    /// Zero-copy iterator over the read-only 1-D lanes along `axis`
+    /// (ndarray `lanes` parity; `M = N - 1`).
+    ///
+    /// # Errors
+    /// [`LetoError`](crate::LetoError) if `axis >= N` or the layout does not fit
+    /// its storage.
+    #[inline]
+    pub fn lanes<const M: usize>(&self, axis: usize) -> Result<Lanes<'_, T, N, M>>
+    where
+        crate::domain::remove_axis::RankMarker<N>: crate::domain::remove_axis::RemoveAxis<
+            N,
+            SmallerShape = [usize; M],
+            SmallerStrides = [isize; M],
+        >,
+    {
+        self.view().lanes(axis)
+    }
+
     /// Slice the array, returning a read-only view.
     #[inline]
     pub fn slice(&self, ranges: &[(usize, usize, isize); N]) -> Result<ArrayView<'_, T, N>> {
@@ -189,6 +207,24 @@ where
     #[inline]
     pub fn view_mut(&mut self) -> ArrayViewMut<'_, T, N> {
         ArrayViewMut::new(self.layout, self.storage.as_mut_slice())
+    }
+
+    /// Zero-copy iterator over the mutable 1-D lanes along `axis`
+    /// (ndarray `lanes_mut` parity; `M = N - 1`).
+    ///
+    /// # Errors
+    /// [`LetoError`](crate::LetoError) if `axis >= N`, the layout does not fit
+    /// its storage, or the layout aliases (a zero stride).
+    #[inline]
+    pub fn lanes_mut<const M: usize>(&mut self, axis: usize) -> Result<LanesMut<'_, T, N, M>>
+    where
+        crate::domain::remove_axis::RankMarker<N>: crate::domain::remove_axis::RemoveAxis<
+            N,
+            SmallerShape = [usize; M],
+            SmallerStrides = [isize; M],
+        >,
+    {
+        self.view_mut().lanes_mut(axis)
     }
 
     /// Slice the array, returning a mutable view.

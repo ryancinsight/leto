@@ -247,6 +247,31 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
         )
     }
 
+    /// Return an iterator yielding read-only 1-D lane views *along* `axis`
+    /// (ndarray `lanes` parity; `M = N - 1` is the complement rank). Dual of
+    /// [`axis_iter`](Self::axis_iter): one lane per complement coordinate.
+    ///
+    /// # Errors
+    /// [`LetoError`] if `axis >= N` or the layout does not fit its storage.
+    #[inline]
+    pub fn lanes<const M: usize>(
+        &self,
+        axis: usize,
+    ) -> Result<crate::application::iter::Lanes<'a, T, N, M>>
+    where
+        crate::domain::remove_axis::RankMarker<N>: crate::domain::remove_axis::RemoveAxis<
+            N,
+            SmallerShape = [usize; M],
+            SmallerStrides = [isize; M],
+        >,
+    {
+        crate::application::iter::Lanes::new(
+            self,
+            axis,
+            crate::domain::remove_axis::RankMarker::<N>,
+        )
+    }
+
     /// Reborrow the read-only view with a shorter lifetime.
     #[inline]
     pub fn reborrow(&self) -> ArrayView<'_, T, N> {
@@ -500,6 +525,31 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         >,
     {
         crate::application::iter::AxisIterMut::new(
+            self,
+            axis,
+            crate::domain::remove_axis::RankMarker::<N>,
+        )
+    }
+
+    /// Return an iterator yielding mutable 1-D lane views *along* `axis`
+    /// (ndarray `lanes_mut` parity; `M = N - 1` is the complement rank).
+    ///
+    /// # Errors
+    /// [`LetoError`] if `axis >= N`, the layout does not fit its storage, or the
+    /// layout aliases (a zero stride).
+    #[inline]
+    pub fn lanes_mut<const M: usize>(
+        self,
+        axis: usize,
+    ) -> Result<crate::application::iter::LanesMut<'a, T, N, M>>
+    where
+        crate::domain::remove_axis::RankMarker<N>: crate::domain::remove_axis::RemoveAxis<
+            N,
+            SmallerShape = [usize; M],
+            SmallerStrides = [isize; M],
+        >,
+    {
+        crate::application::iter::LanesMut::new(
             self,
             axis,
             crate::domain::remove_axis::RankMarker::<N>,
