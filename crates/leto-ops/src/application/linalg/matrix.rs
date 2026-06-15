@@ -24,10 +24,11 @@ use crate::{
     QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
 };
 use crate::{
-    det as det_kernel, inv as inv_kernel, kron as kron_kernel, matmul as matmul_kernel,
-    matrix_rank as matrix_rank_kernel, matrix_rank_with_tolerance as matrix_rank_tol_kernel,
-    norm_l1 as norm_l1_kernel, norm_l2 as norm_l2_kernel, norm_max as norm_max_kernel,
-    pinv as pinv_kernel, singular_values as singular_values_kernel, solve as solve_kernel,
+    det as det_kernel, inv as inv_kernel, kron as kron_kernel, matexp as matexp_kernel,
+    matmul as matmul_kernel, matpow as matpow_kernel, matrix_rank as matrix_rank_kernel,
+    matrix_rank_with_tolerance as matrix_rank_tol_kernel, norm_l1 as norm_l1_kernel,
+    norm_l2 as norm_l2_kernel, norm_max as norm_max_kernel, pinv as pinv_kernel,
+    singular_values as singular_values_kernel, solve as solve_kernel,
     solve_least_squares as solve_least_squares_kernel, trace as trace_kernel,
 };
 use leto::{Array, Array1, Array2, ArrayView, ArrayView1, ArrayView2, Result, Storage};
@@ -411,5 +412,33 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixProperties<T> for M {
     #[inline]
     fn rank_with_tolerance(&self, relative_tolerance: T) -> Result<usize> {
         matrix_rank_tol_kernel(&self.as_matrix_view(), relative_tolerance)
+    }
+}
+
+/// Fluent matrix functions (nalgebra `pow` / `exp` parity): integer power and
+/// exponential as methods on any rank-2 receiver. Each method is a zero-cost
+/// delegator to the free [`matpow`](crate::matpow) / [`matexp`](crate::matexp)
+/// kernel.
+pub trait MatrixFunction<T: RealScalar> {
+    /// Integer matrix power `Aᵏ` via exponentiation by squaring.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square input.
+    fn matpow(&self, exponent: u32) -> Result<Array2<T>>;
+    /// Matrix exponential `e^A` via scaling-and-squaring + Padé.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square or non-finite input.
+    fn matexp(&self) -> Result<Array2<T>>;
+}
+
+impl<T: RealScalar, M: AsMatrixView<T>> MatrixFunction<T> for M {
+    #[inline]
+    fn matpow(&self, exponent: u32) -> Result<Array2<T>> {
+        matpow_kernel(&self.as_matrix_view(), exponent)
+    }
+    #[inline]
+    fn matexp(&self) -> Result<Array2<T>> {
+        matexp_kernel(&self.as_matrix_view())
     }
 }

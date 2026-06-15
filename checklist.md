@@ -1,7 +1,21 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.29.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.29.0: runtime-rank (`IxDyn`) support via a
+Sprint phase: Execution. Target version: 0.30.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.30.0: matrix functions (`matpow`, `matexp`,
+`MatrixFunction` fluent trait) in new `linalg/matrix_function/{dense,power,
+exponential,mod}.rs` leaf hierarchy (nalgebra `pow`/`exp` parity). `matpow`:
+exp-by-squaring `Θ(log k)`, generic over `Scalar` (exact for integer matrices),
+binary-decomposition theorem+proof. `matexp`: scaling-and-squaring + diagonal
+Padé(6), documented identity/construction and empirical/differential evidence
+tier. Both reuse
+`matmul` + LU-inverse (SSOT, no new contraction/solve path); shared dense
+helpers in `dense.rs`. Evidence tier: closed-form oracles (zero/diagonal/
+nilpotent/skew→rotation) + nalgebra `exp`/`pow` differential + rejection
+(12 tests; ops_tests 168 green). Closes the §B "Matrix exp/power" Missing row.
+Remaining §B Missing: Real Schur form (Q,T vectors — needs real Francis
+double-shift QR), pivoted Bunch-Kaufman; §A Partial: random-constructor
+distribution-oracle depth (leto-ops). Delivered 0.29.0: runtime-rank (`IxDyn`)
+support via a
 boundary carrier + zero-copy rank bridge (ADR 0007), NOT a parallel compute
 substrate (keeps ADR 0002's const-rank compute invariant). New `domain/dynamic/`
 (`LayoutDyn`) and `application/dynamic/` (`ArrayD<T,S>`, bridge) leaf hierarchies;

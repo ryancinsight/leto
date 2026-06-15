@@ -4,6 +4,37 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.30.0] - 2026-06-15
+
+### Added
+
+- Matrix functions (`matpow`, `matexp`, `MatrixFunction` trait) in a new
+  `linalg/matrix_function/` leaf hierarchy (nalgebra `pow`/`exp` parity):
+  - `matpow(A, k)` — integer power `Aᵏ` by exponentiation-by-squaring (`Θ(log k)`
+    matmuls), generic over `Scalar` so it is **exact for integer matrices**;
+    documents the binary-decomposition theorem with proof.
+  - `matexp(A)` — exponential `e^A` by scaling-and-squaring with a diagonal
+    Padé(6) approximant; documents the scaling-and-squaring identity, Padé
+    construction, and empirical/differential evidence tier.
+  Both reuse the caller-owned `matmul` and the partial-pivot LU inverse (SSOT —
+  no new contraction or solve path); shared dense helpers live in
+  `matrix_function/dense.rs`. Also exposed as fluent methods (`a.matpow(k)`,
+  `a.matexp()`) via the `MatrixFunction` trait (blanket impl over `AsMatrixView`,
+  zero-cost delegation). Verified by closed-form oracles (zero→I, diagonal,
+  nilpotent `I+N`, skew-symmetric→rotation) and nalgebra `exp`/`pow`
+  differentials, plus non-square/non-finite rejection (12 tests).
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (345 tests)
+- `cargo test -p leto-ops --test ops_tests` (168 tests: 156 + 12 matrix_function)
+- `cargo doc -p leto-ops --no-deps --all-features` (warning-clean)
+- `cargo bench -p leto-ops --bench kernels oracle_compare/sum_reverse_leto_256x256 -- --warm-up-time 2 --measurement-time 10 --sample-size 20`
+  repeated after short-run noise; longer run showed improvement (`5.4561..6.1533
+  us`, -17.069% median).
+
 ## [0.29.0] - 2026-06-15
 
 ### Added

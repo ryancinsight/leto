@@ -25,6 +25,8 @@ pub(crate) mod householder;
 pub mod lu;
 /// Fluent rank-2 linear-algebra trait surface over `Array2`/`ArrayView2`.
 pub mod matrix;
+/// Matrix functions: integer power and exponential.
+pub mod matrix_function;
 /// Vector and matrix norms.
 pub mod norms;
 /// Structural matrix products (Kronecker product).
@@ -53,8 +55,10 @@ pub use full_piv_lu::{full_piv_lu, FullPivLuDecomposition};
 pub use hessenberg::{hessenberg, HessenbergDecomposition};
 pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
 pub use matrix::{
-    AsMatrixView, MatrixDecompose, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
+    AsMatrixView, MatrixDecompose, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties,
+    MatrixSolve,
 };
+pub use matrix_function::{matexp, matpow};
 pub use norms::{norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2, NormMax};
 pub use products::kron;
 pub use properties::{matrix_rank, matrix_rank_with_tolerance, trace};

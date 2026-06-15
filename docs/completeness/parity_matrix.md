@@ -82,7 +82,7 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers) |
 | Numerical rank | `Matrix::rank` | `matrix_rank` / `MatrixProperties::rank` | Verified | properties (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall) |
 | Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`) |
-| Matrix exp / power | nalgebra inherent | — | **Missing** | Stage 5 |
+| Matrix exp / power | nalgebra `exp` / `pow` | `matexp` / `matpow` + `MatrixFunction` | Verified | matrix_function/ — `matpow` exp-by-squaring (`Θ(log k)`, exact incl. integers); `matexp` scaling-and-squaring + diagonal Padé(6) with theorem+proof; closed-form (zero/diagonal/nilpotent/skew→rotation) + nalgebra `exp`/`pow` differential; reuses `matmul`+LU-inv (SSOT) |
 | Small fixed `MatrixN`/`VectorN` | `Matrix3`/`Vector3` | — | **Excluded?** | different abstraction; decide Stage 2 |
 | Geometry: Rotation/Isometry/Quaternion/Perspective | nalgebra geometry | — | **Excluded?** | not an array substrate; decide Stage 2 |
 
