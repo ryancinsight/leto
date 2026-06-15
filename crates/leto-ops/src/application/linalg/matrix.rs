@@ -23,7 +23,7 @@ use crate::{
 };
 use crate::{
     det as det_kernel, inv as inv_kernel, matmul as matmul_kernel, norm_l1 as norm_l1_kernel,
-    norm_l2 as norm_l2_kernel, norm_max as norm_max_kernel,
+    norm_l2 as norm_l2_kernel, norm_max as norm_max_kernel, pinv as pinv_kernel,
     singular_values as singular_values_kernel, solve as solve_kernel,
     solve_least_squares as solve_least_squares_kernel,
 };
@@ -252,6 +252,13 @@ pub trait MatrixSolve<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-square input.
     fn det(&self) -> Result<T>;
+    /// Moore-Penrose pseudoinverse `A⁺` of a full-rank matrix via the thin SVD
+    /// (`A⁺ = V Σ⁻¹ Uᵀ`, shape transposed). Works for tall, wide, and square
+    /// full-rank inputs.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on empty, non-finite, or rank-deficient input.
+    fn pinv(&self) -> Result<Array2<T>>;
 }
 
 impl<T: RealScalar, M: AsMatrixView<T>> MatrixSolve<T> for M {
@@ -270,5 +277,9 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixSolve<T> for M {
     #[inline]
     fn det(&self) -> Result<T> {
         det_kernel(&self.as_matrix_view())
+    }
+    #[inline]
+    fn pinv(&self) -> Result<Array2<T>> {
+        pinv_kernel(&self.as_matrix_view())
     }
 }

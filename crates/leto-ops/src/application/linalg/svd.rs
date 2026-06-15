@@ -162,6 +162,49 @@ pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<
         .collect()
 }
 
+/// Moore-Penrose pseudoinverse `A⁺` of a full-rank matrix, via the thin SVD.
+///
+/// For `A = U Σ Vᵀ` (full rank, so every `σ > 0`), `A⁺ = V Σ⁻¹ Uᵀ` with shape
+/// `n × m` (the transpose of the input shape). This is the numerically sound
+/// SVD route — it does not square the condition number the way the normal
+/// equations `(AᵀA)⁻¹Aᵀ` would.
+///
+/// Full-rank only: rank-deficient inputs are rejected by [`svd_decompose`] (the
+/// rank-revealing pseudoinverse that maps near-zero singular values to zero is
+/// gated on the full rank-revealing SVD contract; see `gap_audit.md` §B).
+///
+/// # Errors
+/// Propagates [`LetoError`](leto::LetoError) for empty, non-finite, or
+/// rank-deficient input (from [`svd_decompose`]).
+pub fn pinv<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
+    let [rows, cols] = matrix.shape();
+    let svd = svd_decompose(matrix)?;
+    // Full rank guaranteed by svd_decompose; reciprocals are finite.
+    let inv_sigma: Vec<T> = svd
+        .singular_values
+        .iter()
+        .map(|&sigma| T::ONE.div(sigma))
+        .collect();
+    let u = &svd.left_singular_vectors; // [rows, rank]
+    let v = &svd.right_singular_vectors; // [cols, rank]
+
+    // A⁺[i][j] = Σ_t V[i][t] · (1/σ_t) · U[j][t]
+    let mut values = vec![T::ZERO; cols * rows];
+    for i in 0..cols {
+        for j in 0..rows {
+            let mut acc = T::ZERO;
+            for (t, &inv_s) in inv_sigma.iter().enumerate() {
+                let v_it = *v.get([i, t])?;
+                let u_jt = *u.get([j, t])?;
+                acc = acc.add(v_it.mul(inv_s).mul(u_jt));
+            }
+            values[i * rows + j] = acc;
+        }
+    }
+    Ok(Array2::from_shape_vec([cols, rows], values)
+        .expect("pseudoinverse shape [cols, rows] matches storage"))
+}
+
 fn default_tolerance<T: RealScalar>() -> T {
     T::ONE.div(T::from_usize(1_000_000_000_000))
 }

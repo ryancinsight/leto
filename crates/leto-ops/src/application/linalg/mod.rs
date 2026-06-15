@@ -32,4 +32,6 @@ pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
 pub use matrix::{AsMatrixView, MatrixDecompose, MatrixNorm, MatrixProduct, MatrixSolve};
 pub use norms::{norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2, NormMax};
 pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};
-pub use svd::{singular_values, svd_decompose, svd_decompose_with_tolerance, SvdDecomposition};
+pub use svd::{
+    pinv, singular_values, svd_decompose, svd_decompose_with_tolerance, SvdDecomposition,
+};

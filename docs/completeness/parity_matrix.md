@@ -66,7 +66,8 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | Thin full-rank SVD | `SVD` subset | `svd_decompose` | Partial | svd.rs |
 | Singular values (incl. rank-deficient) | `SVD::singular_values` | `singular_values` | Verified | oracle_parity.rs |
 | Norms L1/L2/max | `norm`/`norm_squared` | `norm_l1/l2/max` | Verified | norms.rs |
-| Full rank-revealing SVD + pseudo-inverse | `SVD`, `pseudo_inverse` | — | **Missing** | [major], ADR needed |
+| Full-rank pseudo-inverse | `pseudo_inverse` | `pinv` / `MatrixSolve::pinv` | Verified | matrix_traits (vs nalgebra `pseudo_inverse` + Moore-Penrose `A A⁺ A = A`; tall/wide/square; SVD-based `V Σ⁻¹ Uᵀ`) |
+| Full rank-revealing SVD (rank-deficient U/V) + rank-deficient pinv | `SVD`, `pseudo_inverse` | — | **Missing** | [major], ADR needed (full-rank pinv above covers the common case) |
 | Non-symmetric eigen / `complex_eigenvalues` | `eigenvalues` | — | **Missing** | Stage 5 |
 | Schur / Hessenberg | `Schur`/`Hessenberg` | — | **Missing** | Stage 5 |
 | Bidiagonal / ColPivQR / FullPivLU / UDU | nalgebra decomps | — | **Missing** | Stage 5 |

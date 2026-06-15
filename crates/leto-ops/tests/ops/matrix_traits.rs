@@ -32,6 +32,47 @@ fn dmatrix(rows: usize, cols: usize, values: &[f64]) -> DMatrix<f64> {
     DMatrix::from_row_slice(rows, cols, values)
 }
 
+/// Flatten a nalgebra (column-major) matrix to row-major for slice comparison.
+fn dmatrix_row_major(m: &DMatrix<f64>) -> Vec<f64> {
+    let mut out = Vec::with_capacity(m.nrows() * m.ncols());
+    for r in 0..m.nrows() {
+        for c in 0..m.ncols() {
+            out.push(m[(r, c)]);
+        }
+    }
+    out
+}
+
+#[test]
+fn pinv_method_matches_nalgebra_and_moore_penrose() {
+    // Tall (full column rank), wide (full row rank), and square invertible.
+    let cases: [(usize, usize, Vec<f64>); 3] = [
+        (4, 2, vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0]),
+        (2, 4, vec![1.0, 2.0, 0.0, 1.0, 0.0, 1.0, 3.0, 0.0]),
+        (3, 3, vec![4.0, -2.0, 1.0, -2.0, 4.0, -2.0, 1.0, -2.0, 4.0]),
+    ];
+
+    for (rows, cols, values) in cases {
+        let a = Array2::from_shape_vec([rows, cols], values.clone()).unwrap();
+        let leto_pinv = a.pinv().unwrap();
+        assert_eq!(leto_pinv.shape(), [cols, rows]);
+
+        // Differential vs nalgebra's SVD-based pseudo_inverse.
+        let na = dmatrix(rows, cols, &values);
+        let na_pinv = na.clone().pseudo_inverse(1.0e-12).unwrap();
+        assert_close_slice(leto_pinv.storage().as_slice(), &dmatrix_row_major(&na_pinv));
+
+        // Moore-Penrose condition 1: A A⁺ A == A (oracle-independent).
+        let mut a_pinv = Array2::zeros([rows, cols]);
+        {
+            let mut tmp = Array2::zeros([rows, rows]);
+            matmul(&a.view(), &leto_pinv.view(), &mut tmp.view_mut()).unwrap();
+            matmul(&tmp.view(), &a.view(), &mut a_pinv.view_mut()).unwrap();
+        }
+        assert_close_slice(a_pinv.storage().as_slice(), &values);
+    }
+}
+
 #[test]
 fn matmul_method_matches_kernel_and_ndarray() {
     let (m, k, n) = (4usize, 3, 5);

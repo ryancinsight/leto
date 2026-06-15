@@ -8,6 +8,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- Moore-Penrose pseudoinverse `pinv` (free function + `MatrixSolve::pinv`) for
+  full-rank matrices via the thin SVD (`A⁺ = V Σ⁻¹ Uᵀ`, numerically sound — no
+  normal-equations condition-number squaring). Covers tall, wide, and square
+  full-rank inputs. Differential test vs nalgebra `pseudo_inverse` plus the
+  Moore-Penrose identity `A A⁺ A = A`. Rank-deficient pinv remains gated on the
+  full rank-revealing SVD contract (`gap_audit.md` §B / `docs/completeness`).
+
 - Fluent rank-2 linear-algebra trait layer over the existing strided matrix
   (`Array2`/`ArrayView2`), consolidating the ndarray "strided array" and
   nalgebra "matrix methods" models into one type (ADR 0003). Role-segmented
