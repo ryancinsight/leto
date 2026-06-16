@@ -24,14 +24,14 @@ pub use application::linalg::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve,
     col_piv_qr, det, eigenvalues, full_piv_lu, hessenberg, inv, kron, lu_decompose, matexp, matpow,
     matrix_rank, matrix_rank_with_tolerance, norm, norm_l1, norm_l2, norm_max, pinv, qr_decompose,
-    singular_values, solve, solve_least_squares, svd_decompose, svd_decompose_with_tolerance,
-    svd_rank_revealing, svd_rank_revealing_with_tolerance, symmetric_eigen_jacobi,
-    symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
+    schur, singular_values, solve, solve_least_squares, svd_decompose,
+    svd_decompose_with_tolerance, svd_rank_revealing, svd_rank_revealing_with_tolerance,
+    symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
     symmetric_eigenvalues_jacobi_with_tolerance, trace, udu_decompose, AsMatrixView,
     BidiagonalDecomposition, BunchKaufmanDecomposition, CholeskyDecomposition,
     ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition,
     MatrixDecompose, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
-    NormKind, NormL1, NormL2, NormMax, QrDecomposition, SvdDecomposition,
+    NormKind, NormL1, NormL2, NormMax, QrDecomposition, RealSchur, SvdDecomposition,
     SymmetricEigenDecomposition, UduDecomposition,
 };
 pub use application::map::{

@@ -37,6 +37,8 @@ pub mod products;
 pub mod properties;
 /// Householder QR factorization and least-squares solve.
 pub mod qr;
+/// Real Schur decomposition `A = Q T Qᵀ` via Francis double-shift QR.
+pub mod schur;
 /// Thin SVD and singular values for finite matrices.
 pub mod svd;
 /// Symmetric indefinite unpivoted `U D Uᵀ` factorization.
@@ -66,6 +68,7 @@ pub use norms::{norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2, Norm
 pub use products::kron;
 pub use properties::{matrix_rank, matrix_rank_with_tolerance, trace};
 pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};
+pub use schur::{schur, RealSchur};
 pub use svd::{
     pinv, singular_values, svd_decompose, svd_decompose_with_tolerance, svd_rank_revealing,
     svd_rank_revealing_with_tolerance, SvdDecomposition,

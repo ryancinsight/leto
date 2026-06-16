@@ -18,10 +18,10 @@ use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu,
-    hessenberg, lu_decompose, qr_decompose, svd_decompose, svd_rank_revealing,
+    hessenberg, lu_decompose, qr_decompose, schur, svd_decompose, svd_rank_revealing,
     symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition,
     BunchKaufmanDecomposition, CholeskyDecomposition, ColPivQrDecomposition,
-    FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition, QrDecomposition,
+    FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition, QrDecomposition, RealSchur,
     SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
 };
 use crate::{
@@ -250,6 +250,12 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-square, non-finite, or non-converged input.
     fn eigenvalues(&self) -> Result<Vec<Complex<T>>>;
+    /// Real Schur decomposition `A = Q T Qᵀ` (Francis double-shift QR): the
+    /// orthogonal Schur vectors `Q` and the real quasi-triangular `T`.
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square, non-finite, or non-converged input.
+    fn schur(&self) -> Result<RealSchur<T>>;
 }
 
 impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
@@ -312,6 +318,10 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
     #[inline]
     fn eigenvalues(&self) -> Result<Vec<Complex<T>>> {
         eigenvalues(&self.as_matrix_view())
+    }
+    #[inline]
+    fn schur(&self) -> Result<RealSchur<T>> {
+        schur(&self.as_matrix_view())
     }
 }
 

@@ -17,6 +17,7 @@ pub mod parity;
 pub mod properties;
 pub mod qr_cholesky;
 pub mod reduction;
+pub mod schur;
 pub mod structure_ops;
 pub mod svd;
 pub mod udu;
