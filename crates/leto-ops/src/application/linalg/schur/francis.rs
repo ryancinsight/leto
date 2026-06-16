@@ -188,8 +188,32 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
         };
         if let Some((refl, _alpha)) = refl_opt {
             let v_slice = &refl.v[..refl.len];
-            apply_left(h, v_slice, refl.beta, k, n, lo, n - 1);
-            apply_right(h, v_slice, refl.beta, k, n, 0, hi);
+            // Active-block confinement (eigenvalues-only). When accumulating the
+            // Schur similarity (`ACCUMULATE_Q = true`) the full quasi-triangular
+            // `T` is an output, so the apply spans the whole matrix: columns
+            // `lo..n` (left) and rows `0..=hi` (right). In the eigenvalues-only
+            // instantiation `T` is never returned and only the diagonal blocks
+            // are read, so the apply is confined to the active window `[lo, hi]`:
+            //   * left columns `> hi` are strictly upper-triangular (row ≤ hi <
+            //     col); and
+            //   * right rows `< lo` are strictly upper-triangular (row < lo ≤
+            //     col).
+            // Both regions are off every diagonal block and never feed back into
+            // a shift, the bulge band, or any future active block — `hi` only
+            // decreases, and `lo` is monotonically non-decreasing for a fixed
+            // `hi` because deflation sets `h[lo][lo-1]` to exact zero, a hard
+            // floor the upward scan cannot pass. The confinement therefore skips
+            // exclusively never-re-read entries while preserving the full
+            // `[lo, hi]²` arithmetic — hence the spectrum is bitwise identical to
+            // the unconfined sweep. Crucially this clips only *outside* the block
+            // (`c_hi`, `r_lo`); the within-block bounds `c_lo = lo`, `r_hi = hi`
+            // are unchanged, unlike the narrower `[k, k+len]` LAPACK window that
+            // perturbs ill-conditioned near-zero eigenvalues. The const generic
+            // resolves these branches at monomorphization (zero cost).
+            let c_hi = if ACCUMULATE_Q { n - 1 } else { hi };
+            let r_lo = if ACCUMULATE_Q { 0 } else { lo };
+            apply_left(h, v_slice, refl.beta, k, n, lo, c_hi);
+            apply_right(h, v_slice, refl.beta, k, n, r_lo, hi);
             // Accumulate the similarity into `z` only when Schur vectors are
             // wanted; for eigenvalues-only this branch is DCE'd at
             // monomorphization (zero cost), and `z` may be empty.
