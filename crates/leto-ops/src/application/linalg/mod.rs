@@ -7,6 +7,8 @@
 
 /// Golub–Kahan bidiagonalization via two-sided Householder reflectors.
 pub mod bidiagonal;
+/// Symmetric-indefinite Bunch–Kaufman `P A Pᵀ = L D Lᵀ` factorization.
+pub mod bunch_kaufman;
 /// Cholesky factorization of symmetric positive-definite matrices.
 pub mod cholesky;
 /// QR with column pivoting: rank-revealing `A P = Q R`.
@@ -41,6 +43,7 @@ pub mod svd;
 pub mod udu;
 
 pub use bidiagonal::{bidiagonalize, BidiagonalDecomposition};
+pub use bunch_kaufman::{bunch_kaufman, BunchKaufmanDecomposition};
 pub use cholesky::{
     cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, CholeskyDecomposition,
 };

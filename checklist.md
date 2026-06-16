@@ -1,7 +1,20 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.30.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.30.0: matrix functions (`matpow`, `matexp`,
+Sprint phase: Execution. Target version: 0.31.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.31.0: symmetric-indefinite Bunch–Kaufman
+`P A Pᵀ = L D Lᵀ` with partial pivoting (`bunch_kaufman`,
+`BunchKaufmanDecomposition`, `MatrixDecompose::bunch_kaufman`) in new
+`linalg/bunch_kaufman/{mod,decompose,solve}.rs` leaf — the stable general form of
+the unpivoted UDU; 1×1/2×2 pivot blocks via the α=(1+√17)/8 test, succeeds on
+zero-diagonal indefinite matrices. Theorem+proof in rustdoc; exposes l/d/perm/
+is_two_by_two/det/solve/inv + fluent method. Evidence tier: **exact reconstruction
+identity** `P A Pᵀ = L D Lᵀ` (machine precision, definite+indefinite), det/solve/
+inverse differential vs LU, zero-diagonal 2×2-pivot case, 1×1 symmetric
+interchange, rejection (8 tests; ops_tests 176 green). Closes the §B "pivoted
+Bunch-Kaufman" Missing item.
+Remaining §B Missing: Real Schur form (Q,T vectors — needs real Francis
+double-shift QR, [major]); §A Partial: random-constructor distribution-oracle
+depth. Delivered 0.30.0: matrix functions (`matpow`, `matexp`,
 `MatrixFunction` fluent trait) in new `linalg/matrix_function/{dense,power,
 exponential,mod}.rs` leaf hierarchy (nalgebra `pow`/`exp` parity). `matpow`:
 exp-by-squaring `Θ(log k)`, generic over `Scalar` (exact for integer matrices),

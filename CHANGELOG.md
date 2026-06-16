@@ -4,6 +4,34 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.31.0] - 2026-06-15
+
+### Added
+
+- Symmetric-indefinite Bunch–Kaufman `P A Pᵀ = L D Lᵀ` factorization with partial
+  pivoting (`bunch_kaufman`, `BunchKaufmanDecomposition`,
+  `MatrixDecompose::bunch_kaufman`) in a new `linalg/bunch_kaufman/{mod,decompose,
+  solve}.rs` leaf hierarchy. The stable, fully general counterpart of the
+  unpivoted `udu`: selects 1×1 / 2×2 pivot blocks via the α=(1+√17)/8 growth
+  test, so it succeeds on indefinite matrices with zero diagonals (e.g.
+  `[[0,1],[1,0]]`) where unpivoted UDU fails. Documents the constructive
+  factorization theorem with proof and the determinant/solve corollaries.
+  Exposes `l`, `d`, `permutation`, `is_two_by_two`, `det`, `solve`, `inv`, plus
+  the fluent method. Verified by the **exact reconstruction identity**
+  `P A Pᵀ = L D Lᵀ` (machine precision, definite and indefinite), determinant
+  and solve/inverse differentials against the LU kernel, the zero-diagonal
+  2×2-pivot case, the 1×1 symmetric-interchange case, and
+  non-square/nonsymmetric/non-finite rejection (8 tests).
+  Generic over `RealScalar`, native precision.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (353 tests)
+- `cargo test -p leto-ops --test ops_tests` (176 tests: 168 + 8 bunch_kaufman)
+- `cargo doc -p leto-ops --no-deps --all-features` (warning-clean)
+
 ## [0.30.0] - 2026-06-15
 
 ### Added

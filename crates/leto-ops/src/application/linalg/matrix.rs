@@ -17,11 +17,12 @@
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
-    bidiagonalize, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu, hessenberg,
-    lu_decompose, qr_decompose, svd_decompose, svd_rank_revealing, symmetric_eigen_jacobi,
-    symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition, CholeskyDecomposition,
-    ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition,
-    QrDecomposition, SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
+    bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu,
+    hessenberg, lu_decompose, qr_decompose, svd_decompose, svd_rank_revealing,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition,
+    BunchKaufmanDecomposition, CholeskyDecomposition, ColPivQrDecomposition,
+    FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition, QrDecomposition,
+    SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
 };
 use crate::{
     det as det_kernel, inv as inv_kernel, kron as kron_kernel, matexp as matexp_kernel,
@@ -198,6 +199,13 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// [`LetoError`](leto::LetoError) on non-square, nonsymmetric, non-finite,
     /// or zero-pivot input requiring symmetric pivoting.
     fn udu(&self) -> Result<UduDecomposition<T>>;
+    /// Stable symmetric-indefinite Bunch–Kaufman `P A Pᵀ = L D Lᵀ` factorization
+    /// (1×1 and 2×2 pivots); the pivoted general form of [`udu`](Self::udu).
+    ///
+    /// # Errors
+    /// [`LetoError`](leto::LetoError) on non-square, nonsymmetric, or non-finite
+    /// input.
+    fn bunch_kaufman(&self) -> Result<BunchKaufmanDecomposition<T>>;
     /// Upper Hessenberg reduction `A = Q H Qᵀ` (eigensolver prerequisite).
     ///
     /// # Errors
@@ -268,6 +276,10 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
     #[inline]
     fn udu(&self) -> Result<UduDecomposition<T>> {
         udu_decompose(&self.as_matrix_view())
+    }
+    #[inline]
+    fn bunch_kaufman(&self) -> Result<BunchKaufmanDecomposition<T>> {
+        bunch_kaufman(&self.as_matrix_view())
     }
     #[inline]
     fn hessenberg(&self) -> Result<HessenbergDecomposition<T>> {
