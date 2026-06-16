@@ -74,10 +74,87 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
     let mut t: Vec<T> = hess.h().storage().as_slice().to_vec();
     let mut q: Vec<T> = hess.q().storage().as_slice().to_vec();
 
-    francis::run(&mut t, &mut q, n)?;
+    francis::run::<T, true>(&mut t, &mut q, n)?;
     standardize::standardize(&mut t, &mut q, n);
 
     Ok(RealSchur { q, t, n })
+}
+
+/// Eigenvalues of a square real matrix, **without** forming the Schur vectors.
+///
+/// Reduces to Hessenberg, runs the Francis double-shift QR with Q-accumulation
+/// disabled (the `apply_right(z, …)` similarity update is DCE'd at
+/// monomorphization — zero cost), and reads the eigenvalues off the resulting
+/// quasi-triangular blocks. Standardization is skipped because the eigenvalues of
+/// a 2×2 block are extracted from its quadratic regardless of whether the block
+/// is triangularized. This is the fast path backing
+/// [`eigenvalues`](crate::eigenvalues); the full [`schur`] retains the `Q` path.
+///
+/// # Errors
+/// [`LetoError::ShapeMismatch`] for non-square input;
+/// [`LetoError::StorageError`] for non-finite input or QR non-convergence.
+pub(crate) fn real_eigenvalues<T: RealScalar>(
+    matrix: &ArrayView2<'_, T>,
+) -> Result<Vec<Complex<T>>> {
+    let [rows, cols] = matrix.shape();
+    if rows != cols {
+        return Err(LetoError::ShapeMismatch {
+            lhs: vec![rows, cols],
+            rhs: vec![rows, rows],
+        });
+    }
+    let n = rows;
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+    let hess = crate::hessenberg(matrix)?;
+    let mut h: Vec<T> = hess.h().storage().as_slice().to_vec();
+    // No Schur vectors: pass an empty accumulator; the const-generic guarantees
+    // it is never touched.
+    let mut unused: [T; 0] = [];
+    francis::run::<T, false>(&mut h, &mut unused, n)?;
+    Ok(eigenvalues_from_quasi_triangular(&h, n))
+}
+
+/// Read the eigenvalues off a real quasi-upper-triangular matrix `t` (`n × n`):
+/// each 1×1 block is a real eigenvalue, each 2×2 block (nonzero subdiagonal) a
+/// conjugate pair from its quadratic. Shared by [`RealSchur::eigenvalues`] and
+/// [`real_eigenvalues`] (SSOT).
+pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
+    t: &[T],
+    n: usize,
+) -> Vec<Complex<T>> {
+    let mut eigs = Vec::with_capacity(n);
+    let mut i = 0usize;
+    while i < n {
+        let is_block = i + 1 < n && t[(i + 1) * n + i] != T::ZERO;
+        if is_block {
+            let a = t[i * n + i];
+            let b = t[i * n + i + 1];
+            let c = t[(i + 1) * n + i];
+            let d = t[(i + 1) * n + i + 1];
+            let tr = a.add(d);
+            let det = a.mul(d).sub(b.mul(c));
+            let half = T::from_f64(0.5);
+            let four = T::from_f64(4.0);
+            let disc = tr.mul(tr).sub(four.mul(det));
+            if disc < T::ZERO {
+                let re = tr.mul(half);
+                let im = disc.neg().sqrt().mul(half);
+                eigs.push(Complex::new(re, im));
+                eigs.push(Complex::new(re, im.neg()));
+            } else {
+                let root = disc.sqrt();
+                eigs.push(Complex::new(tr.add(root).mul(half), T::ZERO));
+                eigs.push(Complex::new(tr.sub(root).mul(half), T::ZERO));
+            }
+            i += 2;
+        } else {
+            eigs.push(Complex::new(t[i * n + i], T::ZERO));
+            i += 1;
+        }
+    }
+    eigs
 }
 
 impl<T: RealScalar> RealSchur<T> {
@@ -96,37 +173,6 @@ impl<T: RealScalar> RealSchur<T> {
     /// Eigenvalues read off the diagonal blocks of `T` (real and complex).
     #[must_use]
     pub fn eigenvalues(&self) -> Vec<Complex<T>> {
-        let n = self.n;
-        let mut eigs = Vec::with_capacity(n);
-        let mut i = 0usize;
-        while i < n {
-            let is_block = i + 1 < n && self.t[(i + 1) * n + i] != T::ZERO;
-            if is_block {
-                let a = self.t[i * n + i];
-                let b = self.t[i * n + i + 1];
-                let c = self.t[(i + 1) * n + i];
-                let d = self.t[(i + 1) * n + i + 1];
-                let tr = a.add(d);
-                let det = a.mul(d).sub(b.mul(c));
-                let half = T::from_f64(0.5);
-                let four = T::from_f64(4.0);
-                let disc = tr.mul(tr).sub(four.mul(det));
-                if disc < T::ZERO {
-                    let re = tr.mul(half);
-                    let im = disc.neg().sqrt().mul(half);
-                    eigs.push(Complex::new(re, im));
-                    eigs.push(Complex::new(re, im.neg()));
-                } else {
-                    let root = disc.sqrt();
-                    eigs.push(Complex::new(tr.add(root).mul(half), T::ZERO));
-                    eigs.push(Complex::new(tr.sub(root).mul(half), T::ZERO));
-                }
-                i += 2;
-            } else {
-                eigs.push(Complex::new(self.t[i * n + i], T::ZERO));
-                i += 1;
-            }
-        }
-        eigs
+        eigenvalues_from_quasi_triangular(&self.t, self.n)
     }
 }

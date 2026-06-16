@@ -1,7 +1,37 @@
 # Leto Development Checklist
 
-Sprint phase: Execution (performance track). Target version: 0.34.1 [patch]
-(Cargo.toml bumped; CHANGELOG synced). Delivered 0.34.1: performance gap analysis
+Sprint phase: Execution (performance track). Target version: 0.35.0 [minor]
+(Cargo.toml bumped; CHANGELOG synced). Delivered 0.35.0: **full thin SVD via
+bidiagonal QR** (`svd_via_bidiagonal`, Golub–Reinsch) with U/V Givens
+accumulation in `svd/bidiagonal_qr.rs`. Const-generic `VEC`: values-only DCE's
+the U/V rotations (zero cost); full path accumulates into the bidiagonalization
+factors. Wide handled via σ(A)=σ(Aᵀ)+swap; sign-normalized σ≥0, descending sort
+carrying U/V columns. `svd_decompose` rerouted to it (Gram path **deleted** +
+dead `singular_value_or_zero` removed — SSOT), full-rank-rejection contract
+preserved. **Closes the headline SVD perf gap**: full SVD 32×32 292→103.6 µs
+(10.6×→3.5×), 64×64 3.1 ms→758.8 µs (18×→4.1×). Values-only
+`singular_values` now skips factor accumulation through the same const-generic
+kernel: 57.1 µs (32×32) and 275.0 µs (64×64), reducing the local criterion
+median by 25.5% and 39.5%. Accuracy improves versus Gram (`κ(A)`, not `κ(A)²).
+Evidence: reconstruction + orthonormality + nalgebra σ across tall/square/wide
+(svd 14 tests, ops_tests 186; svd_decompose contract tests green). Jacobi
+(`svd_rank_revealing`) retained for rank-deficient/max-accuracy. Residual ~3.5–4.1×
+= scalar bidiagonalization + scalar Givens (vectorization next lever, shared with
+eigenvalues residual). Delivered 0.34.3: `singular_values` moved
+to implicit-shift bidiagonal QR (Golub–Kahan) in new `svd/bidiagonal_qr.rs`
+(reuses `bidiagonalize`, SSOT) — no `AᵀA`, so accuracy κ(A) not κ(A)²
+(diag(1,1e-6)→1e-15). Removed the
+dead Gram `singular_values` (one impl, SSOT). Evidence: σ-preservation theorem +
+21-matrix nalgebra battery + closed-form + rank-deficient + wide-dynamic-range
+(ops_tests 185; matrix_rank + all consumers green). Delivered
+0.34.2: eigenvalues no-Q Francis
+path — `francis::run` const-generic over `ACCUMULATE_Q`; eigenvalues-only passes
+`false` so the Schur-vector update is DCE'd (zero-cost) and standardization is
+skipped; block extraction factored to one shared `eigenvalues_from_quasi_triangular`
+helper (SSOT, used by `RealSchur::eigenvalues` + the no-Q path). Cumulative eig
+speedup: 32×32 992→397.0 µs (~2.5×), 64×64 ~4.8→2.52 ms (~1.9×); eig 8 + schur
+7 tests green. Gap vs nalgebra now ~5.8–7.4× (residual = scalar reflector application;
+vectorization deferred). Delivered 0.34.1: performance gap analysis
 + first optimization. Added `decomposition_compare` criterion baselines
 (leto vs nalgebra, LU/QR/Cholesky/SVD/eig/matexp/matpow) → finding: largest gaps
 are SVD (~10–18×, one-sided Jacobi) and eigenvalues (~16×), NOT matmul (~2×);
@@ -209,6 +239,16 @@ GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
 consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 
 ## Atlas ndarray replacement readiness [arch]
+- [x] [minor] Route default thin SVD through implicit-shift bidiagonal QR
+  (`svd_via_bidiagonal`) and remove the former Gram-backed SVD leaf; values-only
+  `singular_values` now reuses bidiagonal reduction without U/V factor
+  accumulation. Verification: `cargo fmt --check`; `cargo clippy --workspace
+  --all-targets --all-features -- -D warnings`; `cargo nextest run --workspace
+  --all-features` (384 tests); `cargo test --doc --workspace --all-features` (5
+  doctests); `cargo doc -p leto -p leto-ops --all-features --no-deps`;
+  criterion SVD and singular-values benchmark groups; `git diff --check`.
+  Residual: full workspace docs still hit the tracked rustdoc ICE in
+  `numpy 0.23.0` while documenting `leto-python`.
 - [x] [patch] Complete Stage C2 Hermes SIMD coverage audit for leto-ops hot kernels. Current coverage: dense elementwise slice ops and dense sum/dot/min/max route through Hermes via `Scalar`; matmul remains scalar because the current Hermes public surface lacks a zero-allocation scalar-AXPY/fused row-update provider. Rejected measured candidates: const-generic dense blocking regressed matmul (`64x64` ~48.5 µs, `256x256` ~3.37 ms); generic `mul_add` regressed matmul (`64x64` ~245.6 µs, `256x256` ~12.5 ms). Verification: focused matmul tests passed during both experiments; regressing source changes reverted; final gate run recorded in CHANGELOG/backlog.
 - [x] [minor] Extend cache-line micro-tiling to unary `map_into` strided fallbacks (serial + parallel) through the shared `TileGeometry`/`line_elements` policy. Value tests: cache-line-sized transposed f64 `map_into` exact logical output; strided zero-sized input maps without divide-by-zero. Criterion: transposed unary `map_into` 57.631 µs (56.477–58.379 µs CI) → 35.303 µs (34.221–36.468 µs CI), −38.7% median with non-overlapping confidence intervals. Contiguous `map_into` remains within observed run-to-run noise. Version: 0.15.0.
 - [x] [patch] Split `leto-ops::singular_values` from the full-vector `svd_decompose` contract so finite rank-deficient matrices return zero singular values through the smaller Gram-matrix eigenvalue path while `svd_decompose` still rejects rank-deficient inputs. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.

@@ -90,3 +90,24 @@ pub fn bidiagonalize<T: RealScalar>(
         v: Array2::from_shape_vec([n, n], v).expect("V shape matches storage"),
     })
 }
+
+pub(crate) fn bidiagonal_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
+    let [m, n] = matrix.shape();
+    if m < n {
+        return Err(LetoError::ShapeMismatch {
+            lhs: vec![m, n],
+            rhs: vec![n, n],
+        });
+    }
+    for i in 0..m {
+        for j in 0..n {
+            if !matrix.get([i, j])?.is_finite() {
+                return Err(LetoError::StorageError {
+                    reason: "bidiagonalization input contains a non-finite value".to_string(),
+                });
+            }
+        }
+    }
+
+    reduce::reduce_to_bidiagonal_values(matrix, m, n)
+}

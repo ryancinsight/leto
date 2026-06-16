@@ -9,7 +9,7 @@
 //! quadratic). ∎
 //!
 //! Implementation: delegate to the real Schur decomposition
-//! ([`crate::schur`](crate::schur), Francis double-shift QR in **real**
+//! ([`schur`](fn@crate::schur), Francis double-shift QR in **real**
 //! arithmetic) and read the eigenvalues off its quasi-triangular factor. This is
 //! the single QR iteration in the crate (SSOT): the former complex single-shift
 //! Wilkinson iteration is superseded — staying in real arithmetic removes the
@@ -35,5 +35,5 @@ use num_complex::Complex;
 /// [`LetoError::StorageError`](leto::LetoError) for non-finite input or QR
 /// non-convergence.
 pub fn eigenvalues<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<Complex<T>>> {
-    Ok(crate::schur(matrix)?.eigenvalues())
+    crate::application::linalg::schur::real_eigenvalues(matrix)
 }

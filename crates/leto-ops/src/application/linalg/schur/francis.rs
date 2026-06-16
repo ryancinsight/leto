@@ -114,7 +114,7 @@ fn apply_right<T: RealScalar>(
 /// iteration stalls), then chases the resulting bulge down the band with size-3
 /// (and a final size-2) Householder reflectors — a single orthogonal similarity
 /// equal to one double-shifted QR step (the implicit-Q theorem).
-fn francis_step<T: RealScalar>(
+fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
     h: &mut [T],
     z: &mut [T],
     lo: usize,
@@ -161,7 +161,12 @@ fn francis_step<T: RealScalar>(
             let v_slice = &refl.v[..refl.len];
             apply_left(h, v_slice, refl.beta, k, n, lo, n - 1);
             apply_right(h, v_slice, refl.beta, k, n, 0, hi);
-            apply_right(z, v_slice, refl.beta, k, n, 0, n - 1);
+            // Accumulate the similarity into `z` only when Schur vectors are
+            // wanted; for eigenvalues-only this branch is DCE'd at
+            // monomorphization (zero cost), and `z` may be empty.
+            if ACCUMULATE_Q {
+                apply_right(z, v_slice, refl.beta, k, n, 0, n - 1);
+            }
         }
         if k + 1 < hi {
             x = at(h, k + 1, k, n);
@@ -181,7 +186,11 @@ fn francis_step<T: RealScalar>(
 ///
 /// # Errors
 /// [`LetoError::StorageError`] if a block fails to converge within [`MAX_ITER`].
-pub(super) fn run<T: RealScalar>(h: &mut [T], z: &mut [T], n: usize) -> Result<()> {
+pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
+    h: &mut [T],
+    z: &mut [T],
+    n: usize,
+) -> Result<()> {
     if n < 3 {
         return Ok(()); // 0/1: trivial; 2: a single block, standardized later.
     }
@@ -226,7 +235,7 @@ pub(super) fn run<T: RealScalar>(h: &mut [T], z: &mut [T], n: usize) -> Result<(
                 reason: "Schur QR iteration failed to converge".to_string(),
             });
         }
-        francis_step(h, z, lo, hi, n, iter.is_multiple_of(10));
+        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10));
     }
     Ok(())
 }

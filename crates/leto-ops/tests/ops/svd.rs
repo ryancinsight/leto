@@ -238,3 +238,118 @@ fn pinv_rank_deficient_matches_nalgebra_and_moore_penrose() {
         assert_close(*actual, *expected, 1.0e-9);
     }
 }
+
+/// Differential battery: bidiagonal-QR singular values vs nalgebra across a
+/// range of shapes, conditionings, and clustered/tiny-σ matrices.
+#[test]
+fn singular_values_match_nalgebra_across_battery() {
+    // Deterministic pseudo-random generator (no RNG dependency; reproducible).
+    let gen = |seed: u64, len: usize| -> Vec<f64> {
+        let mut s = seed.wrapping_add(0x9E3779B97F4A7C15);
+        (0..len)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                ((s >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+            })
+            .collect()
+    };
+
+    let shapes = [(2, 2), (3, 3), (4, 4), (5, 3), (3, 5), (6, 6), (8, 4)];
+    for (idx, &(m, n)) in shapes.iter().enumerate() {
+        for trial in 0..3u64 {
+            let data = gen(idx as u64 * 17 + trial, m * n);
+            let leto_mat = Array2::from_shape_vec([m, n], data.clone()).unwrap();
+            let na = DMatrix::from_row_slice(m, n, &data);
+
+            let leto_sv = singular_values(&leto_mat.view()).unwrap();
+            let mut na_sv: Vec<f64> = na.singular_values().iter().copied().collect();
+            na_sv.sort_by(|a, b| b.partial_cmp(a).unwrap());
+
+            assert_eq!(leto_sv.len(), na_sv.len(), "shape {m}x{n}");
+            for (l, r) in leto_sv.iter().zip(na_sv.iter()) {
+                // Singular values are well-conditioned; tolerance from f64 eps
+                // scaled by the matrix norm (≈ σ_max).
+                let scale = na_sv.first().copied().unwrap_or(1.0).max(1.0);
+                assert_close(*l, *r, 1.0e-10 * scale);
+            }
+        }
+    }
+}
+
+/// Clustered and tiny singular values (where the Gram path loses accuracy): a
+/// diagonal-like matrix with a wide dynamic range.
+#[test]
+fn singular_values_resolve_wide_dynamic_range() {
+    // diag(1, 1e-6) embedded via an orthogonal-ish mix is hard for AᵀA, but the
+    // bidiagonal path keeps κ(A) not κ(A)². Use an exact diagonal here.
+    let a = Array2::from_shape_vec([2, 2], vec![1.0, 0.0, 0.0, 1.0e-6]).unwrap();
+    let sv = singular_values(&a.view()).unwrap();
+    assert_close(sv[0], 1.0, 1.0e-12);
+    assert_close(sv[1], 1.0e-6, 1.0e-15);
+}
+
+/// Full bidiagonal-QR SVD: reconstruction `A = U Σ Vᵀ`, orthonormal U/V columns,
+/// descending σ, and σ-match vs nalgebra — across tall/square/wide shapes.
+#[test]
+fn svd_via_bidiagonal_reconstructs_and_matches_nalgebra() {
+    use leto_ops::svd_via_bidiagonal;
+
+    let gen = |seed: u64, len: usize| -> Vec<f64> {
+        let mut s = seed.wrapping_add(0x9E3779B97F4A7C15);
+        (0..len)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                ((s >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+            })
+            .collect()
+    };
+
+    for (idx, &(m, n)) in [(2, 2), (3, 3), (4, 2), (2, 4), (5, 3), (3, 5), (6, 6)]
+        .iter()
+        .enumerate()
+    {
+        let data = gen(idx as u64 * 31 + 5, m * n);
+        let a = Array2::from_shape_vec([m, n], data.clone()).unwrap();
+        let svd = svd_via_bidiagonal(&a.view()).unwrap();
+        let k = m.min(n);
+
+        assert_eq!(svd.singular_values.len(), k, "shape {m}x{n}");
+        assert_eq!(svd.left_singular_vectors.shape(), [m, k]);
+        assert_eq!(svd.right_singular_vectors.shape(), [n, k]);
+
+        // Descending, non-negative.
+        for w in svd.singular_values.windows(2) {
+            assert!(w[0] >= w[1] - 1e-12 && w[1] >= -1e-12);
+        }
+
+        // Reconstruction A = U Σ Vᵀ.
+        let recon = reconstruct(&svd, n);
+        for (actual, expected) in recon.iter().zip(data.iter()) {
+            assert_close(*actual, *expected, 1.0e-9);
+        }
+
+        // Orthonormal columns of U and V.
+        let u = svd.left_singular_vectors.storage().as_slice();
+        let v = svd.right_singular_vectors.storage().as_slice();
+        for c1 in 0..k {
+            assert_close(column_norm(u, m, k, c1), 1.0, 1e-9);
+            assert_close(column_norm(v, n, k, c1), 1.0, 1e-9);
+            for c2 in (c1 + 1)..k {
+                assert_close(column_dot(u, m, k, c1, c2), 0.0, 1e-9);
+                assert_close(column_dot(v, n, k, c1, c2), 0.0, 1e-9);
+            }
+        }
+
+        // Singular values vs nalgebra.
+        let na = DMatrix::from_row_slice(m, n, &data);
+        let mut na_sv: Vec<f64> = na.singular_values().iter().copied().collect();
+        na_sv.sort_by(|a, b| b.partial_cmp(a).unwrap());
+        for (l, r) in svd.singular_values.iter().zip(na_sv.iter()) {
+            assert_close(*l, *r, 1e-9);
+        }
+    }
+}

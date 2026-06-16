@@ -9,9 +9,11 @@
 //! orthonormal (`uᵢᵀuⱼ = vᵢᵀAᵀA vⱼ / (σᵢσⱼ) = λⱼ δᵢⱼ /(σᵢσⱼ) = δᵢⱼ`) and
 //! `A vᵢ = σᵢ uᵢ`, i.e. `A V = U Σ`. ∎
 //!
-//! Two paths share the [`SvdDecomposition`] contract (SSOT for the result type):
-//! - `gram` — full-rank thin SVD via the Gram matrix + symmetric Jacobi
-//!   eigensolver; rejects rank-deficient input.
+//! Paths share the [`SvdDecomposition`] contract (SSOT for the result type):
+//! - `bidiagonal_qr` — implicit-shift bidiagonal QR (Golub–Reinsch): the default
+//!   thin SVD ([`svd_decompose`]) and `singular_values`. Avoids `AᵀA`, so
+//!   conditioning is `κ(A)` not `κ(A)²`; `svd_decompose` rejects rank-deficient
+//!   input to preserve its contract.
 //! - `jacobi` — **rank-revealing** one-sided Jacobi SVD; accepts rank-deficient
 //!   input and surfaces zero singular values honestly (ADR 0005).
 //!
@@ -20,14 +22,16 @@
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
 
-/// Full-rank thin SVD via the Gram matrix.
-pub mod gram;
+/// Bidiagonal-QR SVD: default thin SVD, singular values (accuracy-preserving).
+pub mod bidiagonal_qr;
 /// Rank-revealing one-sided Jacobi SVD.
 pub mod jacobi;
 /// Moore-Penrose pseudoinverse.
 pub mod pseudoinverse;
 
-pub use gram::{singular_values, svd_decompose, svd_decompose_with_tolerance};
+pub use bidiagonal_qr::{
+    singular_values, svd_decompose, svd_decompose_with_tolerance, svd_via_bidiagonal,
+};
 pub use jacobi::{svd_rank_revealing, svd_rank_revealing_with_tolerance};
 pub use pseudoinverse::pinv;
 
@@ -81,18 +85,4 @@ pub(super) fn validate_input<T: RealScalar>(
         }
     }
     Ok(())
-}
-
-/// Map a Gram eigenvalue to a singular value, treating small-magnitude negative
-/// eigenvalues (round-off) as zero and rejecting genuinely negative ones.
-pub(super) fn singular_value_or_zero<T: RealScalar>(eigenvalue: T, tolerance: T) -> Result<T> {
-    if eigenvalue < T::ZERO {
-        if eigenvalue.neg() > tolerance {
-            return Err(LetoError::StorageError {
-                reason: "SVD normal matrix has a negative eigenvalue beyond tolerance".to_string(),
-            });
-        }
-        return Ok(T::ZERO);
-    }
-    Ok(eigenvalue.sqrt())
 }

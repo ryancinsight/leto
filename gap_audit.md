@@ -88,8 +88,8 @@ a named Atlas consumer driver.
 | LU / solve / inverse / determinant | `LU`, `try_inverse` | **Closed** — `lu_decompose`, `solve`, `det`, and `inv`, generic over `T: RealScalar`; CFDrs dense solver driver |
 | QR + least squares | `QR` | **Closed** — Householder `qr_decompose` and `solve_least_squares`; CFDrs least-squares driver |
 | Cholesky | `Cholesky` | **Closed** — SPD `cholesky_decompose` and solve; CFDrs SPD driver |
-| Thin full-rank SVD | `SVD` subset | **Closed through 0.14.1** — `svd_decompose` supports tall/square full-column-rank and wide full-row-rank matrices; full-vector decomposition rejects rank-deficient inputs explicitly |
-| Rank-deficient singular values | `SVD::singular_values` subset | **Closed in 0.14.2** — `singular_values` computes the smaller Gram-matrix spectrum and returns zero singular values without constructing missing null-space vectors |
+| Thin full-rank SVD | `SVD` subset | **Closed; performance-updated in 0.35.0** — `svd_decompose` routes to bidiagonal QR (`svd_via_bidiagonal`) for tall/square/wide full-rank matrices and rejects rank-deficient inputs explicitly |
+| Rank-deficient singular values | `SVD::singular_values` subset | **Closed; accuracy-updated in 0.34.3** — `singular_values` uses implicit-shift bidiagonal QR, so it avoids `AᵀA` and returns zero/tiny singular values without squaring the condition number |
 | Full rank-revealing SVD / pseudoinverse | `SVD`, pseudo-inverse helpers | **Closed in 0.20.0** — ADR 0005 one-sided Jacobi SVD (`svd_rank_revealing`) plus rank-deficient `pinv`; verifies reconstruction, orthonormal `V`, nalgebra singular-value/pseudoinverse parity, and Moore-Penrose identities |
 | Norms (L1/L2/Frobenius) | `norm`, `norm_squared` | **Closed** — `NormKind` ZSTs with `norm_l1`, `norm_l2`, and `norm_max` |
 | Non-symmetric eigenvalues | `eigenvalues`, `complex_eigenvalues` | **Closed in 0.20.0** — ADR 0006 shifted complex QR after Hessenberg reduction; verifies exact spectra and nalgebra `complex_eigenvalues` parity |
@@ -166,8 +166,8 @@ benchmark group):
 
 | Kernel | 32×32 gap | 64×64 gap | Bound / cause |
 | --- | --- | --- | --- |
-| SVD (rank-revealing) | ~10.6× | ~18× | one-sided Jacobi (O(sweeps·n³)); nalgebra uses Golub–Reinsch bidiagonal QR |
-| eigenvalues | ~16× → **~8.8×** | ~16× | **was** complex single-shift QR; **now** real Schur (Francis) — see below |
+| SVD (default `svd_decompose`) | ~10.6× → **~3.5×** | ~18× → **~4.1×** | was one-sided Jacobi; **now** bidiagonal QR (Golub–Reinsch) — see below |
+| eigenvalues | ~16× → **~5.8×** | ~16× → **~7.4×** | **was** complex single-shift QR; **now** real Schur (Francis), no-Q path — see below |
 | matexp | ~6.6× | — | Padé reuses matmul (itself ~2× slow) + several products |
 | QR | ~3.6× | ~4.2× | scalar Householder; no panel/blocking |
 | LU | ~3.5× | ~4.1× | scalar partial-pivot |
@@ -177,19 +177,29 @@ benchmark group):
 
 Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul.
 
-- **eigenvalues — RESOLVED (partial, [patch])**: consolidated onto the real
-  Schur (Francis double-shift) iteration via `eigenvalues = schur().eigenvalues()`,
-  deleting the complex single-shift QR (`eigenvalues/{complex,qr}.rs`, the `Cplx`
-  type) — one QR iteration in the crate (SSOT). Real arithmetic removes the
-  per-element `Complex` cost: 32×32 992 µs → 581 µs (~1.7×). Residual gap (~8.8×):
-  the delegation still accumulates Schur vectors `Q` and standardizes (both
-  unneeded for eigenvalues-only), and the Francis reflector application is scalar.
-  A no-`Q` Francis path (const-generic over accumulation) and vectorized reflector
-  application would close more; the no-`Q` change lands in `francis.rs`
-  (peer-agent-active) so it is deferred to a coordinated step.
-- **SVD — OPEN**: the one-sided Jacobi is accuracy-first but slow. A
-  bidiagonal-QR SVD (reusing the existing `bidiagonalize`) is the structural fix;
-  larger effort, tracked.
+- **eigenvalues — RESOLVED (partial, [patch] ×2)**: (1) consolidated onto the
+  real Schur (Francis double-shift) iteration, deleting the complex single-shift
+  QR (`eigenvalues/{complex,qr}.rs`, `Cplx`) — one QR iteration in the crate
+  (SSOT), real arithmetic. (2) **no-Q Francis path**: `francis::run` is
+  const-generic over `ACCUMULATE_Q`; eigenvalues-only passes `false`, so the
+  Schur-vector update is DCE'd (zero cost) and standardization is skipped; block
+  extraction factored into one shared helper. Current validation: 32×32 992 →
+  397.0 µs (~2.5×), 64×64 ~4.8 → 2.52 ms (~1.9×). Residual gap (~5.8–7.4×) is the **scalar
+  reflector application** in the Francis step (`apply_left`/`apply_right` are
+  scalar loops) — vectorizing them (hermes) is the next lever, deferred.
+- **SVD — RESOLVED ([patch]+[minor])**: both singular values and the full thin
+  SVD now use the implicit-shift **bidiagonal QR** (`svd/bidiagonal_qr.rs`,
+  reusing `bidiagonalize`). No `AᵀA`, so accuracy is `κ(A)` not `κ(A)²` (resolves
+  `diag(1,1e-6)` to 1e-15). `svd_via_bidiagonal` accumulates `U`/`V` via Givens
+  (const-generic `VEC`; DCE'd for values-only); `svd_decompose` routes to it
+  (Gram path deleted, SSOT). Current validation: full SVD 32×32 ~292→103.6 µs
+  (10.6×→3.5×), 64×64 ~3.1 ms→758.8 µs (18×→4.1×); values-only
+  `singular_values` 57.1 µs (32×32) and 275.0 µs (64×64), a 25.5%/39.5% local
+  median reduction after skipping factor accumulation. One-sided Jacobi
+  (`svd_rank_revealing`) retained for rank-deficient / maximal accuracy.
+  Residual gap (~3.5–4.1× full SVD, ~3.6–3.8× values-only) is the scalar
+  bidiagonalization + scalar Givens (vectorization is the next lever, shared with
+  the eigenvalues residual).
 - **matmul — OPEN**: register-blocked GEMM micro-kernel needs a tile-accumulating
   SIMD primitive owned upstream in hermes (multi-repo, peer-agent lane); a prior
   scalar 4×4 tile regressed (no SIMD in the tile). Coordinated effort.

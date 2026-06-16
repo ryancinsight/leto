@@ -12,7 +12,8 @@ use leto_ops::{
     zip_mut_with, AddOp, ExpOp,
 };
 use leto_ops::{
-    cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, svd_rank_revealing,
+    cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
+    svd_via_bidiagonal,
 };
 use nalgebra::DMatrix;
 use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
@@ -444,10 +445,17 @@ fn bench_decomposition_compare(c: &mut Criterion) {
         });
 
         group.bench_function(format!("svd_leto_{n}x{n}"), |b| {
-            b.iter(|| black_box(svd_rank_revealing(black_box(&leto_mat.view())).unwrap()))
+            b.iter(|| black_box(svd_via_bidiagonal(black_box(&leto_mat.view())).unwrap()))
         });
         group.bench_function(format!("svd_nalgebra_{n}x{n}"), |b| {
             b.iter(|| black_box(black_box(na_mat.clone()).svd(true, true)))
+        });
+
+        group.bench_function(format!("singular_values_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(singular_values(black_box(&leto_mat.view())).unwrap()))
+        });
+        group.bench_function(format!("singular_values_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(black_box(na_mat.clone()).singular_values()))
         });
 
         group.bench_function(format!("eig_leto_{n}x{n}"), |b| {

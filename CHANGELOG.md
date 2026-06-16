@@ -4,6 +4,95 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.35.0] - 2026-06-16
+
+### Added
+
+- Full thin SVD via implicit-shift bidiagonal QR with `U`/`V` accumulation
+  (`svd_via_bidiagonal`, Golub–Reinsch) in `svd/bidiagonal_qr.rs`. The bidiagonal
+  QR is const-generic over vector accumulation (`VEC`): the values-only path
+  (`singular_values`) DCE's the `U`/`V` Givens rotations (zero cost), while the
+  full path accumulates them into the bidiagonalization's orthogonal factors.
+  Wide input is handled by `σ(A)=σ(Aᵀ)` with `U`/`V` swapped; pivots are
+  sign-normalized to `σ ≥ 0` and sorted descending (carrying the `U`/`V` columns).
+  Verified by reconstruction `A = U Σ Vᵀ`, orthonormal `U`/`V` columns,
+  descending non-negative σ, and σ-match vs nalgebra across tall/square/wide
+  shapes.
+
+### Changed
+
+- `svd_decompose` (default thin SVD) now routes to the bidiagonal-QR path,
+  superseding the Gram-matrix implementation (deleted `svd/gram.rs` and the dead
+  `singular_value_or_zero` helper — SSOT). The full-rank-rejection contract is
+  preserved. **Performance** (criterion median, AVX2 Win11 x86_64): full SVD
+  32×32 ~292 µs → 103.6 µs (gap vs nalgebra 10.6× → 3.5×); 64×64 ~3.1 ms →
+  758.8 µs (18× → 4.1×). Values-only `singular_values` now skips factor
+  accumulation through the same const-generic kernel: 57.1 µs (32×32) and
+  275.0 µs (64×64), reducing local median time by 25.5% and 39.5%. The path is
+  also more accurate than the former Gram route (`κ(A)` not `κ(A)²`). The
+  rank-revealing one-sided Jacobi (`svd_rank_revealing`) is retained for
+  rank-deficient / maximal-accuracy needs.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo nextest run --workspace --all-features` (384 tests)
+- `cargo test --doc --workspace --all-features` (5 doctests)
+- `cargo doc -p leto -p leto-ops --all-features --no-deps` (warning-clean)
+- `cargo doc --workspace --all-features --no-deps` remains blocked by the tracked
+  rustdoc ICE in `numpy 0.23.0` while documenting `leto-python`.
+- `cargo bench -p leto-ops --bench kernels -- decomposition_compare/svd`
+- `cargo bench -p leto-ops --bench kernels -- decomposition_compare/singular_values`
+
+## [0.34.3] - 2026-06-16
+
+### Changed
+
+- `singular_values` now uses an **implicit-shift bidiagonal QR** (Golub–Kahan)
+  in a new `svd/bidiagonal_qr.rs` leaf, replacing the Gram-matrix path. It
+  bidiagonalizes (reused, SSOT) then drives the bidiagonal to diagonal via shifted
+  Givens sweeps **without forming `AᵀA`** — keeping conditioning at `κ(A)` instead
+  of `κ(A)²`, so small singular values retain accuracy the Gram path loses
+  (verified: `diag(1, 1e-6)` resolved to 1e-15, where `AᵀA` loses ~6 digits).
+  Documents the σ-preservation theorem. The dead Gram `singular_values` is
+  removed (one implementation, SSOT). Verified by a 21-matrix nalgebra
+  differential battery (shapes/conditionings), closed-form, rank-deficient, and
+  wide-dynamic-range cases. The follow-on 0.35.0 values-only specialization keeps
+  the same bidiagonal QR oracle while avoiding `U`/`V` factor accumulation.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-ops --test ops_tests` (185 tests; svd 13 incl. battery)
+- `cargo bench -p leto-ops --bench kernels -- decomposition_compare/singular_values`
+
+## [0.34.2] - 2026-06-16
+
+### Changed
+
+- Performance: `eigenvalues` now uses a **no-Q Francis path**. The Francis
+  double-shift iteration (`schur::francis::run`) is const-generic over
+  `ACCUMULATE_Q`; eigenvalues-only runs it with `false`, so the Schur-vector
+  similarity update (`apply_right(z, …)`, the dominant per-reflector cost) is
+  dead-code-eliminated at monomorphization (zero cost), and standardization is
+  skipped (2×2-block eigenvalues come from the quadratic regardless). Block
+  eigenvalue extraction is factored into one `eigenvalues_from_quasi_triangular`
+  helper shared by `RealSchur::eigenvalues` and the no-Q path (SSOT). Cumulative
+  with 0.34.1: 32×32 ~992 µs → 397.0 µs (≈2.5×), 64×64 ~4.8 ms → 2.52 ms
+  (≈1.9×).
+  Contract unchanged (eigenvalues 8 + schur 7 tests green vs nalgebra + known
+  spectra). Residual gap vs nalgebra (~5.8–7.4×) is the scalar reflector application
+  (vectorization is the next lever, deferred).
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-ops --test ops_tests` (183 tests)
+- `cargo bench -p leto-ops --bench kernels -- decomposition_compare/eig`
+
 ## [0.34.1] - 2026-06-15
 
 ### Changed

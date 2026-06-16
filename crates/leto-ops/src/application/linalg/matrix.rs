@@ -216,7 +216,7 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on wide (`m < n`) or non-finite input.
     fn bidiagonalize(&self) -> Result<BidiagonalDecomposition<T>>;
-    /// Thin SVD for finite full-rank matrices (Gram path; rejects rank-deficient).
+    /// Thin SVD for finite full-rank matrices (bidiagonal QR; rejects rank-deficient).
     ///
     /// # Errors
     /// [`LetoError`](leto::LetoError) on rank-deficient or invalid input.
@@ -227,8 +227,7 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on empty or non-finite input.
     fn svd_rank_revealing(&self) -> Result<SvdDecomposition<T>>;
-    /// Singular values (ascending in the kernel's convention), including
-    /// rank-deficient inputs.
+    /// Singular values sorted descending, including rank-deficient inputs.
     ///
     /// # Errors
     /// [`LetoError`](leto::LetoError) on a non-finite input.

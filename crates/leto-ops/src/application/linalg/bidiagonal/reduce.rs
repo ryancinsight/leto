@@ -5,6 +5,12 @@ use crate::application::linalg::householder::{apply_left, apply_right, reflector
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, Result};
 
+struct BidiagonalWork<T> {
+    u: Option<Vec<T>>,
+    b: Vec<T>,
+    v: Option<Vec<T>>,
+}
+
 /// Reduce `A` (m×n, `m ≥ n`) to upper bidiagonal `B` with orthogonal `U` (m×m)
 /// and `V` (n×n), returning row-major `(u, b, v)` such that `A = U B Vᵀ`.
 ///
@@ -19,22 +25,52 @@ pub(super) fn reduce_to_bidiagonal<T: RealScalar>(
     m: usize,
     n: usize,
 ) -> Result<(Vec<T>, Vec<T>, Vec<T>)> {
-    // Working B ← A (m×n), U ← I (m×m), V ← I (n×n).
+    let work = reduce_to_bidiagonal_impl::<T, true>(matrix, m, n)?;
+    Ok((
+        work.u
+            .expect("invariant: ACCUMULATE_FACTORS=true returns U"),
+        work.b,
+        work.v
+            .expect("invariant: ACCUMULATE_FACTORS=true returns V"),
+    ))
+}
+
+/// Reduce `A` to upper bidiagonal `B` without accumulating `U`/`V`.
+///
+/// This is the values-only SVD path: the same Householder transforms are applied
+/// to the working matrix, but factor updates are dead-code-eliminated by the
+/// const-generic `ACCUMULATE_FACTORS = false` specialization.
+pub(super) fn reduce_to_bidiagonal_values<T: RealScalar>(
+    matrix: &ArrayView2<'_, T>,
+    m: usize,
+    n: usize,
+) -> Result<Vec<T>> {
+    Ok(reduce_to_bidiagonal_impl::<T, false>(matrix, m, n)?.b)
+}
+
+fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
+    matrix: &ArrayView2<'_, T>,
+    m: usize,
+    n: usize,
+) -> Result<BidiagonalWork<T>> {
+    // Working B ← A (m×n), U ← I (m×m), V ← I (n×n) only when requested.
     let mut b = vec![T::ZERO; m * n];
     for i in 0..m {
         for j in 0..n {
             b[i * n + j] = *matrix.get([i, j])?;
         }
     }
-    let mut u = identity::<T>(m);
-    let mut v = identity::<T>(n);
+    let mut u = ACCUMULATE_FACTORS.then(|| identity::<T>(m));
+    let mut v = ACCUMULATE_FACTORS.then(|| identity::<T>(n));
 
     for k in 0..n {
         // Left reflector: column k, rows k..m.
         let col: Vec<T> = (k..m).map(|i| b[i * n + k]).collect();
         if let Some((refl, _alpha)) = reflector(&col) {
             apply_left(&refl, &mut b, n, k, k, n); // rows k..m, cols k..n
-            apply_right(&refl, &mut u, m, k, 0, m); // U ← U·Lₖ
+            if let Some(u) = u.as_mut() {
+                apply_right(&refl, u, m, k, 0, m); // U ← U·Lₖ
+            }
         }
 
         // Right reflector: row k, columns k+1..n.
@@ -42,7 +78,9 @@ pub(super) fn reduce_to_bidiagonal<T: RealScalar>(
             let row: Vec<T> = (k + 1..n).map(|j| b[k * n + j]).collect();
             if let Some((refl, _alpha)) = reflector(&row) {
                 apply_right(&refl, &mut b, n, k + 1, k, m); // cols k+1..n, rows k..m
-                apply_right(&refl, &mut v, n, k + 1, 0, n); // V ← V·Rₖ
+                if let Some(v) = v.as_mut() {
+                    apply_right(&refl, v, n, k + 1, 0, n); // V ← V·Rₖ
+                }
             }
         }
     }
@@ -56,7 +94,7 @@ pub(super) fn reduce_to_bidiagonal<T: RealScalar>(
         }
     }
 
-    Ok((u, b, v))
+    Ok(BidiagonalWork { u, b, v })
 }
 
 fn identity<T: RealScalar>(n: usize) -> Vec<T> {

@@ -3,6 +3,11 @@
 - Status: Accepted
 - Date: 2026-06-15
 - Class: [major] (new decomposition contract; additive surface)
+- Update 2026-06-16: `svd_decompose` and `singular_values` are no longer
+  Gram-backed. The full-rank-only default path now uses the bidiagonal-QR
+  implementation (`svd/bidiagonal_qr.rs`) for accuracy and performance, while
+  this ADR's one-sided Jacobi path remains the rank-revealing implementation for
+  rank-deficient SVD and pseudoinverse.
 
 ## Context
 
@@ -29,8 +34,10 @@ which loses ~half the significant digits on ill-conditioned inputs.
 
 ## Decision
 
-Adopt option 2, one-sided Jacobi, as the rank-revealing path, alongside (not
-replacing) the existing Gram path:
+Adopt option 2, one-sided Jacobi, as the rank-revealing path. At the time of
+this ADR it lived alongside the existing Gram path; as of 2026-06-16 that
+full-rank-only path is replaced by bidiagonal QR without changing this ADR's
+rank-revealing decision:
 
 - It is **rank-revealing by construction**: rank-deficient columns converge to
   zero norm, surfacing `σ = 0` honestly; `V` stays fully orthonormal (it is a
@@ -47,8 +54,9 @@ Wide inputs (`m < n`) are handled by decomposing `Aᵀ` and swapping `U ↔ V`
 
 The Moore-Penrose pseudoinverse is **unified** onto this path: `pinv` becomes
 rank-revealing (`A⁺ = Σ_{σᵢ>τ} σᵢ⁻¹ vᵢ uᵢᵀ`), matching nalgebra's single
-`pseudo_inverse`. The full-rank Gram `svd_decompose` is retained for callers that
-want the cheaper full-rank-only path and its explicit rank-deficiency rejection.
+`pseudo_inverse`. The full-rank `svd_decompose` keeps its explicit
+rank-deficiency rejection, but its implementation is now bidiagonal QR rather
+than Gram.
 
 ## Structure (deep vertical hierarchy)
 
@@ -57,7 +65,7 @@ want the cheaper full-rank-only path and its explicit rank-deficiency rejection.
 ```text
 linalg/svd/
   mod.rs           SvdDecomposition struct, shared validation/tolerance, re-exports
-  gram.rs          full-rank Gram-matrix thin SVD (existing svd_decompose, singular_values)
+  bidiagonal_qr.rs full-rank/default thin SVD and singular values
   jacobi.rs        one-sided Jacobi rank-revealing SVD (svd_rank_revealing)
   pseudoinverse.rs Moore-Penrose pinv (rank-revealing, via jacobi)
 ```
