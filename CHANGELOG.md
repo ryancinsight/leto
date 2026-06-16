@@ -4,6 +4,44 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## Unreleased
+
+### Fixed
+
+- `leto-ops` [patch]: `Scalar::tiled_gemm` now defaults to the scalar GEMM
+  fallback, with SIMD dispatch provided only by concrete scalar impls whose
+  `SimdStrategy: SimdOperations<T>` implementation exists. This preserves the
+  SIMD path for supported real/half scalars while allowing generic integer
+  `Scalar` call sites to compile through the fallback path.
+
+### Validation
+
+- `cargo fmt -p leto-ops --check`
+- `cargo clippy -p leto-ops --all-targets -- -D warnings`
+
+## [0.35.1] - 2026-06-16
+
+### Changed
+
+- `matexp` evaluates the degree-6 Padé approximant via the **even/odd split**
+  (Paterson–Stockmeyer factoring): `N(B) = U + B·V`, `D(B) = U − B·V` with
+  `U = Σ_{j even} c_j Bʲ`, `V = Σ_{j odd} c_j B^{j−1}`. This computes the even
+  powers `B², B⁴, B⁶` and one product `B·V` — **4 matmuls instead of 6** for the
+  Padé numerator/denominator (a 33% reduction on that step). Documents the
+  even/odd identity; a compile-time assert ties the unrolling to `q = 6`. Added a
+  shared `sub` dense helper.
+  Evidence: op-count reduction (provable, 6→4) plus the unchanged matexp test
+  battery (zero/diagonal/nilpotent/skew→rotation + nalgebra differential).
+  Wall-clock benefit at the benched sizes (32–64, small norm ⇒ `s = 0`) is within
+  criterion noise — there the LU inverse and remaining products dominate — and
+  grows with `n` and when scaling (`s > 0`) increases the product count.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-ops --test ops_tests` (186 tests; matexp 7)
+
 ## [0.35.0] - 2026-06-16
 
 ### Added

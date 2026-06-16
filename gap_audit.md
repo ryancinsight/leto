@@ -168,7 +168,7 @@ benchmark group):
 | --- | --- | --- | --- |
 | SVD (default `svd_decompose`) | ~10.6× → **~3.5×** | ~18× → **~4.1×** | was one-sided Jacobi; **now** bidiagonal QR (Golub–Reinsch) — see below |
 | eigenvalues | ~16× → **~5.8×** | ~16× → **~7.4×** | **was** complex single-shift QR; **now** real Schur (Francis), no-Q path — see below |
-| matexp | ~6.6× | — | Padé reuses matmul (itself ~2× slow) + several products |
+| matexp | ~6.6× | — | Padé reuses matmul (itself ~2× slow); even/odd split cut its products 6→4, but wall-clock is matmul-bound (tracks matmul gap) |
 | QR | ~3.6× | ~4.2× | scalar Householder; no panel/blocking |
 | LU | ~3.5× | ~4.1× | scalar partial-pivot |
 | Cholesky | ~3.4× | — | scalar |

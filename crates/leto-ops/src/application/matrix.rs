@@ -207,7 +207,45 @@ fn row_blocked_matmul<T: Scalar, const ROW_BLOCK: usize>(
         let row_block_end = (row_block_start + ROW_BLOCK).min(end_row);
         let block_rows = row_block_end - row_block_start;
 
-        if layout.rows == MATMUL_DEPTH_BATCH_ROWS {
+        if layout.lhs_stride_col == 1
+            && layout.lhs_stride_row == layout.shared as isize
+            && layout.rhs_stride_col == 1
+            && layout.rhs_stride_row == layout.cols as isize
+            && layout.out_stride_col == 1
+            && layout.out_stride_row == layout.cols as isize
+        {
+            let a_offset = layout.lhs_offset + (row_block_start * layout.shared) as isize;
+            let b_offset = layout.rhs_offset;
+            let c_offset = layout.out_offset + (row_block_start * layout.cols) as isize;
+            // SAFETY: `validate_matmul` validates all storage spans, layout.cols and
+            // layout.shared represent the valid sizes, and this block processes
+            // non-overlapping row segments of C-contiguous matrices.
+            unsafe {
+                let a_slice = core::slice::from_raw_parts(
+                    lhs_ptr.offset(a_offset),
+                    block_rows * layout.shared,
+                );
+                let b_slice = core::slice::from_raw_parts(
+                    rhs_ptr.offset(b_offset),
+                    layout.shared * layout.cols,
+                );
+                let c_slice = core::slice::from_raw_parts_mut(
+                    out_ptr.offset(c_offset),
+                    block_rows * layout.cols,
+                );
+                T::tiled_gemm(
+                    a_slice,
+                    b_slice,
+                    c_slice,
+                    block_rows,
+                    layout.cols,
+                    layout.shared,
+                );
+            }
+            continue;
+        }
+
+        if layout.rows >= MATMUL_DEPTH_BATCH_ROWS {
             if let Some(out_stride_row) = fused_out_stride {
                 if layout.rhs_stride_row == layout.cols as isize {
                     let out_block_offset =

@@ -4,7 +4,7 @@ use leto::{
     Array, Array1, ArrayD, ArrayView, ArrayViewMut, Layout, LayoutDyn, SliceStorage, VecStorage,
 };
 use leto_ops::{
-    add, bunch_kaufman, cholesky_decompose, col_piv_qr, det, div, inv, kron, matexp, matmul, mul,
+    add, bunch_kaufman, cholesky_decompose, col_piv_qr, det, div, dot, inv, kron, matexp, matmul, mul,
     norm_l1, norm_l2, norm_max, qr_decompose, schur, singular_values, solve, sub, sum,
     svd_decompose, symmetric_eigen_jacobi, trace, RealScalar,
 };
@@ -195,6 +195,22 @@ fn div_py<'py>(
     b: PyReadonlyArray2<'_, f32>,
 ) -> PyResult<Bound<'py, PyArray2<f32>>> {
     binary_py(py, a, b, div)
+}
+
+#[pyfunction]
+#[pyo3(name = "dot")]
+fn dot_py(
+    py: Python<'_>,
+    a: PyReadonlyArray1<'_, f32>,
+    b: PyReadonlyArray1<'_, f32>,
+) -> PyResult<f32> {
+    require_contiguous_1d(&a, "a")?;
+    require_contiguous_1d(&b, "b")?;
+    let a_view = view_from_numpy_1d(&a)?;
+    let b_view = view_from_numpy_1d(&b)?;
+    py.allow_threads(|| {
+        dot(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string()))
+    })
 }
 
 #[pyfunction]
@@ -567,6 +583,7 @@ fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sub_py, m)?)?;
     m.add_function(wrap_pyfunction!(mul_py, m)?)?;
     m.add_function(wrap_pyfunction!(div_py, m)?)?;
+    m.add_function(wrap_pyfunction!(dot_py, m)?)?;
     m.add_function(wrap_pyfunction!(sum_py, m)?)?;
     m.add_function(wrap_pyfunction!(matmul_py, m)?)?;
     m.add_function(wrap_pyfunction!(sum_dyn_py, m)?)?;

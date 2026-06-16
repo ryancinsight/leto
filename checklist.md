@@ -1,7 +1,20 @@
 # Leto Development Checklist
 
-Sprint phase: Execution (performance track). Target version: 0.35.0 [minor]
-(Cargo.toml bumped; CHANGELOG synced). Delivered 0.35.0: **full thin SVD via
+Sprint phase: Execution (performance track). Target version: 0.35.1 [patch]
+(Cargo.toml bumped; CHANGELOG synced). Unreleased patch: `Scalar::tiled_gemm`
+now defaults to scalar GEMM and concrete real/half scalar impls opt into
+`SimdStrategy`, fixing generic integer `Scalar` builds exposed by Hephaestus
+WGPU nextest. Evidence: `cargo fmt -p leto-ops --check`; `cargo clippy -p
+leto-ops --all-targets -- -D warnings`; Hephaestus dependent gate `cargo nextest
+run -p hephaestus-wgpu` (43 passed). Delivered 0.35.1: `matexp` even/odd Padé
+split (Paterson–Stockmeyer) — N=U+B·V, D=U−B·V via even powers B²/B⁴/B⁶ + one
+B·V product → **4 matmuls instead of 6** for the Padé step; added shared dense
+`sub`; compile-time assert ties the unrolling to q=6. Evidence: provable op-count
+reduction + unchanged matexp battery (7 tests, ops_tests 186). Honest perf note:
+wall-clock within criterion noise at 32–64 (small-norm ⇒ s=0; LU-inverse +
+remaining products dominate); benefit grows with n / when s>0. Collision-free
+(`matrix_function/`; peer agent active in svd/eig/francis lane). Delivered 0.35.0:
+**full thin SVD via
 bidiagonal QR** (`svd_via_bidiagonal`, Golub–Reinsch) with U/V Givens
 accumulation in `svd/bidiagonal_qr.rs`. Const-generic `VEC`: values-only DCE's
 the U/V rotations (zero cost); full path accumulates into the bidiagonalization

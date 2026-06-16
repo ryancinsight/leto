@@ -1,12 +1,14 @@
 //! Matrix exponential `e^A` via scaling-and-squaring with a diagonal Padé
 //! approximant.
 
-use super::dense::{add, identity, inf_norm, mul, scale};
+use super::dense::{add, identity, inf_norm, mul, scale, sub};
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
 /// Degree of the diagonal Padé approximant.
 const PADE_Q: usize = 6;
+// The even/odd evaluation below is unrolled for degree 6 (even powers B²,B⁴,B⁶).
+const _: () = assert!(PADE_Q == 6, "even/odd Padé split is unrolled for q = 6");
 /// Scaling threshold: halve `A` until `‖A/2ˢ‖_∞ ≤ 1/2`, where the Padé-6
 /// approximant is accurate to well below `f64` rounding.
 const SCALE_THRESHOLD: f64 = 0.5;
@@ -71,18 +73,33 @@ pub fn matexp<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     }
     let b = scale(&a, T::from_f64(2f64.powi(-(s as i32)))); // B = A / 2ˢ
 
-    // 2. Diagonal Padé(q, q) approximant of e^B.
-    let coeffs = pade_coefficients::<T>();
-    let mut b_power = identity::<T>(rows); // B⁰ = I
-    let mut numerator = scale(&b_power, coeffs[0]);
-    let mut denominator = scale(&b_power, coeffs[0]);
-    for (k, &c_k) in coeffs.iter().enumerate().skip(1) {
-        b_power = mul(&b_power, &b)?; // Bᵏ
-        numerator = add(&numerator, &scale(&b_power, c_k));
-        // (−1)ᵏ c_k on the denominator.
-        let signed = if k % 2 == 0 { c_k } else { c_k.neg() };
-        denominator = add(&denominator, &scale(&b_power, signed));
-    }
+    // 2. Diagonal Padé(q, q) via the even/odd split. Writing
+    //    N(B) = Σ_{k} c_k Bᵏ = U + B·V and D(B) = Σ_{k} (−1)ᵏ c_k Bᵏ = U − B·V
+    //    with U = Σ_{j even} c_j Bʲ (even powers only) and
+    //    V = Σ_{j odd} c_j B^{j−1}, evaluating the even powers B², B⁴, B⁶ and the
+    //    single product B·V costs 4 matmuls instead of the 6 of a naive
+    //    Horner/iterated-power scheme (Paterson–Stockmeyer even/odd factoring).
+    let c = pade_coefficients::<T>();
+    let id = identity::<T>(rows);
+    let b2 = mul(&b, &b)?;
+    let b4 = mul(&b2, &b2)?;
+    let b6 = mul(&b2, &b4)?;
+    // U = c₀I + c₂B² + c₄B⁴ + c₆B⁶ (even); V = c₁I + c₃B² + c₅B⁴ (odd shifted).
+    let u_even = add(
+        &add(
+            &add(&scale(&id, c[0]), &scale(&b2, c[2])),
+            &scale(&b4, c[4]),
+        ),
+        &scale(&b6, c[6]),
+    );
+    let v_odd = add(
+        &add(&scale(&id, c[1]), &scale(&b2, c[3])),
+        &scale(&b4, c[5]),
+    );
+    let bv = mul(&b, &v_odd)?;
+    let numerator = add(&u_even, &bv);
+    let denominator = sub(&u_even, &bv);
+
     let inv_denominator = crate::application::linalg::lu::inv(&denominator.view())?;
     let mut result = mul(&inv_denominator, &numerator)?; // r_q(B) ≈ e^B
 

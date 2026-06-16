@@ -58,6 +58,11 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     ) {
         scalar_axpy_rows_batch_fallback(alphas, x_panel, out, row_stride, rows, depth, cols);
     }
+    /// Register-blocked tiled GEMM: `c += A * B`.
+    #[inline]
+    fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
+        scalar_tiled_gemm_fallback(a, b, c, m, n, k);
+    }
     /// Min reduction over a slice.
     fn min_slice(s: &[Self]) -> Self;
     /// Max reduction over a slice.
@@ -202,6 +207,14 @@ macro_rules! impl_scalar_native {
                 scalar_axpy_rows_batch_fallback(
                     alphas, x_panel, out, row_stride, rows, depth, cols,
                 );
+            }
+
+            #[inline]
+            fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
+                if <SimdStrategy as SimdOperations<Self>>::tiled_gemm(a, b, c, m, n, k).is_ok() {
+                    return;
+                }
+                scalar_tiled_gemm_fallback(a, b, c, m, n, k);
             }
 
             #[inline]
@@ -366,6 +379,14 @@ macro_rules! impl_scalar_half {
                 scalar_axpy_rows_batch_fallback(
                     alphas, x_panel, out, row_stride, rows, depth, cols,
                 );
+            }
+
+            #[inline]
+            fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
+                if <SimdStrategy as SimdOperations<Self>>::tiled_gemm(a, b, c, m, n, k).is_ok() {
+                    return;
+                }
+                scalar_tiled_gemm_fallback(a, b, c, m, n, k);
             }
 
             #[inline]
@@ -581,5 +602,33 @@ fn scalar_axpy_rows_batch_fallback<T: Scalar>(
             rows,
             cols,
         );
+    }
+}
+
+#[inline]
+fn scalar_tiled_gemm_fallback<T: Scalar>(
+    a: &[T],
+    b: &[T],
+    c: &mut [T],
+    m: usize,
+    n: usize,
+    k: usize,
+) {
+    if m == 0 || n == 0 || k == 0 {
+        return;
+    }
+    if a.len() < m * k || b.len() < k * n || c.len() < m * n {
+        return;
+    }
+    for r in 0..m {
+        for kk in 0..k {
+            let a_val = a[r * k + kk];
+            if a_val == T::ZERO {
+                continue;
+            }
+            for col in 0..n {
+                c[r * n + col] = c[r * n + col].add(a_val.mul(b[kk * n + col]));
+            }
+        }
     }
 }

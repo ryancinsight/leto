@@ -60,6 +60,15 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
         depth: usize,
         cols: usize,
     ) -> Result<(), &'static str>;
+    /// Register-blocked tiled GEMM: `c += A * B`.
+    fn tiled_gemm(
+        a: &[T],
+        b: &[T],
+        c: &mut [T],
+        m: usize,
+        n: usize,
+        k: usize,
+    ) -> Result<(), &'static str>;
     /// Vectorized absolute-sum reduction: `Σ |x|`.
     fn abs_sum_slice(s: &[T]) -> Option<T>;
     /// Vectorized absolute-max reduction: `max |x|`.
@@ -128,6 +137,18 @@ macro_rules! impl_simd_ops_native {
                     alphas, x_panel, out, row_stride, rows, depth, cols,
                 )
                 .map_err(|_| "simd axpy rows batch failed")
+            }
+            #[inline(always)]
+            fn tiled_gemm(
+                a: &[$t],
+                b: &[$t],
+                c: &mut [$t],
+                m: usize,
+                n: usize,
+                k: usize,
+            ) -> Result<(), &'static str> {
+                hermes_simd::tiled_gemm::<$t>(a, b, c, m, n, k)
+                    .map_err(|_| "simd tiled gemm failed")
             }
             #[inline(always)]
             fn abs_sum_slice(s: &[$t]) -> Option<$t> {
@@ -210,6 +231,17 @@ macro_rules! impl_simd_ops_fallback {
                 Err("simd disabled")
             }
             #[inline(always)]
+            fn tiled_gemm(
+                _a: &[$t],
+                _b: &[$t],
+                _c: &mut [$t],
+                _m: usize,
+                _n: usize,
+                _k: usize,
+            ) -> Result<(), &'static str> {
+                Err("simd disabled")
+            }
+            #[inline(always)]
             fn abs_sum_slice(_s: &[$t]) -> Option<$t> {
                 None
             }
@@ -286,6 +318,17 @@ macro_rules! impl_simd_ops_unsupported {
                 _rows: usize,
                 _depth: usize,
                 _cols: usize,
+            ) -> Result<(), &'static str> {
+                Err("simd unsupported for type")
+            }
+            #[inline(always)]
+            fn tiled_gemm(
+                _a: &[$t],
+                _b: &[$t],
+                _c: &mut [$t],
+                _m: usize,
+                _n: usize,
+                _k: usize,
             ) -> Result<(), &'static str> {
                 Err("simd unsupported for type")
             }
