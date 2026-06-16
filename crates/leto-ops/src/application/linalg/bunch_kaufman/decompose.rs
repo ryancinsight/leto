@@ -44,14 +44,10 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         });
     }
 
-    // Working full symmetric matrix.
-    let mut a = vec![T::ZERO; n * n];
-    for i in 0..n {
-        for j in 0..n {
-            let value = *matrix.get([i, j])?;
-            a[idx(i, j, n)] = value;
-        }
-    }
+    // Working full symmetric matrix: one bulk row-major copy (idx is i*n+j, so
+    // the contiguous layout matches) instead of per-element bounds-checked gets.
+    let contiguous = matrix.to_contiguous();
+    let mut a = leto::Storage::as_slice(contiguous.storage()).to_vec();
 
     // Symmetry + finiteness validation (same contract as UDU).
     let mut scale = T::ZERO;
