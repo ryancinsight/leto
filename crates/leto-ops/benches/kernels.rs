@@ -15,6 +15,7 @@ use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
     svd_via_bidiagonal,
 };
+use leto_ops::{spmm, CsrMatrix};
 use nalgebra::DMatrix;
 use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
 use std::hint::black_box;
@@ -503,9 +504,53 @@ fn bench_decomposition_compare(c: &mut Criterion) {
     group.finish();
 }
 
+/// Sparse vs dense matrix product on a deliberately sparse operand: with the
+/// matrix ~5% dense, the CSR `spmm` does `O(nnz·k)` work where dense `matmul`
+/// does `O(n²·k)`, so the sparse path is expected ~order-of-magnitude faster.
+/// The one-time `from_dense` compression is excluded from the timed region (the
+/// sparse workflow compresses once and reuses); the dense matmul is the baseline.
+fn bench_sparse_compare(c: &mut Criterion) {
+    let mut group = c.benchmark_group("sparse_compare");
+    let n = 256usize;
+    let k = 32usize;
+
+    // Deterministic ~5%-dense n×n matrix (one nonzero in ~20 entries).
+    let mut dense_a = vec![0.0f64; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            if (i * 7 + j * 13) % 20 == 0 {
+                dense_a[i * n + j] = ((i + j) % 7 + 1) as f64;
+            }
+        }
+    }
+    let a = Array::from_shape_vec([n, n], dense_a).unwrap();
+    let b = Array::from_shape_vec([n, k], pinned_values(n * k, 1.0e-3)).unwrap();
+    let csr = CsrMatrix::from_dense(&a.view());
+
+    group.bench_function("dense_matmul_256sq_x32", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([n, k]),
+            |mut out| {
+                matmul(
+                    black_box(&a.view()),
+                    black_box(&b.view()),
+                    &mut out.view_mut(),
+                )
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.bench_function("sparse_spmm_256sq_x32_5pct", |bencher| {
+        bencher.iter(|| spmm(black_box(&csr), black_box(&b.view())).unwrap());
+    });
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default().sample_size(20).without_plots();
-    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare
+    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_sparse_compare
 }
 criterion_main!(kernels);
