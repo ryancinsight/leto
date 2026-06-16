@@ -11,6 +11,9 @@ use leto_ops::{
     add, bunch_kaufman, dot, map_into, matmul, norm_l1, norm_l2, norm_max, schur, sum, unary_map,
     zip_mut_with, AddOp, ExpOp,
 };
+use leto_ops::{
+    cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, svd_rank_revealing,
+};
 use nalgebra::DMatrix;
 use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
 use std::hint::black_box;
@@ -415,9 +418,86 @@ fn bench_linalg_compare(c: &mut Criterion) {
     group.finish();
 }
 
+/// Gap-analysis baselines: leto vs nalgebra across the decomposition / matrix-
+/// function surface, to quantify which kernels carry the largest performance gap
+/// and prioritize optimization (profile-first per `performance_engineering`).
+fn bench_decomposition_compare(c: &mut Criterion) {
+    let mut group = c.benchmark_group("decomposition_compare");
+
+    for &n in &[32usize, 64] {
+        let values = pinned_values(n * n, 1.0e-3);
+        let leto_mat = Array::from_shape_vec([n, n], values.clone()).unwrap();
+        let na_mat = DMatrix::from_row_slice(n, n, &values);
+
+        group.bench_function(format!("lu_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(lu_decompose(black_box(&leto_mat.view())).unwrap()))
+        });
+        group.bench_function(format!("lu_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(nalgebra::linalg::LU::new(black_box(na_mat.clone()))))
+        });
+
+        group.bench_function(format!("qr_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(qr_decompose(black_box(&leto_mat.view())).unwrap()))
+        });
+        group.bench_function(format!("qr_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(nalgebra::linalg::QR::new(black_box(na_mat.clone()))))
+        });
+
+        group.bench_function(format!("svd_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(svd_rank_revealing(black_box(&leto_mat.view())).unwrap()))
+        });
+        group.bench_function(format!("svd_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(black_box(na_mat.clone()).svd(true, true)))
+        });
+
+        group.bench_function(format!("eig_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(eigenvalues(black_box(&leto_mat.view())).unwrap()))
+        });
+        group.bench_function(format!("eig_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(black_box(na_mat.clone()).complex_eigenvalues()))
+        });
+
+        group.bench_function(format!("matexp_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(matexp(black_box(&leto_mat.view())).unwrap()))
+        });
+        group.bench_function(format!("matexp_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(black_box(na_mat.clone()).exp()))
+        });
+
+        group.bench_function(format!("matpow_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(matpow(black_box(&leto_mat.view()), 8).unwrap()))
+        });
+        group.bench_function(format!("matpow_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(black_box(na_mat.clone()).pow(8)))
+        });
+
+        // Cholesky needs SPD: build AᵀA + nI.
+        let mut spd = vec![0.0; n * n];
+        for i in 0..n {
+            for j in 0..n {
+                let mut acc = 0.0;
+                for k in 0..n {
+                    acc += values[k * n + i] * values[k * n + j];
+                }
+                spd[i * n + j] = acc + if i == j { n as f64 } else { 0.0 };
+            }
+        }
+        let leto_spd = Array::from_shape_vec([n, n], spd.clone()).unwrap();
+        let na_spd = DMatrix::from_row_slice(n, n, &spd);
+        group.bench_function(format!("cholesky_leto_{n}x{n}"), |b| {
+            b.iter(|| black_box(cholesky_decompose(black_box(&leto_spd.view())).unwrap()))
+        });
+        group.bench_function(format!("cholesky_nalgebra_{n}x{n}"), |b| {
+            b.iter(|| black_box(nalgebra::linalg::Cholesky::new(black_box(na_spd.clone()))))
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default().sample_size(20).without_plots();
-    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare
+    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare
 }
 criterion_main!(kernels);

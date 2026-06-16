@@ -1,6 +1,20 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.34.0 [minor] (Cargo.toml bumped;
+Sprint phase: Execution (performance track). Target version: 0.34.1 [patch]
+(Cargo.toml bumped; CHANGELOG synced). Delivered 0.34.1: performance gap analysis
++ first optimization. Added `decomposition_compare` criterion baselines
+(leto vs nalgebra, LU/QR/Cholesky/SVD/eig/matexp/matpow) → finding: largest gaps
+are SVD (~10–18×, one-sided Jacobi) and eigenvalues (~16×), NOT matmul (~2×);
+recorded in gap_audit "Performance gap analysis". Resolved the eigenvalues gap
+(partial): consolidated `eigenvalues` onto the real Schur (Francis) iteration,
+**deleted the complex single-shift QR** (`eigenvalues/{complex,qr}.rs` + `Cplx`) —
+one QR iteration in the crate (SSOT), real arithmetic; 32×32 992→581 µs (~1.7×),
+contract-preserving (eig 8 + schur 7 tests green). Residual eig gap (~8.8×) needs
+a no-Q Francis path (const-generic over Q-accumulation) which lands in
+`francis.rs` (peer-agent-active) → deferred/coordinated. Open perf items: SVD
+(bidiagonal-QR rewrite reusing `bidiagonalize`); matmul (register-blocked GEMM
+micro-kernel, upstream hermes primitive, peer lane). Prior target 0.34.0 [minor]
+(Cargo.toml bumped;
 CHANGELOG synced). Delivered 0.34.0: PyO3 runtime-rank interop
 (`leto_python.sum_dyn`) realizing the ADR 0007 boundary at the binding edge —
 arbitrary-rank numpy array → **zero-copy** `ArrayD` (borrowing via

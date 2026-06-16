@@ -159,6 +159,41 @@ migration, the themis-0.9 re-pin cascade, dense matmul oracle performance
 parity, Schur vectors, pivoted symmetric-indefinite factorization, matrix
 functions, and any consumer-driven fixed-size/geometry decisions.
 
+## Performance gap analysis (2026-06-15, AVX2 Win11 x86_64, criterion sample-10)
+
+Decomposition surface, leto/nalgebra median ratio (`decomposition_compare`
+benchmark group):
+
+| Kernel | 32×32 gap | 64×64 gap | Bound / cause |
+| --- | --- | --- | --- |
+| SVD (rank-revealing) | ~10.6× | ~18× | one-sided Jacobi (O(sweeps·n³)); nalgebra uses Golub–Reinsch bidiagonal QR |
+| eigenvalues | ~16× → **~8.8×** | ~16× | **was** complex single-shift QR; **now** real Schur (Francis) — see below |
+| matexp | ~6.6× | — | Padé reuses matmul (itself ~2× slow) + several products |
+| QR | ~3.6× | ~4.2× | scalar Householder; no panel/blocking |
+| LU | ~3.5× | ~4.1× | scalar partial-pivot |
+| Cholesky | ~3.4× | — | scalar |
+| dense matmul | ~2.0× | ~1.5× | AXPY (rank-1) scheme: O(n³) output traffic; needs register-blocked GEMM micro-kernel (tile-accumulating SIMD primitive → upstream hermes) |
+| matpow | ~1.5× | — | matmul-bound (tracks matmul) |
+
+Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul.
+
+- **eigenvalues — RESOLVED (partial, [patch])**: consolidated onto the real
+  Schur (Francis double-shift) iteration via `eigenvalues = schur().eigenvalues()`,
+  deleting the complex single-shift QR (`eigenvalues/{complex,qr}.rs`, the `Cplx`
+  type) — one QR iteration in the crate (SSOT). Real arithmetic removes the
+  per-element `Complex` cost: 32×32 992 µs → 581 µs (~1.7×). Residual gap (~8.8×):
+  the delegation still accumulates Schur vectors `Q` and standardizes (both
+  unneeded for eigenvalues-only), and the Francis reflector application is scalar.
+  A no-`Q` Francis path (const-generic over accumulation) and vectorized reflector
+  application would close more; the no-`Q` change lands in `francis.rs`
+  (peer-agent-active) so it is deferred to a coordinated step.
+- **SVD — OPEN**: the one-sided Jacobi is accuracy-first but slow. A
+  bidiagonal-QR SVD (reusing the existing `bidiagonalize`) is the structural fix;
+  larger effort, tracked.
+- **matmul — OPEN**: register-blocked GEMM micro-kernel needs a tile-accumulating
+  SIMD primitive owned upstream in hermes (multi-repo, peer-agent lane); a prior
+  scalar 4×4 tile regressed (no SIMD in the tile). Coordinated effort.
+
 - `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
   rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
   all closed.

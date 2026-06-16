@@ -4,6 +4,36 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.34.1] - 2026-06-15
+
+### Changed
+
+- Performance: consolidated `eigenvalues` onto the real Schur (Francis
+  double-shift) iteration — `eigenvalues = schur().eigenvalues()` — and **removed
+  the complex single-shift QR** (`eigenvalues/{complex,qr}.rs` and the internal
+  `Cplx` type). The crate now has a single non-symmetric QR iteration (SSOT),
+  staying in real arithmetic (no per-element `Complex` cost) and sharing the
+  Hessenberg reduction, double-shift step, and block eigenvalue extraction with
+  the Schur-vector path. Measured 32×32: ~992 µs → ~581 µs (≈1.7× faster).
+  Output contract unchanged (verified by the existing eigenvalues battery vs
+  nalgebra + known spectra, and the schur tests).
+
+### Added
+
+- `decomposition_compare` criterion benchmark group: leto-vs-nalgebra baselines
+  across LU/QR/Cholesky/SVD/eigenvalues/matexp/matpow (gap-analysis foundation;
+  see `gap_audit.md` "Performance gap analysis"). Largest gaps are SVD (~10–18×,
+  one-sided Jacobi) and eigenvalues; matmul (~2×) is smaller than expected.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-ops --test ops_tests` (183 tests; eigenvalues 8 + schur 7
+  green after consolidation)
+- `cargo bench -p leto-ops --bench kernels -- decomposition_compare` (baselines
+  recorded)
+
 ## [0.34.0] - 2026-06-15
 
 ### Added
