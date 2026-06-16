@@ -1,7 +1,19 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.32.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.32.0: real Schur decomposition `A = Q T Qᵀ`
+Sprint phase: Execution. Target version: 0.33.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.33.0: stack-allocated `StackStorage<T, CAP>`
+backing (inline `[T; CAP]`, no heap, `no_std`/`Copy`) + `Array::from_stack`/
+`from_stack_elem`. Reuses the **full** op surface via the `Storage` trait
+(DIP/SSOT — zero per-backend code; reductions/iteration/transpose all verified on
+stack-backed arrays, 6 tests). ADR 0008 resolves the parity matrix's two
+`Excluded?` rows: stack allocation delivered; compile-time fixed *shape*
+Excluded(architecture) (leto is const-rank/runtime-dims per ADR 0002); geometry
+Excluded(bounded-context) (downstream domain crate, not the array substrate).
+**This closes the parity program's open exclude-vs-implement decisions** — §A and
+§B are fully resolved (Verified/Complete/Excluded-with-rationale). Remaining:
+performance (Verified→Complete via criterion baselines), consumer-driven PyO3
+`ArrayD` interop (ADR 0007). Delivered 0.32.0: real Schur decomposition
+`A = Q T Qᵀ`
 (`schur`, `RealSchur`, `MatrixDecompose::schur`) in new
 `linalg/schur/{mod,francis,standardize}.rs` leaf (nalgebra `Schur` parity) — the
 Schur **vectors** (orthogonal Q + real quasi-triangular T), the capstone §B gap.
