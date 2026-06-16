@@ -186,10 +186,19 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   (SSOT), real arithmetic. (2) **no-Q Francis path**: `francis::run` is
   const-generic over `ACCUMULATE_Q`; eigenvalues-only passes `false`, so the
   Schur-vector update is DCE'd (zero cost) and standardization is skipped; block
-  extraction factored into one shared helper. Current validation: 32×32 992 →
-  397.0 µs (~2.5×), 64×64 ~4.8 → 2.52 ms (~1.9×). Residual gap (~5.8–7.4×) is the **scalar
-  reflector application** in the Francis step (`apply_left`/`apply_right` are
-  scalar loops) — vectorizing them (hermes) is the next lever, deferred.
+  extraction factored into one shared helper. (3) **active-block confinement**:
+  the eigenvalues-only apply is restricted to the active window `[lo, hi]` (left
+  columns `≤ hi`, right rows `≥ lo`); skipped entries are strictly
+  upper-triangular and never feed back, so the spectrum is bitwise identical
+  (proof: `hi` decreases, `lo` is monotone non-decreasing for fixed `hi` via
+  exact-zero deflation). 64×64 `eig` 1.69 → 1.50 ms. Residual gap (~5×) splits
+  into: the **scalar reflector application** (`apply_left`/`apply_right` are
+  scalar loops; vectorizing them via hermes is one lever), and the
+  **within-block `[k, k+len]` narrowing** which is correctness-gated — it
+  perturbs ill-conditioned near-zero eigenvalues (proven 3×, e.g.
+  `6.1e-15+1.75e-7i` in the hardened 16×16 battery) and requires matrix
+  balancing (`dgebal`) first (#20). The safe confinement above is the
+  perturbation-free subset of the LAPACK `dlahqr` WANTT=false window.
 - **SVD — RESOLVED ([patch]+[minor])**: both singular values and the full thin
   SVD now use the implicit-shift **bidiagonal QR** (`svd/bidiagonal_qr.rs`,
   reusing `bidiagonalize`). No `AᵀA`, so accuracy is `κ(A)` not `κ(A)²` (resolves

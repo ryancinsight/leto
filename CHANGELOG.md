@@ -15,6 +15,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   zero-copy, and both materialize only non-contiguous RHS views.
   Raw CSR construction validates row pointers, column bounds, and strictly
   increasing per-row column indices.
+- `leto-ops` [patch]: confined the eigenvalues-only Francis apply to the active
+  window `[lo, hi]` (left columns clipped to `≤ hi`, right rows to `≥ lo`). The
+  skipped entries are strictly upper-triangular, lie off every diagonal block, and
+  never feed back into a shift, the bulge band, or a future active block (`hi`
+  only decreases; `lo` is monotone non-decreasing for fixed `hi` via exact-zero
+  deflation), so the spectrum is bitwise identical to the unconfined sweep. The
+  Schur (`ACCUMULATE_Q = true`) path keeps the full-matrix sweep since `T` is an
+  output; the const generic resolves the branch at monomorphization. 64×64 `eig`
+  1.69 ms → 1.50 ms. The within-block `[k, k+len]` narrowing (further perf, but
+  perturbs ill-conditioned near-zero eigenvalues) remains gated on balancing.
 - `leto-ops` [patch]: optimized trace, Kronecker product, and keep-dim axis
   reductions over strided views by replacing repeated checked logical indexing in
   hot loops with validated stride walks. Added negative-stride regression tests
@@ -36,7 +46,7 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 - `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`
 - `cargo test -p leto-ops --test ops_tests sparse --all-features` (7 sparse tests)
 - `cargo test -p leto-ops --test ops_tests lu --all-features` (38 filtered tests)
-- `cargo nextest run -p leto-ops --all-features` (215 tests)
+- `cargo nextest run -p leto-ops --all-features` (216 tests)
 - `cargo test -p leto-ops --doc --all-features` (5 doctests)
 - `RUSTDOCFLAGS="-D warnings" cargo doc -p leto-ops --no-deps --all-features`
 - `cargo bench -p leto-ops --bench kernels reductions/sum_reverse_last_axis_256x256 -- --warm-up-time 1 --measurement-time 2 --sample-size 10`
