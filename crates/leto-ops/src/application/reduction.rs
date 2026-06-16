@@ -252,17 +252,16 @@ where
             } else {
                 let mut a = Op::initial(input_data[first_off]);
                 for axis_idx in 1..axis_len {
-                    input_idx[axis] = axis_idx;
-                    let input_off = input_layout.offset_of(input_idx)?;
+                    let input_off = (first_off as isize + axis_idx as isize) as usize;
                     a = Op::fold(a, input_data[input_off]);
                 }
                 a
             }
         } else {
             let mut a = Op::initial(input_data[first_off]);
+            let axis_stride = input_layout.strides[axis];
             for axis_idx in 1..axis_len {
-                input_idx[axis] = axis_idx;
-                let input_off = input_layout.offset_of(input_idx)?;
+                let input_off = (first_off as isize + axis_idx as isize * axis_stride) as usize;
                 a = Op::fold(a, input_data[input_off]);
             }
             a
@@ -341,11 +340,7 @@ where
                     } else {
                         let mut a = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
                         for axis_idx in 1..ctx.axis_len {
-                            input_idx[ctx.axis] = axis_idx;
-                            let input_off = ctx
-                                .input_layout
-                                .offset_of(input_idx)
-                                .expect("validated input layout must map every logical index");
+                            let input_off = (first_off as isize + axis_idx as isize) as usize;
                             let value = unsafe { *(input_ptr as *const T).add(input_off) };
                             a = Op::fold(a, value);
                         }
@@ -353,12 +348,10 @@ where
                     }
                 } else {
                     let mut a = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
+                    let axis_stride = ctx.input_layout.strides[ctx.axis];
                     for axis_idx in 1..ctx.axis_len {
-                        input_idx[ctx.axis] = axis_idx;
-                        let input_off = ctx
-                            .input_layout
-                            .offset_of(input_idx)
-                            .expect("validated input layout must map every logical index");
+                        let input_off =
+                            (first_off as isize + axis_idx as isize * axis_stride) as usize;
                         let value = unsafe { *(input_ptr as *const T).add(input_off) };
                         a = Op::fold(a, value);
                     }

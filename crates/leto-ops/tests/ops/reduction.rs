@@ -1,4 +1,4 @@
-use leto::{Array, Layout, Storage, VecStorage};
+use leto::{Array, Layout, SliceArg, Storage, VecStorage};
 use leto_ops::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, sum, sum_axis,
     sum_axis_into,
@@ -114,6 +114,22 @@ fn test_allocating_axis_reduction_handles_strided_transposed_input() {
     assert_eq!(output.shape(), [3, 1]);
     assert!(output.layout().is_c_contiguous());
     assert_eq!(output.storage().as_slice(), &[5.0, 7.0, 9.0]);
+}
+
+#[test]
+fn axis_reductions_handle_negative_stride_input() {
+    let input = Array::from_shape_vec([2, 3], vec![1i32, 2, 3, 4, 5, 6]).unwrap();
+    let reversed_cols = input
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(Some(-1), None, -1)])
+        .unwrap();
+
+    let row_sum = sum_axis(&reversed_cols, 1).unwrap();
+    let row_min = min_axis(&reversed_cols, 1).unwrap();
+    let col_max = max_axis(&reversed_cols, 0).unwrap();
+
+    assert_eq!(row_sum.storage().as_slice(), &[6, 15]);
+    assert_eq!(row_min.storage().as_slice(), &[1, 4]);
+    assert_eq!(col_max.storage().as_slice(), &[6, 5, 4]);
 }
 
 #[test]

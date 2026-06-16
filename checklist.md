@@ -1,12 +1,19 @@
 # Leto Development Checklist
 
 Sprint phase: Execution (performance track). Target version: 0.35.1 [patch]
-(Cargo.toml bumped; CHANGELOG synced). Unreleased patch: `Scalar::tiled_gemm`
-now defaults to scalar GEMM and concrete real/half scalar impls opt into
-`SimdStrategy`, fixing generic integer `Scalar` builds exposed by Hephaestus
-WGPU nextest. Evidence: `cargo fmt -p leto-ops --check`; `cargo clippy -p
-leto-ops --all-targets -- -D warnings`; Hephaestus dependent gate `cargo nextest
-run -p hephaestus-wgpu` (43 passed). Delivered 0.35.1: `matexp` even/odd Padé
+(Cargo.toml bumped; CHANGELOG synced). Unreleased patch: trace, Kronecker, and
+keep-dim axis reductions now use validated stride walks instead of repeated
+logical offset recomputation in hot loops; negative-stride regression tests cover
+reverse views. Evidence: `cargo fmt --package leto-ops --check`; `cargo clippy
+-p leto-ops --all-targets --all-features -- -D warnings`; `cargo test -p
+leto-ops --all-features` (189 ops tests); `cargo doc -p leto-ops --no-deps
+--all-features`; focused reverse-axis reduction benchmark improved 11.742%
+median. Prior unreleased patch: `Scalar::tiled_gemm` now defaults to scalar GEMM
+and concrete real/half scalar impls opt into `SimdStrategy`, fixing generic
+integer `Scalar` builds exposed by Hephaestus WGPU nextest. Evidence: `cargo fmt
+-p leto-ops --check`; `cargo clippy -p leto-ops --all-targets -- -D warnings`;
+Hephaestus dependent gate `cargo nextest run -p hephaestus-wgpu` (43 passed).
+Delivered 0.35.1: `matexp` even/odd Padé
 split (Paterson–Stockmeyer) — N=U+B·V, D=U−B·V via even powers B²/B⁴/B⁶ + one
 B·V product → **4 matmuls instead of 6** for the Padé step; added shared dense
 `sub`; compile-time assert ties the unrolling to q=6. Evidence: provable op-count

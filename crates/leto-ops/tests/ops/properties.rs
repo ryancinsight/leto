@@ -2,7 +2,7 @@
 //! and structural products (Kronecker), against nalgebra and oracle-independent
 //! identities.
 
-use leto::{Array2, Storage};
+use leto::{Array2, SliceArg, Storage};
 use leto_ops::{kron, matrix_rank, trace, MatrixProduct, MatrixProperties};
 use nalgebra::DMatrix;
 
@@ -38,6 +38,19 @@ fn dmatrix_row_major(m: &DMatrix<f64>) -> Vec<f64> {
     out
 }
 
+fn view_row_major<const R: usize, const C: usize>(
+    view: &leto::ArrayView<'_, f64, 2>,
+    shape: [usize; 2],
+) -> Vec<f64> {
+    let mut out = Vec::with_capacity(shape[0] * shape[1]);
+    for row in 0..R {
+        for col in 0..C {
+            out.push(*view.get([row, col]).unwrap());
+        }
+    }
+    out
+}
+
 // ── trace ───────────────────────────────────────────────────────────────────
 
 #[test]
@@ -61,6 +74,25 @@ fn trace_is_scalar_generic_over_integers() {
 fn trace_rejects_non_square() {
     let a = Array2::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
     assert!(trace(&a.view()).is_err());
+}
+
+#[test]
+fn trace_handles_negative_stride_square_view() {
+    let a = Array2::from_shape_vec(
+        [4, 4],
+        vec![
+            0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+        ],
+    )
+    .unwrap();
+    let reversed = a
+        .slice_with::<2>(&[
+            SliceArg::range(Some(-1), None, -1),
+            SliceArg::range(Some(-1), None, -1),
+        ])
+        .unwrap();
+
+    assert_eq!(trace(&reversed).unwrap(), 30.0);
 }
 
 // ── rank ──────────────────────────────────────────────────────────────────--
@@ -124,6 +156,25 @@ fn kron_rectangular_shape_matches_nalgebra() {
     let leto_k = kron(&a.view(), &b.view()).unwrap();
     assert_eq!(leto_k.shape(), [2, 6]); // [2*1, 3*2]
     let expected = dmatrix(2, 3, &a_vals).kronecker(&dmatrix(1, 2, &b_vals));
+    assert_close_slice(leto_k.storage().as_slice(), &dmatrix_row_major(&expected));
+}
+
+#[test]
+fn kron_handles_negative_stride_views() {
+    let a = Array2::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let b = Array2::from_shape_vec([2, 2], vec![5.0, 6.0, 7.0, 8.0]).unwrap();
+    let a_reversed_rows = a
+        .slice_with::<2>(&[SliceArg::range(Some(-1), None, -1), SliceArg::All])
+        .unwrap();
+    let b_reversed_cols = b
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(Some(-1), None, -1)])
+        .unwrap();
+
+    let leto_k = kron(&a_reversed_rows, &b_reversed_cols).unwrap();
+    let expected = dmatrix(2, 2, &view_row_major::<2, 2>(&a_reversed_rows, [2, 2])).kronecker(
+        &dmatrix(2, 2, &view_row_major::<2, 2>(&b_reversed_cols, [2, 2])),
+    );
+
     assert_close_slice(leto_k.storage().as_slice(), &dmatrix_row_major(&expected));
 }
 

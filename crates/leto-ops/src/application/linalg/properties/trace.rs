@@ -30,9 +30,23 @@ pub fn trace<T: Scalar>(matrix: &ArrayView2<'_, T>) -> Result<T> {
             rhs: vec![rows, rows],
         });
     }
+    if rows == 0 {
+        return Ok(T::ZERO);
+    }
+    let data = matrix.data();
+    let strides = matrix.strides();
+    let diag_stride = strides[0] + strides[1];
+    let mut offset = matrix.offset() as isize;
     let mut acc = T::ZERO;
-    for i in 0..rows {
-        acc = acc.add(*matrix.get([i, i])?);
+    for _ in 0..rows {
+        // SAFETY: The index [i, i] is logically in-bounds for a square matrix of size `rows`.
+        // The layout is validated, and the precalculated diagonal stride corresponds exactly
+        // to the offset delta for the next [i+1, i+1] element, staying within the bounds
+        // of the storage slice.
+        unsafe {
+            acc = acc.add(*data.get_unchecked(offset as usize));
+        }
+        offset += diag_stride;
     }
     Ok(acc)
 }

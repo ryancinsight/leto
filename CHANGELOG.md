@@ -6,6 +6,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Changed
+
+- `leto-ops` [patch]: optimized trace, Kronecker product, and keep-dim axis
+  reductions over strided views by replacing repeated checked logical indexing in
+  hot loops with validated stride walks. Added negative-stride regression tests
+  for trace, Kronecker, and axis reductions so reverse views remain covered.
+
 ### Fixed
 
 - `leto-ops` [patch]: `Scalar::tiled_gemm` now defaults to the scalar GEMM
@@ -18,6 +25,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 - `cargo fmt -p leto-ops --check`
 - `cargo clippy -p leto-ops --all-targets -- -D warnings`
+- `cargo fmt --package leto-ops --check`
+- `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-ops --all-features` (189 ops tests)
+- `RUSTDOCFLAGS="-D warnings" cargo doc -p leto-ops --no-deps --all-features`
+- `cargo bench -p leto-ops --bench kernels reductions/sum_reverse_last_axis_256x256 -- --warm-up-time 1 --measurement-time 2 --sample-size 10`
+  reported 5.3588 µs median, −11.742%.
 
 ## [0.35.1] - 2026-06-16
 
