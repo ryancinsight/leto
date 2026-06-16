@@ -69,7 +69,11 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
     }
     let n = rows;
     if n == 0 {
-        return Ok(RealSchur { q: vec![], t: vec![], n: 0 });
+        return Ok(RealSchur {
+            q: vec![],
+            t: vec![],
+            n: 0,
+        });
     }
 
     // Reduce to Hessenberg (validates finiteness; reused — SSOT). `H = Qᴴᵀ A Qᴴ`.
@@ -110,8 +114,11 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     if n == 0 {
         return Ok(Vec::new());
     }
-    let hess = crate::hessenberg(matrix)?;
-    let mut h: Vec<T> = hess.h().storage().as_slice().to_vec();
+    // Eigenvalues-only: reduce to Hessenberg without accumulating Q (similarity
+    // invariance means the Schur vectors are never needed), saving the O(n³) Q
+    // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
+    let (mut h, hn) = crate::application::linalg::hessenberg::hessenberg_values(matrix)?;
+    debug_assert_eq!(hn, n);
     // No Schur vectors: pass an empty accumulator; the const-generic guarantees
     // it is never touched.
     let mut unused: [T; 0] = [];
