@@ -49,7 +49,15 @@ pub(super) fn reduce_to_hessenberg<T: RealScalar, const ACCUMULATE_Q: bool>(
         // Sub-column below the subdiagonal: rows k+1..n of column k.
         let x: Vec<T> = (k + 1..n).map(|i| h[i * n + k]).collect();
         if let Some((refl, _alpha)) = reflector(&x) {
-            apply_left(&refl, &mut h, n, k + 1, 0, n); // H ← Pₖ H
+            // Left apply starts at column k: the reflector touches rows [k+1, n),
+            // which are already zero in columns [0, k) (those columns are reduced
+            // to Hessenberg form by prior steps), so the skipped columns are a
+            // provable no-op. Column k itself is transformed (it is what this
+            // reflector zeroes below the subdiagonal). The right apply must still
+            // span all rows [0, n): the trailing columns [k+1, n) are unreduced and
+            // dense above the diagonal. (Matches LAPACK dgehrd's trailing-submatrix
+            // update.)
+            apply_left(&refl, &mut h, n, k + 1, k, n); // H ← Pₖ H
             apply_right(&refl, &mut h, n, k + 1, 0, n); // H ← (Pₖ H) Pₖ
             if ACCUMULATE_Q {
                 apply_right(&refl, &mut q, n, k + 1, 0, n); // Q ← Q Pₖ
