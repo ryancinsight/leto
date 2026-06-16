@@ -1,6 +1,6 @@
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
-use leto::{Array2, ArrayView2, LetoError, Result};
+use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
 /// Eigenpairs of a real symmetric matrix.
 ///
@@ -135,14 +135,8 @@ fn validate_symmetric_input<T: RealScalar>(matrix: &ArrayView2<'_, T>, tolerance
 }
 
 fn copy_row_major<T: Scalar>(matrix: &ArrayView2<'_, T>) -> Vec<T> {
-    let [rows, cols] = matrix.shape();
-    let mut values = Vec::with_capacity(rows * cols);
-    for row in 0..rows {
-        for col in 0..cols {
-            values.push(*matrix.get([row, col]).expect("validated matrix bounds"));
-        }
-    }
-    values
+    // One bulk row-major copy instead of per-element bounds-checked gets.
+    matrix.to_contiguous().storage().as_slice().to_vec()
 }
 
 fn identity<T: Scalar>(n: usize) -> Vec<T> {
