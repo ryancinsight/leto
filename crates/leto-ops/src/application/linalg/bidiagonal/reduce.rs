@@ -3,7 +3,7 @@
 
 use crate::application::linalg::householder::{apply_left, apply_right, reflector};
 use crate::domain::real::RealScalar;
-use leto::{ArrayView2, Result};
+use leto::{ArrayView2, LetoError, Result, Storage};
 
 struct BidiagonalWork<T> {
     u: Option<Vec<T>>,
@@ -53,13 +53,17 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
     m: usize,
     n: usize,
 ) -> Result<BidiagonalWork<T>> {
-    // Working B ← A (m×n), U ← I (m×m), V ← I (n×n) only when requested.
-    let mut b = vec![T::ZERO; m * n];
-    for i in 0..m {
-        for j in 0..n {
-            b[i * n + j] = *matrix.get([i, j])?;
-        }
+    // Working B ← A (m×n) via one bulk row-major copy, validating finiteness in
+    // the same pass (SSOT — the caller no longer pre-scans element-by-element).
+    // U ← I (m×m), V ← I (n×n) only when requested.
+    let contiguous = matrix.to_contiguous();
+    let b_src = contiguous.storage().as_slice();
+    if !b_src.iter().all(|value| value.is_finite()) {
+        return Err(LetoError::StorageError {
+            reason: "bidiagonalization input contains a non-finite value".to_string(),
+        });
     }
+    let mut b = b_src.to_vec();
     let mut u = ACCUMULATE_FACTORS.then(|| identity::<T>(m));
     let mut v = ACCUMULATE_FACTORS.then(|| identity::<T>(n));
 
