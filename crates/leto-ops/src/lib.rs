@@ -38,7 +38,7 @@ pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
     MulOp, SubOp,
 };
-pub use application::matrix::{batched_matmul, matmul};
+pub use application::matrix::{batched_matmul, matmul, matmul_auto};
 pub use application::random::{normal_with_seed, uniform_with_seed};
 pub use application::reduction::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
