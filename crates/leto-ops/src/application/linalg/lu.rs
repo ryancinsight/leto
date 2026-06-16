@@ -1,5 +1,5 @@
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result};
+use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result, Storage};
 
 /// LU decomposition with partial pivoting: `P · A = L · U`.
 ///
@@ -35,19 +35,16 @@ pub fn lu_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<LuDecom
     }
     let n = rows;
 
-    // One copy into row-major working storage; elimination is in place.
-    let mut a = Vec::with_capacity(n * n);
-    for r in 0..n {
-        for c in 0..n {
-            let value = *matrix.get([r, c])?;
-            if !value.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "LU input contains a non-finite value".to_string(),
-                });
-            }
-            a.push(value);
-        }
+    // One bulk row-major copy into working storage + a single finiteness scan
+    // (replacing per-element bounds-checked gets); elimination is in place.
+    let contiguous = matrix.to_contiguous();
+    let src = contiguous.storage().as_slice();
+    if !src.iter().all(|value| value.is_finite()) {
+        return Err(LetoError::StorageError {
+            reason: "LU input contains a non-finite value".to_string(),
+        });
     }
+    let mut a = src.to_vec();
 
     let mut pivots: Vec<usize> = (0..n).collect();
     let mut sign = 1i8;
@@ -77,13 +74,20 @@ pub fn lu_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<LuDecom
         }
 
         let pivot = a[k * n + k];
+        // Rank-1 elimination of the trailing submatrix. For each row r > k,
+        // `a[r, k+1..] -= (a[r,k]/pivot) · a[k, k+1..]` — a fused axpy over two
+        // contiguous, disjoint rows (k < r), dispatched through the SIMD
+        // `axpy_slice` (SSOT with the matmul/QR row updates). `split_at_mut`
+        // separates the pivot row (in `head`) from the trailing rows (`tail`).
+        let (head, tail) = a.split_at_mut((k + 1) * n);
+        let pivot_row = &head[k * n + (k + 1)..k * n + n];
         for r in (k + 1)..n {
-            let factor = a[r * n + k].div(pivot);
-            a[r * n + k] = factor;
-            for c in (k + 1)..n {
-                let update = factor.mul(a[k * n + c]);
-                a[r * n + c] = a[r * n + c].sub(update);
-            }
+            let base = (r - (k + 1)) * n;
+            let factor = tail[base + k].div(pivot);
+            tail[base + k] = factor;
+            let target = &mut tail[base + (k + 1)..base + n];
+            // target += (−factor)·pivot_row  ≡  target −= factor·pivot_row.
+            T::axpy_slice(T::ZERO.sub(factor), pivot_row, target);
         }
     }
 
