@@ -191,14 +191,36 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   columns `≤ hi`, right rows `≥ lo`); skipped entries are strictly
   upper-triangular and never feed back, so the spectrum is bitwise identical
   (proof: `hi` decreases, `lo` is monotone non-decreasing for fixed `hi` via
-  exact-zero deflation). 64×64 `eig` 1.69 → 1.50 ms. Residual gap (~5×) splits
-  into: the **scalar reflector application** (`apply_left`/`apply_right` are
-  scalar loops; vectorizing them via hermes is one lever), and the
-  **within-block `[k, k+len]` narrowing** which is correctness-gated — it
-  perturbs ill-conditioned near-zero eigenvalues (proven 3×, e.g.
-  `6.1e-15+1.75e-7i` in the hardened 16×16 battery) and requires matrix
-  balancing (`dgebal`) first (#20). The safe confinement above is the
+  exact-zero deflation). 64×64 `eig` 1.69 → 1.50 ms. The safe confinement is the
   perturbation-free subset of the LAPACK `dlahqr` WANTT=false window.
+
+  Residual gap (~5×) — **#20 CLOSED with machine-checked evidence**. Two further
+  levers were investigated and rejected:
+  - **Within-block `[k, k+len]` narrowing** (the rest of `dlahqr` WANTT=false):
+    diverges from the nalgebra oracle on the hardened 16×16 case at eigenvalue
+    `6.1e-15 ± 1.75e-7i`. Root cause is *not* a bug and *not* bad scaling — it is a
+    **defective (high-multiplicity) zero eigenvalue**: machine-checked
+    `det(A) = -8.7e-30 ≈ 0`, nullity 3 (smallest singular values
+    `[5.55, 1.3e-15, 0, 0]`). A defective eigenvalue perturbs as `O(√(ε‖A‖))`, and
+    `√(ε‖A‖) = 1.54e-7` matches the spurious `1.75e-7` imaginary part nalgebra
+    reports for the defective-0. Both algorithm variants are backward-stable; they
+    legitimately differ by `√(ε‖A‖) > 1e-7`. The narrowing is correctness-equivalent
+    (leto's `~1e-15` is in fact nearer the true real-0) but cannot match the oracle
+    at the over-tight 1e-7 absolute tolerance, for a sub-2× apply gain over the
+    confinement already landed — not pursued.
+  - **Matrix balancing (`dgebal` Parlett–Reinsch scaling)** — implemented, verified
+    spectrum-preserving (radix-2 exact), then **reverted**: on the well-scaled
+    integer benchmark matrices it produces `D ≈ I`, so it neither conditions the
+    defective eigenvalue (the narrowing still failed *with* balancing) nor speeds
+    convergence, while adding O(n²·sweeps) overhead that **regressed** `eig`
+    (64×64 1.50 → 1.64 ms). Net-negative for the target metric with no consumer
+    need; removed per subtractive/anti-over-engineering discipline.
+
+  The genuine remaining lever is therefore **not** an apply-window or balancing
+  change but vectorizing the scalar 3-wide reflector applies — which, given their
+  tiny strided inner loops, in turn needs a blocked/aggregated-reflector
+  (WY / small-bulge multishift) rewrite. Tracked as a major structural item, not a
+  patch.
 - **SVD — RESOLVED ([patch]+[minor])**: both singular values and the full thin
   SVD now use the implicit-shift **bidiagonal QR** (`svd/bidiagonal_qr.rs`,
   reusing `bidiagonalize`). No `AᵀA`, so accuracy is `κ(A)` not `κ(A)²` (resolves
