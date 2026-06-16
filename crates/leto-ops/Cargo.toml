@@ -36,7 +36,7 @@ name = "kernels"
 harness = false
 
 [features]
-default = ["std", "simd", "parallel", "mnemosyne-memory"]
+default = ["std", "simd", "parallel", "mnemosyne-memory", "topology"]
 std = ["leto/std", "num-traits/std"]
 simd = ["dep:hermes-simd"]
 parallel = ["dep:moirai"]

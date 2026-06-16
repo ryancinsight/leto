@@ -4,8 +4,8 @@ use leto::{
     Array, Array1, ArrayD, ArrayView, ArrayViewMut, Layout, LayoutDyn, SliceStorage, VecStorage,
 };
 use leto_ops::{
-    add, bunch_kaufman, cholesky_decompose, col_piv_qr, det, div, dot, inv, kron, matexp, matmul, mul,
-    norm_l1, norm_l2, norm_max, qr_decompose, schur, singular_values, solve, sub, sum,
+    add, bunch_kaufman, cholesky_decompose, col_piv_qr, det, div, dot, inv, kron, matexp, matmul,
+    mul, norm_l1, norm_l2, norm_max, qr_decompose, schur, singular_values, solve, sub, sum,
     svd_decompose, symmetric_eigen_jacobi, trace, RealScalar,
 };
 use numpy::{
@@ -208,9 +208,7 @@ fn dot_py(
     require_contiguous_1d(&b, "b")?;
     let a_view = view_from_numpy_1d(&a)?;
     let b_view = view_from_numpy_1d(&b)?;
-    py.allow_threads(|| {
-        dot(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })
+    py.allow_threads(|| dot(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string())))
 }
 
 #[pyfunction]
