@@ -193,7 +193,7 @@ fn cumsum_matches_ndarray_accumulate() {
 
 #[test]
 fn matmul_matches_ndarray_dot() {
-    let (m, k, n) = (5usize, 3, 4);
+    let (m, k, n) = (64usize, 64, 64);
     let a_vals = seq(m * k, 0.2, 1.0);
     let b_vals = seq(k * n, 0.3, -1.0);
     let a = Array2::from_shape_vec([m, k], a_vals.clone()).unwrap();

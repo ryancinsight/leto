@@ -117,10 +117,8 @@ fn nalgebra_spectrum(a: &Array2<f64>, n: usize) -> Vec<Complex<f64>> {
 #[test]
 fn schur_symmetric_real_spectrum() {
     let a = mat(3, vec![2.0, 1.0, 0.0, 1.0, 3.0, 1.0, 0.0, 1.0, 2.0]);
-    let s = schur(&a.view()).unwrap();
-    println!("Q = {:?}", s.q());
-    println!("T = {:?}", s.t());
     assert_schur_contract(&a, 3);
+    let s = schur(&a.view()).unwrap();
     assert_spectrum_matches(s.eigenvalues(), &nalgebra_spectrum(&a, 3));
 }
 

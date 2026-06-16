@@ -1,7 +1,20 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.31.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.31.0: symmetric-indefinite Bunch–Kaufman
+Sprint phase: Execution. Target version: 0.32.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.32.0: real Schur decomposition `A = Q T Qᵀ`
+(`schur`, `RealSchur`, `MatrixDecompose::schur`) in new
+`linalg/schur/{mod,francis,standardize}.rs` leaf (nalgebra `Schur` parity) — the
+Schur **vectors** (orthogonal Q + real quasi-triangular T), the capstone §B gap.
+Francis double-shift implicit QR in real arithmetic; reuses Hessenberg + shared
+Householder reflectors (SSOT); precision-exact deflation; real-2×2 standardization.
+Theorem+proof (implicit-Q) in rustdoc. Evidence tier: exact reconstruction
+`A = Q T Qᵀ`, Q orthogonality, quasi-triangular structure (2×2 only for complex
+pairs), spectrum vs `eigenvalues` kernel + nalgebra (7 tests; ops_tests 183 green).
+Concurrent-agent note: the Francis bulge-chase initial-reflector-size fix was
+applied cooperatively by the peer agent; module structure/wiring/tests are mine.
+**This closes the last substantive §B nalgebra-decomposition gap.** Remaining §A
+Partial: random-constructor distribution-oracle depth; cross-cutting: PyO3 `ArrayD`
+interop. Delivered 0.31.0: symmetric-indefinite Bunch–Kaufman
 `P A Pᵀ = L D Lᵀ` with partial pivoting (`bunch_kaufman`,
 `BunchKaufmanDecomposition`, `MatrixDecompose::bunch_kaufman`) in new
 `linalg/bunch_kaufman/{mod,decompose,solve}.rs` leaf — the stable general form of

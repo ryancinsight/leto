@@ -1,7 +1,7 @@
 //! Real Schur decomposition `A = Q T Qᵀ` via the Francis double-shift QR
 //! algorithm (nalgebra `Schur` parity).
 //!
-//! Unlike [`eigenvalues`](crate::eigenvalues) — which promotes to complex and
+//! Unlike [`eigenvalues`](fn@crate::eigenvalues) — which promotes to complex and
 //! returns only the spectrum — this routine stays in **real arithmetic** and
 //! returns both the orthogonal `Q` and the real quasi-upper-triangular `T`,
 //! i.e. the Schur *vectors*.
@@ -13,7 +13,7 @@
 //! `A = Q T Qᵀ`.
 //!
 //! *Proof (algorithmic).* Reduce `A` to upper Hessenberg `H = U₀ᵀ A U₀` with
-//! orthogonal `U₀` (Householder; reused via [`hessenberg`](crate::hessenberg)).
+//! orthogonal `U₀` (Householder; reused via [`hessenberg`](fn@crate::hessenberg)).
 //! Each Francis double-shift step replaces `H` by `Zₖᵀ H Zₖ` for an orthogonal
 //! `Zₖ` that equals one step of unshifted QR applied to
 //! `(H − μ₁I)(H − μ₂I)` — the implicit-Q theorem guarantees the bulge-chasing
@@ -36,7 +36,7 @@
 //! Evidence tier: theorem/proof sketch in rustdoc plus value-semantic tests for
 //! the exact reconstruction `A = Q T Qᵀ`, `Q` orthogonality, quasi-triangular
 //! structure (2×2 blocks only for complex pairs), and eigenvalue agreement with
-//! both [`eigenvalues`](crate::eigenvalues) and nalgebra across real and complex
+//! both [`eigenvalues`](fn@crate::eigenvalues) and nalgebra across real and complex
 //! spectra.
 
 mod francis;

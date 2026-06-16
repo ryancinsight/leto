@@ -4,6 +4,33 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.32.0] - 2026-06-15
+
+### Added
+
+- Real Schur decomposition `A = Q T Qᵀ` (`schur`, `RealSchur`,
+  `MatrixDecompose::schur`) in a new `linalg/schur/{mod,francis,standardize}.rs`
+  leaf hierarchy (nalgebra `Schur` parity). Unlike the existing `eigenvalues`
+  (complex spectrum only), this returns the Schur **vectors**: the orthogonal
+  `Q` and the real quasi-upper-triangular `T` (1×1 blocks for real eigenvalues,
+  2×2 blocks for complex-conjugate pairs). Stays in real arithmetic via the
+  Francis double-shift implicit QR — reduce to Hessenberg (reused, SSOT), chase
+  the bulge with shared Householder reflectors (SSOT), deflate 1×1/2×2 blocks
+  (precision-exact `d + |sub| == d` test), then split real 2×2 blocks. Documents
+  the real-Schur theorem and the algorithmic proof (implicit-Q). Exposes
+  `q`/`t`/`eigenvalues` plus the fluent method. Verified by the exact
+  reconstruction `A = Q T Qᵀ`, `Q` orthogonality, quasi-triangular structure
+  (2×2 only for complex pairs), and spectrum agreement with both the
+  `eigenvalues` kernel and nalgebra across real/complex spectra (7 tests).
+  Generic over `RealScalar`, native precision.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-ops --test ops_tests` (183 tests: 176 + 7 schur)
+- `cargo doc -p leto-ops --no-deps --all-features` (warning-clean)
+
 ## [0.31.0] - 2026-06-15
 
 ### Added
