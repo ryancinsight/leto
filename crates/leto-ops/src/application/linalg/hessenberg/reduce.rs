@@ -2,7 +2,7 @@
 
 use crate::application::linalg::householder::{apply_left, apply_right, reflector};
 use crate::domain::real::RealScalar;
-use leto::{ArrayView2, Result};
+use leto::{ArrayView2, LetoError, Result, Storage};
 
 /// Reduce `A` (n×n) to upper Hessenberg `H`, optionally accumulating the
 /// orthogonal `Q`, returning row-major `(h, q, n)` such that `A = Q H Qᵀ`.
@@ -26,13 +26,16 @@ pub(super) fn reduce_to_hessenberg<T: RealScalar, const ACCUMULATE_Q: bool>(
 ) -> Result<(Vec<T>, Vec<T>, usize)> {
     let [n, _] = matrix.shape();
 
-    // Row-major working copy H ← A.
-    let mut h = vec![T::ZERO; n * n];
-    for i in 0..n {
-        for j in 0..n {
-            h[i * n + j] = *matrix.get([i, j])?;
-        }
+    // Row-major working copy H ← A via one bulk copy, validating finiteness in the
+    // same pass (SSOT — the caller no longer pre-scans element-by-element).
+    let contiguous = matrix.to_contiguous();
+    let h_src = contiguous.storage().as_slice();
+    if !h_src.iter().all(|value| value.is_finite()) {
+        return Err(LetoError::StorageError {
+            reason: "Hessenberg input contains a non-finite value".to_string(),
+        });
     }
+    let mut h = h_src.to_vec();
     // Q ← I only when requested; otherwise an empty, never-touched buffer.
     let mut q = if ACCUMULATE_Q {
         let mut q = vec![T::ZERO; n * n];

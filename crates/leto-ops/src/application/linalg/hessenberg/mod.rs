@@ -51,23 +51,15 @@ impl<T: RealScalar> HessenbergDecomposition<T> {
     }
 }
 
-/// Validate square shape and finite entries, returning the dimension `n`.
-fn validate_square_finite<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<usize> {
+/// Validate square shape, returning the dimension `n`. Finiteness is checked in
+/// the reduction's single bulk input copy (SSOT), not by a second pre-scan here.
+fn validate_square<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<usize> {
     let [rows, cols] = matrix.shape();
     if rows != cols {
         return Err(LetoError::ShapeMismatch {
             lhs: vec![rows, cols],
             rhs: vec![rows, rows],
         });
-    }
-    for row in 0..rows {
-        for col in 0..cols {
-            if !matrix.get([row, col])?.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "Hessenberg input contains a non-finite value".to_string(),
-                });
-            }
-        }
     }
     Ok(rows)
 }
@@ -78,7 +70,7 @@ fn validate_square_finite<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<u
 /// [`LetoError::ShapeMismatch`] for non-square input;
 /// [`LetoError::StorageError`] for a non-finite entry.
 pub fn hessenberg<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<HessenbergDecomposition<T>> {
-    validate_square_finite(matrix)?;
+    validate_square(matrix)?;
     let (h, q, n) = reduce::reduce_to_hessenberg::<T, true>(matrix)?;
     Ok(HessenbergDecomposition {
         q: Array2::from_shape_vec([n, n], q).expect("Q shape matches storage"),
@@ -102,7 +94,7 @@ pub fn hessenberg<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Hessenber
 pub(crate) fn hessenberg_values<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
 ) -> Result<(Vec<T>, usize)> {
-    validate_square_finite(matrix)?;
+    validate_square(matrix)?;
     let (h, _q, n) = reduce::reduce_to_hessenberg::<T, false>(matrix)?;
     Ok((h, n))
 }
