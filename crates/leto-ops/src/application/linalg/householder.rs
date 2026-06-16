@@ -70,15 +70,31 @@ pub(crate) fn apply_left<T: RealScalar>(
     c1: usize,
 ) {
     let Reflector { v, beta } = refl;
-    for j in c0..c1 {
-        let mut dot = T::ZERO;
-        for (i, &vi) in v.iter().enumerate() {
-            dot = dot.add(vi.mul(m[(base_row + i) * cols + j]));
+    if c1 <= c0 {
+        return;
+    }
+    // Row-oriented `P·m`: accumulate `w = vᵀ·m[rows, c0..c1]` by sweeping each
+    // reflector row contiguously, then apply `m −= v·(β·w)` row by row — versus a
+    // per-column dot that strides the reflector rows at `cols` apart. Contiguous,
+    // auto-vectorizable. The per-`w[j]` summation order (reflector rows ascending)
+    // and the `(β·dot)·v[i]` scaling grouping are preserved, so the result is
+    // bitwise-identical to the column-oriented form (FP mul is commutative but not
+    // associative — `w` is scaled by `β` before multiplying by `v[i]`).
+    let span = c1 - c0;
+    let mut w = vec![T::ZERO; span];
+    for (i, &vi) in v.iter().enumerate() {
+        let row = &m[(base_row + i) * cols + c0..(base_row + i) * cols + c1];
+        for (wj, &mij) in w.iter_mut().zip(row) {
+            *wj = wj.add(vi.mul(mij));
         }
-        let scale = beta.mul(dot);
-        for (i, &vi) in v.iter().enumerate() {
-            let idx = (base_row + i) * cols + j;
-            m[idx] = m[idx].sub(scale.mul(vi));
+    }
+    for wj in w.iter_mut() {
+        *wj = beta.mul(*wj);
+    }
+    for (i, &vi) in v.iter().enumerate() {
+        let row = &mut m[(base_row + i) * cols + c0..(base_row + i) * cols + c1];
+        for (mij, &wj) in row.iter_mut().zip(w.iter()) {
+            *mij = mij.sub(vi.mul(wj));
         }
     }
 }
