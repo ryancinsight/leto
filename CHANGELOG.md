@@ -8,6 +8,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- `leto-ops` [minor]: added a narrow CPU CSR matrix representation, SpMV, and
+  SpMM kernels (`CsrMatrix`, `spmv`, `spmv_into`, `spmm`, `spmm_into`) for sparse parity. CSR compression
+  scans strided dense views without materializing a dense copy; SpMV borrows
+  contiguous vectors zero-copy, SpMM borrows contiguous dense RHS matrices
+  zero-copy, and both materialize only non-contiguous RHS views.
+  Raw CSR construction validates row pointers, column bounds, and strictly
+  increasing per-row column indices.
 - `leto-ops` [patch]: optimized trace, Kronecker product, and keep-dim axis
   reductions over strided views by replacing repeated checked logical indexing in
   hot loops with validated stride walks. Added negative-stride regression tests
@@ -27,7 +34,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 - `cargo clippy -p leto-ops --all-targets -- -D warnings`
 - `cargo fmt --package leto-ops --check`
 - `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`
-- `cargo test -p leto-ops --all-features` (189 ops tests)
+- `cargo test -p leto-ops --test ops_tests sparse --all-features` (7 sparse tests)
+- `cargo test -p leto-ops --test ops_tests lu --all-features` (38 filtered tests)
+- `cargo nextest run -p leto-ops --all-features` (215 tests)
+- `cargo test -p leto-ops --doc --all-features` (5 doctests)
 - `RUSTDOCFLAGS="-D warnings" cargo doc -p leto-ops --no-deps --all-features`
 - `cargo bench -p leto-ops --bench kernels reductions/sum_reverse_last_axis_256x256 -- --warm-up-time 1 --measurement-time 2 --sample-size 10`
   reported 5.3588 µs median, −11.742%.

@@ -41,6 +41,16 @@ fn det_matches_closed_form_with_pivoting_parity() {
 }
 
 #[test]
+fn lu_exposes_pivot_permutation_without_copying() {
+    let a = Array::from_shape_vec([3, 3], vec![0.0f64, 2.0, 1.0, 3.0, 0.0, 4.0, 5.0, 6.0, 0.0])
+        .unwrap();
+
+    let lu = lu_decompose(&a.view()).unwrap();
+
+    assert_eq!(lu.pivots(), &[2, 1, 0]);
+}
+
+#[test]
 fn inv_times_original_is_identity() {
     let values = vec![2.0f64, 1.0, 1.0, 1.0, 3.0, 2.0, 1.0, 0.0, 0.5];
     let a = Array::from_shape_vec([3, 3], values.clone()).unwrap();

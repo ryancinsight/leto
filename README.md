@@ -19,11 +19,11 @@ Leto sits between:
   without making Apollo depend on Coeus.
 
 Layer boundary: Leto owns layout, storage, views, slicing, broadcasting,
-elementwise math, reductions, matmul, shape ops, and dense linear algebra
-(currently the symmetric Jacobi eigensolver). Coeus owns autodiff graphs,
-NN kernels (conv/pool/attention), optimizers, sparse formats, and GPU
-backends behind its `ComputeBackend` trait. Apollo owns Fourier, spectral,
-and transform kernels. `themis` and `melinoe` are consumed indirectly via
+elementwise math, reductions, matmul, shape ops, dense linear algebra, and the
+narrow CPU CSR sparse-dense parity kernels. Coeus owns autodiff graphs, NN kernels
+(conv/pool/attention), optimizers, higher sparse formats/backends, and GPU
+backends behind its `ComputeBackend` trait. Apollo owns Fourier, spectral, and
+transform kernels. `themis` and `melinoe` are consumed indirectly via
 `mnemosyne`/`moirai`, not as direct leto dependencies.
 
 ## Naming
@@ -259,7 +259,8 @@ Current value-semantic coverage includes:
   `coeus-leto` const-rank dispatch shim (ADR 0002) into Leto/`leto-ops` kernels,
   with cross-repo contract and per-op differential tests (coeus workspace 255
   tests green). Coeus keeps `ComputeBackend`, autodiff, NN kernels
-  (conv/pool/attention), sparse, and wgpu/CUDA backends; `coeus-tensor` is the
+  (conv/pool/attention), higher sparse formats/backends, and wgpu/CUDA backends;
+  Leto owns CPU CSR sparse-dense parity kernels. `coeus-tensor` is the
   autodiff-integrated tensor wrapper (not duplicated layout). Consumer rev-bump
   to Leto 0.20.0 is pending the stack-wide themis-0.9 re-pin cascade
   (`gap_audit.md` §D).

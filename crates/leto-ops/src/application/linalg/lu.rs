@@ -110,6 +110,13 @@ impl<T: RealScalar> LuDecomposition<T> {
         &self.factors
     }
 
+    /// The permutation pivots vector.
+    #[must_use]
+    #[inline]
+    pub fn pivots(&self) -> &[usize] {
+        &self.pivots
+    }
+
     /// Determinant of the original matrix: parity × product of `U`'s diagonal.
     #[must_use]
     pub fn det(&self) -> T {

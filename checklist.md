@@ -1,14 +1,17 @@
 # Leto Development Checklist
 
 Sprint phase: Execution (performance track). Target version: 0.35.1 [patch]
-(Cargo.toml bumped; CHANGELOG synced). Unreleased patch: trace, Kronecker, and
-keep-dim axis reductions now use validated stride walks instead of repeated
-logical offset recomputation in hot loops; negative-stride regression tests cover
-reverse views. Evidence: `cargo fmt --package leto-ops --check`; `cargo clippy
--p leto-ops --all-targets --all-features -- -D warnings`; `cargo test -p
-leto-ops --all-features` (189 ops tests); `cargo doc -p leto-ops --no-deps
---all-features`; focused reverse-axis reduction benchmark improved 11.742%
-median. Prior unreleased patch: `Scalar::tiled_gemm` now defaults to scalar GEMM
+(Cargo.toml bumped; CHANGELOG synced). Unreleased minor/patch lane: Leto owns
+narrow CPU CSR sparse-dense parity kernels while Coeus keeps higher sparse
+formats/backends; trace, Kronecker, and keep-dim axis reductions use validated
+stride walks instead of repeated logical offset recomputation in hot loops.
+Negative-stride regression tests cover reverse views. Evidence: `cargo fmt
+--package leto-ops --check`; `cargo clippy -p leto-ops --all-targets
+--all-features -- -D warnings`; `cargo nextest run -p leto-ops --all-features`
+(215 tests); `cargo test -p leto-ops --doc --all-features` (5 doctests);
+`cargo doc -p leto-ops --no-deps --all-features`; focused reverse-axis reduction
+benchmark improved 11.742% median. Prior unreleased patch:
+`Scalar::tiled_gemm` now defaults to scalar GEMM
 and concrete real/half scalar impls opt into `SimdStrategy`, fixing generic
 integer `Scalar` builds exposed by Hephaestus WGPU nextest. Evidence: `cargo fmt
 -p leto-ops --check`; `cargo clippy -p leto-ops --all-targets -- -D warnings`;
@@ -355,8 +358,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   coeus-core's dynamic-rank layout, with CPU compute delegated to leto. The
   array-primitive duplication is what was retired (routed to coeus-leto); the
   tensor/autograd wrapper legitimately remains coeus-owned. coeus-specific NN
-  kernels (conv/pool/attention/optimizers/sparse) stay in coeus by the layer
-  boundary. No leto-side capability gap remains for the CPU re-base.
+  kernels (conv/pool/attention/optimizers) and higher sparse formats/backends
+  stay in coeus by the layer boundary; Leto owns narrow CPU sparse parity
+  kernels such as CSR SpMV/SpMM. No leto-side capability gap remains for the CPU
+  re-base.
 - [ ] [minor] Apollo internal FFT-kernel migration off ndarray using the new
   memory-order slice access (boundary `forward_leto`/`inverse_leto` APIs already
   in place). Apollo (HEAD `db76ca2`) still uses ndarray as its internal CPU

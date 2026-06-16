@@ -10,8 +10,9 @@ Coeus (the Atlas `burn` replacement) carries its own non-differentiable array
 layer (`coeus-tensor`/`coeus-core`: layout, storage, COW, traversal) built over
 the same Mnemosyne + Moirai substrate as Leto. The structural-duplication rule
 requires consolidating that layer into Leto, with Coeus retaining
-`ComputeBackend`, autodiff, NN kernels, optimizers, sparse formats, and GPU
-backends.
+`ComputeBackend`, autodiff, NN kernels, optimizers, higher sparse
+formats/backends, and GPU backends. Leto may own narrow CPU sparse kernels when
+they are part of ndarray/nalgebra parity, such as CSR SpMV/SpMM.
 
 The blocking mismatch: Coeus's `Layout` is **runtime-rank** (rank carried as a
 `Vec`/dynamic dimension), while Leto's `Layout<const N: usize>` is

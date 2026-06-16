@@ -6,7 +6,7 @@
 //! work into `O(nnz)` and `O(nnz·…)`, where `nnz` is the nonzero count — a large
 //! win once density `nnz/(n·m)` is small. This module owns the **Compressed
 //! Sparse Row (CSR)** representation and the kernels over it; [`spmv`] is the
-//! sparse matrix–vector product.
+//! sparse matrix-vector product and [`spmm`] is the sparse-dense product.
 //!
 //! # Theorem (CSR exactly represents the matrix; SpMV is `O(nnz)`)
 //! Let `A ∈ Tᵐˣⁿ` with `nnz` nonzeros. The CSR triple `(values, col_indices,
@@ -25,14 +25,18 @@
 //! `(i,j)`) or is empty (value `0`). Hence the stored matrix equals `A`. The
 //! product `y = A x` is `y[i] = Σ_j A[i,j] x[j] = Σ_{p ∈ row i} values[p]·
 //! x[col_indices[p]]`, by the identity above — exactly the loop [`spmv`] runs,
-//! touching each nonzero once: `Θ(nnz + m)` time, versus dense `Θ(m·n)`. ∎
+//! touching each nonzero once: `Θ(nnz + m)` time, versus dense `Θ(m·n)`.
+//! [`spmm`] extends the same identity across each dense RHS column in
+//! `Θ(nnz·k + m·k)`. ∎
 //!
 //! Vertical structure (SoC): this module owns the [`CsrMatrix`] type and the
-//! dense↔sparse conversions; [`spmv`] owns the sparse matrix–vector kernel.
+//! dense↔sparse conversions; [`spmv`] and [`spmm`] own sparse-dense kernels.
 //! Generic over [`crate::domain::scalar::Scalar`]; native precision.
 
+mod spmm;
 mod spmv;
 
+pub use spmm::{spmm, spmm_into};
 pub use spmv::{spmv, spmv_into};
 
 use crate::domain::scalar::Scalar;
