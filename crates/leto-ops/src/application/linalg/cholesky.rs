@@ -1,5 +1,5 @@
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result};
+use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result, Storage};
 
 /// Cholesky factorization of a symmetric positive-definite matrix:
 /// `A = L · Lᵀ` with `L` lower-triangular.
@@ -34,17 +34,22 @@ pub fn cholesky_decompose<T: RealScalar>(
     }
     let n = rows;
 
+    // One bulk row-major copy + a single finiteness scan, then contiguous
+    // indexing in the factorization — replacing per-element bounds-checked,
+    // stride-recomputing `matrix.get` calls inside the hot loop.
+    let contiguous = matrix.to_contiguous();
+    let a = contiguous.storage().as_slice();
+    if !a.iter().all(|value| value.is_finite()) {
+        return Err(LetoError::StorageError {
+            reason: "Cholesky input contains a non-finite value".to_string(),
+        });
+    }
+
     let mut l = vec![T::ZERO; n * n];
     for r in 0..n {
         for c in 0..=r {
-            let a_rc = *matrix.get([r, c])?;
-            if !a_rc.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "Cholesky input contains a non-finite value".to_string(),
-                });
-            }
             // acc = A[r][c] - Σ_{k<c} L[r][k]·L[c][k]
-            let mut acc = a_rc;
+            let mut acc = a[r * n + c];
             for k in 0..c {
                 acc = acc.sub(l[r * n + k].mul(l[c * n + k]));
             }
