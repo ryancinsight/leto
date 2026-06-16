@@ -1,6 +1,8 @@
-use leto::{Array, ArrayView, ArrayViewMut, Layout, VecStorage};
+use leto::{Array, ArrayD, ArrayView, ArrayViewMut, Layout, LayoutDyn, SliceStorage, VecStorage};
 use leto_ops::{add, div, matmul, mul, sub, sum};
-use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods};
+use numpy::{
+    PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyReadonlyArrayDyn, PyUntypedArrayMethods,
+};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -178,6 +180,51 @@ fn matmul_py<'py>(
     array_into_numpy2(py, out_arr, out_shape)
 }
 
+/// Largest runtime rank the dynamic dispatch handles (covers all common tensor
+/// ranks; numpy arrays beyond this are rejected rather than silently truncated).
+const MAX_DYNAMIC_RANK: usize = 6;
+
+/// Sum every element of a C-contiguous slice interpreted as a runtime-rank array.
+///
+/// This is the ADR 0007 boundary pattern in miniature: a numpy array of rank
+/// unknown at compile time is carried as a zero-copy [`ArrayD`] (borrowing the
+/// numpy buffer through [`SliceStorage`]), then recovered to a const-rank
+/// `Array` via `into_dimensionality::<N>()` — at which point the existing
+/// rank-generic `sum` kernel runs with no per-rank code. Dispatch is a bounded
+/// `match` on `ndim()`.
+fn sum_dynamic(shape: &[usize], slice: &[f32]) -> PyResult<f32> {
+    let to_py = |e: leto::LetoError| PyValueError::new_err(e.to_string());
+    let layout = LayoutDyn::c_contiguous(shape).map_err(to_py)?;
+    let arr = ArrayD::new(layout, SliceStorage::new(slice)).map_err(to_py)?;
+    let total = match arr.ndim() {
+        1 => sum(&arr.into_dimensionality::<1>().map_err(to_py)?.view()),
+        2 => sum(&arr.into_dimensionality::<2>().map_err(to_py)?.view()),
+        3 => sum(&arr.into_dimensionality::<3>().map_err(to_py)?.view()),
+        4 => sum(&arr.into_dimensionality::<4>().map_err(to_py)?.view()),
+        5 => sum(&arr.into_dimensionality::<5>().map_err(to_py)?.view()),
+        6 => sum(&arr.into_dimensionality::<6>().map_err(to_py)?.view()),
+        n => {
+            return Err(PyValueError::new_err(format!(
+                "array rank {n} exceeds the supported dynamic-dispatch rank {MAX_DYNAMIC_RANK}"
+            )))
+        }
+    };
+    Ok(total)
+}
+
+#[pyfunction]
+#[pyo3(name = "sum_dyn")]
+fn sum_dyn_py(py: Python<'_>, a: PyReadonlyArrayDyn<'_, f32>) -> PyResult<f32> {
+    if !a.is_c_contiguous() {
+        return Err(PyValueError::new_err("a must be C-contiguous"));
+    }
+    let shape = a.shape().to_vec();
+    let slice = a.as_slice().map_err(|_| {
+        PyValueError::new_err("Failed to extract contiguous slice from NumPy array")
+    })?;
+    py.allow_threads(|| sum_dynamic(&shape, slice))
+}
+
 /// A Python module wrapping Leto strided array operations.
 #[pymodule]
 fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -187,6 +234,7 @@ fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(div_py, m)?)?;
     m.add_function(wrap_pyfunction!(sum_py, m)?)?;
     m.add_function(wrap_pyfunction!(matmul_py, m)?)?;
+    m.add_function(wrap_pyfunction!(sum_dyn_py, m)?)?;
     Ok(())
 }
 
@@ -266,6 +314,51 @@ mod tests {
             let result = matmul_py(py, lhs.readonly(), rhs.readonly());
 
             assert!(result.is_err());
+        });
+    }
+
+    #[test]
+    fn sum_dyn_handles_multiple_ranks() {
+        prepare_python();
+
+        Python::with_gil(|py| {
+            // Rank 1: arange(5) → 0+1+2+3+4 = 10.
+            let r1 = PyArray1::from_vec(py, vec![0.0f32, 1.0, 2.0, 3.0, 4.0]);
+            assert_eq!(sum_dyn_py(py, r1.to_dyn().readonly()).unwrap(), 10.0);
+
+            // Rank 2: [[1,2,3],[4,5,6]] → 21.
+            let r2 = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
+            assert_eq!(sum_dyn_py(py, r2.to_dyn().readonly()).unwrap(), 21.0);
+
+            // Rank 3: ones((2,2,2)) → 8.
+            let r3 = py
+                .eval(
+                    c_str!("__import__('numpy').ones((2, 2, 2), dtype='float32')"),
+                    None,
+                    None,
+                )
+                .unwrap()
+                .extract::<PyReadonlyArrayDyn<'_, f32>>()
+                .unwrap();
+            assert_eq!(sum_dyn_py(py, r3).unwrap(), 8.0);
+        });
+    }
+
+    #[test]
+    fn sum_dyn_rejects_non_contiguous() {
+        prepare_python();
+
+        Python::with_gil(|py| {
+            let view = py
+                .eval(
+                    c_str!("__import__('numpy').arange(6, dtype='float32').reshape(2, 3).T"),
+                    None,
+                    None,
+                )
+                .unwrap()
+                .extract::<PyReadonlyArrayDyn<'_, f32>>()
+                .unwrap();
+            assert!(sum_dyn_py(py, view).is_err());
         });
     }
 

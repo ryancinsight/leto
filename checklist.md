@@ -1,7 +1,18 @@
 # Leto Development Checklist
 
-Sprint phase: Execution. Target version: 0.33.0 [minor] (Cargo.toml bumped;
-CHANGELOG synced). Delivered 0.33.0: stack-allocated `StackStorage<T, CAP>`
+Sprint phase: Execution. Target version: 0.34.0 [minor] (Cargo.toml bumped;
+CHANGELOG synced). Delivered 0.34.0: PyO3 runtime-rank interop
+(`leto_python.sum_dyn`) realizing the ADR 0007 boundary at the binding edge —
+arbitrary-rank numpy array → **zero-copy** `ArrayD` (borrowing via
+`SliceStorage`) → `into_dimensionality::<N>()` bridge (bounded `match` on
+`ndim()`, ranks 1–6) → existing rank-generic `sum` kernel (SSOT, no per-rank
+binding code); GIL released around compute; non-contiguous rejected. Removes the
+prior compile-time-rank-2 numpy-boundary constraint. Evidence tier: embedded-
+CPython 3.13 integration tests (ranks 1/2/3 + non-contiguous rejection; crate's
+established binding-test convention — no maturin/pytest harness exists, so the
+Rust embedded-Python tests are authoritative; 7 leto-python tests). Closes the
+ADR 0007 consumer-driven PyO3 follow-up. Delivered 0.33.0: stack-allocated
+`StackStorage<T, CAP>`
 backing (inline `[T; CAP]`, no heap, `no_std`/`Copy`) + `Array::from_stack`/
 `from_stack_elem`. Reuses the **full** op surface via the `Storage` trait
 (DIP/SSOT — zero per-backend code; reductions/iteration/transpose all verified on

@@ -4,6 +4,29 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.34.0] - 2026-06-15
+
+### Added
+
+- PyO3 runtime-rank interop (`leto_python.sum_dyn`): accepts an **arbitrary-rank**
+  numpy array and reduces it, realizing the ADR 0007 boundary pattern at the
+  binding edge. The numpy buffer is carried as a **zero-copy** `ArrayD` borrowing
+  it through `SliceStorage`, then recovered to a const-rank `Array` via
+  `into_dimensionality::<N>()` (bounded `match` on `ndim()`, ranks 1–6), at which
+  point the existing rank-generic `sum` kernel runs with no per-rank binding code
+  (SSOT). Releases the GIL around compute (`allow_threads`) and rejects
+  non-C-contiguous input. This removes the prior compile-time-rank-2 constraint at
+  the numpy boundary. Verified by embedded-CPython integration tests across ranks
+  1/2/3 and non-contiguous rejection (binding-layer convention; 7 leto-python
+  tests total).
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto-python` (7 tests; real numpy arrays through the
+  `#[pyfunction]` entry points via embedded CPython 3.13)
+
 ## [0.33.0] - 2026-06-15
 
 ### Added

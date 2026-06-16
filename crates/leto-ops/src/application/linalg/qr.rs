@@ -1,5 +1,5 @@
 use crate::domain::real::RealScalar;
-use leto::{Array1, ArrayView1, ArrayView2, LetoError, Result};
+use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result};
 
 /// Householder QR factorization of an `m × n` matrix with `m ≥ n`:
 /// `A = Q · R` with `Q` orthogonal (`m × m`, held implicitly as reflectors)
@@ -125,6 +125,57 @@ impl<T: RealScalar> QrDecomposition<T> {
     #[inline]
     pub fn shape(&self) -> (usize, usize) {
         (self.rows, self.cols)
+    }
+
+    /// Materialize the orthogonal factor `Q` (`m × m`).
+    #[must_use]
+    pub fn q(&self) -> Array2<T> {
+        let (m, n) = (self.rows, self.cols);
+        let mut q = vec![T::ZERO; m * m];
+        for i in 0..m {
+            q[i * m + i] = T::ONE;
+        }
+
+        let limit = n.min(m);
+        for k in (0..limit).rev() {
+            let beta = self.betas[k];
+            if beta == T::ZERO {
+                continue;
+            }
+
+            for col_idx in 0..m {
+                let mut dot = self.heads[k].mul(q[k * m + col_idx]);
+                for offset in 1..(m - k) {
+                    let r = k + offset;
+                    let v_val = self.packed[r * n + k];
+                    dot = dot.add(v_val.mul(q[r * m + col_idx]));
+                }
+
+                let bs = beta.mul(dot);
+
+                q[k * m + col_idx] = q[k * m + col_idx].sub(bs.mul(self.heads[k]));
+                for offset in 1..(m - k) {
+                    let r = k + offset;
+                    let v_val = self.packed[r * n + k];
+                    q[r * m + col_idx] = q[r * m + col_idx].sub(bs.mul(v_val));
+                }
+            }
+        }
+
+        Array2::from_shape_vec([m, m], q).expect("Q shape matches storage")
+    }
+
+    /// Materialize the upper-triangular factor `R` (`m × n`).
+    #[must_use]
+    pub fn r(&self) -> Array2<T> {
+        let (m, n) = (self.rows, self.cols);
+        let mut r = vec![T::ZERO; m * n];
+        for i in 0..m {
+            for j in i..n {
+                r[i * n + j] = self.packed[i * n + j];
+            }
+        }
+        Array2::from_shape_vec([m, n], r).expect("R shape matches storage")
     }
 
     /// Solve `min ‖A·x − rhs‖₂` (least squares; exact solve when `m = n`).
