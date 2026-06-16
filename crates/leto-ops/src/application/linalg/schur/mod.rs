@@ -68,6 +68,9 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
         });
     }
     let n = rows;
+    if n == 0 {
+        return Ok(RealSchur { q: vec![], t: vec![], n: 0 });
+    }
 
     // Reduce to Hessenberg (validates finiteness; reused — SSOT). `H = Qᴴᵀ A Qᴴ`.
     let hess = crate::hessenberg(matrix)?;

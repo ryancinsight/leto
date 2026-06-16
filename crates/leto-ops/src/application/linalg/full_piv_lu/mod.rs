@@ -47,6 +47,12 @@ impl<T: RealScalar> FullPivLuDecomposition<T> {
         self.rank
     }
 
+    /// Return the packed LU factors.
+    #[must_use]
+    pub fn lu_factors(&self) -> &[T] {
+        &self.lu
+    }
+
     /// Determinant: `0` when rank-deficient, else `sign(P)·sign(Q)·∏ Uₖₖ`.
     #[must_use]
     pub fn det(&self) -> T {

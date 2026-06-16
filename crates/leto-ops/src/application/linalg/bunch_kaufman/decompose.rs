@@ -34,6 +34,15 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
             rhs: vec![n, n],
         });
     }
+    if n == 0 {
+        return Ok(Factored {
+            l: vec![],
+            d: vec![],
+            perm: vec![],
+            two: vec![],
+            n: 0,
+        });
+    }
 
     // Working full symmetric matrix.
     let mut a = vec![T::ZERO; n * n];
