@@ -33,7 +33,7 @@
 //! and least-squares agreement. Generic over [`crate::RealScalar`], native precision.
 
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result};
+use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result, Storage};
 
 /// Householder QR factorization of an `m × n` matrix with `m ≥ n`:
 /// `A = Q · R` with `Q` orthogonal (`m × m`, held implicitly as reflectors)
@@ -78,18 +78,17 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
         });
     }
 
-    let mut a = Vec::with_capacity(rows * cols);
-    for r in 0..rows {
-        for c in 0..cols {
-            let value = *matrix.get([r, c])?;
-            if !value.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "QR input contains a non-finite value".to_string(),
-                });
-            }
-            a.push(value);
-        }
+    // One bulk row-major copy into working storage, then a single tight
+    // finiteness scan — replacing `rows*cols` bounds-checked element gets. The
+    // factorization mutates `a` in place.
+    let contiguous = matrix.to_contiguous();
+    let a_slice = contiguous.storage().as_slice();
+    if !a_slice.iter().all(|value| value.is_finite()) {
+        return Err(LetoError::StorageError {
+            reason: "QR input contains a non-finite value".to_string(),
+        });
     }
+    let mut a = a_slice.to_vec();
 
     let mut heads = vec![T::ZERO; cols];
     let mut betas = vec![T::ZERO; cols];
