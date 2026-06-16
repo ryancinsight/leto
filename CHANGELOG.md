@@ -4,6 +4,36 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.33.0] - 2026-06-15
+
+### Added
+
+- Stack-allocated array storage `StackStorage<T, const CAP>` (inline `[T; CAP]`,
+  no heap; `no_std`-friendly; `Copy` when `T: Copy`) plus `Array::from_stack` /
+  `from_stack_elem` constructors. Because every array operation is generic over
+  the `Storage` trait (DIP), a stack-backed array inherits the **entire**
+  operation surface — reductions, arithmetic, iteration, slicing, transpose, the
+  LA kernels via views — with **no** duplicated kernels (SSOT). This is the
+  allocation-free part of the nalgebra small-fixed-matrix surface (ADR 0008).
+  Verified: construction, `CAP == ∏shape` validation, `from_stack_elem` fill,
+  reductions (`sum`/`mean`/`var`), iteration, transpose, and `Copy`/heap-free
+  clone on stack-backed arrays (6 tests).
+
+### Changed
+
+- ADR 0008 resolves the parity matrix's two `Excluded?` rows: stack allocation
+  is delivered (above); compile-time fixed *shape* (type-level dims) is
+  Excluded(architecture) — leto encodes const rank with runtime dims (ADR 0002);
+  geometry (Rotation/Isometry/Quaternion/Perspective) is Excluded(bounded-
+  context) — spatial transforms belong to a downstream domain crate, not the
+  array substrate.
+
+### Validation
+
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test -p leto --test core_tests stack_storage --all-features` (6 tests)
+
 ## [0.32.0] - 2026-06-15
 
 ### Added

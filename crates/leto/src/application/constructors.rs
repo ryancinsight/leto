@@ -4,7 +4,38 @@ use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 #[cfg(feature = "mnemosyne-alloc")]
 use crate::infrastructure::storage::MnemosyneStorage;
-use crate::infrastructure::storage::VecStorage;
+use crate::infrastructure::storage::{StackStorage, VecStorage};
+
+impl<T, const CAP: usize, const N: usize> Array<T, StackStorage<T, CAP>, N> {
+    /// Create a stack-backed array from a runtime `shape` and an inline
+    /// `[T; CAP]` in C-contiguous order — no heap allocation.
+    ///
+    /// # Errors
+    /// [`LetoError`] if the shape's element count does not equal `CAP`.
+    pub fn from_stack(shape: [usize; N], data: [T; CAP]) -> Result<Self> {
+        let layout = Layout::c_contiguous(shape)?;
+        if layout.size() != CAP {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "stack capacity {CAP} does not match shape element count {}",
+                    layout.size()
+                ),
+            });
+        }
+        Self::new(layout, StackStorage::new(data))
+    }
+
+    /// Create a stack-backed array of `shape` filled with `value` (no heap).
+    ///
+    /// # Errors
+    /// [`LetoError`] if the shape's element count does not equal `CAP`.
+    pub fn from_stack_elem(shape: [usize; N], value: T) -> Result<Self>
+    where
+        T: Copy,
+    {
+        Self::from_stack(shape, [value; CAP])
+    }
+}
 
 impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     /// Create a new Array of a given shape filled with the default value of T.

@@ -17,7 +17,7 @@ pub use domain::remove_axis::{RankMarker, RemoveAxis};
 pub use domain::slice::SliceArg;
 
 pub use infrastructure::storage::{
-    CowStorage, SliceStorage, SliceStorageMut, Storage, StorageMut, VecStorage,
+    CowStorage, SliceStorage, SliceStorageMut, StackStorage, Storage, StorageMut, VecStorage,
 };
 
 #[cfg(feature = "mnemosyne-alloc")]

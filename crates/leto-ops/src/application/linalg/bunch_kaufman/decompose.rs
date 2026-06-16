@@ -35,37 +35,37 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         });
     }
 
-    // Symmetry + finiteness validation (same contract as UDU).
-    let mut scale = T::ZERO;
-    for i in 0..n {
-        for j in 0..n {
-            let value = *matrix.get([i, j])?;
-            if !value.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "Bunch-Kaufman input contains a non-finite value".to_string(),
-                });
-            }
-            if value.abs() > scale {
-                scale = value.abs();
-            }
-        }
-    }
-    let sym_tol = scale.mul(T::ONE.div(T::from_usize(1_000_000_000)));
-    for i in 0..n {
-        for j in (i + 1)..n {
-            if matrix.get([i, j])?.sub(*matrix.get([j, i])?).abs() > sym_tol {
-                return Err(LetoError::StorageError {
-                    reason: "Bunch-Kaufman requires a symmetric matrix".to_string(),
-                });
-            }
-        }
-    }
-
     // Working full symmetric matrix.
     let mut a = vec![T::ZERO; n * n];
     for i in 0..n {
         for j in 0..n {
-            a[idx(i, j, n)] = *matrix.get([i, j])?;
+            let value = *matrix.get([i, j])?;
+            a[idx(i, j, n)] = value;
+        }
+    }
+
+    // Symmetry + finiteness validation (same contract as UDU).
+    let mut scale = T::ZERO;
+    for &value in &a {
+        if !value.is_finite() {
+            return Err(LetoError::StorageError {
+                reason: "Bunch-Kaufman input contains a non-finite value".to_string(),
+            });
+        }
+        if value.abs() > scale {
+            scale = value.abs();
+        }
+    }
+
+    let sym_tol = scale.mul(T::ONE.div(T::from_usize(1_000_000_000)));
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let diff = a[idx(i, j, n)].sub(a[idx(j, i, n)]).abs();
+            if diff > sym_tol {
+                return Err(LetoError::StorageError {
+                    reason: "Bunch-Kaufman requires a symmetric matrix".to_string(),
+                });
+            }
         }
     }
 
@@ -180,11 +180,17 @@ fn eliminate_1x1<T: RealScalar>(a: &mut [T], l: &mut [T], d: &mut [T], k: usize,
         let factor = a[idx(i, k, n)].div(pivot);
         l[idx(i, k, n)] = factor;
     }
+
+    let (row_k_part, trailing_part) = a.split_at_mut((k + 1) * n);
+    let row_k = &row_k_part[k * n..];
+
     for i in (k + 1)..n {
         let factor = l[idx(i, k, n)];
+        let row_i_idx = (i - (k + 1)) * n;
+        let row_i = &mut trailing_part[row_i_idx..row_i_idx + n];
         for j in (k + 1)..n {
-            let update = factor.mul(a[idx(k, j, n)]);
-            a[idx(i, j, n)] = a[idx(i, j, n)].sub(update);
+            let update = factor.mul(row_k[j]);
+            row_i[j] = row_i[j].sub(update);
         }
     }
 }
@@ -227,12 +233,19 @@ fn eliminate_2x2<T: RealScalar>(
         l[idx(i, k, n)] = c0.mul(inv00).add(c1.mul(inv01));
         l[idx(i, k + 1, n)] = c0.mul(inv01).add(c1.mul(inv11));
     }
+
+    let (rows_k_k1, trailing_part) = a.split_at_mut((k + 2) * n);
+    let row_k = &rows_k_k1[k * n..(k + 1) * n];
+    let row_k1 = &rows_k_k1[(k + 1) * n..(k + 2) * n];
+
     for i in (k + 2)..n {
         let li0 = l[idx(i, k, n)];
         let li1 = l[idx(i, k + 1, n)];
+        let row_i_idx = (i - (k + 2)) * n;
+        let row_i = &mut trailing_part[row_i_idx..row_i_idx + n];
         for j in (k + 2)..n {
-            let update = li0.mul(a[idx(k, j, n)]).add(li1.mul(a[idx(k + 1, j, n)]));
-            a[idx(i, j, n)] = a[idx(i, j, n)].sub(update);
+            let update = li0.mul(row_k[j]).add(li1.mul(row_k1[j]));
+            row_i[j] = row_i[j].sub(update);
         }
     }
     Ok(())

@@ -4,13 +4,54 @@
 //! Operates entirely in real arithmetic: complex eigenvalues surface as isolated
 //! 2×2 diagonal blocks (standardized later), so no complex type is needed here.
 
-use crate::application::linalg::householder::reflector;
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};
 
 /// Iteration cap before declaring non-convergence (Wilkinson + exceptional
 /// shifts converge in `O(n)` steps; this is a safety bound).
 const MAX_ITER: usize = 2000;
+
+struct StackReflector<T> {
+    v: [T; 3],
+    len: usize,
+    beta: T,
+}
+
+fn stack_reflector<T: RealScalar>(x: &[T]) -> Option<(StackReflector<T>, T)> {
+    let len = x.len();
+    if len == 0 || len > 3 {
+        return None;
+    }
+    let mut norm_sq = T::ZERO;
+    for &xi in x {
+        norm_sq = norm_sq.add(xi.mul(xi));
+    }
+    let norm = norm_sq.sqrt();
+    if norm <= T::ZERO {
+        return None;
+    }
+
+    let sign = if x[0] < T::ZERO {
+        T::ZERO.sub(T::ONE)
+    } else {
+        T::ONE
+    };
+    let alpha = T::ZERO.sub(sign.mul(norm)); // α = −sign·‖x‖
+
+    let mut v = [T::ZERO; 3];
+    v[..len].copy_from_slice(&x[..len]);
+    v[0] = v[0].sub(alpha); // v₀ = x₀ − α
+
+    let mut vnorm_sq = T::ZERO;
+    for &vi in &v[..len] {
+        vnorm_sq = vnorm_sq.add(vi.mul(vi));
+    }
+    if vnorm_sq <= T::ZERO {
+        return None;
+    }
+    let beta = T::ONE.add(T::ONE).div(vnorm_sq);
+    Some((StackReflector { v, len, beta }, alpha))
+}
 
 #[inline]
 fn at<T: Copy>(h: &[T], i: usize, j: usize, n: usize) -> T {
@@ -109,11 +150,18 @@ fn francis_step<T: RealScalar>(
 
     for k in lo..=(hi - 1) {
         let len = if k < hi - 1 { 3 } else { 2 };
-        let vec = if len == 3 { vec![x, y, zz] } else { vec![x, y] };
-        if let Some((refl, _alpha)) = reflector(&vec) {
-            apply_left(h, &refl.v, refl.beta, k, n, lo, n - 1);
-            apply_right(h, &refl.v, refl.beta, k, n, 0, hi);
-            apply_right(z, &refl.v, refl.beta, k, n, 0, n - 1);
+        let refl_opt = if len == 3 {
+            let arr = [x, y, zz];
+            stack_reflector(&arr)
+        } else {
+            let arr = [x, y, T::ZERO];
+            stack_reflector(&arr[..2])
+        };
+        if let Some((refl, _alpha)) = refl_opt {
+            let v_slice = &refl.v[..refl.len];
+            apply_left(h, v_slice, refl.beta, k, n, lo, n - 1);
+            apply_right(h, v_slice, refl.beta, k, n, 0, hi);
+            apply_right(z, v_slice, refl.beta, k, n, 0, n - 1);
         }
         if k + 1 < hi {
             x = at(h, k + 1, k, n);

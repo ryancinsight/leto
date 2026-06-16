@@ -40,7 +40,7 @@ Evidence column: `parity.rs` / `oracle_parity.rs` = differential test file;
 | vector dot | `Array1::dot` | `dot` | Complete | parity.rs, kernels.rs `dot_*` |
 | concat / stack | `concatenate`/`stack` | `concat`/`stack` | Verified | parity.rs |
 | pad / split | (manual) | `pad`/`split` | Verified | structure tests |
-| Random (uniform/normal, seeded) | ndarray-rand | `uniform/normal_with_seed` | Partial | closed-form ref |
+| Random (uniform/normal, seeded) | ndarray-rand | `uniform/normal_with_seed` | Complete | structure_ops.rs, kernels.rs |
 | std::ops operator overloads | `+ - * /` on arrays, `-` neg, scalar ops | `&a op &b`, `&a op s`, `-&a` | Verified | core/arithmetic (ADR 0004; `*` elementwise) |
 | Dynamic rank `IxDyn` (runtime-rank carrier + zero-copy bridge) | `IxDyn` | `ArrayD<T,S>` + `LayoutDyn`; `into_dyn` / `into_dimensionality::<N>` | Verified | core/dynamic (ADR 0007) — boundary carrier (construct/inspect/index/reshape/materialize) + zero-copy rank bridge to the const-rank kernels; round-trip, strided, runtime-rank dispatch. Compute via rank recovery by design (not a parallel substrate) |
 | Element iteration `iter`/`indexed_iter` (logical-order, double-ended) | ndarray `iter`/`indexed_iter` | `Array`/`ArrayView::iter`/`indexed_iter` → `ElementIter`/`IndexedIter`; `IntoIterator for &ArrayView` | Verified | core/iteration — row-major order, transposed/strided logical order, `([usize;N], &T)` pairs, `DoubleEndedIterator`+`ExactSizeIterator`, empty |
@@ -70,22 +70,23 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | Thin full-rank SVD (Gram) | `SVD` subset | `svd_decompose` | Verified | svd/gram.rs (full-rank; rejects rank-deficient) |
 | Rank-revealing SVD (incl. rank-deficient U/V) | `SVD` | `svd_rank_revealing` / `MatrixDecompose::svd_rank_revealing` | Verified | svd/jacobi.rs — one-sided Jacobi (ADR 0005); vs nalgebra singular values (tall/wide/deficient) + reconstruction + orthonormal V |
 | Singular values (incl. rank-deficient) | `SVD::singular_values` | `singular_values` | Verified | oracle_parity.rs |
-| Norms L1/L2/max | `norm`/`norm_squared` | `norm_l1/l2/max` | Verified | norms.rs |
+| Norms L1/L2/max | `norm`/`norm_squared` | `norm_l1/l2/max` | Complete | norms.rs, kernels.rs |
 | Pseudo-inverse (full-rank **and** rank-deficient) | `pseudo_inverse` | `pinv` / `MatrixSolve::pinv` | Verified | svd/pseudoinverse.rs — rank-revealing via Jacobi SVD; vs nalgebra `pseudo_inverse` + Moore-Penrose `A A⁺ A = A`, `A⁺ A A⁺ = A⁺` |
 | Non-symmetric eigenvalues (real + complex) | `complex_eigenvalues` | `eigenvalues` / `MatrixDecompose::eigenvalues` | Verified | eigenvalues/ — shifted complex QR (ADR 0006); vs nalgebra `complex_eigenvalues` battery (real/complex/various sizes) + exact known spectra |
 | Hessenberg reduction | `Hessenberg` | `hessenberg` / `MatrixDecompose::hessenberg` | Verified | hessenberg/ (Householder; ADR 0006); reconstruction + orthogonality + structure + trace/Frobenius invariants + nalgebra Frobenius parity |
-| Real Schur form (Q, T with vectors) | `Schur` | `schur` / `MatrixDecompose::schur` → `RealSchur` (`q`/`t`/`eigenvalues`) | Verified | schur/ — Francis double-shift QR (real arithmetic, Q accumulation) with theorem+proof; reuses Hessenberg (SSOT); exact reconstruction `A = Q T Qᵀ`, `Q` orthogonality, quasi-triangular structure (2×2 blocks only for complex pairs), spectrum vs `eigenvalues` kernel + nalgebra |
+| Real Schur form (Q, T with vectors) | `Schur` | `schur` / `MatrixDecompose::schur` → `RealSchur` (`q`/`t`/`eigenvalues`) | Complete | schur/, kernels.rs — Francis double-shift QR (real arithmetic, Q accumulation) with theorem+proof; reuses Hessenberg (SSOT); exact reconstruction `A = Q T Qᵀ`, `Q` orthogonality, quasi-triangular structure (2×2 blocks only for complex pairs), spectrum vs `eigenvalues` kernel + nalgebra |
 | Bidiagonalization | `Bidiagonal` | `bidiagonalize` / `MatrixDecompose::bidiagonalize` | Verified | bidiagonal/ — Golub–Kahan two-sided Householder (ADR 0006); reconstruction + orthogonality + structure + singular-value preservation vs leto & nalgebra SVD |
 | LU, complete pivoting (rank-revealing) | `FullPivLU` | `full_piv_lu` / `MatrixDecompose::full_piv_lu` | Verified | full_piv_lu/ — `P A Q = L U`; reconstruction + rank + det/solve/inv vs nalgebra `FullPivLU` + rank-deficiency revelation |
 | QR, column pivoting (rank-revealing) | `ColPivQR` | `col_piv_qr` / `MatrixDecompose::col_piv_qr` | Verified | col_piv_qr/ — `A P = Q R`; reconstruction + orthogonality + rank + full-rank least squares vs leto QR & nalgebra normal equations |
 | UDU / LDLᵀ (symmetric indefinite, unpivoted) | `UDU` | `udu_decompose` / `MatrixDecompose::udu` | Verified | udu/ — unpivoted `A = U D Uᵀ`; reconstruction + determinant/solve/inverse vs nalgebra + zero-pivot rejection |
-| Bunch–Kaufman (symmetric indefinite, pivoted) | `BunchKaufman` | `bunch_kaufman` / `MatrixDecompose::bunch_kaufman` | Verified | bunch_kaufman/ — partial-pivot `P A Pᵀ = L D Lᵀ` (1×1/2×2 blocks, α=(1+√17)/8) with theorem+proof; **exact reconstruction** identity, det/solve/inverse vs LU, zero-diagonal indefinite (forces 2×2 pivot), rejection. Stable general form of UDU |
+| Bunch–Kaufman (symmetric indefinite, pivoted) | `BunchKaufman` | `bunch_kaufman` / `MatrixDecompose::bunch_kaufman` | Complete | bunch_kaufman/, kernels.rs — partial-pivot `P A Pᵀ = L D Lᵀ` (1×1/2×2 blocks, α=(1+√17)/8) with theorem+proof; **exact reconstruction** identity, det/solve/inverse vs LU, zero-diagonal indefinite (forces 2×2 pivot), rejection. Stable general form of UDU |
 | Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers) |
 | Numerical rank | `Matrix::rank` | `matrix_rank` / `MatrixProperties::rank` | Verified | properties (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall) |
 | Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`) |
 | Matrix exp / power | nalgebra `exp` / `pow` | `matexp` / `matpow` + `MatrixFunction` | Verified | matrix_function/ — `matpow` exp-by-squaring (`Θ(log k)`, exact incl. integers); `matexp` scaling-and-squaring + diagonal Padé(6) with theorem+proof; closed-form (zero/diagonal/nilpotent/skew→rotation) + nalgebra `exp`/`pow` differential; reuses `matmul`+LU-inv (SSOT) |
-| Small fixed `MatrixN`/`VectorN` | `Matrix3`/`Vector3` | — | **Excluded?** | different abstraction; decide Stage 2 |
-| Geometry: Rotation/Isometry/Quaternion/Perspective | nalgebra geometry | — | **Excluded?** | not an array substrate; decide Stage 2 |
+| Stack-allocated fixed-size arrays (allocation-free) | `Matrix3`/`Vector3` (stack aspect) | `StackStorage<T, CAP>` + `Array::from_stack`/`from_stack_elem` | Verified | core/stack_storage (ADR 0008) — inline `[T; CAP]` backing, `no_std`/`Copy`; reuses the **full** op surface via the `Storage` trait (SSOT, no per-backend code); construction/validation/reductions/iteration/transpose |
+| Compile-time fixed *shape* (type-level dims) | `Matrix3` shape-in-type | — | **Excluded(architecture)** | ADR 0008 — leto is const-*rank*/runtime-*dims* (ADR 0002); type-level dims fork the core type, no consumer driver |
+| Geometry: Rotation/Isometry/Quaternion/Perspective | nalgebra geometry | — | **Excluded(bounded-context)** | ADR 0008 — spatial transforms are a downstream domain crate, not the array substrate (SRP/bounded-context isolation) |
 
 ## C. First-pass performance comparison (2026-06-14, AVX2 Win11 x86_64)
 
@@ -107,8 +108,8 @@ Median, criterion sample-size 10, identical pinned f64 inputs.
 
 Counting only rows enumerated above (not yet the full oracle surface):
 
-- ndarray array families tested/present: ~27 of ~28 rows at Verified+ →
-  remaining Partial row: random constructors (distribution-oracle depth).
+- ndarray array families tested/present: 28 of 28 rows at Verified+ / Complete.
+  No remaining Partial or Missing rows.
 - nalgebra dense-decomposition families: 8 of ~15 at Verified+ → remaining:
   rank-revealing SVD, non-symmetric/Schur/Hessenberg, secondary factorizations,
   Kron/trace/rank; geometry + small-fixed pending exclude-vs-implement decision.

@@ -6,6 +6,7 @@ pub mod lanes;
 pub mod layout;
 pub mod quantile;
 pub mod slicing;
+pub mod stack_storage;
 pub mod statistics;
 pub mod storage;
 pub mod structure;

@@ -27,6 +27,9 @@ thiserror = { workspace = true }
 ndarray = { workspace = true }
 nalgebra = { workspace = true }
 criterion = { workspace = true }
+ndarray-rand = "0.15"
+rand = "0.8"
+rand_chacha = "0.3"
 
 [[bench]]
 name = "kernels"

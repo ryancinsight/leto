@@ -8,8 +8,8 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
 use leto_ops::{
-    add, dot, map_into, matmul, norm_l1, norm_l2, norm_max, sum, unary_map, zip_mut_with, AddOp,
-    ExpOp,
+    add, bunch_kaufman, dot, map_into, matmul, norm_l1, norm_l2, norm_max, schur, sum, unary_map,
+    zip_mut_with, AddOp, ExpOp,
 };
 use nalgebra::DMatrix;
 use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
@@ -324,12 +324,100 @@ fn bench_parity_oracle(c: &mut Criterion) {
         bencher.iter(|| black_box(&nd_a).dot(black_box(&nd_b)));
     });
 
+    // Seeded random constructors
+    use leto_ops::{normal_with_seed, uniform_with_seed};
+    use ndarray_rand::rand_distr::{Normal, Uniform};
+    use ndarray_rand::RandomExt;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    group.bench_function("uniform_leto_64k", |bencher| {
+        bencher.iter(|| {
+            uniform_with_seed(
+                black_box([len]),
+                black_box(-2.0),
+                black_box(5.0),
+                black_box(42),
+            )
+            .unwrap()
+        });
+    });
+    group.bench_function("uniform_ndarray_64k", |bencher| {
+        bencher.iter(|| {
+            let mut rng = ChaCha8Rng::seed_from_u64(42);
+            NdArray1::random_using(black_box(len), black_box(Uniform::new(-2.0, 5.0)), &mut rng)
+        });
+    });
+
+    group.bench_function("normal_leto_64k", |bencher| {
+        bencher.iter(|| {
+            normal_with_seed(
+                black_box([len]),
+                black_box(1.0),
+                black_box(2.0),
+                black_box(42),
+            )
+            .unwrap()
+        });
+    });
+    group.bench_function("normal_ndarray_64k", |bencher| {
+        bencher.iter(|| {
+            let mut rng = ChaCha8Rng::seed_from_u64(42);
+            NdArray1::random_using(
+                black_box(len),
+                black_box(Normal::new(1.0, 2.0).unwrap()),
+                &mut rng,
+            )
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_linalg_compare(c: &mut Criterion) {
+    let mut group = c.benchmark_group("linalg_compare");
+
+    for &n in &[32usize, 64] {
+        let values = pinned_values(n * n, 1.0e-3);
+        let leto_mat = Array::from_shape_vec([n, n], values.clone()).unwrap();
+        let nalgebra_mat = DMatrix::from_row_slice(n, n, &values);
+
+        group.bench_function(format!("schur_leto_{n}x{n}"), |bencher| {
+            bencher.iter(|| black_box(schur(black_box(&leto_mat.view())).unwrap()));
+        });
+        group.bench_function(format!("schur_nalgebra_{n}x{n}"), |bencher| {
+            bencher.iter(|| {
+                black_box(nalgebra::linalg::Schur::new(black_box(
+                    nalgebra_mat.clone(),
+                )))
+            });
+        });
+
+        // Bunch-Kaufman requires symmetric matrix
+        let mut sym_values = values.clone();
+        for i in 0..n {
+            for j in 0..n {
+                sym_values[i * n + j] = values[if i < j { i * n + j } else { j * n + i }];
+            }
+        }
+        let leto_sym = Array::from_shape_vec([n, n], sym_values.clone()).unwrap();
+        let nalgebra_sym = DMatrix::from_row_slice(n, n, &sym_values);
+
+        group.bench_function(format!("bunch_kaufman_leto_{n}x{n}"), |bencher| {
+            bencher.iter(|| black_box(bunch_kaufman(black_box(&leto_sym.view())).unwrap()));
+        });
+        group.bench_function(format!("bunch_kaufman_nalgebra_{n}x{n}"), |bencher| {
+            bencher
+                .iter(|| black_box(nalgebra::linalg::LBLT::new(black_box(nalgebra_sym.clone()))));
+        });
+    }
+
     group.finish();
 }
 
 criterion_group! {
     name = kernels;
     config = Criterion::default().sample_size(20).without_plots();
-    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle
+    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare
 }
 criterion_main!(kernels);

@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.32.0"
+version = "0.33.0"
 edition = "2021"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -20,7 +20,7 @@ leto-ops = { path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "1e014d25461b322345c15fb3cf9467b5388616dd" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "03d9d0346f52b08946875ff54540431e178aa51d" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "03d9d0346f52b08946875ff54540431e178aa51d", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "d4a01bde1c8cfa9dbd09015b712573bb0046b991", package = "hermes-simd" }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
