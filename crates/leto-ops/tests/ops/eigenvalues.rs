@@ -73,7 +73,7 @@ fn eigenvalues_complex_conjugate_pair_exact() {
 #[test]
 fn eigenvalues_match_nalgebra_battery() {
     // Mixed real/complex spectra across sizes; nalgebra is the oracle.
-    let cases: [(usize, Vec<f64>); 5] = [
+    let cases: [(usize, Vec<f64>); 7] = [
         // Upper triangular → eigenvalues are the diagonal.
         (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0]),
         // Non-symmetric, real spectrum.
@@ -96,6 +96,20 @@ fn eigenvalues_match_nalgebra_battery() {
         (
             5,
             (0..25).map(|i| ((i * 7 + 3) % 11) as f64 - 5.0).collect(),
+        ),
+        // Dense non-symmetric 8×8 — multiple bulge-chase steps and deflations,
+        // exercising the block-confined eigenvalue-only Francis updates.
+        (
+            8,
+            (0..64).map(|i| ((i * 13 + 5) % 17) as f64 - 8.0).collect(),
+        ),
+        // Dense non-symmetric 16×16 — many nested active blocks; stresses the
+        // [lo, hi] / [lo, k+len+1] apply ranges across the full chase.
+        (
+            16,
+            (0..256)
+                .map(|i| ((i * 31 + 7) % 23) as f64 - 11.0)
+                .collect(),
         ),
     ];
 
