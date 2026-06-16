@@ -92,6 +92,9 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
 
     let mut heads = vec![T::ZERO; cols];
     let mut betas = vec![T::ZERO; cols];
+    // Reused row-vector scratch `w = vᵀ·A_trailing` for the rank-1 reflector
+    // update (see the trailing-column apply); one allocation, not one per column.
+    let mut w = vec![T::ZERO; cols];
 
     for k in 0..cols {
         // ‖x‖ for the pivot column below (and including) the diagonal.
@@ -124,17 +127,44 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
         }
         let beta = T::ONE.add(T::ONE).div(v_norm_sq);
 
-        // Apply H = I − β·v·vᵀ to the trailing columns.
-        for c in (k + 1)..cols {
-            let mut s = head.mul(a[k * cols + c]);
-            for r in (k + 1)..rows {
-                s = s.add(a[r * cols + k].mul(a[r * cols + c]));
+        // Apply H = I − β·v·vᵀ to the trailing columns as a row-oriented rank-1
+        // update: w = vᵀ·A[:, k+1..], then A[:, k+1..] −= β·v·w. Accumulating and
+        // applying along contiguous matrix rows (row-major) gives cache-friendly,
+        // auto-vectorizable inner loops, versus the strided column traversal. The
+        // per-`w[c]` summation order (row k, then rows k+1..m ascending) is
+        // identical to the column-oriented form, so results are bitwise-identical.
+        let trail = cols - (k + 1);
+        let w = &mut w[..trail];
+        // w ← head · (row k of the trailing block).
+        let row_k = &a[k * cols + (k + 1)..k * cols + cols];
+        for (wc, &akc) in w.iter_mut().zip(row_k) {
+            *wc = head.mul(akc);
+        }
+        // w += v[r] · (row r) for r = k+1..m  (v[r] is the in-place reflector tail).
+        for r in (k + 1)..rows {
+            let vr = a[r * cols + k];
+            let row_r = &a[r * cols + (k + 1)..r * cols + cols];
+            for (wc, &arc) in w.iter_mut().zip(row_r) {
+                *wc = wc.add(vr.mul(arc));
             }
-            let bs = beta.mul(s);
-            a[k * cols + c] = a[k * cols + c].sub(bs.mul(head));
-            for r in (k + 1)..rows {
-                let update = bs.mul(a[r * cols + k]);
-                a[r * cols + c] = a[r * cols + c].sub(update);
+        }
+        // Scale in place: w[c] ← β·w[c] = bs[c]. Scaling here (then multiplying by
+        // head / v[r]) reproduces the column-oriented grouping (β·s)·head exactly;
+        // FP multiplication is commutative but not associative, so the order matters.
+        for wc in w.iter_mut() {
+            *wc = beta.mul(*wc);
+        }
+        // Row k: A[k, c] −= bs[c]·head.
+        let row_k = &mut a[k * cols + (k + 1)..k * cols + cols];
+        for (akc, &wc) in row_k.iter_mut().zip(w.iter()) {
+            *akc = akc.sub(wc.mul(head));
+        }
+        // Rows r>k: A[r, c] −= bs[c]·v[r].
+        for r in (k + 1)..rows {
+            let vr = a[r * cols + k];
+            let row_r = &mut a[r * cols + (k + 1)..r * cols + cols];
+            for (arc, &wc) in row_r.iter_mut().zip(w.iter()) {
+                *arc = arc.sub(wc.mul(vr));
             }
         }
 
