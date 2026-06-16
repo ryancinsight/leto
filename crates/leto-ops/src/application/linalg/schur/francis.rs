@@ -3,6 +3,35 @@
 //!
 //! Operates entirely in real arithmetic: complex eigenvalues surface as isolated
 //! 2×2 diagonal blocks (standardized later), so no complex type is needed here.
+//!
+//! # Theorem (Francis step = one implicit double-shift QR step)
+//! Let `H` be unreduced upper Hessenberg and `μ₁, μ₂` a shift pair that is either
+//! two reals or a complex-conjugate pair. One Francis step computes an orthogonal
+//! `Z` with `Zᵀ H Z` again upper Hessenberg, and `Zᵀ H Z` equals the matrix
+//! produced by one explicit double-shift QR step — i.e. `Q` from the QR
+//! factorization `(H − μ₁I)(H − μ₂I) = Q R`, applied as `Qᵀ H Q` — without ever
+//! forming the product or leaving real arithmetic.
+//!
+//! *Proof (implicit-Q).* `M = (H − μ₁I)(H − μ₂I)` is real: a conjugate pair gives
+//! `M = H² − (μ₁+μ₂)H + μ₁μ₂I` with real coefficients `s = μ₁+μ₂`, `t = μ₁μ₂`.
+//! The step builds the Householder `P₀` mapping `M e₁` (its first column,
+//! computed directly from `s, t` and the top-left of `H` — the `x, y, zz` below)
+//! to a multiple of `e₁`, then forms `P₀ᵀ H P₀`, which bulges `H` just below the
+//! subdiagonal, and chases the bulge with Householders `P₁ … P_{n-2}` that
+//! restore Hessenberg form. Set `Z = P₀ P₁ … P_{n-2}`; then `Zᵀ H Z` is upper
+//! Hessenberg and `Z e₁ = P₀ e₁ ∝ M e₁`. The implicit-Q theorem states that for
+//! unreduced `H`, an orthogonal `Z` with `Zᵀ H Z` unreduced Hessenberg is
+//! determined, up to column signs, by `Z e₁`. The explicit step's `Q` satisfies
+//! `Q e₁ ∝ M e₁` as well (first column of `Q R = M`), so `Z` and `Q` agree up to
+//! signs and yield the same Hessenberg form. Hence the bulge chase realizes the
+//! double-shift QR step in real arithmetic. ∎
+//!
+//! # Corollary (convergence and deflation)
+//! With Wilkinson-type shifts (eigenvalues of the trailing 2×2 block) the bottom
+//! subdiagonal entry converges quadratically to zero; the iteration zeroes it
+//! (precision-exact deflation test), splitting off a 1×1 (real eigenvalue) or 2×2
+//! (conjugate pair) block, and recurses on the leading submatrix. Exceptional
+//! ad-hoc shifts every few stalls break the rare non-convergent cycles.
 
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};
