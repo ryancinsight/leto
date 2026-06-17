@@ -175,7 +175,20 @@ benchmark group):
 | QR | ~3.6× | **~1.0×** | reach parity (row-oriented SIMD apply + blocked ≥256²) |
 | LU | ~3.5× | **~0.96×** | reach parity (bulk-copy input + SIMD axpy elimination); solve/inv O(n³) `get` removed |
 | Cholesky | ~3.4× | — | solve/inv O(n³) `get` removed (commit `6920655`); decompose scalar (constant-factor) |
-| singular_values (values-only SVD) | — | **~2.25×** | OPEN — **profiled** (warm 64²): REDUCE ~82 µs + SWEEP ~48 µs vs nalgebra ~78 µs total. The SIMD `apply_right` dot trimmed the reduce ~6%; full parity needs **major algorithm work**, not constant-factor: (a) the bidiagonalization REDUCE is ~2.25× nalgebra's because nalgebra is **blocked** (`dlabrd`, trailing GEMM update) vs leto's per-reflector axpy — the intricate look-ahead-coupled kernel (ADR 0010 Phase 2 note); (b) the values SWEEP is **sequential Givens** with a per-rotation `sqrt`, parity-closeable only by **divide-and-conquer SVD** (`dbdsdc`). Same sequential-iteration class as the deferred eig multishift; correctly phased, not rushed. |
+| singular_values (values-only SVD) | — | **~2.25×** | OPEN — **profiled** (warm 64²): REDUCE ~82 µs + SWEEP ~48 µs vs nalgebra ~78 µs total. The SIMD `apply_right` dot trimmed the reduce ~6%; full parity needs **major algorithm work**, not constant-factor: (a) the bidiagonalization REDUCE is ~2.25× nalgebra's, and a flop analysis proves
+this is **not** allocation or constant-factor: leto's 82 µs is already *below* a
+naive per-reflector SIMD estimate (~131 µs), so the axpy applies are well
+vectorized — removing the per-step `col`/`row`/`w` heap allocations would not
+move it. nalgebra's 40 µs is **higher sustained flop/ns from blocked GEMM**
+(`dlabrd`) vs leto's per-reflector axpy passes (bandwidth/latency-bound); the only
+lever is blocking, the intricate look-ahead-coupled kernel (ADR 0010 Phase 2 note,
+needs the `X`/`Y` accumulators). (b) the values SWEEP is **sequential Givens** with
+a per-rotation `sqrt`, parity-closeable only by **divide-and-conquer SVD**
+(`dbdsdc`). Both are major sequential/blocked-kernel rewrites of the same class as
+the deferred eig multishift — correctly phased, not rushed (a subtle bug ships
+wrong singular values, a HARD-tier defect). The verified compact-WY block reflector
+(`reflector_block`) is the ready substrate for `dlabrd`; the remaining intricacy is
+the two-sided look-ahead, not the block apply. |
 | dense matmul | ~2.0× | ~1.5× | AXPY (rank-1) scheme: O(n³) output traffic; needs register-blocked GEMM micro-kernel (tile-accumulating SIMD primitive → upstream hermes) |
 | matpow | ~1.5× | — | matmul-bound (tracks matmul) |
 
