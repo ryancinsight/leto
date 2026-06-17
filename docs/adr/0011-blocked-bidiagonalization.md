@@ -1,5 +1,44 @@
 # ADR 0011: Blocked bidiagonal reduction (`dgebrd`/`dlabrd`) for singular values
 
+- Status: **Implemented, oracle-verified, then REVERTED as measured-regressive.**
+  Superseded conclusion below (the "disparity" is a small-matrix artifact; leto's
+  unblocked reduce is already at parity at scale).
+
+## Outcome (measured)
+
+The blocked reduction (`dlabrd` panel `X`/`Y` look-ahead + `dgebrd` two-GEMM
+trailing update) was implemented in row-major from the grounded reference and
+**verified correct**: 192² blocked singular values matched nalgebra to `1e-9·σ₁`
+(the blocked = unblocked theorem holds in practice). But A/B benchmarks show it is
+a **regression at every size**:
+
+| size | unblocked | blocked | nalgebra |
+| --- | --- | --- | --- |
+| 256² | 4.69 ms | 5.68 ms | 3.67 ms |
+| 512² | 32.7 ms | 38.0 ms | 31.9 ms |
+
+Two facts overturn the original premise:
+1. **leto's *unblocked* bidiagonalization is already at parity at scale** — 512²
+   `1.03×` nalgebra, 256² `1.28×`. The `~2.25×` figure that motivated this ADR is a
+   **small-matrix (64²) fixed-overhead artifact** (per-reflector allocation/setup
+   amortizes poorly when `n` is small), *not* a structural large-`n` throughput gap.
+2. **Blocking is the wrong lever for that artifact**: `dlabrd`'s `X`/`Y`
+   accumulators ~double the flops to convert the trailing update to BLAS-3; that
+   trade only pays when the BLAS-3/BLAS-2 speed ratio is large enough (nalgebra's
+   tuned kernels), and it adds *more* fixed overhead — so it regresses exactly the
+   small-`n` regime where the gap lives, and loses to the already-good unblocked
+   path at large `n`.
+
+Reverted per the anti-regression / justified-constructs discipline (a correct but
+slower kernel is not shipped). The grounded algorithm above is retained as the
+reference should a future need arise (e.g. a much faster GEMM, or `m ≫ n` where the
+panel overhead amortizes differently). The genuine, bounded residual is the
+small-`n` fixed overhead in the unblocked reduce (allocation reuse), tracked
+separately — low ROI given parity at scale.
+
+---
+Original design (grounded reference, retained for the record):
+
 - Status: Accepted (design; grounded in the LAPACK reference, ready to implement)
 - Date: 2026-06-17
 - Class: [minor] (additive fast path behind a size gate; no API/numeric contract

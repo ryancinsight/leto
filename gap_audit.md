@@ -175,7 +175,8 @@ benchmark group):
 | QR | ~3.6× | **~1.0×** | reach parity (row-oriented SIMD apply + blocked ≥256²) |
 | LU | ~3.5× | **~0.96×** | reach parity (bulk-copy input + SIMD axpy elimination); solve/inv O(n³) `get` removed |
 | Cholesky | ~3.4× | — | solve/inv O(n³) `get` removed (commit `6920655`); decompose scalar (constant-factor) |
-| singular_values (values-only SVD) | — | **~2.25×** | OPEN — **profiled** (warm 64²): REDUCE ~82 µs + SWEEP ~48 µs vs nalgebra ~78 µs total. The SIMD `apply_right` dot trimmed the reduce ~6%; full parity needs **major algorithm work**, not constant-factor: (a) the bidiagonalization REDUCE is ~2.25× nalgebra's, and a flop analysis proves
+| singular_values (values-only SVD) | — | 64² ~2.25×, **256² 1.28×, 512² 1.03×** | **REFRAMED (ADR 0011): not a structural gap.** The blocked `dgebrd`/`dlabrd` was implemented + oracle-verified (192² matches nalgebra) then **reverted as measured-regressive** (256² 4.69→5.68 ms, 512² 32.7→38 ms — the `X`/`Y` look-ahead ~doubles flops, unrecovered by leto's GEMM ratio). Key finding: leto's **unblocked** bidiagonalization is **already at parity at scale** (512² 1.03×); the ~2.25× is a **small-`n` (64²) fixed-overhead artifact**, addressable only by per-reflector allocation reuse (low ROI given scale-parity), *not* blocking. |
+| singular_values (superseded note) | — | — | **profiled** (warm 64²): REDUCE ~82 µs + SWEEP ~48 µs vs nalgebra ~78 µs total. The SIMD `apply_right` dot trimmed the reduce ~6%; full parity needs **major algorithm work**, not constant-factor: (a) the bidiagonalization REDUCE is ~2.25× nalgebra's, and a flop analysis proves
 this is **not** allocation or constant-factor: leto's 82 µs is already *below* a
 naive per-reflector SIMD estimate (~131 µs), so the axpy applies are well
 vectorized — removing the per-step `col`/`row`/`w` heap allocations would not
