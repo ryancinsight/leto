@@ -86,9 +86,14 @@ pub fn bidiagonalize<T: RealScalar>(
 /// Bidiagonal `(d, e)` of `A` (`m ≥ n`) via the column-major working buffer (the
 /// SVD values path's locality experiment; `σ(A) = σ(B)`).
 ///
+/// # Preconditions
+/// Entries must be finite. Finiteness is the caller's responsibility — the sole
+/// caller, [`crate::singular_values`], validates it once via `validate_input`
+/// (SSOT), so re-scanning here would be a redundant `O(mn)` pass on the SVD hot
+/// path; a `debug_assert` keeps the safety net in debug/test builds.
+///
 /// # Errors
-/// [`LetoError::ShapeMismatch`] for `m < n`; [`LetoError::StorageError`] for a
-/// non-finite entry.
+/// [`LetoError::ShapeMismatch`] for `m < n`.
 pub(crate) fn bidiagonal_diag_colmajor<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
 ) -> Result<(Vec<T>, Vec<T>)> {
@@ -101,10 +106,9 @@ pub(crate) fn bidiagonal_diag_colmajor<T: RealScalar>(
     }
     let contiguous = matrix.to_contiguous();
     let a = contiguous.storage().as_slice();
-    if !a.iter().all(|x| x.is_finite()) {
-        return Err(LetoError::StorageError {
-            reason: "bidiagonalization input contains a non-finite value".to_string(),
-        });
-    }
+    debug_assert!(
+        a.iter().all(|x| x.is_finite()),
+        "bidiagonal_diag_colmajor precondition: caller (validate_input) guarantees finite entries"
+    );
     Ok(colmajor::reduce_values(a, m, n))
 }
