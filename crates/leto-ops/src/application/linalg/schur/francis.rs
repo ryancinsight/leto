@@ -32,6 +32,34 @@
 //! (precision-exact deflation test), splitting off a 1×1 (real eigenvalue) or 2×2
 //! (conjugate pair) block, and recurses on the leading submatrix. Exceptional
 //! ad-hoc shifts every few stalls break the rare non-convergent cycles.
+//!
+//! # Theorem (eigenvalues-only within-block apply window — LAPACK `dlahqr`)
+//! For the spectrum it suffices to apply each bulge-chasing reflector `Pₖ` only on
+//! the window columns `[k, hi]` (left) and rows `[lo, k+len]` (right), provided the
+//! annihilated bulge column `k−1` is set to its known image `(α, 0, 0)ᵀ`. The
+//! eigenvalues read off the converged quasi-triangular `H` are unchanged.
+//!
+//! *Proof.* `H` stays similar to the original under every two-sided reflector, so
+//! the spectrum is preserved regardless of which entries are stored. The
+//! eigenvalues are read from the **diagonal blocks** only. An entry skipped by the
+//! window is one of: (i) the bulge subdiagonal in column `k−1`, whose post-reflector
+//! value is exactly `(α, 0, 0)` — written explicitly, so no information is lost; or
+//! (ii) an entry with row `< lo` or column `> hi`, which is strictly above the
+//! active diagonal block (`row < lo ≤ col` or `row ≤ hi < col`) and hence never
+//! lies on a diagonal block, is never a shift source (shifts come from the trailing
+//! 2×2 of `[lo, hi]`), and never enters the bulge band. Because `hi` is
+//! non-increasing and `lo` is non-decreasing for fixed `hi` (deflation sets
+//! `h[lo][lo−1]` to exact zero, a hard floor), such an entry is never read by a
+//! future active block either. The window thus omits only never-read entries, so
+//! the diagonal blocks — hence the eigenvalues — match the full sweep. ∎
+//!
+//! *Numerical note (evidence tier: differential + empirical).* The window reorders
+//! the floating-point updates relative to a full sweep, so on a **defective**
+//! eigenvalue (perturbation `O(√(ε‖A‖))`) the computed value can differ from a full
+//! sweep — and from a backward-stable reference — by `O(√(ε‖A‖))`. This is within
+//! backward stability, not an error; the eigenvalue battery asserts the derived
+//! `8·√(ε‖A‖)` tolerance accordingly. The `ACCUMULATE_Q` (Schur) path keeps the
+//! full sweep because `T` and the Schur vectors are outputs.
 
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};

@@ -130,13 +130,28 @@ fn transpose_square<T: RealScalar>(src: &[T], n: usize) -> Vec<T> {
 
 /// Apply the column Givens `col' = c·col + s·col₊₁`, `col₊₁' = c·col₊₁ − s·col`
 /// to a matrix stored **transposed**, where the two columns are the two
-/// **contiguous rows** `(row, row+1)` of length `len`. This is the same linear
-/// combination of the same two vectors as the column form — hence the
-/// accumulated factor is bitwise-identical — but the inner loop is over two
-/// contiguous, disjoint row slices (cache-friendly, auto-vectorizable) instead of
-/// a column stride of `len`. `U`/`V` are accumulated as `Uᵀ`/`Vᵀ` so every
-/// rotation hits this path; the single transpose back is `O(n²)`, negligible
-/// against the `O(n³)` sweep.
+/// **contiguous rows** `(row, row+1)` of length `len`.
+///
+/// # Theorem (transposed accumulation is bitwise-identical, and contiguous)
+/// Accumulating `U` (or `V`) as its transpose `Uᵀ` while rotating two **rows** of
+/// `Uᵀ` produces exactly the same factor `U` as rotating two **columns** of `U`,
+/// bit for bit, and turns the strided column update into a contiguous one.
+///
+/// *Proof.* A plane rotation applied to columns `(k, k+1)` of `U` is the
+/// right-multiplication `U ← U G` with `G` the embedded `2×2` Givens. Transposing,
+/// `(U G)ᵀ = Gᵀ Uᵀ`, i.e. `Uᵀ ← Gᵀ Uᵀ`, which is a left-multiplication mixing
+/// **rows** `(k, k+1)` of `Uᵀ` with the same scalar coefficients `(c, s)`. The two
+/// updated entries in each position are the identical floating-point expression
+/// `c·a + s·b` / `c·b − s·a` of the identical operands `a, b`, evaluated in the
+/// identical order — so no rounding differs: the stored `Uᵀ` is the exact transpose
+/// of the column-accumulated `U`. In row-major storage a row of `Uᵀ` is a
+/// contiguous length-`len` slice, so the rotation is two contiguous disjoint
+/// slices (cache-friendly, auto-vectorizable) instead of a stride-`len` column walk
+/// (a cache line per element). The factors are recovered by reading rows of
+/// `Uᵀ`/`Vᵀ` as columns of `U`/`V` at the `O(n²)` thin-extraction step — no
+/// separate transpose pass — negligible against the `O(n³)` sweep. ∎
+///
+/// `U`/`V` are accumulated as `Uᵀ`/`Vᵀ` so every rotation hits this path.
 #[inline]
 fn rotate_rows<T: RealScalar>(mat: &mut [T], len: usize, row: usize, c: T, s: T) {
     let (head, tail) = mat.split_at_mut((row + 1) * len);
