@@ -25,10 +25,11 @@
 //! (`m < n`) are rejected — transpose first (the bidiagonalization of `Aᵀ` is
 //! the lower-bidiagonal form of `A`).
 
+mod colmajor;
 mod reduce;
 
 use crate::domain::real::RealScalar;
-use leto::{Array2, ArrayView2, LetoError, Result};
+use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
 /// Bidiagonal decomposition `A = U B Vᵀ` (`B` upper bidiagonal).
 #[derive(Debug, Clone)]
@@ -82,7 +83,15 @@ pub fn bidiagonalize<T: RealScalar>(
     })
 }
 
-pub(crate) fn bidiagonal_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
+/// Bidiagonal `(d, e)` of `A` (`m ≥ n`) via the column-major working buffer (the
+/// SVD values path's locality experiment; `σ(A) = σ(B)`).
+///
+/// # Errors
+/// [`LetoError::ShapeMismatch`] for `m < n`; [`LetoError::StorageError`] for a
+/// non-finite entry.
+pub(crate) fn bidiagonal_diag_colmajor<T: RealScalar>(
+    matrix: &ArrayView2<'_, T>,
+) -> Result<(Vec<T>, Vec<T>)> {
     let [m, n] = matrix.shape();
     if m < n {
         return Err(LetoError::ShapeMismatch {
@@ -90,6 +99,13 @@ pub(crate) fn bidiagonal_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Re
             rhs: vec![n, n],
         });
     }
-    // Finiteness is validated inside the reduction's single bulk input copy.
-    reduce::reduce_to_bidiagonal_values(matrix, m, n)
+    let contiguous = matrix.to_contiguous();
+    let a = contiguous.storage().as_slice();
+    if !a.iter().all(|x| x.is_finite()) {
+        return Err(LetoError::StorageError {
+            reason: "bidiagonalization input contains a non-finite value".to_string(),
+        });
+    }
+    Ok(colmajor::reduce_values(a, m, n))
 }
+

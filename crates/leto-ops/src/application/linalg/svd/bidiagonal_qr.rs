@@ -38,23 +38,15 @@ pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<
     let [rows, cols] = matrix.shape();
 
     // Bidiagonalization requires `m >= n`; σ(A) = σ(Aᵀ), so transpose wide input.
-    let b = if rows >= cols {
-        crate::application::linalg::bidiagonal::bidiagonal_values(matrix)?
+    // Uses the column-major working buffer (left reflector contiguous; local to
+    // this path, no global layout change) and returns `(d, e)` directly.
+    let (mut d, mut e) = if rows >= cols {
+        crate::application::linalg::bidiagonal::bidiagonal_diag_colmajor(matrix)?
     } else {
         let transposed = transpose_to_owned(matrix)?;
-        crate::application::linalg::bidiagonal::bidiagonal_values(&transposed.view())?
+        crate::application::linalg::bidiagonal::bidiagonal_diag_colmajor(&transposed.view())?
     };
     let k = rows.min(cols);
-
-    // Extract the diagonal `d[0..k]` and superdiagonal `e[0..k-1]`.
-    let mut d = vec![T::ZERO; k];
-    let mut e = vec![T::ZERO; k];
-    for i in 0..k {
-        d[i] = b[i * k + i];
-        if i + 1 < k {
-            e[i] = b[i * k + i + 1];
-        }
-    }
 
     let mut no_u: [T; 0] = [];
     let mut no_v: [T; 0] = [];

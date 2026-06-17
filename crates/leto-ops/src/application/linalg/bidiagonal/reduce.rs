@@ -35,19 +35,6 @@ pub(super) fn reduce_to_bidiagonal<T: RealScalar>(
     ))
 }
 
-/// Reduce `A` to upper bidiagonal `B` without accumulating `U`/`V`.
-///
-/// This is the values-only SVD path: the same Householder transforms are applied
-/// to the working matrix, but factor updates are dead-code-eliminated by the
-/// const-generic `ACCUMULATE_FACTORS = false` specialization.
-pub(super) fn reduce_to_bidiagonal_values<T: RealScalar>(
-    matrix: &ArrayView2<'_, T>,
-    m: usize,
-    n: usize,
-) -> Result<Vec<T>> {
-    Ok(reduce_to_bidiagonal_impl::<T, false>(matrix, m, n)?.b)
-}
-
 fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
     matrix: &ArrayView2<'_, T>,
     m: usize,
