@@ -58,6 +58,20 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     ) {
         scalar_axpy_rows_batch_fallback(alphas, x_panel, out, row_stride, rows, depth, cols);
     }
+    /// Register-blocked sub-matrix GEMV `y += A·x`: `A` row-major `nrows×ncols`
+    /// with row stride `lda ≥ ncols`. Accumulates into `y` (zero it first for
+    /// `y = A·x`). Default is the scalar fallback; SIMD types override it.
+    #[inline]
+    fn gemv_strided(
+        a: &[Self],
+        x: &[Self],
+        y: &mut [Self],
+        nrows: usize,
+        ncols: usize,
+        lda: usize,
+    ) {
+        scalar_gemv_strided_fallback(a, x, y, nrows, ncols, lda);
+    }
     /// Register-blocked tiled GEMM: `c += A * B`.
     #[inline]
     fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
@@ -215,6 +229,22 @@ macro_rules! impl_scalar_native {
                     return;
                 }
                 scalar_tiled_gemm_fallback(a, b, c, m, n, k);
+            }
+            #[inline]
+            fn gemv_strided(
+                a: &[Self],
+                x: &[Self],
+                y: &mut [Self],
+                nrows: usize,
+                ncols: usize,
+                lda: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::gemv_strided(a, x, y, nrows, ncols, lda)
+                    .is_ok()
+                {
+                    return;
+                }
+                scalar_gemv_strided_fallback(a, x, y, nrows, ncols, lda);
             }
 
             #[inline]
@@ -387,6 +417,22 @@ macro_rules! impl_scalar_half {
                     return;
                 }
                 scalar_tiled_gemm_fallback(a, b, c, m, n, k);
+            }
+            #[inline]
+            fn gemv_strided(
+                a: &[Self],
+                x: &[Self],
+                y: &mut [Self],
+                nrows: usize,
+                ncols: usize,
+                lda: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::gemv_strided(a, x, y, nrows, ncols, lda)
+                    .is_ok()
+                {
+                    return;
+                }
+                scalar_gemv_strided_fallback(a, x, y, nrows, ncols, lda);
             }
 
             #[inline]
@@ -602,6 +648,38 @@ fn scalar_axpy_rows_batch_fallback<T: Scalar>(
             rows,
             cols,
         );
+    }
+}
+
+/// Scalar fallback for [`Scalar::gemv_strided`]: `y[r] += Σ_c a[r·lda + c]·x[c]`
+/// over the `nrows × ncols` row-major sub-matrix (`lda ≥ ncols`).
+#[inline]
+fn scalar_gemv_strided_fallback<T: Scalar>(
+    a: &[T],
+    x: &[T],
+    y: &mut [T],
+    nrows: usize,
+    ncols: usize,
+    lda: usize,
+) {
+    if lda < ncols || x.len() < ncols || y.len() < nrows {
+        return;
+    }
+    let a_needed = if nrows == 0 {
+        0
+    } else {
+        (nrows - 1) * lda + ncols
+    };
+    if a.len() < a_needed {
+        return;
+    }
+    for (r, yr) in y.iter_mut().enumerate().take(nrows) {
+        let row = &a[r * lda..r * lda + ncols];
+        let mut acc = T::ZERO;
+        for (&av, &xv) in row.iter().zip(x.iter()) {
+            acc = acc.add(av.mul(xv));
+        }
+        *yr = yr.add(acc);
     }
 }
 

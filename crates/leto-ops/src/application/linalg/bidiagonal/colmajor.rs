@@ -10,11 +10,14 @@
 //! values) as the row-major reduction — only the memory layout of the working
 //! buffer differs; the arithmetic and reflector sequence are identical. ∎
 //!
-//! Both applies are contiguous in this layout: the left reflector updates the
-//! trailing **columns** by a per-column dot+axpy (`dot_slice`/`axpy_slice`); the
-//! right reflector forms `Aw = Σⱼ wⱼ·colⱼ` and updates `colⱼ -= τ·wⱼ·Aw`, again
-//! column-contiguous. Only the small `O(m)`/`O(n)` reflector gathers touch
-//! strided memory.
+//! Both applies are contiguous in this layout. The **left** reflector treats the
+//! trailing column block as a row-major sub-matrix (rows = columns, length
+//! `vlen`, row stride `m`) and applies it in two batched, register-blocked SIMD
+//! calls — `gemv_strided` for the dots `dotⱼ = vᵀ·colⱼ` (TILE_M accumulators in
+//! flight, ILP) and `axpy_rows` for the rank-1 update `colⱼ −= (τ·dotⱼ)·v` —
+//! rather than `O(n)` per-column `dot`/`axpy` calls. The **right** reflector forms
+//! `Aw = Σⱼ wⱼ·colⱼ` and updates `colⱼ -= τ·wⱼ·Aw`, column-contiguous. Only the
+//! small `O(m)`/`O(n)` reflector gathers touch strided memory.
 
 use crate::domain::real::RealScalar;
 
@@ -70,6 +73,7 @@ pub(super) fn reduce_values<T: RealScalar>(a: &[T], m: usize, n: usize) -> (Vec<
     let mut vbuf = vec![T::ZERO; m]; // contiguous copy of the active left reflector
     let mut w = vec![T::ZERO; n]; // right reflector
     let mut aw = vec![T::ZERO; m]; // A·w column vector
+    let mut dotbuf = vec![T::ZERO; n]; // batched left-reflector dots vᵀ·colⱼ
 
     for k in 0..n {
         // ---- Left reflector on column k, rows k..m (contiguous).
@@ -84,13 +88,40 @@ pub(super) fn reduce_values<T: RealScalar>(a: &[T], m: usize, n: usize) -> (Vec<
         for r in 1..vlen {
             vbuf[r] = cm[k * m + k + r];
         }
-        // Apply to trailing columns k+1..n: colⱼ −= (τ·vᵀcolⱼ)·v.
+        // Apply to trailing columns k+1..n: colⱼ −= (τ·vᵀcolⱼ)·v, batched as a
+        // sub-matrix dot (gemv_strided) + rank-1 update (axpy_rows). Both keep
+        // TILE_M independent SIMD accumulators in flight, where the prior
+        // per-column loop serialized on each column's reduction/update — the
+        // isolated dot batch measured ≈2× (hermes `reflector_dots` bench).
         if tau_q != T::ZERO {
-            for j in (k + 1)..n {
-                let colj = &mut cm[j * m + k..j * m + m];
-                let dot = T::dot_slice(&vbuf[..vlen], colj);
-                let s = tau_q.mul(dot);
-                T::axpy_slice(T::ZERO.sub(s), &vbuf[..vlen], colj);
+            let ntrail = n - k - 1;
+            if ntrail > 0 {
+                // Batch the dots: dotbuf[t] = vᵀ·col_{k+1+t} over the trailing
+                // column block (gemv_strided accumulates, so zero first).
+                for slot in dotbuf[..ntrail].iter_mut() {
+                    *slot = T::ZERO;
+                }
+                T::gemv_strided(
+                    &cm[(k + 1) * m + k..],
+                    &vbuf[..vlen],
+                    &mut dotbuf[..ntrail],
+                    ntrail,
+                    vlen,
+                    m,
+                );
+                // Scale in place to the per-column axpy coefficient, then batch
+                // the rank-1 update via axpy_rows: colⱼ[i] += (−τ·dot[j])·v[i].
+                for slot in dotbuf[..ntrail].iter_mut() {
+                    *slot = T::ZERO.sub(tau_q.mul(*slot));
+                }
+                T::axpy_rows(
+                    &dotbuf[..ntrail],
+                    &vbuf[..vlen],
+                    &mut cm[(k + 1) * m + k..],
+                    m,
+                    ntrail,
+                    vlen,
+                );
             }
         }
 
