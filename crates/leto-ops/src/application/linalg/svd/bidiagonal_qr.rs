@@ -72,17 +72,24 @@ fn transpose_to_owned<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array
     Array2::from_shape_vec([cols, rows], values)
 }
 
-/// Givens rotation `(c, s)` with `c·a + s·b = r`, `−s·a + c·b = 0`.
+/// Givens rotation `(c, s, r)` with `c·a + s·b = r`, `−s·a + c·b = 0`.
+///
+/// Returns the rotated lead component `r = c·a + s·b` (the 2-norm `√(a²+b²)`
+/// when `b ≠ 0`, else `a`) so the caller uses it directly instead of recomputing
+/// `c·a + s·b` — `givens` already formed `√(a²+b²)` to normalize, so re-deriving
+/// it at the call site is pure redundant arithmetic (the nalgebra `cancel_y`
+/// pattern, which returns the norm alongside the rotation).
 #[inline]
-fn givens<T: RealScalar>(a: T, b: T) -> (T, T) {
+fn givens<T: RealScalar>(a: T, b: T) -> (T, T, T) {
     if b == T::ZERO {
-        return (T::ONE, T::ZERO);
+        return (T::ONE, T::ZERO, a);
     }
     // One reciprocal + two mults rather than two divides by the same `r`
     // (division is several× a multiply; the sweep calls this O(n²) times). The
     // extra rounding of `1/r` is within the SVD's differential tolerance.
-    let inv_r = T::ONE.div(a.mul(a).add(b.mul(b)).sqrt());
-    (a.mul(inv_r), b.mul(inv_r))
+    let r = a.mul(a).add(b.mul(b)).sqrt();
+    let inv_r = T::ONE.div(r);
+    (a.mul(inv_r), b.mul(inv_r), r)
 }
 
 /// Wilkinson shift: the eigenvalue of the trailing 2×2 of `T = BᵀB` (rows
@@ -238,12 +245,13 @@ fn qr_step<T: RealScalar, const VEC: bool>(
 
     for k in p..q {
         // Right rotation (mixes columns k, k+1) annihilating z → accumulate V.
-        let (c, s) = givens(y, z);
+        let (c, s, r_right) = givens(y, z);
         if VEC {
             rotate_rows(v, n, k, c, s); // V accumulated transposed
         }
         if k > p {
-            e[k - 1] = c.mul(y).add(s.mul(z));
+            // c·y + s·z = √(y²+z²) = r_right (returned by `givens`, not recomputed).
+            e[k - 1] = r_right;
         }
         let mut f = c.mul(d[k]).add(s.mul(e[k]));
         e[k] = c.mul(e[k]).sub(s.mul(d[k]));
@@ -252,11 +260,12 @@ fn qr_step<T: RealScalar, const VEC: bool>(
         d[k] = f;
 
         // Left rotation (mixes rows k, k+1) annihilating the bulge → accumulate U.
-        let (c, s) = givens(d[k], bulge_col);
+        let (c, s, r_left) = givens(d[k], bulge_col);
         if VEC {
             rotate_rows(u, m, k, c, s); // U accumulated transposed
         }
-        d[k] = c.mul(d[k]).add(s.mul(bulge_col));
+        // c·d[k] + s·bulge_col = √(d[k]²+bulge_col²) = r_left (not recomputed).
+        d[k] = r_left;
         f = c.mul(e[k]).add(s.mul(d[k + 1]));
         d[k + 1] = c.mul(d[k + 1]).sub(s.mul(e[k]));
         e[k] = f;
