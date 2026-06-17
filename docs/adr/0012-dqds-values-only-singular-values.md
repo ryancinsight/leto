@@ -203,6 +203,19 @@ phase** (now 1.40× after batching) and diffuse per-op overhead, **not** a missi
 dqds. dqds remains a *potential absolute* speedup over Givens (cheaper per-step,
 no sqrt), but it is no longer the path to nalgebra *parity*.
 
+**Quantified (phase-attribution probe, best-of-N least-contended, 64²):**
+
+| Phase  | original | after this session's work |
+|--------|----------|---------------------------|
+| bidiag | 63.8 µs  | ~50 µs (batched reflectors, ~22%) |
+| sweep  | ~54 µs   | ~50 µs (givens-norm reuse, ~7%) |
+| total  | ~114 µs  | ~98–104 µs (~10–14%) |
+
+leto/nalgebra (≈60 µs) thus moves from ≈1.9× to ≈1.7×. Numbers are best-case
+under ±30% session noise (heavy concurrent build load); the per-phase deltas are
+each individually validated by the isolated probe and by correctness-identical
+A/B (bit-exact differential tests).
+
 ## Decision
 
 **Keep the implicit-shift Givens QR sweep** for `singular_values` (correct, no
