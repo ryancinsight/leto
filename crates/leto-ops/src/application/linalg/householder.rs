@@ -112,17 +112,19 @@ pub(crate) fn apply_right<T: RealScalar>(
     let Reflector { v, beta } = refl;
     let len = v.len();
     for i in r0..r1 {
-        let row = &mut m[i * cols + base_col..i * cols + base_col + len];
-        // Reduction `dot = rowᵀ·v` stays sequential (ascending `j`) to preserve the
-        // summation order; vectorizing it via a tree reduction would reorder the
-        // adds and perturb the rounding of the eigenvalue-feeding paths.
-        let mut dot = T::ZERO;
-        for (&mij, &vj) in row.iter().zip(v.iter()) {
-            dot = dot.add(mij.mul(vj));
-        }
+        let start = i * cols + base_col;
+        // Both the contraction `dot = rowᵀ·v` and the update `row −= (β·dot)·v` run
+        // over the contiguous row window via the SIMD `Scalar::dot_slice` /
+        // `axpy_slice` (SSOT). The reduction reorders the adds vs a sequential
+        // sweep, so the reflector application matches only to the backward-error
+        // bound `O(len·ε)` — within the differential tolerances the
+        // bidiagonalization (well-conditioned singular values) and the
+        // Hessenberg→Francis path (the eigenvalue battery's derived `8·√(ε‖A‖)`)
+        // already assert. Wide in the bidiagonalization (a full trailing row), where
+        // the vectorized dot pays; the 2–3-wide Hessenberg reflector falls to the
+        // scalar tail.
+        let dot = T::dot_slice(&m[start..start + len], v);
         let scale = beta.mul(dot);
-        // The element-wise update is contiguous; route it through the SIMD
-        // `axpy_slice` (bitwise-identical to the separate `mul`+`sub`).
-        T::axpy_slice(T::ZERO.sub(scale), v, row); // row += (−scale)·v ≡ row −= scale·v
+        T::axpy_slice(T::ZERO.sub(scale), v, &mut m[start..start + len]); // row −= scale·v
     }
 }
