@@ -1,7 +1,7 @@
 # ADR 0010: Blocked-reflector (compact-WY) vectorization for eig/SVD
 
 - Status: Accepted (phased; Phases 0–1 done, Phase 2 measured-valueless/reverted,
-  Phase 3 is the real residual lever)
+  Phase 3 SVD done (disparity resolved), Phase 3 eig remaining)
 - Date: 2026-06-16
 - Class: [major] (post-1.0 the trailing-update path changes observable timing and
   the internal reduction/iteration kernels are restructured; the public surface

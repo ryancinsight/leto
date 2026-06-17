@@ -25,6 +25,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   output; the const generic resolves the branch at monomorphization. 64×64 `eig`
   1.69 ms → 1.50 ms. The within-block `[k, k+len]` narrowing (further perf, but
   perturbs ill-conditioned near-zero eigenvalues) remains gated on balancing.
+- `leto-ops` [patch]: made the full-SVD bidiagonal-QR `U`/`V` accumulation
+  contiguous by holding the factors transposed (`Uᵀ`/`Vᵀ`), so each Givens rotation
+  mixes two contiguous rows instead of striding two columns of the row-major
+  factors — bitwise-identical result, cache-friendly and auto-vectorized. 256²
+  full SVD 164 → 34.7 ms (4.7×, faster than nalgebra); 64² 1.31 → 0.60 ms. The
+  singular-values-only path is unchanged. (ADR 0010 Phase 3, SVD.)
 - `leto-ops` [patch]: SIMD-vectorized the shared Householder apply and the Francis
   left-apply via `Scalar::axpy_slice` (the SSOT path used by LU/QR/matmul),
   replacing hand loops that relied on auto-vectorization. The contiguous inner

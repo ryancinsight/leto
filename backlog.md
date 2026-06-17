@@ -310,8 +310,13 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   256² full SVD 164 ms blocked vs 163 ms unblocked (the sequential Givens sweep is
   the whole cost; formation < 1 ms). `apply_block_right` reverted with it. Lesson:
   the SVD/eig residual is the iteration (Phase 3), not the reductions/factors.
-- [ ] [major] Phase 3 (the real residual lever): accelerate the sequential Givens
-  bidiagonal-QR sweep (`dbdsqr`) for SVD and small-bulge multishift QR (`dlaqr5`)
-  for eig — chase `nb`-wide bulge chains so off-window updates batch into GEMMs.
-  Inherently serial, highest risk; gate on the hardened 8×8/16×16/defective
-  batteries with the backward-error tolerance.
+- [x] [major] Phase 3 (SVD) DONE: the dominant `U`/`V` Givens accumulation made
+  contiguous via transposed factors (each rotation mixes two contiguous rows,
+  bitwise-identical). 256² full SVD 164 → 34.7 ms (4.7×, now faster than nalgebra);
+  64² 1.31 → 0.60 ms. Commit `9bef76e`. SVD disparity resolved at scale.
+- [ ] [major] Phase 3 (eig) remaining: the Francis right-apply / multishift sweep.
+  The transposed-accumulator trick does not transfer (`H` is the read/written
+  working matrix), so eig needs the small-bulge multishift (`dlaqr5`) block rewrite
+  — chase `nb`-wide bulge chains so off-window updates batch into GEMMs. Inherently
+  serial, highest risk; gate on the hardened 8×8/16×16/defective batteries with the
+  backward-error tolerance.

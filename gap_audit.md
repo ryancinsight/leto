@@ -262,6 +262,17 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   sequential (each rotation feeds the next in the bulge chase) and is exactly why
   it is the residual. `apply_block_right` reverted with it (no value-adding
   consumer; `apply_block_left`/blocked-QR Phase 1 retained, a measured 256² win).
+
+  **ADR 0010 Phase 3 (SVD) — DONE, disparity resolved.** Without restructuring the
+  serial bulge chase, the per-Givens `U`/`V` **column** rotation (striding the
+  row-major factors — a cache line per row, no SIMD) was made contiguous by
+  accumulating `U`/`V` **transposed**, so each rotation mixes two contiguous rows:
+  bitwise-identical factor, cache-friendly auto-vectorized loop. **256² full SVD
+  164 → 34.7 ms (4.7×, now *faster* than nalgebra 46.6 ms); 64² 1.31 → 0.60 ms**
+  (clean A/B), verified by the SVD reconstruction + nalgebra batteries (commit
+  `9bef76e`). The trick does *not* transfer to eig (`H` is the read/written working
+  matrix, not an isolated accumulator), so the eig residual still needs the
+  multishift block rewrite.
 - **matmul — OPEN**: register-blocked GEMM micro-kernel needs a tile-accumulating
   SIMD primitive owned upstream in hermes (multi-repo, peer-agent lane); a prior
   scalar 4×4 tile regressed (no SIMD in the tile). Coordinated effort.
