@@ -1,6 +1,6 @@
 # ADR 0010: Blocked-reflector (compact-WY) vectorization for eig/SVD
 
-- Status: Accepted (phased; Phase 0 done, Phases 1–3 planned)
+- Status: Accepted (phased; Phases 0–1 done, Phases 2–3 planned)
 - Date: 2026-06-16
 - Class: [major] (post-1.0 the trailing-update path changes observable timing and
   the internal reduction/iteration kernels are restructured; the public surface
@@ -109,13 +109,17 @@ linalg/
   `axpy_slice` (Householder apply + Francis left-apply); eig 5.9×→4.4×, svd
   4.1×→3.4×. Establishes the SIMD-apply baseline and the backward-error test
   tolerance that admits blocked reorderings.
-- **Phase 1 — block reflector primitive:** `reflector_block/` with the compact-WY
-  accumulation and `tiled_gemm`-based block apply. Verified in isolation:
-  differential equality (within `O(r·ε‖C‖)`) of `apply_*_block` against `r`
-  sequential single-reflector applies, over random panels and sizes. Wired into
-  **blocked Hessenberg** (`dlahr2`-style panel reduction + GEMM trailing update),
-  its first consumer, verified against the existing unblocked Hessenberg contract
-  (Q orthogonality, `A = QHQᵀ`, trace/Frobenius invariants).
+- **Phase 1 (done):** `reflector_block/{mod,accumulate}` — the compact-WY
+  accumulation (`build_t`) and `tiled_gemm`-based `apply_block_left`. Verified in
+  isolation: differential equality (within `O(r·ε‖C‖)`) of the block apply against
+  `r` sequential single-reflector applies, plus column-norm (orthogonality)
+  preservation. First consumer: **panel-blocked `qr_decompose`** (`dgeqrf`
+  structure — the one-sided, no-look-ahead case, lower-risk than Hessenberg).
+  Gated on `BLOCK_MIN_ROWS = 256` (measured A/B crossover ≈ 200: 256² QR 1.51 →
+  1.29 ms blocked, but 128² regresses 175 → 223 µs), so below it the factorization
+  is byte-for-byte the unblocked sweep (64² unchanged). Verified by a 256² solve
+  recovering a known `x` to 1e-9. (Blocked Hessenberg is folded into Phase 2 with
+  the two-sided reductions.)
 - **Phase 2 — blocked bidiagonalization (`dlabrd`-style):** two-sided panel
   reduction feeding the SVD; verified against the unblocked `bidiagonalize`
   (`A = U B Vᵀ`, bidiagonal structure, U/V orthogonality) and the SVD batteries.

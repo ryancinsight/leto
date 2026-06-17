@@ -43,6 +43,15 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   only guaranteed to agree to that scale. The old bound brittlely pinned leto to
   nalgebra's exact rounding path. Exact / symmetric (perfectly-conditioned) cases
   keep the tight `1e-7` bound.
+- `leto-ops` [minor]: added the compact-WY block Householder reflector
+  (`linalg/reflector_block`, ADR 0010 Phase 1) — `Q = I − V T Vᵀ` (Schreiber–Van
+  Loan, theorem + proof) applying `r` aggregated reflectors to a trailing block as
+  three `tiled_gemm` (BLAS-3) products. First consumer: panel-blocked
+  `qr_decompose` (`dgeqrf` structure), gated on `BLOCK_MIN_ROWS = 256` (measured
+  crossover ≈ 200) so matrices below it run the exact unblocked sweep (64² QR
+  unchanged) and large matrices win (256² QR 1.51 → 1.29 ms). Verified by the
+  isolated block-apply differential (vs `r` sequential applies, `O(r·ε‖C‖)`) and a
+  256² known-`x` solve. Establishes the seam for the eig/SVD Phase 2–3 consumers.
 - `leto-ops` [patch]: optimized trace, Kronecker product, and keep-dim axis
   reductions over strided views by replacing repeated checked logical indexing in
   hot loops with validated stride walks. Added negative-stride regression tests

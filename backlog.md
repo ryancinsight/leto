@@ -298,10 +298,13 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   singular_values 3.8×→2.3×. Backward-error eigenvalue tolerance correction
   (`8·√(ε‖A‖)`, machine-checked defective-eigenvalue derivation) unblocks blocked
   reorderings. Done (commits `5104a60`, `8df636f`).
-- [ ] [major] Phase 1: `linalg/reflector_block/` — compact-WY `BlockReflector<T, NB>`
-  + `accumulate.rs` (Schreiber–Van Loan `T`) + `panel.rs` (Cow panel view); block
-  apply via `tiled_gemm`. Differential test vs `r` sequential applies. Wire into
-  blocked Hessenberg (`dlahr2`-style); verify vs unblocked Hessenberg contract.
+- [x] [major] Phase 1: `linalg/reflector_block/{mod,accumulate}` — compact-WY
+  block reflector (Schreiber–Van Loan `build_t` + `tiled_gemm` block apply),
+  differential-tested vs `r` sequential applies + orthogonality. First consumer:
+  panel-blocked `qr_decompose` (`dgeqrf`), gated on `BLOCK_MIN_ROWS = 256` (A/B
+  crossover ≈ 200): 256² QR 1.51 → 1.29 ms, ≤128² byte-for-byte unchanged.
+  Verified by a 256² known-`x` solve. Done (commit `c78b843`). Blocked Hessenberg
+  folded into Phase 2.
 - [ ] [major] Phase 2: blocked bidiagonalization (`dlabrd`-style) for SVD; verify vs
   unblocked `bidiagonalize` + SVD batteries.
 - [ ] [major] Phase 3: small-bulge multishift QR (eig) + blocked bidiagonal QR (SVD)
