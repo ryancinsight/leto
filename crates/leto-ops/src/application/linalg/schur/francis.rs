@@ -40,6 +40,13 @@ use leto::{LetoError, Result};
 /// shifts converge in `O(n)` steps; this is a safety bound).
 const MAX_ITER: usize = 2000;
 
+/// Minimum left-apply column span at which the vectorized row-oriented sweep
+/// (two contiguous `axpy_slice` passes) overtakes the per-column scalar sweep.
+/// Below it the SIMD dispatch and extra `w` traversal are not amortized; the
+/// active block narrows as the iteration deflates, so most applies on small
+/// matrices stay scalar. Derived empirically (f64 AVX2: crossover ≈ 32 columns).
+const SPAN_SIMD_MIN: usize = 32;
+
 struct StackReflector<T> {
     v: [T; 3],
     len: usize,
@@ -89,6 +96,21 @@ fn at<T: Copy>(h: &[T], i: usize, j: usize, n: usize) -> T {
 
 /// Left-apply a Householder reflector `P = I − β v vᵀ` (positioned at base row
 /// `k`, `v.len()` rows) across columns `c_lo..=c_hi`: `H ← P H`.
+///
+/// Row-oriented: accumulate `w = (β vᵀ)·H[rows, c_lo..=c_hi]` by sweeping each
+/// reflector row contiguously into the caller-owned `scratch`, then apply
+/// `H −= v·w` row by row — both inner sweeps are contiguous `axpy_slice` updates
+/// (SSOT SIMD path). The per-`w[j]` summation order (reflector rows ascending)
+/// and the `vᵢ·(β·w[j])` grouping match the column-oriented form exactly, so the
+/// result is bitwise-identical (hermes `axpy` performs no FMA contraction); the
+/// reflector spans only 2–3 rows but the column span is the active-block width,
+/// where the vectorized sweep pays off. `scratch` must hold `≥ c_hi − c_lo + 1`
+/// elements (the caller sizes it to `n`, reused across the whole iteration —
+/// allocation-free hot path).
+// Eight tight primitive parameters (matrix, reflector vector + β, base row, dim,
+// column range, scratch); each is a distinct kernel input and bundling them into
+// a struct would add an artificial indirection on this hot inner routine.
+#[allow(clippy::too_many_arguments)]
 fn apply_left<T: RealScalar>(
     h: &mut [T],
     v: &[T],
@@ -97,17 +119,44 @@ fn apply_left<T: RealScalar>(
     n: usize,
     c_lo: usize,
     c_hi: usize,
+    scratch: &mut [T],
 ) {
-    for j in c_lo..=c_hi {
-        let mut w = T::ZERO;
-        for (i, &vi) in v.iter().enumerate() {
-            w = w.add(vi.mul(h[(k + i) * n + j]));
+    if c_hi < c_lo {
+        return;
+    }
+    let span = c_hi - c_lo + 1;
+    if span < SPAN_SIMD_MIN {
+        // Narrow span (the common case late in deflation, and every span on small
+        // matrices): the per-column scalar sweep beats the vectorized two-pass —
+        // the `axpy_slice` dispatch and the extra `w` traversal are not amortized
+        // over so few columns. Bitwise-identical to the wide path (same per-`w[j]`
+        // order and `vᵢ·(β·w[j])` grouping).
+        for j in c_lo..=c_hi {
+            let mut acc = T::ZERO;
+            for (i, &vi) in v.iter().enumerate() {
+                acc = acc.add(vi.mul(h[(k + i) * n + j]));
+            }
+            acc = acc.mul(beta);
+            for (i, &vi) in v.iter().enumerate() {
+                let cell = (k + i) * n + j;
+                h[cell] = h[cell].sub(vi.mul(acc));
+            }
         }
-        w = w.mul(beta);
-        for (i, &vi) in v.iter().enumerate() {
-            let cell = (k + i) * n + j;
-            h[cell] = h[cell].sub(vi.mul(w));
-        }
+        return;
+    }
+    // Wide span: row-oriented, both inner sweeps contiguous `axpy_slice` (SIMD).
+    let w = &mut scratch[..span];
+    w.fill(T::ZERO);
+    for (i, &vi) in v.iter().enumerate() {
+        let base = (k + i) * n + c_lo;
+        T::axpy_slice(vi, &h[base..base + span], w); // w += vᵢ · H[row, c_lo..=c_hi]
+    }
+    for wj in w.iter_mut() {
+        *wj = beta.mul(*wj);
+    }
+    for (i, &vi) in v.iter().enumerate() {
+        let base = (k + i) * n + c_lo;
+        T::axpy_slice(T::ZERO.sub(vi), w, &mut h[base..base + span]); // H −= vᵢ · w
     }
 }
 
@@ -150,6 +199,7 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
     hi: usize,
     n: usize,
     exceptional: bool,
+    scratch: &mut [T],
 ) {
     // Shift sum `s = μ₁ + μ₂` and product `t = μ₁ μ₂`.
     let (s, t) = if exceptional {
@@ -212,7 +262,7 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
             // resolves these branches at monomorphization (zero cost).
             let c_hi = if ACCUMULATE_Q { n - 1 } else { hi };
             let r_lo = if ACCUMULATE_Q { 0 } else { lo };
-            apply_left(h, v_slice, refl.beta, k, n, lo, c_hi);
+            apply_left(h, v_slice, refl.beta, k, n, lo, c_hi, scratch);
             apply_right(h, v_slice, refl.beta, k, n, r_lo, hi);
             // Accumulate the similarity into `z` only when Schur vectors are
             // wanted; for eigenvalues-only this branch is DCE'd at
@@ -247,6 +297,9 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     if n < 3 {
         return Ok(()); // 0/1: trivial; 2: a single block, standardized later.
     }
+    // Reusable left-apply accumulator `w`, sized to the widest possible column
+    // span (`n`); reused across every reflector so the hot path allocates once.
+    let mut scratch = vec![T::ZERO; n];
     let mut hi = n - 1;
     let mut iter = 0usize;
     loop {
@@ -288,7 +341,7 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
                 reason: "Schur QR iteration failed to converge".to_string(),
             });
         }
-        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10));
+        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10), &mut scratch);
     }
     Ok(())
 }
