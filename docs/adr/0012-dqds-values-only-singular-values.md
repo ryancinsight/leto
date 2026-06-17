@@ -101,11 +101,19 @@ singular values to the Givens path (so the qd array dqds sees is strictly
 positive — fixing the earlier rank-deficient break). It passes **all 17**
 differential tests. Sweep counts / timings on the 64² benchmark:
 
-| Variant                                     | sweeps | result |
-|---------------------------------------------|--------|--------|
-| no-split, shift = ½·dmin                     | 300    | 181 µs (regression) |
-| split + gate, shift ∈ {¼,½,¾,0.9,0.99}·dmin  | 300–403 | sweep count **plateaus** — fraction does not help |
-| **split + gate, ½·dmin (clean A/B)**         | ~300   | **116.5 µs vs Givens 115.5 µs — change −1.3%, NO win** |
+| Variant                                       | sweeps | result |
+|-----------------------------------------------|--------|--------|
+| no-split, shift = ½·dmin                       | 300    | 181 µs (regression) |
+| split + gate, shift ∈ {¼,½,¾,0.9,0.99}·dmin    | 300–403 | sweep count **plateaus** — fraction does not help |
+| **split + gate, ½·dmin (clean A/B)**           | ~300   | **116.5 µs vs Givens 115.5 µs — change −1.3%, NO win** |
+| split + gate, trailing-2×2 estimate + halving  | 626    | **worse** — the 2×2 estimate overshoots `λ_min` (interlacing), so the adaptive halving wastes attempts |
+
+A whole **shift survey** (five `dmin` fractions + the trailing-2×2 eigenvalue
+estimate with adaptive halving) was run: every simple shift heuristic lands at
+≥300 sweep-attempts, never near the ~130 (≈2/value) that would beat Givens' 92
+steps. Achieving that requires the genuine `dlasq4` Fernando–Parlett **cased**
+shift (dmin/dmin1/dmin2/dn/dn1/dn2 gap analysis), which cannot be reconstructed
+reliably from memory — it needs the LAPACK reference source.
 
 **Findings.**
 1. The `dmin`-fraction shift plateaus at ~300 sweeps (≈5/value) regardless of
