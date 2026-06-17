@@ -111,9 +111,19 @@ differential tests. Sweep counts / timings on the 64² benchmark:
 A whole **shift survey** (five `dmin` fractions + the trailing-2×2 eigenvalue
 estimate with adaptive halving) was run: every simple shift heuristic lands at
 ≥300 sweep-attempts, never near the ~130 (≈2/value) that would beat Givens' 92
-steps. Achieving that requires the genuine `dlasq4` Fernando–Parlett **cased**
-shift (dmin/dmin1/dmin2/dn/dn1/dn2 gap analysis), which cannot be reconstructed
-reliably from memory — it needs the LAPACK reference source.
+steps.
+
+Finally, a **`dlasq4`-style gap shift** was reconstructed — target the bottom
+Schur complement `dn` with the Newton/gap correction `dn − (b1/gap1)·b1`
+(tracking `dn`/`dn1`/`dmin1` in the sweep) — plus a hot-loop optimization
+hoisting the O(len) interior-split scan out of the steady-state sweep (run only
+at block entry / after a deflation). This is the strongest version: ~280 sweeps,
+**115.8 µs**. Clean same-session A/B vs Givens swung between **−0.03 % (p=0.95)
+and +4.2 %** across runs — i.e. a **statistical tie within the ±5 % machine
+noise floor, no measurable win**. The reconstruction reaches ~280 sweeps
+(≈4.4/value), still ~2× the true `dlasq4`'s ≈130; closing that needs the exact
+LAPACK gap formulas/cases. Per the ship-only-on-measured-win DoD, a noise-level
+tie does not justify ~250 lines of delicate kernel, so it is not shipped.
 
 **Findings.**
 1. The `dmin`-fraction shift plateaus at ~300 sweeps (≈5/value) regardless of
