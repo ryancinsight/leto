@@ -72,6 +72,59 @@ The forward error is the standard blocked-orthogonal bound `O(r·ε‖C‖)`, wi
 backward-error tolerance the eig/SVD batteries already assert (see ADR note on the
 `8·√(ε‖A‖)` defective-eigenvalue bound).
 
+## Theorem (Phase 2 — blocked two-sided panel reduction, `dlabrd`/`dlahr2`)
+
+Let a panel of `nb` left reflectors form `Q_L = I − V T_L Vᵀ` and `nb` right
+reflectors form `Q_R = I − W S Wᵀ` (each compact-WY by the theorem above). The
+two-sided trailing update `A ← Q_Lᵀ A Q_R` on the sub-block below/right of the
+panel equals applying the `2·nb` single reflectors in their original interleaved
+order, and is realised by two rank-`nb` GEMM corrections
+`A ← A − V Yᵀ − X Wᵀ`, where `Y = Aᵀ V·(…)` and `X = A W·(…)` are the accumulator
+panels built columnwise during the reduction.
+
+*Proof.* Orthogonal-similarity associativity: `Q_Lᵀ A Q_R = (H_{L,nb}…H_{L,1}) A
+(H_{R,1}…H_{R,nb})`, and the WY identity collapses each one-sided product to
+`I − VT_LVᵀ` / `I − WSWᵀ` (proved above), so the grouped form equals the
+sequential interleaving up to the floating-point reorder bound `O(nb·ε‖A‖)`. The
+*non-trivial* content — and why a naïve “defer the trailing columns” scheme is
+incorrect — is the **look-ahead**: the right reflector at panel column `i` mixes
+column `i+1` (still inside the panel) with the *entire* trailing column range, so
+column `i+1` must already carry the trailing contribution before its own reflector
+is formed. The `X`, `Y` accumulators encode exactly that partial trailing action,
+so each in-panel column is reduced as if the full trailing update had run, while
+the bulk trailing GEMM is deferred to the panel boundary. The reduction is
+therefore mathematically identical to the unblocked sweep (the implementation
+oracle), not an approximation of it. ∎
+
+*Correctness gate:* differential reconstruction `A = U B Vᵀ` (bidiagonal) /
+`A = Q H Qᵀ` (Hessenberg), `U`/`V`/`Q` orthogonality, and bidiagonal/Hessenberg
+structure against the unblocked path, plus the existing SVD/eig batteries.
+
+## Theorem (Phase 3 — small-bulge multishift QR, `dlaqr5`)
+
+A multishift Francis sweep introduces `m/2` `3×3` bulges simultaneously near the
+top of the active Hessenberg block and chases them down the band together. The
+result equals `m` single-shift Wilkinson steps (one per shift), and the chase of a
+*tight chain* of bulges across a window of `nb` rows is a sequence of small
+reflector applications confined to that window — accumulated into a compact-WY
+block and applied to the off-window portions of the band (and to the Schur-vector
+matrix) as GEMMs.
+
+*Proof sketch.* By the implicit-Q theorem (ADR 0006), a Francis sweep with shift
+polynomial `p(H) = Π(H − μⱼI)` is determined up to reflector signs by its first
+column `p(H)e₁`; chasing the resulting bulge restores Hessenberg form and realises
+`Qᵀ H Q` for the `Q` of `p(H) = QR`. Splitting `p` into `m/2` conjugate-pair
+quadratics and introducing the corresponding bulges in a packed chain yields the
+same cumulative `Q` (same first column `p(H)e₁`), so the multishift sweep equals
+the composition of the single steps. Within the chase window the reflectors touch
+only `≤ nb` rows/columns; aggregating them by compact-WY turns the
+off-window band update and the `Q`-accumulation into GEMMs (BLAS-3), which is the
+performance lever for the dominant iteration cost. The numerical reorder stays
+within the backward-error bound already adopted for the spectrum. ∎
+
+*Correctness gate:* the hardened 8×8/16×16/defective eigenvalue battery under the
+`8·√(ε‖A‖)` backward-error tolerance, plus `A = Q T Qᵀ` Schur reconstruction.
+
 ## Decision
 
 Introduce a compact-WY block-reflector seam and route the three reduction/iteration
@@ -84,24 +137,40 @@ contract changes; the differential batteries are the gate.
 ```
 linalg/
   reflector_block/
-    mod.rs       BlockReflector<T> (V panel view + T factor) + the compact-WY
-                 theorem/proof; apply_left_block / apply_right_block via tiled_gemm
-    accumulate.rs  build T columnwise from a panel of single reflectors (the
+    mod.rs       apply_block_left (Phase 1) / apply_block_right (Phase 2) via
+                 tiled_gemm + the compact-WY theorem/proof
+    accumulate.rs  build_t columnwise from a panel of single reflectors (the
                    Schreiber–Van Loan recurrence) — SSOT for T construction
-    panel.rs       zero-copy column-panel view over row-major storage (Cow where a
-                   non-contiguous panel must be materialized; borrow otherwise)
+    panel.rs       (Phase 2) Cow column-panel view: borrow a contiguous panel,
+                   materialize a strided one
 ```
 
-- **Monomorphization / zero-cost:** `BlockReflector<T, const NB: usize>` — the
-  block width is a const generic so the panel buffers are fixed-size and the GEMM
-  shapes are known at compile time; one generic kernel monomorphizes per `(T, NB)`.
-- **ZST / typestate:** a `Side` ZST (`Left`/`Right`) selects the apply form at
-  compile time (DCE), avoiding a runtime branch in the hot trailing update.
-- **DIP / SSOT:** the block apply depends only on `Scalar::tiled_gemm` (the
-  existing backend seam), not on any concrete SIMD type; `accumulate.rs` is the
-  single `T`-construction site reused by every consumer.
-- **Zero-copy / CoW:** `panel.rs` borrows the reflector columns in place when the
-  storage is contiguous; it materializes only a non-contiguous panel.
+Design-pattern application, with the Phase-1 reality and the deliberate
+deferrals (a deferral here is an engineering decision recorded against the
+mechanical trigger, not an omission):
+
+- **DIP / SSOT (Phase 1, done):** `apply_block_left` depends only on
+  `Scalar::tiled_gemm` (the backend seam), never a concrete SIMD type;
+  `accumulate::build_t` is the single `T`-construction site.
+- **Monomorphization / zero-cost (Phase 1, done; const-`NB` rejected):** the block
+  apply is generic `<T: RealScalar>` and monomorphizes per scalar. A const-generic
+  `NB` was **deliberately not used**: panels are variable width (the last panel is
+  `cols mod NB`, and the `BLOCK_MIN_ROWS` gate makes the *effective* width runtime),
+  so a fixed `NB` would force padding or a separate tail path — runtime `r ≤ NB`
+  is the correct, non-cargo-culted choice (const generics buy nothing when the
+  dimension is genuinely runtime; over-specializing is the documented anti-goal of
+  performance_engineering's instantiation-count rule).
+- **ZST / typestate `Side` (Phase 2):** a `Left`/`Right` ZST selecting the apply
+  form at compile time is introduced **with** `apply_block_right`, whose only
+  consumer is a two-sided reduction (Phase 2). Adding `apply_block_right` + `Side`
+  in Phase 1 — with no caller — would be dead code (`-D warnings`) and speculative
+  generality; they land when their consumer does.
+- **Zero-copy / CoW `panel.rs` (Phase 2):** Phase 1's sole consumer (QR) stores
+  reflectors as *strided* columns of a row-major matrix, so its panel is always
+  materialized — the borrow arm of a `Cow` panel would be unexercised (slop) in
+  Phase 1. `panel.rs` lands with Phase 2, whose contiguous-panel reductions
+  exercise the borrow path; until then QR's direct materialization is the honest
+  minimal form.
 
 ### Phases
 
