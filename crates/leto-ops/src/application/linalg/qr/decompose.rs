@@ -1,13 +1,12 @@
 //! Householder QR factorization kernel (`A →` packed reflectors + `R`).
 //!
-//! Panel-blocked (LAPACK `dgeqrf` structure): columns are reduced in panels of
-//! [`BLOCK_WIDTH`]; within a panel each reflector is applied unblocked to the
-//! remaining panel columns, then the panel's reflectors are applied to the
-//! trailing block in one BLAS-3 sweep via the compact-WY
-//! [`reflector_block`](crate::application::linalg::reflector_block). For
-//! `cols ≤ BLOCK_WIDTH` there is a single panel and no trailing block, so the
-//! path is byte-for-byte the original unblocked factorization — small matrices
-//! pay nothing.
+//! Panel-blocked (LAPACK `dgeqrf` structure): columns are reduced in fixed-width
+//! panels; within a panel each reflector is applied unblocked to the remaining
+//! panel columns, then the panel's reflectors are applied to the trailing block
+//! in one BLAS-3 sweep via the compact-WY reflector block kernel. For matrices
+//! no wider than one panel there is no trailing block, so the path is
+//! byte-for-byte the original unblocked factorization — small matrices pay
+//! nothing.
 
 use super::QrDecomposition;
 use crate::application::linalg::reflector_block::apply_block_left;

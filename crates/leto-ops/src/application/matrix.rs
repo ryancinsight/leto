@@ -142,9 +142,9 @@ pub fn matmul<T: Scalar>(
 
 /// Matrix product `out = lhs · rhs` that **automatically exploits sparsity**.
 ///
-/// Scans `lhs` once for its nonzero density; when that is at or below
-/// [`SPARSE_DENSITY_THRESHOLD`] — and `out` is contiguous row-major — it
-/// compresses `lhs` to CSR and runs the `Θ(nnz·n)` sparse kernel
+/// Scans `lhs` once for its nonzero density; when it is below the internal
+/// sparse-density threshold — and `out` is contiguous row-major — it compresses
+/// `lhs` to CSR and runs the `Θ(nnz·n)` sparse kernel
 /// ([`crate::spmm`]), else it runs the dense [`matmul`]. The chosen path is an
 /// implementation detail: the mathematical result is the same up to
 /// floating-point summation order between the two accumulation schemes.
