@@ -175,25 +175,27 @@ impl<T: RealScalar> LuDecomposition<T> {
 
     /// Forward- then back-substitution over the packed factors. `x` arrives
     /// already permuted and leaves holding the solution.
+    ///
+    /// The packed `L`/`U` is row-major, so each substitution row is a contiguous
+    /// slice and the row·partial-solution reduction is a contiguous dot product
+    /// dispatched through the SIMD [`Scalar::dot_slice`] (SSOT with the other
+    /// contraction paths) — replacing the per-element bounds-checked logical
+    /// `Array2::get`, whose `O(n³)` invocation by [`inv`](Self::inv) dominated the
+    /// triangular solve. Inverse/solve are correspondingly faster (e.g. they back
+    /// the matrix exponential's Padé denominator inverse).
     fn solve_in_place(&self, x: &mut [T]) {
         let n = self.dim();
-        let a = |r: usize, c: usize| *self.factors.get([r, c]).expect("factor in bounds");
+        let f = self.factors.storage().as_slice(); // row-major packed L (below) / U (on+above)
 
-        // Forward: L · y = P · rhs (unit diagonal).
+        // Forward: L · y = P · rhs (unit diagonal). yᵣ = xᵣ − Σ_{c<r} L[r,c]·y_c.
         for r in 1..n {
-            let mut acc = x[r];
-            for (c, &solved) in x[..r].iter().enumerate() {
-                acc = acc.sub(a(r, c).mul(solved));
-            }
-            x[r] = acc;
+            let dot = T::dot_slice(&f[r * n..r * n + r], &x[..r]);
+            x[r] = x[r].sub(dot);
         }
-        // Backward: U · x = y.
+        // Backward: U · x = y. xᵣ = (yᵣ − Σ_{c>r} U[r,c]·x_c) / U[r,r].
         for r in (0..n).rev() {
-            let mut acc = x[r];
-            for (offset, &solved) in x[(r + 1)..n].iter().enumerate() {
-                acc = acc.sub(a(r, r + 1 + offset).mul(solved));
-            }
-            x[r] = acc.div(a(r, r));
+            let dot = T::dot_slice(&f[r * n + r + 1..r * n + n], &x[r + 1..n]);
+            x[r] = x[r].sub(dot).div(f[r * n + r]);
         }
     }
 }
