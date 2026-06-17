@@ -25,6 +25,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   output; the const generic resolves the branch at monomorphization. 64×64 `eig`
   1.69 ms → 1.50 ms. The within-block `[k, k+len]` narrowing (further perf, but
   perturbs ill-conditioned near-zero eigenvalues) remains gated on balancing.
+- `leto-ops` [patch]: applied the same LU triangular-solve fix to Cholesky
+  (`cholesky::solve_in_place`) — it had the identical `O(n³)`-under-`inv`
+  bounds-checked `Array2::get` defect. Forward sweep now reduces over a contiguous
+  row via SIMD `dot_slice`; backward (strided column) is direct-indexed scalar.
+  `cholesky_solve`/`inv`/`det` speed up.
 - `leto-ops` [patch]: replaced the bounds-checked logical `Array2::get([r,c])` in
   the LU triangular solve (`solve_in_place`) with the row-major contiguous slice and
   a SIMD `Scalar::dot_slice` reduction. `inv()` invokes the solve `n` times, so the

@@ -172,9 +172,10 @@ benchmark group):
 | SVD (default `svd_decompose`) | ~10.6× → **~3.5×** | ~18× → **~4.1×** | was one-sided Jacobi; **now** bidiagonal QR (Golub–Reinsch) — see below |
 | eigenvalues | ~16× → **~5.8×** | ~16× → **~7.4×** | **was** complex single-shift QR; **now** real Schur (Francis), no-Q path — see below |
 | matexp | ~5.7× → **~1.15×** | — | **RESOLVED** (commit `01a197d`). Root cause was *not* matmul (matpow, also matmul-bound, was already ~1.2×) but the **Padé-denominator inverse**: `LuDecomposition::solve_in_place` read the packed `L`/`U` via the bounds-checked logical `Array2::get([r,c])` per element, and `inv()` calls it `n` times → `O(n³)` checked gets dominating. Fixed by the contiguous slice + SIMD `dot_slice` substitution. 64² 2.14 → 0.39 ms. Speeds every LU solve/inv/det. |
-| QR | ~3.6× | ~4.2× | scalar Householder; no panel/blocking |
-| LU | ~3.5× | ~4.1× | scalar partial-pivot |
-| Cholesky | ~3.4× | — | scalar |
+| QR | ~3.6× | **~1.0×** | reach parity (row-oriented SIMD apply + blocked ≥256²) |
+| LU | ~3.5× | **~0.96×** | reach parity (bulk-copy input + SIMD axpy elimination); solve/inv O(n³) `get` removed |
+| Cholesky | ~3.4× | — | solve/inv O(n³) `get` removed (commit `6920655`); decompose scalar (constant-factor) |
+| singular_values (values-only SVD) | — | **~2.4×** | OPEN constant-factor: bidiagonalization reduce is SIMD'd (Phase 0); residual is per-reflector allocation + micro-tuning vs nalgebra, not a structural `get`/strided defect. Low ROI, not chased. |
 | dense matmul | ~2.0× | ~1.5× | AXPY (rank-1) scheme: O(n³) output traffic; needs register-blocked GEMM micro-kernel (tile-accumulating SIMD primitive → upstream hermes) |
 | matpow | ~1.5× | — | matmul-bound (tracks matmul) |
 
