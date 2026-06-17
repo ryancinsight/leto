@@ -305,8 +305,13 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   crossover ≈ 200): 256² QR 1.51 → 1.29 ms, ≤128² byte-for-byte unchanged.
   Verified by a 256² known-`x` solve. Done (commit `c78b843`). Blocked Hessenberg
   folded into Phase 2.
-- [ ] [major] Phase 2: blocked bidiagonalization (`dlabrd`-style) for SVD; verify vs
-  unblocked `bidiagonalize` + SVD batteries.
-- [ ] [major] Phase 3: small-bulge multishift QR (eig) + blocked bidiagonal QR (SVD)
-  so the dominant bulge-chase trailing updates become GEMMs; gate on the hardened
-  8×8/16×16/defective batteries with the backward-error tolerance.
+- [x] [major] Phase 2: blocked U/V factor formation — implemented + verified (256²
+  `A=UBVᵀ` reconstruction/orthogonality), then **reverted as measured-valueless**:
+  256² full SVD 164 ms blocked vs 163 ms unblocked (the sequential Givens sweep is
+  the whole cost; formation < 1 ms). `apply_block_right` reverted with it. Lesson:
+  the SVD/eig residual is the iteration (Phase 3), not the reductions/factors.
+- [ ] [major] Phase 3 (the real residual lever): accelerate the sequential Givens
+  bidiagonal-QR sweep (`dbdsqr`) for SVD and small-bulge multishift QR (`dlaqr5`)
+  for eig — chase `nb`-wide bulge chains so off-window updates batch into GEMMs.
+  Inherently serial, highest risk; gate on the hardened 8×8/16×16/defective
+  batteries with the backward-error tolerance.

@@ -1,6 +1,7 @@
 # ADR 0010: Blocked-reflector (compact-WY) vectorization for eig/SVD
 
-- Status: Accepted (phased; Phases 0–1 done, Phases 2–3 planned)
+- Status: Accepted (phased; Phases 0–1 done, Phase 2 measured-valueless/reverted,
+  Phase 3 is the real residual lever)
 - Date: 2026-06-16
 - Class: [major] (post-1.0 the trailing-update path changes observable timing and
   the internal reduction/iteration kernels are restructured; the public surface
@@ -189,14 +190,25 @@ mechanical trigger, not an omission):
   is byte-for-byte the unblocked sweep (64² unchanged). Verified by a 256² solve
   recovering a known `x` to 1e-9. (Blocked Hessenberg is folded into Phase 2 with
   the two-sided reductions.)
-- **Phase 2 — blocked bidiagonalization (`dlabrd`-style):** two-sided panel
-  reduction feeding the SVD; verified against the unblocked `bidiagonalize`
-  (`A = U B Vᵀ`, bidiagonal structure, U/V orthogonality) and the SVD batteries.
-- **Phase 3 — small-bulge multishift QR (eig) / blocked bidiagonal QR (SVD):**
-  chase `nb`-wide bulges so the bulge-application trailing updates become GEMMs
-  (LAPACK `dlaqr5`/`dbdsqr`-blocked). Highest value (the iteration is the dominant
-  cost) and highest risk (index management); gated on the hardened
-  8×8/16×16/defective batteries with the backward-error tolerance.
+- **Phase 2 — blocked U/V factor formation: implemented, verified, REVERTED as
+  valueless (measured).** The SVD's `U = L₀…L_{n-1}` / `V = R₀…R_{n-2}` formation
+  was rewritten to store the panel reflectors and apply them to the identity by
+  blocked compact-WY `apply_block_right` (one-sided — no `dlabrd` look-ahead),
+  verified correct by a 256² `A = U B Vᵀ` reconstruction + orthogonality +
+  singular-value contract. **But A/B showed no benefit: 256² full SVD 164 ms
+  blocked vs 163 ms unblocked.** The entire cost is the sequential Givens
+  bidiagonal-QR sweep (Phase 3); factor formation is < 1 ms. Blocking it is
+  cargo-cult and was removed (`apply_block_right` with it). *Blocking the two-sided
+  reduction itself (`dlabrd`) is likewise low-leverage: the per-reflector applies
+  are already SIMD (Phase 0), and the sweep dominates.* The genuine SVD lever is
+  Phase 3.
+- **Phase 3 — accelerate the Givens bidiagonal-QR sweep (`dbdsqr`) / small-bulge
+  multishift QR for eig (`dlaqr5`):** the dominant, sequential iteration cost.
+  Inherently serial (each rotation/bulge feeds the next), so the lever is
+  restructuring to chase `nb`-wide bulge chains whose off-window updates batch into
+  GEMMs — highest value, highest risk; gated on the hardened 8×8/16×16/defective
+  batteries with the backward-error tolerance. This, not factor formation
+  (Phase 2), is where the residual eig/SVD disparity actually lives.
 
 ## Rejected alternatives
 

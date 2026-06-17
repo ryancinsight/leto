@@ -246,8 +246,22 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   `Scalar::axpy_slice`, see the eigenvalues entry): 64×64 full SVD 758.8 →
   **417 µs** (4.1× → **3.4×**), `singular_values` 275.0 → **133 µs** (3.8× →
   **2.3×**). Residual gap is the scalar **Givens** bidiagonal-QR sweep (strided
-  2×2 rotations, sequential bulge chase — does not vectorize without the blocked
-  rewrite #21).
+  2×2 rotations, sequential bulge chase).
+
+  **ADR 0010 Phase 2 (blocked U/V factor formation) — implemented, verified, then
+  REVERTED as valueless.** The factor formation was rewritten to store the panel
+  reflectors and form `U = L₀…L_{n-1}` / `V = R₀…R_{n-2}` by blocked compact-WY
+  `apply_block_right` (one-sided, no `dlabrd` look-ahead); verified correct by a
+  256² `A = U B Vᵀ` reconstruction + orthogonality + singular-value contract. But
+  the A/B measurement is decisive: **full SVD 256² is 164 ms blocked vs 163 ms
+  unblocked — no difference.** The entire 256² SVD cost (~163 ms vs nalgebra
+  46.6 ms, 3.5×) is the **sequential Givens bidiagonal-QR sweep**; the U/V
+  formation is < 1 ms. Blocking it is therefore cargo-cult (complexity with no
+  present performance need) and was removed. **The genuine SVD lever is Phase 3
+  — accelerating the Givens sweep itself** (`dbdsqr`), which is inherently
+  sequential (each rotation feeds the next in the bulge chase) and is exactly why
+  it is the residual. `apply_block_right` reverted with it (no value-adding
+  consumer; `apply_block_left`/blocked-QR Phase 1 retained, a measured 256² win).
 - **matmul — OPEN**: register-blocked GEMM micro-kernel needs a tile-accumulating
   SIMD primitive owned upstream in hermes (multi-repo, peer-agent lane); a prior
   scalar 4×4 tile regressed (no SIMD in the tile). Coordinated effort.
