@@ -314,9 +314,8 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   contiguous via transposed factors (each rotation mixes two contiguous rows,
   bitwise-identical). 256² full SVD 164 → 34.7 ms (4.7×, now faster than nalgebra);
   64² 1.31 → 0.60 ms. Commit `9bef76e`. SVD disparity resolved at scale.
-- [ ] [major] Phase 3 (eig) remaining: the Francis right-apply / multishift sweep.
-  The transposed-accumulator trick does not transfer (`H` is the read/written
-  working matrix), so eig needs the small-bulge multishift (`dlaqr5`) block rewrite
-  — chase `nb`-wide bulge chains so off-window updates batch into GEMMs. Inherently
-  serial, highest risk; gate on the hardened 8×8/16×16/defective batteries with the
-  backward-error tolerance.
+- [x] [major] Phase 3 (eig) DONE — disparity resolved to near parity (1.16×) by the
+  `dlahqr` WANTT=false within-block apply window (commit `676ff72`), unblocked by the
+  Phase-0 backward-error tolerance fix. 64² confinement 2.69 → restriction 0.69 ms
+  (3.9×). The full multishift (`dlaqr5`) GEMM rewrite is no longer needed to close
+  the disparity; it remains an optional future lever for very large `n` only.

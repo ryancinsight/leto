@@ -194,13 +194,22 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   exact-zero deflation). 64×64 `eig` 1.69 → 1.50 ms. The safe confinement is the
   perturbation-free subset of the LAPACK `dlahqr` WANTT=false window.
 
-  Residual gap (~5×) — **#20 CLOSED with machine-checked evidence**. Two further
-  levers were investigated and rejected:
-  - **Within-block `[k, k+len]` narrowing** (the rest of `dlahqr` WANTT=false):
-    diverges from the nalgebra oracle on the hardened 16×16 case at eigenvalue
-    `6.1e-15 ± 1.75e-7i`. Root cause is *not* a bug and *not* bad scaling — it is a
-    **defective (high-multiplicity) zero eigenvalue**: machine-checked
-    `det(A) = -8.7e-30 ≈ 0`, nullity 3 (smallest singular values
+  **eig DISPARITY RESOLVED (within-block window, now SHIPPED — commit `676ff72`).**
+  The `dlahqr` WANTT=false narrowing — left columns `[k, hi]`, right rows
+  `[lo, k+len]`, explicit bulge zeroing — is ~half the apply work of the `[lo,hi]²`
+  confinement and cuts the dominant scalar right-apply to the bulge neighbourhood.
+  Clean A/B 64×64: confinement 2.69 ms → restriction 0.69 ms (3.9×); vs nalgebra
+  0.60 ms ⇒ **1.16× (near parity, from ~4.6×)**. It was rejected three times
+  *only* because it diverges from nalgebra by `√(ε‖A‖) = 1.75e-7` on the defective
+  eigenvalue (below), exceeding the *old* fixed `1e-7` test bound; it is
+  backward-stable and became admissible once that bound was corrected (Phase 0) to
+  the analytically-derived `8·√(ε‖A‖)`. The earlier "#20 rejected" verdict was
+  conditional on the brittle test, which is now fixed — the window is the genuine
+  win, not a defect.
+
+  Historical note (#20, machine-checked): the window's divergence was *not* a bug
+  and *not* bad scaling — the 16×16 fixture has a **defective (high-multiplicity)
+  zero eigenvalue**: `det(A) = -8.7e-30 ≈ 0`, nullity 3 (smallest singular values
     `[5.55, 1.3e-15, 0, 0]`). A defective eigenvalue perturbs as `O(√(ε‖A‖))`, and
     `√(ε‖A‖) = 1.54e-7` matches the spurious `1.75e-7` imaginary part nalgebra
     reports for the defective-0. Both algorithm variants are backward-stable; they
