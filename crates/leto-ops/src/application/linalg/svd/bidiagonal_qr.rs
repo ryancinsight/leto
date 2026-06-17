@@ -117,24 +117,35 @@ fn wilkinson_shift<T: RealScalar>(d: &[T], e: &[T], p: usize, q: usize) -> T {
     t22.sub(sign.mul(t12.mul(t12)).div(denom))
 }
 
-/// Right-multiply columns `(col, col+1)` of a row-major `rows × stride` matrix by
-/// the Givens `[[c, −s], [s, c]]`: `col' = c·col + s·col₊₁`,
-/// `col₊₁' = −s·col + c·col₊₁`. Used to accumulate `U` (left rotations) and `V`
-/// (right rotations) — both update columns identically.
+/// Transpose a row-major `n × n` matrix into a fresh buffer.
+fn transpose_square<T: RealScalar>(src: &[T], n: usize) -> Vec<T> {
+    let mut out = vec![T::ZERO; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            out[j * n + i] = src[i * n + j];
+        }
+    }
+    out
+}
+
+/// Apply the column Givens `col' = c·col + s·col₊₁`, `col₊₁' = c·col₊₁ − s·col`
+/// to a matrix stored **transposed**, where the two columns are the two
+/// **contiguous rows** `(row, row+1)` of length `len`. This is the same linear
+/// combination of the same two vectors as the column form — hence the
+/// accumulated factor is bitwise-identical — but the inner loop is over two
+/// contiguous, disjoint row slices (cache-friendly, auto-vectorizable) instead of
+/// a column stride of `len`. `U`/`V` are accumulated as `Uᵀ`/`Vᵀ` so every
+/// rotation hits this path; the single transpose back is `O(n²)`, negligible
+/// against the `O(n³)` sweep.
 #[inline]
-fn rotate_columns<T: RealScalar>(
-    mat: &mut [T],
-    rows: usize,
-    stride: usize,
-    col: usize,
-    c: T,
-    s: T,
-) {
-    for i in 0..rows {
-        let a = mat[i * stride + col];
-        let b = mat[i * stride + col + 1];
-        mat[i * stride + col] = c.mul(a).add(s.mul(b));
-        mat[i * stride + col + 1] = c.mul(b).sub(s.mul(a));
+fn rotate_rows<T: RealScalar>(mat: &mut [T], len: usize, row: usize, c: T, s: T) {
+    let (head, tail) = mat.split_at_mut((row + 1) * len);
+    let row_k = &mut head[row * len..row * len + len];
+    let row_k1 = &mut tail[..len];
+    for (a, b) in row_k.iter_mut().zip(row_k1.iter_mut()) {
+        let (va, vb) = (*a, *b);
+        *a = c.mul(va).add(s.mul(vb));
+        *b = c.mul(vb).sub(s.mul(va));
     }
 }
 
@@ -209,7 +220,7 @@ fn qr_step<T: RealScalar, const VEC: bool>(
         // Right rotation (mixes columns k, k+1) annihilating z → accumulate V.
         let (c, s) = givens(y, z);
         if VEC {
-            rotate_columns(v, n, n, k, c, s);
+            rotate_rows(v, n, k, c, s); // V accumulated transposed
         }
         if k > p {
             e[k - 1] = c.mul(y).add(s.mul(z));
@@ -223,7 +234,7 @@ fn qr_step<T: RealScalar, const VEC: bool>(
         // Left rotation (mixes rows k, k+1) annihilating the bulge → accumulate U.
         let (c, s) = givens(d[k], bulge_col);
         if VEC {
-            rotate_columns(u, m, m, k, c, s);
+            rotate_rows(u, m, k, c, s); // U accumulated transposed
         }
         d[k] = c.mul(d[k]).add(s.mul(bulge_col));
         f = c.mul(e[k]).add(s.mul(d[k + 1]));
@@ -251,9 +262,12 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
     let bidiag = crate::bidiagonalize(matrix)?;
 
     // Bidiagonalization factors `A = U_b B V_bᵀ`; accumulate the QR rotations on
-    // top of them. `U_b` is `m × m`, `V_b` is `n × n`.
-    let mut u: Vec<T> = bidiag.u().storage().as_slice().to_vec();
-    let mut v: Vec<T> = bidiag.v().storage().as_slice().to_vec();
+    // top of them. To make every rotation a contiguous two-row update we hold the
+    // factors **transposed**: `ut = U_bᵀ` (`m × m`), `vt = V_bᵀ` (`n × n`), so
+    // after the sweep `ut = Uᵀ`, `vt = Vᵀ` (see `rotate_rows`). Column `j` of
+    // `U`/`V` is therefore row `j` of `ut`/`vt`.
+    let mut ut = transpose_square(bidiag.u().storage().as_slice(), m);
+    let mut vt = transpose_square(bidiag.v().storage().as_slice(), n);
     let b = bidiag.b();
     let mut d = vec![T::ZERO; n];
     let mut e = vec![T::ZERO; n];
@@ -264,19 +278,21 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
         }
     }
 
-    qr_iterate::<T, true>(&mut d, &mut e, n, &mut u, m, &mut v, n)?;
+    qr_iterate::<T, true>(&mut d, &mut e, n, &mut ut, m, &mut vt, n)?;
 
-    // Force σ ≥ 0: a negative pivot flips the sign of its left singular vector.
+    // Force σ ≥ 0: a negative pivot flips the sign of its left singular vector
+    // (column `i` of `U` = row `i` of `ut`, contiguous).
     for i in 0..n {
         if d[i] < T::ZERO {
             d[i] = d[i].neg();
-            for r in 0..m {
-                u[r * m + i] = u[r * m + i].neg();
+            for slot in &mut ut[i * m..i * m + m] {
+                *slot = slot.neg();
             }
         }
     }
 
-    // Descending sort of the singular values, carrying the U/V columns.
+    // Descending sort of the singular values, carrying the U/V columns. Column
+    // `old` of `U`/`V` is row `old` of `ut`/`vt` (a contiguous slice).
     let mut perm: Vec<usize> = (0..n).collect();
     perm.sort_by(|&a, &b| d[b].partial_cmp(&d[a]).expect("singular values are finite"));
 
@@ -286,10 +302,10 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
     for (new_col, &old) in perm.iter().enumerate() {
         sigma[new_col] = d[old];
         for r in 0..m {
-            u_thin[r * n + new_col] = u[r * m + old];
+            u_thin[r * n + new_col] = ut[old * m + r];
         }
         for r in 0..n {
-            v_thin[r * n + new_col] = v[r * n + old];
+            v_thin[r * n + new_col] = vt[old * n + r];
         }
     }
 
