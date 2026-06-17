@@ -79,6 +79,16 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
         ncols: usize,
         lda: usize,
     ) -> Result<(), &'static str>;
+    /// Register-blocked transposed sub-matrix GEMV `y += Aᵀ·x` (row-major
+    /// `nrows×ncols`, row stride `lda ≥ ncols`).
+    fn gemv_transpose_strided(
+        a: &[T],
+        x: &[T],
+        y: &mut [T],
+        nrows: usize,
+        ncols: usize,
+        lda: usize,
+    ) -> Result<(), &'static str>;
     /// Vectorized absolute-sum reduction: `Σ |x|`.
     fn abs_sum_slice(s: &[T]) -> Option<T>;
     /// Vectorized absolute-max reduction: `max |x|`.
@@ -171,6 +181,18 @@ macro_rules! impl_simd_ops_native {
             ) -> Result<(), &'static str> {
                 hermes_simd::gemv_strided::<$t>(a, x, y, nrows, ncols, lda)
                     .map_err(|_| "simd gemv_strided failed")
+            }
+            #[inline(always)]
+            fn gemv_transpose_strided(
+                a: &[$t],
+                x: &[$t],
+                y: &mut [$t],
+                nrows: usize,
+                ncols: usize,
+                lda: usize,
+            ) -> Result<(), &'static str> {
+                hermes_simd::gemv_transpose_strided::<$t>(a, x, y, nrows, ncols, lda)
+                    .map_err(|_| "simd gemv_transpose_strided failed")
             }
             #[inline(always)]
             fn abs_sum_slice(s: &[$t]) -> Option<$t> {
@@ -275,6 +297,17 @@ macro_rules! impl_simd_ops_fallback {
                 Err("simd disabled")
             }
             #[inline(always)]
+            fn gemv_transpose_strided(
+                _a: &[$t],
+                _x: &[$t],
+                _y: &mut [$t],
+                _nrows: usize,
+                _ncols: usize,
+                _lda: usize,
+            ) -> Result<(), &'static str> {
+                Err("simd disabled")
+            }
+            #[inline(always)]
             fn abs_sum_slice(_s: &[$t]) -> Option<$t> {
                 None
             }
@@ -367,6 +400,17 @@ macro_rules! impl_simd_ops_unsupported {
             }
             #[inline(always)]
             fn gemv_strided(
+                _a: &[$t],
+                _x: &[$t],
+                _y: &mut [$t],
+                _nrows: usize,
+                _ncols: usize,
+                _lda: usize,
+            ) -> Result<(), &'static str> {
+                Err("simd unsupported for type")
+            }
+            #[inline(always)]
+            fn gemv_transpose_strided(
                 _a: &[$t],
                 _x: &[$t],
                 _y: &mut [$t],

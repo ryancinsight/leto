@@ -16,7 +16,8 @@
 //! calls — `gemv_strided` for the dots `dotⱼ = vᵀ·colⱼ` (TILE_M accumulators in
 //! flight, ILP) and `axpy_rows` for the rank-1 update `colⱼ −= (τ·dotⱼ)·v` —
 //! rather than `O(n)` per-column `dot`/`axpy` calls. The **right** reflector forms
-//! `Aw = Σⱼ wⱼ·colⱼ` and updates `colⱼ -= τ·wⱼ·Aw`, column-contiguous. Only the
+//! `Aw = Σⱼ wⱼ·colⱼ` (`gemv_transpose_strided`) and updates `colⱼ -= τ·wⱼ·Aw`
+//! (`axpy_rows`) over the trailing segment block, likewise batched. Only the
 //! small `O(m)`/`O(n)` reflector gathers touch strided memory.
 
 use crate::domain::real::RealScalar;
@@ -137,20 +138,29 @@ pub(super) fn reduce_values<T: RealScalar>(a: &[T], m: usize, n: usize) -> (Vec<
             if tau_p != T::ZERO {
                 let rows = m - k - 1; // trailing rows k+1..m
                 if rows > 0 {
-                    // Aw[k+1..m] = Σⱼ wⱼ · colⱼ[k+1..m]  (column-contiguous accumulate).
+                    // The trailing segment block colⱼ[k+1..m] (j=k+1..n) is a
+                    // row-major sub-matrix (rows = columns = `rlen`, length `rows`,
+                    // row stride m) starting at (k+1)·(m+1). Batch both applies:
+                    //   Aw = Σⱼ wⱼ·segⱼ   = gemv_transpose_strided(block, w)
+                    //   segⱼ −= (τ·wⱼ)·Aw  = axpy_rows(−τ·w, Aw, block)
+                    // replacing O(rlen) per-column axpy calls with one
+                    // register-blocked SIMD call each (ILP across columns).
+                    let base = (k + 1) * m + (k + 1);
                     for v in aw[..rows].iter_mut() {
-                        *v = T::ZERO;
+                        *v = T::ZERO; // gemv_transpose_strided accumulates
                     }
-                    for (idx, j) in ((k + 1)..n).enumerate() {
-                        let seg = &cm[j * m + (k + 1)..j * m + m];
-                        T::axpy_slice(w[idx], seg, &mut aw[..rows]);
+                    T::gemv_transpose_strided(
+                        &cm[base..],
+                        &w[..rlen],
+                        &mut aw[..rows],
+                        rlen,
+                        rows,
+                        m,
+                    );
+                    for (idx, slot) in dotbuf[..rlen].iter_mut().enumerate() {
+                        *slot = T::ZERO.sub(tau_p.mul(w[idx]));
                     }
-                    // colⱼ[k+1..m] −= τ·wⱼ·Aw  (column-contiguous update).
-                    for (idx, j) in ((k + 1)..n).enumerate() {
-                        let scale = T::ZERO.sub(tau_p.mul(w[idx]));
-                        let seg = &mut cm[j * m + (k + 1)..j * m + m];
-                        T::axpy_slice(scale, &aw[..rows], seg);
-                    }
+                    T::axpy_rows(&dotbuf[..rlen], &aw[..rows], &mut cm[base..], m, rlen, rows);
                 }
             }
         }
