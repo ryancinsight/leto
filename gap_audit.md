@@ -420,3 +420,21 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
 - Performed: generalized `leto-ops::svd_decompose` and `singular_values` from tall/square full-column-rank inputs to all full-rank thin SVD shapes. Wide full-row-rank matrices now use `A A^T`, then derive right singular vectors via `V = A^T U Σ^-1`.
 - Architecture effect: Leto closes the current wide-matrix SVD nalgebra-parity gap without a second API or downstream Apollo-specific adapter. Rank-deficient inputs remain explicit errors until a rank-revealing SVD contract is implemented.
 - Evidence tier: value-semantic reconstruction and orthonormality tests. No machine-checked proof was performed.
+
+## Leto 64² singular-values disparity — root-caused as algorithmic (ADR 0012)
+- Performed: profiler-free phase attribution of `singular_values` 64² vs nalgebra
+  (bidiag 1.72×, values-sweep 2.25×, total 1.92×). Ruled out — by direct
+  experiment — convergence (92 Givens steps = 1.44/value), bounds checks
+  (`get_unchecked` left timing unchanged → already elided), trait dispatch
+  (f64 ops `#[inline(always)]`), and hermes `dot` dispatch (`target-cpu=native`;
+  the values sweep is pure-scalar `VEC=false` and never calls `dot`).
+- Root cause: the implicit-shift Givens sweep costs 2√+2÷ per element; LAPACK's
+  values-only path uses **dqds** (0√+1÷). A correct dqds kernel was prototyped
+  and verified (17 differential tests incl. rank-deficient/f32) but: no-split
+  dqds regresses (300 sweeps, 181 µs vs Givens 128 µs — this graded matrix is a
+  near-best case for Givens at 1.44 steps/value), and naïve splitting broke the
+  rank-deficient case. Reverted; scoped as [major] (full dlasq split+shift) in
+  ADR 0012.
+- Residual risk: 64² values-only stays ~1.9× nalgebra until the dlasq-class
+  dqds lands; correctness and accuracy are unaffected (Givens path retained).
+- Evidence tier: criterion + differential suite + phase/step attribution.

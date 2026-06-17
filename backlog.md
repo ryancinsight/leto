@@ -319,3 +319,11 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   Phase-0 backward-error tolerance fix. 64² confinement 2.69 → restriction 0.69 ms
   (3.9×). The full multishift (`dlaqr5`) GEMM rewrite is no longer needed to close
   the disparity; it remains an optional future lever for very large `n` only.
+
+- [ ] [major] SVD values-only **dqds** fast path (ADR 0012). Replace the implicit-shift
+  Givens sweep in `singular_values` with a full `dlasq`-class dqds (block splitting +
+  Fernando–Parlett shift cases + ping-pong). Root cause of the 64² ~1.9× nalgebra gap
+  is algorithmic (2√+2÷ Givens vs 0√+1÷ dqds). DoR: prototype reverted (no-split
+  regresses; naïve splitting breaks rank-deficient). DoD: differential parity across
+  the battery + adversarial clustered/tiny/zero/wide-range inputs, AND a measured 64²/256²
+  win before merge (asymptotic-only is insufficient at n=64).
