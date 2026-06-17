@@ -135,23 +135,25 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
 
     fn solve_in_place(&self, x: &mut [T]) {
         let n = self.dim;
-        let l = |r: usize, c: usize| *self.lower.get([r, c]).expect("factor in bounds");
+        // Row-major `L`; the per-element bounds-checked logical `get` is `O(n³)`
+        // under `inv` (n solves), so read the contiguous slice once. The forward
+        // sweep reduces over a contiguous row (SIMD `dot_slice`, SSOT); the
+        // backward sweep reduces down a column (strided), so it stays a direct
+        // indexed scalar loop — still free of the `get` overhead.
+        let l = self.lower.storage().as_slice();
 
-        // Forward: L · y = rhs.
+        // Forward: L · y = rhs. yᵣ = (xᵣ − Σ_{c<r} L[r,c]·y_c) / L[r,r].
         for r in 0..n {
-            let mut acc = x[r];
-            for (c, &solved) in x[..r].iter().enumerate() {
-                acc = acc.sub(l(r, c).mul(solved));
-            }
-            x[r] = acc.div(l(r, r));
+            let dot = T::dot_slice(&l[r * n..r * n + r], &x[..r]);
+            x[r] = x[r].sub(dot).div(l[r * n + r]);
         }
-        // Backward: Lᵀ · x = y (Lᵀ[r][c] = L[c][r]).
+        // Backward: Lᵀ · x = y (Lᵀ[r][c] = L[c][r], a strided column read).
         for r in (0..n).rev() {
             let mut acc = x[r];
             for (offset, &solved) in x[(r + 1)..n].iter().enumerate() {
-                acc = acc.sub(l(r + 1 + offset, r).mul(solved));
+                acc = acc.sub(l[(r + 1 + offset) * n + r].mul(solved));
             }
-            x[r] = acc.div(l(r, r));
+            x[r] = acc.div(l[r * n + r]);
         }
     }
 }
