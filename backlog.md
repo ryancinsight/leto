@@ -286,3 +286,24 @@ Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is
 - [ ] Migrate one low-risk Apollo crate first, preferably a verification-only or WGPU verification path, and keep differential tests against `ndarray`.
 - [ ] Migrate public Apollo APIs only after compatibility/migration notes are in Apollo CHANGELOG because replacing `ndarray::Array*` public types is a breaking API change.
 - [ ] Remove Apollo's workspace `ndarray` dependency only after all crate manifests and Python bindings no longer expose or construct `ndarray` arrays except under a temporary compatibility feature.
+
+## Phase 9: Blocked-reflector vectorization (eig/SVD disparity) [major]
+Source: `docs/adr/0010-blocked-reflector-vectorization.md`; `gap_audit.md` eig/SVD residuals.
+Residual disparity is structural: the Francis right-apply and the Givens bidiagonal-QR
+apply *single* width-2/3 reflectors (bandwidth-bound, no contiguous SIMD span). The fix
+is the compact-WY block reflector (Schreiber–Van Loan), applying `nb` aggregated
+reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked oracle.
+- [x] [patch] Phase 0: vectorize contiguous single-reflector sweeps via `axpy_slice`
+  (Householder apply + Francis left-apply). eig 5.9×→4.4×, svd 4.1×→3.4×,
+  singular_values 3.8×→2.3×. Backward-error eigenvalue tolerance correction
+  (`8·√(ε‖A‖)`, machine-checked defective-eigenvalue derivation) unblocks blocked
+  reorderings. Done (commits `5104a60`, `8df636f`).
+- [ ] [major] Phase 1: `linalg/reflector_block/` — compact-WY `BlockReflector<T, NB>`
+  + `accumulate.rs` (Schreiber–Van Loan `T`) + `panel.rs` (Cow panel view); block
+  apply via `tiled_gemm`. Differential test vs `r` sequential applies. Wire into
+  blocked Hessenberg (`dlahr2`-style); verify vs unblocked Hessenberg contract.
+- [ ] [major] Phase 2: blocked bidiagonalization (`dlabrd`-style) for SVD; verify vs
+  unblocked `bidiagonalize` + SVD batteries.
+- [ ] [major] Phase 3: small-bulge multishift QR (eig) + blocked bidiagonal QR (SVD)
+  so the dominant bulge-chase trailing updates become GEMMs; gate on the hardened
+  8×8/16×16/defective batteries with the backward-error tolerance.
