@@ -3,8 +3,18 @@
 - Status: investigated, prototype reverted, scoped as a [major] follow-up
 - Date: 2026-06-17
 - Change class: [major] (new values-only kernel + shift/splitting machinery)
-- Supersedes the "diffuse per-flop constant" conclusion of the 64²
-  `singular_values` parity investigation with a concrete algorithmic root cause.
+
+> **Correction (read first).** An earlier revision of this ADR framed the 64²
+> gap as *algorithmic* — "nalgebra is fast because it uses dqds; leto's Givens is
+> 2√+2÷ vs dqds' 0√+1÷." **That premise is false.** nalgebra 0.32's
+> `SVD::try_new_unordered` uses the **same** implicit-shift **Givens** QR sweep
+> leto does (verified in `nalgebra/src/linalg/svd.rs`: `wilkinson_shift`,
+> `GivensRotation::cancel_y`, `compute_2x2_uptrig_svd`). So the ~1.9× gap is a
+> **per-step / per-element implementation constant within the same algorithm**,
+> not a Givens-vs-dqds difference, and the phase split below is approximate. dqds
+> remains a *theoretically* cheaper kernel (fewer transcendentals) that would beat
+> **both** implementations if made fast — but it is not the explanation for
+> nalgebra's lead, and the prototype did not beat leto's own Givens path.
 
 ## Context: the measured disparity
 
@@ -42,11 +52,18 @@ converges in **92 steps = 1.44 steps/singular-value** — better than the typica
   `219f2fb`) did not move the 64² number (the values sweep is `VEC=false`,
   pure scalar — it does not call `dot` at all).
 
-The residual is therefore **algorithmic**, not a micro-inefficiency: the Givens
-sweep costs **2 √ + 2 ÷ per element** (two rotations per bulge-chase step), which
-no amount of micro-tuning removes.
+The micro-causes above are ruled out, but the residual is **not** isolated to a
+single dominant factor: it is a per-step/per-element constant within the same
+Givens algorithm nalgebra uses. Candidate remaining factors (unconfirmed, would
+need instruction-level profiling): nalgebra's fixed-size `Matrix2x3`/`Vector2`
+rotation kernels monomorphize to fully-unrolled small-vector code, its
+`delimit_subproblem` re-runs after *every* step (possibly tighter active windows),
+and its iteration count may differ from leto's measured 92. The phase split above
+is approximate (nalgebra's standalone `Bidiagonal::new` is not identical to the
+bidiagonalization inside its SVD), so the per-phase ratios should be read as
+indicative, not exact.
 
-## The algorithmic root cause and the candidate fix (dqds)
+## dqds as a candidate fix (cheaper kernel, not the cause of the gap)
 
 LAPACK's values-only path (`dbdsqr`/`dlasq`) uses **dqds** — the differential
 quotient–difference algorithm with shifts — on the *squared* qd array
@@ -108,9 +125,18 @@ shift accounting). Scope that as a dedicated [major] item, gated by:
 
 ## Consequences
 
-- The 64² disparity is now **root-caused** (algorithmic: 2√+2÷ Givens vs the
-  0√+1÷ dqds), not a mystery constant — future work targets the right lever.
+- The 64² disparity is **not** algorithmic: leto and nalgebra run the same
+  implicit-shift Givens sweep, so the ~1.9× is a per-step/per-element
+  implementation constant that this investigation narrowed (ruling out
+  convergence, bounds checks, dispatch, inlining) but did not isolate to a single
+  cause. Closing it likely needs matching nalgebra's fixed-size rotation kernels
+  / active-window tightness — or the dqds kernel below, which would undercut both.
+- dqds stays a scoped [major] lever (fewer transcendentals per element) but is
+  **not** the reason nalgebra leads; its value is an absolute speedup over Givens,
+  contingent on the full `dlasq` machinery (the simple/split prototypes regressed
+  or broke rank-deficient correctness).
 - The verified-correct dqds transform/theory lives in this ADR and git history
   (prototype on the working tree was reverted to avoid shipping dead/slow code).
 - Evidence tier: criterion measurements + 17-test differential suite +
-  profiler-free phase/step attribution. No machine-checked proof performed.
+  profiler-free phase/step attribution (phase split approximate). No
+  machine-checked proof performed.

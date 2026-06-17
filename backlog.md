@@ -322,8 +322,10 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
 
 - [ ] [major] SVD values-only **dqds** fast path (ADR 0012). Replace the implicit-shift
   Givens sweep in `singular_values` with a full `dlasq`-class dqds (block splitting +
-  Fernando–Parlett shift cases + ping-pong). Root cause of the 64² ~1.9× nalgebra gap
-  is algorithmic (2√+2÷ Givens vs 0√+1÷ dqds). DoR: prototype reverted (no-split
-  regresses; naïve splitting breaks rank-deficient). DoD: differential parity across
-  the battery + adversarial clustered/tiny/zero/wide-range inputs, AND a measured 64²/256²
-  win before merge (asymptotic-only is insufficient at n=64).
+  Fernando–Parlett shift cases + ping-pong). NOTE: the 64² ~1.9× nalgebra gap is NOT
+  algorithmic — nalgebra uses the same Givens sweep (verified); the gap is a per-step
+  implementation constant. dqds (0√+1÷ vs 2√+2÷) is an *absolute* speedup lever that
+  would beat both, not the explanation for nalgebra's lead. DoR: prototype reverted
+  (no-split regresses; naïve splitting breaks rank-deficient). DoD: differential parity
+  across the battery + adversarial clustered/tiny/zero/wide-range inputs, AND a measured
+  64²/256² win before merge (asymptotic-only is insufficient at n=64).

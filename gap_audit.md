@@ -428,13 +428,15 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   (`get_unchecked` left timing unchanged → already elided), trait dispatch
   (f64 ops `#[inline(always)]`), and hermes `dot` dispatch (`target-cpu=native`;
   the values sweep is pure-scalar `VEC=false` and never calls `dot`).
-- Root cause: the implicit-shift Givens sweep costs 2√+2÷ per element; LAPACK's
-  values-only path uses **dqds** (0√+1÷). A correct dqds kernel was prototyped
-  and verified (17 differential tests incl. rank-deficient/f32) but: no-split
-  dqds regresses (300 sweeps, 181 µs vs Givens 128 µs — this graded matrix is a
-  near-best case for Givens at 1.44 steps/value), and naïve splitting broke the
-  rank-deficient case. Reverted; scoped as [major] (full dlasq split+shift) in
-  ADR 0012.
-- Residual risk: 64² values-only stays ~1.9× nalgebra until the dlasq-class
-  dqds lands; correctness and accuracy are unaffected (Givens path retained).
+- Root cause (corrected): nalgebra 0.32 uses the **same** implicit-shift Givens
+  sweep (verified in its `svd.rs`), so the gap is a per-step/per-element
+  **implementation constant**, NOT algorithmic (an earlier note wrongly framed it
+  as Givens-vs-dqds — see ADR 0012's correction). dqds (0√+1÷ vs Givens' 2√+2÷)
+  is a *theoretical* lever that would beat both, but a prototype (correct on all
+  17 differential tests incl. rank-deficient/f32) regressed without splitting
+  (300 sweeps, 181 µs vs Givens 128 µs) and broke rank-deficient with naïve
+  splitting. Reverted; scoped [major] (full dlasq split+shift) in ADR 0012.
+- Residual risk: 64² values-only stays ~1.9× nalgebra; the per-step constant was
+  narrowed (convergence/bounds/dispatch/inlining ruled out) but not isolated to a
+  single cause. Correctness and accuracy are unaffected (Givens path retained).
 - Evidence tier: criterion + differential suite + phase/step attribution.
