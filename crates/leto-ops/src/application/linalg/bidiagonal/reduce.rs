@@ -67,11 +67,17 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
     let mut u = ACCUMULATE_FACTORS.then(|| identity::<T>(m));
     let mut v = ACCUMULATE_FACTORS.then(|| identity::<T>(n));
 
+    // Reused scratch (allocation-free reduction hot loop): the column/row
+    // gathers and the left-apply accumulator `w`.
+    let mut col: Vec<T> = Vec::with_capacity(m);
+    let mut row: Vec<T> = Vec::with_capacity(n);
+    let mut alw: Vec<T> = Vec::with_capacity(n);
     for k in 0..n {
         // Left reflector: column k, rows k..m.
-        let col: Vec<T> = (k..m).map(|i| b[i * n + k]).collect();
+        col.clear();
+        col.extend((k..m).map(|i| b[i * n + k]));
         if let Some((refl, _alpha)) = reflector(&col) {
-            apply_left(&refl, &mut b, n, k, k, n); // rows k..m, cols k..n
+            apply_left(&refl, &mut b, n, k, k, n, &mut alw); // rows k..m, cols k..n
             if let Some(u) = u.as_mut() {
                 apply_right(&refl, u, m, k, 0, m); // U ← U·Lₖ
             }
@@ -79,7 +85,8 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
 
         // Right reflector: row k, columns k+1..n.
         if k + 1 < n {
-            let row: Vec<T> = (k + 1..n).map(|j| b[k * n + j]).collect();
+            row.clear();
+            row.extend((k + 1..n).map(|j| b[k * n + j]));
             if let Some((refl, _alpha)) = reflector(&row) {
                 apply_right(&refl, &mut b, n, k + 1, k, m); // cols k+1..n, rows k..m
                 if let Some(v) = v.as_mut() {

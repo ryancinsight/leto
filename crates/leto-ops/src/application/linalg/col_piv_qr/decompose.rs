@@ -67,6 +67,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
     let tol = ref_norm.mul(T::ONE.div(T::from_usize(1_000_000_000_000)));
     let mut rank = p;
 
+    let mut alw: Vec<T> = Vec::with_capacity(n);
     for k in 0..p {
         // Pivot: column with the largest tail norm among k..n.
         let mut best = k;
@@ -92,7 +93,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         // Householder on column k, rows k..m.
         let col: Vec<T> = (k..m).map(|i| r[i * n + k]).collect();
         if let Some((refl, _alpha)) = reflector(&col) {
-            apply_left(&refl, &mut r, n, k, k, n); // rows k..m, cols k..n
+            apply_left(&refl, &mut r, n, k, k, n, &mut alw); // rows k..m, cols k..n
             apply_right(&refl, &mut q, m, k, 0, m); // Q ← Q Hₖ
         }
     }

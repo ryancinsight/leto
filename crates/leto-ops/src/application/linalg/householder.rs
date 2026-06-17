@@ -61,6 +61,10 @@ pub(crate) fn reflector<T: RealScalar>(x: &[T]) -> Option<(Reflector<T>, T)> {
 
 /// Left-apply `P` to rows `[base_row .. base_row + v.len())` of a row-major
 /// `_ × cols` matrix, across columns `[c0 .. c1)` (`block ← P · block`).
+///
+/// `scratch` is the caller-owned accumulator `w = vᵀ·block`; reused across calls
+/// so the reduction hot loop is allocation-free (it is resized up to the column
+/// span as needed). Pass an empty `Vec` on the first call.
 pub(crate) fn apply_left<T: RealScalar>(
     refl: &Reflector<T>,
     m: &mut [T],
@@ -68,6 +72,7 @@ pub(crate) fn apply_left<T: RealScalar>(
     base_row: usize,
     c0: usize,
     c1: usize,
+    scratch: &mut Vec<T>,
 ) {
     let Reflector { v, beta } = refl;
     if c1 <= c0 {
@@ -84,17 +89,19 @@ pub(crate) fn apply_left<T: RealScalar>(
     // result is unchanged to the last bit — the eigenvalue/SVD paths see no
     // rounding perturbation.
     let span = c1 - c0;
-    let mut w = vec![T::ZERO; span];
+    scratch.clear();
+    scratch.resize(span, T::ZERO);
+    let w = scratch.as_mut_slice();
     for (i, &vi) in v.iter().enumerate() {
         let row = &m[(base_row + i) * cols + c0..(base_row + i) * cols + c1];
-        T::axpy_slice(vi, row, &mut w); // w += vᵢ · row
+        T::axpy_slice(vi, row, w); // w += vᵢ · row
     }
     for wj in w.iter_mut() {
         *wj = beta.mul(*wj);
     }
     for (i, &vi) in v.iter().enumerate() {
         let row = &mut m[(base_row + i) * cols + c0..(base_row + i) * cols + c1];
-        T::axpy_slice(T::ZERO.sub(vi), &w, row); // row += (−vᵢ)·w  ≡  row −= vᵢ·w
+        T::axpy_slice(T::ZERO.sub(vi), w, row); // row += (−vᵢ)·w  ≡  row −= vᵢ·w
     }
 }
 

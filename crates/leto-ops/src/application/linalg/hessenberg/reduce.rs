@@ -47,6 +47,8 @@ pub(super) fn reduce_to_hessenberg<T: RealScalar, const ACCUMULATE_Q: bool>(
         Vec::new()
     };
 
+    // Reused left-apply accumulator (allocation-free hot loop).
+    let mut alw: Vec<T> = Vec::with_capacity(n);
     // k runs to n−3 inclusive: the final subdiagonal entry needs no reflector.
     for k in 0..n.saturating_sub(2) {
         // Sub-column below the subdiagonal: rows k+1..n of column k.
@@ -60,7 +62,7 @@ pub(super) fn reduce_to_hessenberg<T: RealScalar, const ACCUMULATE_Q: bool>(
             // span all rows [0, n): the trailing columns [k+1, n) are unreduced and
             // dense above the diagonal. (Matches LAPACK dgehrd's trailing-submatrix
             // update.)
-            apply_left(&refl, &mut h, n, k + 1, k, n); // H ← Pₖ H
+            apply_left(&refl, &mut h, n, k + 1, k, n, &mut alw); // H ← Pₖ H
             apply_right(&refl, &mut h, n, k + 1, 0, n); // H ← (Pₖ H) Pₖ
             if ACCUMULATE_Q {
                 apply_right(&refl, &mut q, n, k + 1, 0, n); // Q ← Q Pₖ
