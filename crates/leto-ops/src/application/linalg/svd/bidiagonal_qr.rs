@@ -184,23 +184,33 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
     let mut q = k - 1;
     let mut iter = 0usize;
     loop {
-        // Deflate negligible superdiagonals (precision-exact `s + |e| == s`).
-        for i in 0..q {
-            let scale = d[i].abs().add(d[i + 1].abs());
-            if scale.add(e[i].abs()) == scale {
-                e[i] = T::ZERO;
+        // Peel converged singular values off the bottom, deflating the bottom
+        // superdiagonal in passing (precision-exact `s + |e| == s`). Only the
+        // active region near the bottom is touched — already-converged blocks
+        // above are not re-scanned each iteration (matches LAPACK/nalgebra
+        // `delimit_subproblem`; the prior `0..q` rescan was `O(q)` per step).
+        while q > 0 {
+            let scale = d[q - 1].abs().add(d[q].abs());
+            if scale.add(e[q - 1].abs()) == scale {
+                e[q - 1] = T::ZERO;
             }
-        }
-        // Shrink the active window from the bottom past zero superdiagonals.
-        while q > 0 && e[q - 1] == T::ZERO {
+            if e[q - 1] != T::ZERO {
+                break;
+            }
             q -= 1;
         }
         if q == 0 {
             return Ok(());
         }
-        // Top of the bottom-most unreduced block.
+        // Top of the bottom-most unreduced block: scan up until a negligible
+        // superdiagonal splits it (deflate that entry as the block boundary).
         let mut p = q;
-        while p > 0 && e[p - 1] != T::ZERO {
+        while p > 0 {
+            let scale = d[p - 1].abs().add(d[p].abs());
+            if scale.add(e[p - 1].abs()) == scale {
+                e[p - 1] = T::ZERO;
+                break;
+            }
             p -= 1;
         }
 
