@@ -432,10 +432,14 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   sweep (verified in its `svd.rs`), so the gap is a per-step/per-element
   **implementation constant**, NOT algorithmic (an earlier note wrongly framed it
   as Givens-vs-dqds — see ADR 0012's correction). dqds (0√+1÷ vs Givens' 2√+2÷)
-  is a *theoretical* lever that would beat both, but a prototype (correct on all
-  17 differential tests incl. rank-deficient/f32) regressed without splitting
-  (300 sweeps, 181 µs vs Givens 128 µs) and broke rank-deficient with naïve
-  splitting. Reverted; scoped [major] (full dlasq split+shift) in ADR 0012.
+  is a *theoretical* lever that would beat both. A full implementation (block
+  splitting + in-place sweep + rank-deficiency gate to Givens) was built and
+  passes all 17 differential tests, but a **clean same-session A/B** (criterion,
+  nalgebra-anchored) measured it at **−1.3% vs Givens — a statistical tie, no
+  win**: the dmin-fraction shift plateaus at ~300 sweeps (vs Givens' 92 steps),
+  cancelling dqds's per-element saving. A win needs the full dlasq4 cased shift
+  (~130 sweeps), and even then bidiag (1.72× nalgebra, unchanged) caps parity.
+  Reverted per the ship-only-on-measured-win DoD; scoped [major] in ADR 0012.
 - Residual risk: 64² values-only stays ~1.9× nalgebra; the per-step constant was
   narrowed (convergence/bounds/dispatch/inlining ruled out) but not isolated to a
   single cause. Correctness and accuracy are unaffected (Givens path retained).

@@ -94,20 +94,33 @@ A complete, generic-over-`RealScalar` dqds kernel was implemented and verified
 battery, wide dynamic range, rank-deficient/zero σ, diagonal closed-form, f32).
 Two shift/splitting strategies were measured on the 64² benchmark matrix:
 
-| Variant                                   | sweeps | result        |
-|-------------------------------------------|--------|---------------|
-| no-split, shift = ¼·dmin estimate         | 384    | 0 fallbacks   |
-| no-split, shift = ½·dmin estimate         | 300    | 1 fallback; **181 µs total — a regression vs Givens' 128 µs** |
-| recursive interior splitting + ½ shift    | 403    | **broke the rank-deficient case**, no speedup |
+A second, complete implementation was then built (user-authorized [major] push):
+work-stack **block splitting**, in-place sweep with backup/restore positivity
+retry, `dmin`-fraction shift, and a **rank-deficiency gate** routing exact-zero
+singular values to the Givens path (so the qd array dqds sees is strictly
+positive — fixing the earlier rank-deficient break). It passes **all 17**
+differential tests. Sweep counts / timings on the 64² benchmark:
+
+| Variant                                     | sweeps | result |
+|---------------------------------------------|--------|--------|
+| no-split, shift = ½·dmin                     | 300    | 181 µs (regression) |
+| split + gate, shift ∈ {¼,½,¾,0.9,0.99}·dmin  | 300–403 | sweep count **plateaus** — fraction does not help |
+| **split + gate, ½·dmin (clean A/B)**         | ~300   | **116.5 µs vs Givens 115.5 µs — change −1.3%, NO win** |
 
 **Findings.**
-1. A *simple* dqds (single global shift, no block splitting) does **full-length**
-   sweeps and is throttled to the global smallest eigenvalue; on this graded
-   matrix it needs ~300 sweeps and is **slower** than the Givens path — which
-   here converges exceptionally (1.44 steps/value), a near-best case for Givens.
-2. Adding interior splitting (the real source of `dlasq`'s speed) is numerically
-   delicate: the naïve recursion mishandled zero-`q` (rank-deficient) blocks and
-   did not reduce sweeps without the proper Fernando–Parlett shift.
+1. The `dmin`-fraction shift plateaus at ~300 sweeps (≈5/value) regardless of
+   fraction or splitting — `dmin` is too loose an estimate of `λ_min` far from
+   convergence. The win requires the full `dlasq4` Fernando–Parlett *cased* shift
+   (~2–3 sweeps/value), which is ~150 lines of intricate logic not reliably
+   reconstructable without the LAPACK source.
+2. At ~300 sweeps, dqds's per-element saving (1 ÷ vs 2 √ + 2 ÷) is exactly
+   cancelled by doing ~3× more total sweeps than Givens' 92 steps (this graded
+   matrix converges exceptionally under Givens, 1.44 steps/value — a near-best
+   case for it). The **clean same-session A/B** (criterion, nalgebra-anchored)
+   measured dqds at **−1.3%** vs Givens: a statistical tie, not a win.
+3. Even a perfect dqds sweep cannot reach nalgebra parity here: the
+   **bidiagonalization** phase (leto 1.72× nalgebra, unchanged by dqds) caps the
+   achievable total.
 
 ## Decision
 
