@@ -78,8 +78,11 @@ fn givens<T: RealScalar>(a: T, b: T) -> (T, T) {
     if b == T::ZERO {
         return (T::ONE, T::ZERO);
     }
-    let r = a.mul(a).add(b.mul(b)).sqrt();
-    (a.div(r), b.div(r))
+    // One reciprocal + two mults rather than two divides by the same `r`
+    // (division is several× a multiply; the sweep calls this O(n²) times). The
+    // extra rounding of `1/r` is within the SVD's differential tolerance.
+    let inv_r = T::ONE.div(a.mul(a).add(b.mul(b)).sqrt());
+    (a.mul(inv_r), b.mul(inv_r))
 }
 
 /// Wilkinson shift: the eigenvalue of the trailing 2×2 of `T = BᵀB` (rows

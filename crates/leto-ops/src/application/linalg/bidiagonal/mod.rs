@@ -108,4 +108,3 @@ pub(crate) fn bidiagonal_diag_colmajor<T: RealScalar>(
     }
     Ok(colmajor::reduce_values(a, m, n))
 }
-
