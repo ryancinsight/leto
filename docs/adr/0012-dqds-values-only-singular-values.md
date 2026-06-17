@@ -178,13 +178,39 @@ untouched** — that half still needs the `dlasq4` dqds (above). Shipped in leto
 commits `4ff44a6` (left reflector) and `6262bfe` (right reflector); the four
 GEMV-family kernels are in hermes.
 
+### Correction — the sweep does NOT need dqds/`dlasq4` to match nalgebra
+
+A later source comparison overturns the framing above. **nalgebra's SVD sweep
+is itself Givens-based** (`linalg/svd.rs` drives a Golub–Reinsch implicit-shift
+bulge chase via `GivensRotation::cancel_y` + `compute_2x2_uptrig_svd`) — it does
+**not** use dqds. So matching nalgebra is an *in-algorithm* arithmetic question,
+not a "port `dlasq`" question. Two findings from reading nalgebra 0.35's
+`givens.rs`/`svd.rs` against leto's `qr_step`:
+
+1. **leto's `givens` is already cheaper than nalgebra's `cancel_y`** — 1 sqrt +
+   1 reciprocal + 2 mults vs nalgebra's 1 sqrt + 2 divides (+ sign handling). No
+   deficit there.
+2. **One real redundancy existed and is now fixed:** `givens` formed
+   `r = √(a²+b²)` then discarded it, and `qr_step` recomputed the same value as
+   `c·a + s·b` for both `e[k-1]` and `d[k]`. `givens` now returns `r` and the
+   caller uses it directly (commit `16ab2a1`) — correctness-identical (`r ≡
+   c·a+s·b`, 17 differential tests bit-exact), strictly fewer ops per inner step.
+
+Net: with the recompute removed, leto's sweep arithmetic is **competitive with
+nalgebra's** (both Givens). The earlier "sweep ≈2.35× nalgebra" rested on a
+shaky phase-split estimate; the residual disparity is dominated by the **bidiag
+phase** (now 1.40× after batching) and diffuse per-op overhead, **not** a missing
+dqds. dqds remains a *potential absolute* speedup over Givens (cheaper per-step,
+no sqrt), but it is no longer the path to nalgebra *parity*.
+
 ## Decision
 
 **Keep the implicit-shift Givens QR sweep** for `singular_values` (correct, no
-regression, excellent convergence). **Do not ship** a partial dqds: the simple
-form regresses and the fast form requires the full `dlasq` split-and-shift
-machinery (dlasq2/3/4 shift cases + ping-pong + block splitting with per-block
-shift accounting). Scope that as a dedicated [major] item, gated by:
+regression, excellent convergence; now with the norm-reuse micro-opt). A partial
+dqds still must not ship (the simple form regresses; the fast form needs the full
+`dlasq` machinery) — but per the correction above, dqds is an *optional absolute*
+optimization, not required for nalgebra parity. Scope it as a dedicated [major]
+item only if an absolute sweep speedup is wanted, gated by:
 
 - differential parity with nalgebra across the existing battery **and** adversarial
   clustered/tiny/zero/wide-dynamic-range inputs (the rank-deficient case is the
