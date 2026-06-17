@@ -25,6 +25,24 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   output; the const generic resolves the branch at monomorphization. 64×64 `eig`
   1.69 ms → 1.50 ms. The within-block `[k, k+len]` narrowing (further perf, but
   perturbs ill-conditioned near-zero eigenvalues) remains gated on balancing.
+- `leto-ops` [patch]: SIMD-vectorized the shared Householder apply and the Francis
+  left-apply via `Scalar::axpy_slice` (the SSOT path used by LU/QR/matmul),
+  replacing hand loops that relied on auto-vectorization. The contiguous inner
+  sweeps are bitwise-identical to the scalar form (hermes `axpy` performs no FMA
+  contraction); the Francis left-apply uses a run-owned reused scratch buffer
+  (allocation-free) and a `SPAN_SIMD_MIN = 32` threshold so narrow spans stay
+  scalar. Accelerates the bidiagonalization (SVD) and Hessenberg + Francis (eig):
+  64×64 `svd` 759 → 417 µs (4.1× → 3.4× vs nalgebra), `singular_values` 275 →
+  133 µs (3.8× → 2.3×), `eig` 1.50 ms → 1.11 ms (5.9× → 4.4×); 32×32 `eig` 284 →
+  242 µs.
+- `leto-ops` [patch]: corrected the non-symmetric eigenvalue battery's match
+  tolerance from a fixed `1e-7` absolute to the derived backward-error bound
+  `8·√(ε‖A‖)`. Machine-checked wrong-bound fix: the 16×16 fixture is singular with
+  nullity 3 (`det ≈ −8.7e-30`), so its zero eigenvalue is defective and perturbs
+  as `√(ε‖A‖) = 1.54e-7 > 1e-7`; two backward-stable solvers (leto, nalgebra) are
+  only guaranteed to agree to that scale. The old bound brittlely pinned leto to
+  nalgebra's exact rounding path. Exact / symmetric (perfectly-conditioned) cases
+  keep the tight `1e-7` bound.
 - `leto-ops` [patch]: optimized trace, Kronecker product, and keep-dim axis
   reductions over strided views by replacing repeated checked logical indexing in
   hot loops with validated stride walks. Added negative-stride regression tests

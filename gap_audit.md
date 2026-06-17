@@ -216,11 +216,22 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
     (64×64 1.50 → 1.64 ms). Net-negative for the target metric with no consumer
     need; removed per subtractive/anti-over-engineering discipline.
 
-  The genuine remaining lever is therefore **not** an apply-window or balancing
-  change but vectorizing the scalar 3-wide reflector applies — which, given their
-  tiny strided inner loops, in turn needs a blocked/aggregated-reflector
-  (WY / small-bulge multishift) rewrite. Tracked as a major structural item, not a
-  patch.
+  (4) **SIMD apply** (now the eig test is backward-error-correct, see below):
+  the shared Householder apply and the Francis **left**-apply route their
+  contiguous inner sweeps through `Scalar::axpy_slice` (SSOT SIMD), row-oriented
+  with a reused scratch buffer and a `SPAN_SIMD_MIN = 32` threshold (narrow spans
+  stay scalar). Bitwise-identical to the column-oriented form. 64×64 `eig` 1.50 →
+  **1.11 ms** (5.9× → **4.4×**); 32×32 284 → **242 µs**. The brittle `1e-7`
+  oracle was first replaced by the analytically-correct backward-error bound
+  `8·√(ε‖A‖)` (defective-eigenvalue derivation above, machine-checked), which
+  unblocked all backward-stable reorderings.
+
+  Residual gap (~4.4×) is the Francis **right**-apply (3-wide per row, no
+  contiguous span to vectorize) plus the per-step reflector overhead. Closing it
+  needs the blocked/aggregated-reflector (compact-WY / small-bulge multishift)
+  rewrite so the apply becomes a GEMM — tracked as `[major/arch]` (#21), not a
+  patch. **#20 CLOSED**: the within-block `[k, k+len]` narrowing and balancing
+  were both investigated and rejected (above).
 - **SVD — RESOLVED ([patch]+[minor])**: both singular values and the full thin
   SVD now use the implicit-shift **bidiagonal QR** (`svd/bidiagonal_qr.rs`,
   reusing `bidiagonalize`). No `AᵀA`, so accuracy is `κ(A)` not `κ(A)²` (resolves
@@ -231,9 +242,12 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   `singular_values` 57.1 µs (32×32) and 275.0 µs (64×64), a 25.5%/39.5% local
   median reduction after skipping factor accumulation. One-sided Jacobi
   (`svd_rank_revealing`) retained for rank-deficient / maximal accuracy.
-  Residual gap (~3.5–4.1× full SVD, ~3.6–3.8× values-only) is the scalar
-  bidiagonalization + scalar Givens (vectorization is the next lever, shared with
-  the eigenvalues residual).
+  **SIMD bidiagonalization** (shared Householder apply now routes through
+  `Scalar::axpy_slice`, see the eigenvalues entry): 64×64 full SVD 758.8 →
+  **417 µs** (4.1× → **3.4×**), `singular_values` 275.0 → **133 µs** (3.8× →
+  **2.3×**). Residual gap is the scalar **Givens** bidiagonal-QR sweep (strided
+  2×2 rotations, sequential bulge chase — does not vectorize without the blocked
+  rewrite #21).
 - **matmul — OPEN**: register-blocked GEMM micro-kernel needs a tile-accumulating
   SIMD primitive owned upstream in hermes (multi-repo, peer-agent lane); a prior
   scalar 4×4 tile regressed (no SIMD in the tile). Coordinated effort.
