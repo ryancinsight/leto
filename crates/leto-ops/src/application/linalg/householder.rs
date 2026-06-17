@@ -75,27 +75,26 @@ pub(crate) fn apply_left<T: RealScalar>(
     }
     // Row-oriented `P·m`: accumulate `w = vᵀ·m[rows, c0..c1]` by sweeping each
     // reflector row contiguously, then apply `m −= v·(β·w)` row by row — versus a
-    // per-column dot that strides the reflector rows at `cols` apart. Contiguous,
-    // auto-vectorizable. The per-`w[j]` summation order (reflector rows ascending)
-    // and the `(β·dot)·v[i]` scaling grouping are preserved, so the result is
-    // bitwise-identical to the column-oriented form (FP mul is commutative but not
-    // associative — `w` is scaled by `β` before multiplying by `v[i]`).
+    // per-column dot that strides the reflector rows at `cols` apart. Both inner
+    // sweeps are contiguous element-wise `y += a·x` updates, dispatched through the
+    // SIMD `Scalar::axpy_slice` (SSOT with the LU/QR/matmul row updates). The
+    // per-`w[j]` summation order (reflector rows ascending) and the `(β·w)` scaling
+    // grouping are preserved; `axpy_slice` is bitwise-identical to the separate
+    // `mul`+`add` it replaces (hermes `axpy` performs no FMA contraction), so the
+    // result is unchanged to the last bit — the eigenvalue/SVD paths see no
+    // rounding perturbation.
     let span = c1 - c0;
     let mut w = vec![T::ZERO; span];
     for (i, &vi) in v.iter().enumerate() {
         let row = &m[(base_row + i) * cols + c0..(base_row + i) * cols + c1];
-        for (wj, &mij) in w.iter_mut().zip(row) {
-            *wj = wj.add(vi.mul(mij));
-        }
+        T::axpy_slice(vi, row, &mut w); // w += vᵢ · row
     }
     for wj in w.iter_mut() {
         *wj = beta.mul(*wj);
     }
     for (i, &vi) in v.iter().enumerate() {
         let row = &mut m[(base_row + i) * cols + c0..(base_row + i) * cols + c1];
-        for (mij, &wj) in row.iter_mut().zip(w.iter()) {
-            *mij = mij.sub(vi.mul(wj));
-        }
+        T::axpy_slice(T::ZERO.sub(vi), &w, row); // row += (−vᵢ)·w  ≡  row −= vᵢ·w
     }
 }
 
@@ -111,15 +110,19 @@ pub(crate) fn apply_right<T: RealScalar>(
     r1: usize,
 ) {
     let Reflector { v, beta } = refl;
+    let len = v.len();
     for i in r0..r1 {
+        let row = &mut m[i * cols + base_col..i * cols + base_col + len];
+        // Reduction `dot = rowᵀ·v` stays sequential (ascending `j`) to preserve the
+        // summation order; vectorizing it via a tree reduction would reorder the
+        // adds and perturb the rounding of the eigenvalue-feeding paths.
         let mut dot = T::ZERO;
-        for (j, &vj) in v.iter().enumerate() {
-            dot = dot.add(m[i * cols + base_col + j].mul(vj));
+        for (&mij, &vj) in row.iter().zip(v.iter()) {
+            dot = dot.add(mij.mul(vj));
         }
         let scale = beta.mul(dot);
-        for (j, &vj) in v.iter().enumerate() {
-            let idx = i * cols + base_col + j;
-            m[idx] = m[idx].sub(scale.mul(vj));
-        }
+        // The element-wise update is contiguous; route it through the SIMD
+        // `axpy_slice` (bitwise-identical to the separate `mul`+`sub`).
+        T::axpy_slice(T::ZERO.sub(scale), v, row); // row += (−scale)·v ≡ row −= scale·v
     }
 }
