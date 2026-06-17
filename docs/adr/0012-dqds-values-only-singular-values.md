@@ -153,8 +153,30 @@ calls while keeping SIMD. **Clean A/B result: −1.3 % (inline is *slightly
 worse*)** — call overhead is *not* the bidiag bottleneck, because hermes
 `axpy_slice` already inlines under native+LTO (no boundary to remove). Reverted.
 Closing the bidiag gap would need a genuinely batched strided gemv/ger kernel
-(new hermes infrastructure), whose payoff is now doubly doubtful given the same
-memory traffic and the inlining result.
+(new hermes infrastructure).
+
+### Update — the batched gemv kernel was built, and it *does* win (~19%)
+
+The "call-overhead null" result above was for *inlining* the per-column axpy
+(keeping the per-column structure). The genuinely **batched** reflector apply is
+different and was subsequently built: new hermes `gemv_strided` /
+`gemv_transpose_strided` + `axpy_rows` replace the O(n) per-column `dot`/`axpy`
+calls with O(1) register-blocked SIMD calls per reflector, giving **ILP across
+columns** (independent dot/axpy accumulators in flight) rather than serial
+per-column reductions. The isolated reflector dot-batch measures **2×** (hermes
+`reflector_dots` bench), and a clean, machine-settled **phase attribution** of
+64² `singular_values` confirms the integration win:
+
+| Phase (64²) | per-column | batched (both reflectors) |
+|-------------|-----------|---------------------------|
+| bidiag      | 63.8 µs   | **51.9 µs (≈19% faster)** |
+| sweep       | ~50 µs    | ~54 µs (unchanged)        |
+
+So the bidiag phase drops from 1.72× → ≈1.40× nalgebra. The *total* SVD effect
+(~114 → ~106 µs) is partly masked by session noise because the **sweep phase is
+untouched** — that half still needs the `dlasq4` dqds (above). Shipped in leto
+commits `4ff44a6` (left reflector) and `6262bfe` (right reflector); the four
+GEMV-family kernels are in hermes.
 
 ## Decision
 
