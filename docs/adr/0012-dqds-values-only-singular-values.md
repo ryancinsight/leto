@@ -140,6 +140,22 @@ tie does not justify ~250 lines of delicate kernel, so it is not shipped.
    **bidiagonalization** phase (leto 1.72× nalgebra, unchanged by dqds) caps the
    achievable total.
 
+## Bidiagonalization phase — call-overhead hypothesis measured and rejected
+
+The other ~half of the gap is the bidiag phase, where leto applies each
+Householder reflector to the trailing block by **per-column** `dot`+`axpy`
+(O(n²) hermes calls) while nalgebra uses a batched gemv+ger. Hypothesis: the
+per-column call overhead is the cost. **Test:** the `axpy` updates are
+element-wise (not reductions), so they auto-vectorize to AVX2 under
+`target-cpu=native` *without* a hermes call — inlining all three axpy sites
+(left-reflector apply, `Aw` accumulate, update) eliminates ~half the per-column
+calls while keeping SIMD. **Clean A/B result: −1.3 % (inline is *slightly
+worse*)** — call overhead is *not* the bidiag bottleneck, because hermes
+`axpy_slice` already inlines under native+LTO (no boundary to remove). Reverted.
+Closing the bidiag gap would need a genuinely batched strided gemv/ger kernel
+(new hermes infrastructure), whose payoff is now doubly doubtful given the same
+memory traffic and the inlining result.
+
 ## Decision
 
 **Keep the implicit-shift Givens QR sweep** for `singular_values` (correct, no
