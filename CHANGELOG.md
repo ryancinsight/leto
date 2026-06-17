@@ -25,6 +25,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   output; the const generic resolves the branch at monomorphization. 64×64 `eig`
   1.69 ms → 1.50 ms. The within-block `[k, k+len]` narrowing (further perf, but
   perturbs ill-conditioned near-zero eigenvalues) remains gated on balancing.
+- `leto-ops` [patch]: replaced the bounds-checked logical `Array2::get([r,c])` in
+  the LU triangular solve (`solve_in_place`) with the row-major contiguous slice and
+  a SIMD `Scalar::dot_slice` reduction. `inv()` invokes the solve `n` times, so the
+  `O(n³)` checked gets dominated every LU solve/inverse/determinant. 64² `matexp`
+  (whose Padé denominator is inverted via LU) 2.14 → 0.39 ms (~5.7× → ~1.15× of
+  nalgebra); all LU-backed solves speed up correspondingly.
 - `leto-ops` [patch]: restricted the eigenvalues-only Francis apply to the LAPACK
   `dlahqr` WANTT=false window (left columns `[k, hi]`, right rows `[lo, k+len]`,
   explicit bulge zeroing) — ~half the apply work, cutting the dominant scalar

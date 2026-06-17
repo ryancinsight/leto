@@ -171,7 +171,7 @@ benchmark group):
 | --- | --- | --- | --- |
 | SVD (default `svd_decompose`) | ~10.6× → **~3.5×** | ~18× → **~4.1×** | was one-sided Jacobi; **now** bidiagonal QR (Golub–Reinsch) — see below |
 | eigenvalues | ~16× → **~5.8×** | ~16× → **~7.4×** | **was** complex single-shift QR; **now** real Schur (Francis), no-Q path — see below |
-| matexp | ~6.6× | — | Padé reuses matmul (itself ~2× slow); even/odd split cut its products 6→4, but wall-clock is matmul-bound (tracks matmul gap) |
+| matexp | ~5.7× → **~1.15×** | — | **RESOLVED** (commit `01a197d`). Root cause was *not* matmul (matpow, also matmul-bound, was already ~1.2×) but the **Padé-denominator inverse**: `LuDecomposition::solve_in_place` read the packed `L`/`U` via the bounds-checked logical `Array2::get([r,c])` per element, and `inv()` calls it `n` times → `O(n³)` checked gets dominating. Fixed by the contiguous slice + SIMD `dot_slice` substitution. 64² 2.14 → 0.39 ms. Speeds every LU solve/inv/det. |
 | QR | ~3.6× | ~4.2× | scalar Householder; no panel/blocking |
 | LU | ~3.5× | ~4.1× | scalar partial-pivot |
 | Cholesky | ~3.4× | — | scalar |
