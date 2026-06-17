@@ -256,7 +256,8 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
                 // is backward-stable but reorders rounding, so on a near-defective
                 // eigenvalue it differs from a full sweep (and from the reference)
                 // by `O(√(ε‖A‖))` — within the eigenvalue battery's derived
-                // backward-error tolerance, machine-checked.
+                // backward-error tolerance. Evidence tier: differential and
+                // empirical validation, not machine-checked proof.
                 if k > lo {
                     h[k * n + (k - 1)] = alpha;
                     h[(k + 1) * n + (k - 1)] = T::ZERO;
