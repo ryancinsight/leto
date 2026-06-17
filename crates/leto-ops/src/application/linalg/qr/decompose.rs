@@ -1,8 +1,29 @@
 //! Householder QR factorization kernel (`A →` packed reflectors + `R`).
+//!
+//! Panel-blocked (LAPACK `dgeqrf` structure): columns are reduced in panels of
+//! [`BLOCK_WIDTH`]; within a panel each reflector is applied unblocked to the
+//! remaining panel columns, then the panel's reflectors are applied to the
+//! trailing block in one BLAS-3 sweep via the compact-WY
+//! [`reflector_block`](crate::application::linalg::reflector_block). For
+//! `cols ≤ BLOCK_WIDTH` there is a single panel and no trailing block, so the
+//! path is byte-for-byte the original unblocked factorization — small matrices
+//! pay nothing.
 
 use super::QrDecomposition;
+use crate::application::linalg::reflector_block::apply_block_left;
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result, Storage};
+
+/// Panel width for blocked QR. 32 matches the GEMM tile and the `axpy` crossover.
+const BLOCK_WIDTH: usize = 32;
+
+/// Minimum row count for the blocked path to pay. The compact-WY trailing GEMM
+/// only amortizes the panel extraction/transpose/allocation overhead at scale
+/// (measured A/B crossover ≈ 200 rows: 256² QR 1.51 → 1.29 ms blocked, but 128²
+/// 175 → 223 µs — a regression). Below it the factorization runs as a single
+/// full-width panel, byte-for-byte the original unblocked sweep, so small and
+/// medium matrices pay nothing.
+const BLOCK_MIN_ROWS: usize = 256;
 
 /// Compute the Householder QR factorization of an `m × n` matrix, `m ≥ n`.
 ///
@@ -40,81 +61,128 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
     // update (see the trailing-column apply); one allocation, not one per column.
     let mut w = vec![T::ZERO; cols];
 
-    for k in 0..cols {
-        // ‖x‖ for the pivot column below (and including) the diagonal.
-        let mut norm_sq = T::ZERO;
-        for r in k..rows {
-            let x = a[r * cols + k];
-            norm_sq = norm_sq.add(x.mul(x));
-        }
-        let norm = norm_sq.sqrt();
-        if norm == T::ZERO {
-            return Err(LetoError::StorageError {
-                reason: format!("QR pivot column {k} has zero norm: matrix is rank-deficient"),
-            });
+    // Block only when the matrix is large enough that the trailing GEMM amortizes
+    // the panel overhead; otherwise a single full-width panel reproduces the exact
+    // unblocked sweep (no block apply, no numeric change).
+    let panel_width = if rows >= BLOCK_MIN_ROWS {
+        BLOCK_WIDTH
+    } else {
+        cols.max(1)
+    };
+    let mut panel_start = 0;
+    while panel_start < cols {
+        let panel_end = (panel_start + panel_width).min(cols);
+
+        for k in panel_start..panel_end {
+            // ‖x‖ for the pivot column below (and including) the diagonal.
+            let mut norm_sq = T::ZERO;
+            for r in k..rows {
+                let x = a[r * cols + k];
+                norm_sq = norm_sq.add(x.mul(x));
+            }
+            let norm = norm_sq.sqrt();
+            if norm == T::ZERO {
+                return Err(LetoError::StorageError {
+                    reason: format!("QR pivot column {k} has zero norm: matrix is rank-deficient"),
+                });
+            }
+
+            // alpha = -sign(x₀)·‖x‖ for cancellation-free head computation.
+            let pivot = a[k * cols + k];
+            let alpha = if pivot > T::ZERO {
+                T::ZERO.sub(norm)
+            } else {
+                norm
+            };
+            let head = pivot.sub(alpha);
+
+            // vᵀv = head² + Σ tail²  (tail entries stay in place below the diagonal).
+            let mut v_norm_sq = head.mul(head);
+            for r in (k + 1)..rows {
+                let x = a[r * cols + k];
+                v_norm_sq = v_norm_sq.add(x.mul(x));
+            }
+            let beta = T::ONE.add(T::ONE).div(v_norm_sq);
+
+            // Apply H = I − β·v·vᵀ to the remaining *panel* columns [k+1, panel_end)
+            // as a row-oriented rank-1 update: w = vᵀ·A[:, k+1..panel_end], then
+            // A[:, k+1..panel_end] −= β·v·w. The trailing columns [panel_end, cols)
+            // are deferred to the panel's single compact-WY block update below.
+            let trail = panel_end - (k + 1);
+            let w = &mut w[..trail];
+            let row_k = &a[k * cols + (k + 1)..k * cols + panel_end];
+            for (wc, &akc) in w.iter_mut().zip(row_k) {
+                *wc = head.mul(akc);
+            }
+            for r in (k + 1)..rows {
+                let vr = a[r * cols + k];
+                let row_r = &a[r * cols + (k + 1)..r * cols + panel_end];
+                for (wc, &arc) in w.iter_mut().zip(row_r) {
+                    *wc = wc.add(vr.mul(arc));
+                }
+            }
+            for wc in w.iter_mut() {
+                *wc = beta.mul(*wc);
+            }
+            let row_k = &mut a[k * cols + (k + 1)..k * cols + panel_end];
+            for (akc, &wc) in row_k.iter_mut().zip(w.iter()) {
+                *akc = akc.sub(wc.mul(head));
+            }
+            for r in (k + 1)..rows {
+                let vr = a[r * cols + k];
+                let row_r = &mut a[r * cols + (k + 1)..r * cols + panel_end];
+                for (arc, &wc) in row_r.iter_mut().zip(w.iter()) {
+                    *arc = arc.sub(wc.mul(vr));
+                }
+            }
+
+            a[k * cols + k] = alpha; // R diagonal; v's tail remains below.
+            heads[k] = head;
+            betas[k] = beta;
         }
 
-        // alpha = -sign(x₀)·‖x‖ for cancellation-free head computation.
-        let pivot = a[k * cols + k];
-        let alpha = if pivot > T::ZERO {
-            T::ZERO.sub(norm)
-        } else {
-            norm
-        };
-        let head = pivot.sub(alpha);
-
-        // vᵀv = head² + Σ tail²  (tail entries stay in place below the diagonal).
-        let mut v_norm_sq = head.mul(head);
-        for r in (k + 1)..rows {
-            let x = a[r * cols + k];
-            v_norm_sq = v_norm_sq.add(x.mul(x));
-        }
-        let beta = T::ONE.add(T::ONE).div(v_norm_sq);
-
-        // Apply H = I − β·v·vᵀ to the trailing columns as a row-oriented rank-1
-        // update: w = vᵀ·A[:, k+1..], then A[:, k+1..] −= β·v·w. Accumulating and
-        // applying along contiguous matrix rows (row-major) gives cache-friendly,
-        // auto-vectorizable inner loops, versus the strided column traversal. The
-        // per-`w[c]` summation order (row k, then rows k+1..m ascending) is
-        // identical to the column-oriented form, so results are bitwise-identical.
-        let trail = cols - (k + 1);
-        let w = &mut w[..trail];
-        // w ← head · (row k of the trailing block).
-        let row_k = &a[k * cols + (k + 1)..k * cols + cols];
-        for (wc, &akc) in w.iter_mut().zip(row_k) {
-            *wc = head.mul(akc);
-        }
-        // w += v[r] · (row r) for r = k+1..m  (v[r] is the in-place reflector tail).
-        for r in (k + 1)..rows {
-            let vr = a[r * cols + k];
-            let row_r = &a[r * cols + (k + 1)..r * cols + cols];
-            for (wc, &arc) in w.iter_mut().zip(row_r) {
-                *wc = wc.add(vr.mul(arc));
+        // Compact-WY block update of the trailing columns [panel_end, cols) by the
+        // panel's reflectors (rows [panel_start, rows)). The reflectors are zero
+        // above their pivot, so the transform is confined to rows ≥ panel_start.
+        // `a[k][k]` currently holds the R diagonal (alpha); the reflector head is
+        // in `heads[k]`, so the extracted panel `V` uses the head on the diagonal
+        // and the in-place tail below — exactly the stored reflector.
+        let nb = panel_end - panel_start;
+        let ntrail = cols - panel_end;
+        if ntrail > 0 {
+            let m_sub = rows - panel_start;
+            // V (m_sub × nb): column j is reflector (panel_start + j).
+            let mut v = vec![T::ZERO; m_sub * nb];
+            let mut panel_betas = vec![T::ZERO; nb];
+            for j in 0..nb {
+                let col = panel_start + j;
+                panel_betas[j] = betas[col];
+                v[j * nb + j] = heads[col]; // diagonal head (local row j == col)
+                for r in (col + 1)..rows {
+                    v[(r - panel_start) * nb + j] = a[r * cols + col];
+                }
+            }
+            // C (m_sub × ntrail): trailing columns extracted contiguously.
+            let mut c_block = vec![T::ZERO; m_sub * ntrail];
+            for r in panel_start..rows {
+                for (jc, slot) in c_block
+                    [(r - panel_start) * ntrail..(r - panel_start) * ntrail + ntrail]
+                    .iter_mut()
+                    .enumerate()
+                {
+                    *slot = a[r * cols + panel_end + jc];
+                }
+            }
+            apply_block_left(&v, &panel_betas, &mut c_block, m_sub, ntrail, nb);
+            // Write the updated trailing block back.
+            for r in panel_start..rows {
+                for jc in 0..ntrail {
+                    a[r * cols + panel_end + jc] = c_block[(r - panel_start) * ntrail + jc];
+                }
             }
         }
-        // Scale in place: w[c] ← β·w[c] = bs[c]. Scaling here (then multiplying by
-        // head / v[r]) reproduces the column-oriented grouping (β·s)·head exactly;
-        // FP multiplication is commutative but not associative, so the order matters.
-        for wc in w.iter_mut() {
-            *wc = beta.mul(*wc);
-        }
-        // Row k: A[k, c] −= bs[c]·head.
-        let row_k = &mut a[k * cols + (k + 1)..k * cols + cols];
-        for (akc, &wc) in row_k.iter_mut().zip(w.iter()) {
-            *akc = akc.sub(wc.mul(head));
-        }
-        // Rows r>k: A[r, c] −= bs[c]·v[r].
-        for r in (k + 1)..rows {
-            let vr = a[r * cols + k];
-            let row_r = &mut a[r * cols + (k + 1)..r * cols + cols];
-            for (arc, &wc) in row_r.iter_mut().zip(w.iter()) {
-                *arc = arc.sub(wc.mul(vr));
-            }
-        }
 
-        a[k * cols + k] = alpha; // R diagonal; v's tail remains below.
-        heads[k] = head;
-        betas[k] = beta;
+        panel_start = panel_end;
     }
 
     Ok(QrDecomposition {

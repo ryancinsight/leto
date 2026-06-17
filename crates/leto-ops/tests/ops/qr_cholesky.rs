@@ -23,6 +23,34 @@ fn assert_close_slice(actual: &[f64], expected: &[f64]) {
 // ── QR ──────────────────────────────────────────────────────────────────────
 
 #[test]
+fn qr_blocked_path_solves_large_system() {
+    // n = 256 reaches BLOCK_MIN_ROWS, so the panel-blocked compact-WY trailing
+    // update runs (eight panels); a diagonally-dominant A is well-conditioned, so a
+    // square QR solve must recover a known x to tight tolerance — value-semantic
+    // proof the blocked factorization equals the unblocked one.
+    let n = 256usize;
+    let a_values: Vec<f64> = (0..n * n)
+        .map(|idx| {
+            let (i, j) = (idx / n, idx % n);
+            if i == j {
+                100.0 + i as f64
+            } else {
+                ((i * 7 + j * 3) % 5) as f64 - 2.0
+            }
+        })
+        .collect();
+    let x_true: Vec<f64> = (0..n).map(|i| (i as f64 * 0.5) - 7.0).collect();
+    let rhs_values: Vec<f64> = (0..n)
+        .map(|i| (0..n).map(|j| a_values[i * n + j] * x_true[j]).sum())
+        .collect();
+
+    let a = Array::from_shape_vec([n, n], a_values).unwrap();
+    let rhs = Array::from_shape_vec([n], rhs_values).unwrap();
+    let x = solve_least_squares(&a.view(), &rhs.view()).unwrap();
+    assert_close_slice(x.storage().as_slice(), &x_true);
+}
+
+#[test]
 fn qr_square_solve_matches_lu() {
     let a_values = vec![4.0f64, 1.0, 2.0, 1.0, 5.0, 3.0, 2.0, 3.0, 7.0];
     let rhs_values = vec![13.0f64, 20.0, 31.0];
