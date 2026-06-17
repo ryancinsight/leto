@@ -162,17 +162,29 @@ mechanical trigger, not an omission):
   is the correct, non-cargo-culted choice (const generics buy nothing when the
   dimension is genuinely runtime; over-specializing is the documented anti-goal of
   performance_engineering's instantiation-count rule).
-- **ZST / typestate `Side` (Phase 2):** a `Left`/`Right` ZST selecting the apply
-  form at compile time is introduced **with** `apply_block_right`, whose only
-  consumer is a two-sided reduction (Phase 2). Adding `apply_block_right` + `Side`
-  in Phase 1 — with no caller — would be dead code (`-D warnings`) and speculative
-  generality; they land when their consumer does.
-- **Zero-copy / CoW `panel.rs` (Phase 2):** Phase 1's sole consumer (QR) stores
-  reflectors as *strided* columns of a row-major matrix, so its panel is always
-  materialized — the borrow arm of a `Cow` panel would be unexercised (slop) in
-  Phase 1. `panel.rs` lands with Phase 2, whose contiguous-panel reductions
-  exercise the borrow path; until then QR's direct materialization is the honest
-  minimal form.
+- **ZST / typestate `Side` — deliberately NOT built (final).** A `Left`/`Right`
+  ZST selecting the apply form at compile time, and the `apply_block_right` it would
+  dispatch, have **no consumer**: their only caller would be a two-sided reduction
+  (Phase 2), which was implemented, measured-valueless, and reverted, while Phase 3
+  closed the disparity by other means. Adding them now is callerless dead code,
+  which `-D warnings` rejects and the cleanup HARD-rule (`integrity`: remove
+  obsolete/unused code) prohibits. This is the correct *application* of the
+  zero-cost/ZST principle — use it where a dispatch genuinely varies — not its
+  omission. (The codebase applies ZSTs/typestates where they do fit:
+  `SimdStrategy`, `ScalarStrategy`, the SVD `VEC` / Schur `ACCUMULATE_Q` const-bool
+  specializations, the symmetric-eigen no-vector `RotationTarget`.)
+- **Zero-copy / CoW `panel.rs` — deliberately NOT built (final).** Phase 1's sole
+  consumer (QR) stores reflectors as *strided* columns of a row-major matrix, so its
+  panel is always materialized; a `Cow` panel's borrow arm would be unexercised.
+  With no contiguous-panel consumer (Phase 2 reverted), `panel.rs` would be slop.
+  CoW is applied where it fits elsewhere (`ArrayView::to_contiguous` borrows a
+  contiguous view, materializes a strided one).
+- **const-generic `NB` — deliberately NOT used (final).** See the monomorphization
+  bullet above: panels are variable width and the size gate makes the effective
+  width runtime, so a const `NB` would force padding/a tail path. Runtime `r ≤ NB`
+  is correct; const generics buy nothing when the dimension is genuinely runtime.
+  (Const generics *are* used where the dimension is compile-time: the `VEC` /
+  `ACCUMULATE_Q` / `ACCUMULATE_FACTORS` bool specializations, `SPAN_SIMD_MIN`.)
 
 ### Phases
 
