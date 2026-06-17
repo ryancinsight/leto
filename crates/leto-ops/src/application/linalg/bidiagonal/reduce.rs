@@ -96,11 +96,17 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
         }
     }
 
-    // Present exact upper-bidiagonal form (keep (i,i) and (i,i+1) only).
-    for i in 0..m {
-        for j in 0..n {
-            if j < i || j > i + 1 {
-                b[i * n + j] = T::ZERO;
+    // Present exact upper-bidiagonal form (keep (i,i) and (i,i+1) only). Needed
+    // only when the `B` matrix is an output (factor path); the values-only path
+    // reads just the diagonal/superdiagonal, so the `O(m·n)` zeroing of the
+    // (negligible-by-construction) off-bidiagonal entries is wasted there and is
+    // DCE'd by the const generic.
+    if ACCUMULATE_FACTORS {
+        for i in 0..m {
+            for j in 0..n {
+                if j < i || j > i + 1 {
+                    b[i * n + j] = T::ZERO;
+                }
             }
         }
     }
