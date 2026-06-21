@@ -1,5 +1,5 @@
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result, Storage};
+use leto::{Array1, Array2, ArrayView1, ArrayView2, ArrayViewMut1, LetoError, Result, Storage};
 
 /// LU decomposition with partial pivoting: `P · A = L · U`.
 ///
@@ -37,14 +37,12 @@ pub fn lu_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<LuDecom
 
     // One bulk row-major copy into working storage + a single finiteness scan
     // (replacing per-element bounds-checked gets); elimination is in place.
-    let contiguous = matrix.to_contiguous();
-    let src = contiguous.storage().as_slice();
-    if !src.iter().all(|value| value.is_finite()) {
+    let mut a = matrix.to_contiguous().into_storage().into_inner();
+    if !a.iter().all(|value| value.is_finite()) {
         return Err(LetoError::StorageError {
             reason: "LU input contains a non-finite value".to_string(),
         });
     }
-    let mut a = src.to_vec();
 
     let mut pivots: Vec<usize> = (0..n).collect();
     let mut sign = 1i8;
@@ -99,6 +97,13 @@ pub fn lu_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<LuDecom
 }
 
 impl<T: RealScalar> LuDecomposition<T> {
+    /// Construct an LU decomposition directly from its raw components.
+    #[must_use]
+    #[inline]
+    pub fn from_raw_parts(factors: Array2<T>, pivots: Vec<usize>, sign: i8) -> Self {
+        Self { factors, pivots, sign }
+    }
+
     /// Matrix dimension `n`.
     #[must_use]
     #[inline]
@@ -136,8 +141,9 @@ impl<T: RealScalar> LuDecomposition<T> {
         det
     }
 
-    /// Solve `A · x = rhs` for one right-hand-side vector.
-    pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+    /// Solve `A · x = rhs` directly into a caller-owned view `out`.
+    #[allow(clippy::needless_range_loop)]
+    pub fn solve_into(&self, rhs: &ArrayView1<'_, T>, out: &mut ArrayViewMut1<'_, T>) -> Result<()> {
         let n = self.dim();
         if rhs.shape() != [n] {
             return Err(LetoError::ShapeMismatch {
@@ -145,14 +151,68 @@ impl<T: RealScalar> LuDecomposition<T> {
                 rhs: vec![n],
             });
         }
-
-        // Apply the row permutation while gathering the RHS.
-        let mut x = Vec::with_capacity(n);
-        for k in 0..n {
-            x.push(*rhs.get([self.pivots[k]])?);
+        if out.shape() != [n] {
+            return Err(LetoError::ShapeMismatch {
+                lhs: out.shape().to_vec(),
+                rhs: vec![n],
+            });
         }
-        self.solve_in_place(&mut x);
-        Array1::from_shape_vec([n], x)
+
+        if let Some(out_slice) = out.as_mut_slice() {
+            if let Some(rhs_slice) = rhs.as_slice() {
+                for k in 0..n {
+                    out_slice[k] = rhs_slice[self.pivots[k]];
+                }
+            } else {
+                for k in 0..n {
+                    out_slice[k] = *rhs.get([self.pivots[k]])?;
+                }
+            }
+            self.solve_in_place(out_slice);
+        } else {
+            if let Some(rhs_slice) = rhs.as_slice() {
+                for k in 0..n {
+                    *out.get_mut([k])? = rhs_slice[self.pivots[k]];
+                }
+            } else {
+                for k in 0..n {
+                    *out.get_mut([k])? = *rhs.get([self.pivots[k]])?;
+                }
+            }
+            let f = self.factors.storage().as_slice();
+
+            // Forward: L · y = P · rhs (unit diagonal). yᵣ = xᵣ − Σ_{c<r} L[r,c]·y_c.
+            for r in 1..n {
+                let mut dot = T::ZERO;
+                for c in 0..r {
+                    let f_rc = f[r * n + c];
+                    let x_c = *out.get([c])?;
+                    dot = dot.add(f_rc.mul(x_c));
+                }
+                let out_r = out.get_mut([r])?;
+                *out_r = out_r.sub(dot);
+            }
+            // Backward: U · x = y. xᵣ = (yᵣ − Σ_{c>r} U[r,c]·x_c) / U[r,r].
+            for r in (0..n).rev() {
+                let mut dot = T::ZERO;
+                for c in (r + 1)..n {
+                    let f_rc = f[r * n + c];
+                    let x_c = *out.get([c])?;
+                    dot = dot.add(f_rc.mul(x_c));
+                }
+                let out_r = out.get_mut([r])?;
+                *out_r = out_r.sub(dot).div(f[r * n + r]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Solve `A · x = rhs` for one right-hand-side vector.
+    pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+        let n = self.dim();
+        let mut out = Array1::from_elem([n], T::ZERO);
+        self.solve_into(rhs, &mut out.view_mut())?;
+        Ok(out)
     }
 
     /// Inverse of the original matrix, solving against the identity columns.

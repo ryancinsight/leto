@@ -126,3 +126,31 @@ fn test_mnemosyne_storage_moves_non_clone_values() {
     let values = storage.into_vec();
     assert_eq!(values, vec![Payload(1), Payload(2), Payload(3)]);
 }
+
+#[cfg(feature = "mnemosyne-alloc")]
+#[test]
+fn test_mnemosyne_storage_zst_drop() {
+    static DROP_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    struct ZstDrop;
+    impl Drop for ZstDrop {
+        fn drop(&mut self) {
+            DROP_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    DROP_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
+    {
+        let vec = vec![ZstDrop, ZstDrop, ZstDrop];
+        let _storage = MnemosyneStorage::from_vec(vec);
+    }
+    assert_eq!(DROP_COUNT.load(std::sync::atomic::Ordering::SeqCst), 3);
+}
+
+#[test]
+fn test_slice_step_isize_min() {
+    let layout = Layout::c_contiguous([5]).unwrap();
+    let ranges = [(0, 5, isize::MIN)];
+    let res = layout.slice(&ranges);
+    assert!(res.is_err());
+}

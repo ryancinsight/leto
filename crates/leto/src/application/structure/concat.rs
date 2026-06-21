@@ -1,5 +1,4 @@
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::view::ArrayView;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -43,28 +42,40 @@ pub fn concat<T: Clone, const N: usize>(
 
     let out_layout = Layout::c_contiguous(out_shape)?;
     let size = out_layout.size();
-    let mut values = Vec::with_capacity(size);
 
-    for flat in 0..size {
-        let mut index = index_from_flat(flat, &out_shape);
-        let along = index[axis];
-        // Locate the source input owning logical position `along` on `axis`.
-        let mut base = 0usize;
-        let mut chosen: Option<&ArrayView<'_, T, N>> = None;
-        let mut local = along;
-        for view in inputs {
-            let len = view.shape()[axis];
-            if along < base + len {
-                local = along - base;
-                chosen = Some(view);
-                break;
-            }
-            base += len;
+    if axis == 0 {
+        let mut values: Vec<T> = Vec::with_capacity(size);
+        for input_view in inputs {
+            values.extend(input_view.iter().cloned());
         }
-        let view = chosen.expect("axis position is covered by an input");
-        index[axis] = local;
-        values.push(view.get(index)?.clone());
+        return Array::new(out_layout, VecStorage::new(values));
     }
+
+    let mut values: Vec<std::mem::MaybeUninit<T>> = Vec::with_capacity(size);
+    unsafe {
+        values.set_len(size);
+    }
+
+    let mut base = 0usize;
+    for input_view in inputs {
+        let input_axis_len = input_view.shape()[axis];
+        for (src_index, val) in input_view.indexed_iter() {
+            let mut out_index = src_index;
+            out_index[axis] += base;
+            let out_off = out_layout.offset_of(out_index)?;
+            values[out_off].write(val.clone());
+        }
+        base += input_axis_len;
+    }
+
+    let values = unsafe {
+        let mut values = std::mem::ManuallyDrop::new(values);
+        Vec::from_raw_parts(
+            values.as_mut_ptr() as *mut T,
+            values.len(),
+            values.capacity(),
+        )
+    };
 
     Array::new(out_layout, VecStorage::new(values))
 }

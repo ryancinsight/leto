@@ -27,11 +27,20 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         });
     }
 
+    // One bulk row-major copy only when not already contiguous.
+    let contiguous;
+    let a = if let Some(slice) = matrix.as_slice() {
+        slice
+    } else {
+        contiguous = matrix.to_contiguous();
+        leto::Storage::as_slice(contiguous.storage())
+    };
+
     // Symmetry + finiteness validation, and a scale for the zero-pivot floor.
     let mut scale = T::ZERO;
     for i in 0..n {
         for j in 0..n {
-            let value = *matrix.get([i, j])?;
+            let value = a[i * n + j];
             if !value.is_finite() {
                 return Err(LetoError::StorageError {
                     reason: "UDU input contains a non-finite value".to_string(),
@@ -45,7 +54,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
     let sym_tol = scale.mul(T::ONE.div(T::from_usize(1_000_000_000)));
     for i in 0..n {
         for j in (i + 1)..n {
-            if matrix.get([i, j])?.sub(*matrix.get([j, i])?).abs() > sym_tol {
+            if a[i * n + j].sub(a[j * n + i]).abs() > sym_tol {
                 return Err(LetoError::StorageError {
                     reason: "UDU requires a symmetric matrix".to_string(),
                 });
@@ -58,7 +67,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
     let mut d = vec![T::ZERO; n];
 
     for j in (0..n).rev() {
-        let mut dj = *matrix.get([j, j])?;
+        let mut dj = a[j * n + j];
         for k in (j + 1)..n {
             let ujk = u[j * n + k];
             dj = dj.sub(ujk.mul(ujk).mul(d[k]));
@@ -72,7 +81,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         u[j * n + j] = T::ONE;
 
         for i in (0..j).rev() {
-            let mut uij = *matrix.get([i, j])?;
+            let mut uij = a[i * n + j];
             for k in (j + 1)..n {
                 uij = uij.sub(u[i * n + k].mul(u[j * n + k]).mul(d[k]));
             }

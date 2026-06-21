@@ -15,8 +15,10 @@ use crate::domain::real::RealScalar;
 ///
 /// Cost `O(m r² + r³)`; `r` is the panel width (small, fixed), so this is a lower
 /// order term against the `O(m n r)` trailing GEMM it enables.
-pub(super) fn build_t<T: RealScalar>(v: &[T], beta: &[T], m: usize, r: usize) -> Vec<T> {
-    let mut t = vec![T::ZERO; r * r];
+pub(super) fn build_t<T: RealScalar>(v: &[T], beta: &[T], t: &mut [T], m: usize, r: usize) {
+    t.fill(T::ZERO);
+    let mut z_stack = [T::ZERO; 128];
+    let mut z_vec = Vec::new();
     for j in 0..r {
         t[j * r + j] = beta[j];
         if j == 0 {
@@ -24,7 +26,13 @@ pub(super) fn build_t<T: RealScalar>(v: &[T], beta: &[T], m: usize, r: usize) ->
         }
         // z = V[:, 0:j]ᵀ · v_j  (length j). Column i of V is zero above row i and
         // column j above row j, so only rows ≥ j contribute (`vrj == 0` skips them).
-        let mut z = vec![T::ZERO; j];
+        let z = if j <= 128 {
+            &mut z_stack[..j]
+        } else {
+            z_vec.resize(j, T::ZERO);
+            &mut z_vec[..]
+        };
+        z.fill(T::ZERO);
         for row in 0..m {
             let vrj = v[row * r + j];
             if vrj == T::ZERO {
@@ -45,5 +53,4 @@ pub(super) fn build_t<T: RealScalar>(v: &[T], beta: &[T], m: usize, r: usize) ->
             t[i * r + j] = neg_beta.mul(acc);
         }
     }
-    t
 }

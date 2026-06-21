@@ -8,27 +8,43 @@
 //! [`ExactSizeIterator`] and [`DoubleEndedIterator`]; the two ends share one
 //! `[front, back)` cursor so forward and backward consumption meet exactly once.
 
-use crate::application::index::index_from_flat;
 use crate::application::view::ArrayView;
 use crate::domain::layout::Layout;
 
-/// Resolve the element at logical position `flat` through `layout`'s strides.
-///
-/// `data` is passed by value (it is a `Copy` `&'a [T]`), so the returned
-/// reference carries the data lifetime `'a` rather than the borrow of any
-/// iterator struct.
 #[inline]
-fn elem_at<'a, T, const N: usize>(
-    data: &'a [T],
-    layout: &Layout<N>,
+fn odometer_step<const N: usize>(
+    index: &mut [usize; N],
     shape: &[usize; N],
-    flat: usize,
-) -> &'a T {
-    let index = index_from_flat(flat, shape);
-    let offset = layout
-        .offset_of(index)
-        .expect("invariant: logical index is in bounds for the view shape");
-    &data[offset]
+    strides: &[isize; N],
+    offset: &mut usize,
+) {
+    for i in (0..N).rev() {
+        index[i] += 1;
+        if index[i] < shape[i] {
+            *offset = (*offset as isize + strides[i]) as usize;
+            break;
+        }
+        *offset = (*offset as isize - (shape[i] - 1) as isize * strides[i]) as usize;
+        index[i] = 0;
+    }
+}
+
+#[inline]
+fn odometer_step_back<const N: usize>(
+    index: &mut [usize; N],
+    shape: &[usize; N],
+    strides: &[isize; N],
+    offset: &mut usize,
+) {
+    for i in (0..N).rev() {
+        if index[i] > 0 {
+            index[i] -= 1;
+            *offset = (*offset as isize - strides[i]) as usize;
+            break;
+        }
+        *offset = (*offset as isize + (shape[i] - 1) as isize * strides[i]) as usize;
+        index[i] = shape[i] - 1;
+    }
 }
 
 /// Iterator over every element of a view in logical row-major order.
@@ -36,11 +52,16 @@ fn elem_at<'a, T, const N: usize>(
 /// Yields `&T`. Construct via [`ArrayView::iter`](crate::application::view::ArrayView::iter)
 /// or [`Array::iter`](crate::application::array::Array::iter).
 pub struct ElementIter<'a, T, const N: usize> {
+    contiguous_iter: Option<std::slice::Iter<'a, T>>,
     data: &'a [T],
     layout: Layout<N>,
     shape: [usize; N],
     front: usize,
     back: usize,
+    front_index: [usize; N],
+    front_offset: usize,
+    back_index: [usize; N],
+    back_offset: usize,
 }
 
 impl<'a, T, const N: usize> ElementIter<'a, T, N> {
@@ -48,12 +69,37 @@ impl<'a, T, const N: usize> ElementIter<'a, T, N> {
     #[inline]
     pub(crate) fn new(view: &ArrayView<'a, T, N>) -> Self {
         let layout = view.layout();
+        let contiguous_iter = if layout.is_c_dense() {
+            let start = layout.offset;
+            let end = start + layout.size();
+            Some(view.data()[start..end].iter())
+        } else {
+            None
+        };
+        let back = view.size();
+        let (back_index, back_offset) = if back > 0 {
+            let mut idx = [0usize; N];
+            for (i, item) in idx.iter_mut().enumerate() {
+                *item = layout.shape[i] - 1;
+            }
+            let offset = layout
+                .offset_of(idx)
+                .expect("invariant: last index is valid");
+            (idx, offset)
+        } else {
+            ([0usize; N], layout.offset)
+        };
         Self {
+            contiguous_iter,
             data: view.data(),
             layout,
             shape: layout.shape,
             front: 0,
-            back: view.size(),
+            back,
+            front_index: [0usize; N],
+            front_offset: layout.offset,
+            back_index,
+            back_offset,
         }
     }
 }
@@ -63,29 +109,54 @@ impl<'a, T, const N: usize> Iterator for ElementIter<'a, T, N> {
 
     #[inline]
     fn next(&mut self) -> Option<&'a T> {
-        if self.front >= self.back {
-            return None;
+        if let Some(ref mut iter) = self.contiguous_iter {
+            iter.next()
+        } else {
+            if self.front >= self.back {
+                return None;
+            }
+            let elem = &self.data[self.front_offset];
+            odometer_step(
+                &mut self.front_index,
+                &self.shape,
+                &self.layout.strides,
+                &mut self.front_offset,
+            );
+            self.front += 1;
+            Some(elem)
         }
-        let elem = elem_at(self.data, &self.layout, &self.shape, self.front);
-        self.front += 1;
-        Some(elem)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.back - self.front;
-        (remaining, Some(remaining))
+        if let Some(ref iter) = self.contiguous_iter {
+            iter.size_hint()
+        } else {
+            let remaining = self.back - self.front;
+            (remaining, Some(remaining))
+        }
     }
 }
 
 impl<'a, T, const N: usize> DoubleEndedIterator for ElementIter<'a, T, N> {
     #[inline]
     fn next_back(&mut self) -> Option<&'a T> {
-        if self.front >= self.back {
-            return None;
+        if let Some(ref mut iter) = self.contiguous_iter {
+            iter.next_back()
+        } else {
+            if self.front >= self.back {
+                return None;
+            }
+            self.back -= 1;
+            let elem = &self.data[self.back_offset];
+            odometer_step_back(
+                &mut self.back_index,
+                &self.shape,
+                &self.layout.strides,
+                &mut self.back_offset,
+            );
+            Some(elem)
         }
-        self.back -= 1;
-        Some(elem_at(self.data, &self.layout, &self.shape, self.back))
     }
 }
 
@@ -102,6 +173,10 @@ pub struct IndexedIter<'a, T, const N: usize> {
     shape: [usize; N],
     front: usize,
     back: usize,
+    front_index: [usize; N],
+    front_offset: usize,
+    back_index: [usize; N],
+    back_offset: usize,
 }
 
 impl<'a, T, const N: usize> IndexedIter<'a, T, N> {
@@ -109,12 +184,29 @@ impl<'a, T, const N: usize> IndexedIter<'a, T, N> {
     #[inline]
     pub(crate) fn new(view: &ArrayView<'a, T, N>) -> Self {
         let layout = view.layout();
+        let back = view.size();
+        let (back_index, back_offset) = if back > 0 {
+            let mut idx = [0usize; N];
+            for (i, item) in idx.iter_mut().enumerate() {
+                *item = layout.shape[i] - 1;
+            }
+            let offset = layout
+                .offset_of(idx)
+                .expect("invariant: last index is valid");
+            (idx, offset)
+        } else {
+            ([0usize; N], layout.offset)
+        };
         Self {
             data: view.data(),
             layout,
             shape: layout.shape,
             front: 0,
-            back: view.size(),
+            back,
+            front_index: [0usize; N],
+            front_offset: layout.offset,
+            back_index,
+            back_offset,
         }
     }
 }
@@ -127,8 +219,14 @@ impl<'a, T, const N: usize> Iterator for IndexedIter<'a, T, N> {
         if self.front >= self.back {
             return None;
         }
-        let index = index_from_flat(self.front, &self.shape);
-        let elem = elem_at(self.data, &self.layout, &self.shape, self.front);
+        let index = self.front_index;
+        let elem = &self.data[self.front_offset];
+        odometer_step(
+            &mut self.front_index,
+            &self.shape,
+            &self.layout.strides,
+            &mut self.front_offset,
+        );
         self.front += 1;
         Some((index, elem))
     }
@@ -147,11 +245,15 @@ impl<'a, T, const N: usize> DoubleEndedIterator for IndexedIter<'a, T, N> {
             return None;
         }
         self.back -= 1;
-        let index = index_from_flat(self.back, &self.shape);
-        Some((
-            index,
-            elem_at(self.data, &self.layout, &self.shape, self.back),
-        ))
+        let index = self.back_index;
+        let elem = &self.data[self.back_offset];
+        odometer_step_back(
+            &mut self.back_index,
+            &self.shape,
+            &self.layout.strides,
+            &mut self.back_offset,
+        );
+        Some((index, elem))
     }
 }
 

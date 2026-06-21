@@ -1,6 +1,6 @@
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
-use leto::{Array2, ArrayView2, LetoError, Result, Storage};
+use leto::{Array2, ArrayView2, LetoError, Result};
 
 /// Eigenpairs of a real symmetric matrix.
 ///
@@ -58,9 +58,16 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     tolerance: T,
 ) -> Result<Vec<T>> {
-    validate_symmetric_input(matrix, tolerance)?;
-    let [n, _] = matrix.shape();
+    let [rows, cols] = matrix.shape();
+    if rows != cols {
+        return Err(LetoError::ShapeMismatch {
+            lhs: vec![rows, cols],
+            rhs: vec![rows, rows],
+        });
+    }
+    let n = rows;
     let mut a = copy_row_major(matrix);
+    validate_symmetric_input(&a, n, tolerance)?;
     let mut target = NoEigenvectors;
 
     diagonalize(&mut a, n, tolerance, &mut target);
@@ -72,9 +79,16 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     tolerance: T,
 ) -> Result<SymmetricEigenDecomposition<T>> {
-    validate_symmetric_input(matrix, tolerance)?;
-    let [n, _] = matrix.shape();
+    let [rows, cols] = matrix.shape();
+    if rows != cols {
+        return Err(LetoError::ShapeMismatch {
+            lhs: vec![rows, cols],
+            rhs: vec![rows, rows],
+        });
+    }
+    let n = rows;
     let mut a = copy_row_major(matrix);
+    validate_symmetric_input(&a, n, tolerance)?;
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
     diagonalize(&mut a, n, tolerance, &mut target);
@@ -102,28 +116,21 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     })
 }
 
-fn validate_symmetric_input<T: RealScalar>(matrix: &ArrayView2<'_, T>, tolerance: T) -> Result<()> {
-    let [rows, cols] = matrix.shape();
-    if rows != cols {
-        return Err(LetoError::ShapeMismatch {
-            lhs: vec![rows, cols],
-            rhs: vec![rows, rows],
-        });
-    }
+fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> Result<()> {
     if !tolerance.is_finite() || tolerance < T::ZERO {
         return Err(LetoError::StorageError {
             reason: "eigensolver tolerance must be finite and non-negative".to_string(),
         });
     }
-    for row in 0..rows {
-        for col in 0..cols {
-            let value = *matrix.get([row, col])?;
+    for row in 0..n {
+        for col in 0..n {
+            let value = a[row * n + col];
             if !value.is_finite() {
                 return Err(LetoError::StorageError {
                     reason: "symmetric eigensolver input contains a non-finite value".to_string(),
                 });
             }
-            let transposed = *matrix.get([col, row])?;
+            let transposed = a[col * n + row];
             if value.sub(transposed).abs() > tolerance {
                 return Err(LetoError::StorageError {
                     reason: "symmetric eigensolver input is not symmetric".to_string(),
@@ -136,7 +143,11 @@ fn validate_symmetric_input<T: RealScalar>(matrix: &ArrayView2<'_, T>, tolerance
 
 fn copy_row_major<T: Scalar>(matrix: &ArrayView2<'_, T>) -> Vec<T> {
     // One bulk row-major copy instead of per-element bounds-checked gets.
-    matrix.to_contiguous().storage().as_slice().to_vec()
+    if let Some(slice) = matrix.as_slice() {
+        slice.to_vec()
+    } else {
+        matrix.to_contiguous().into_storage().into_inner()
+    }
 }
 
 fn identity<T: Scalar>(n: usize) -> Vec<T> {

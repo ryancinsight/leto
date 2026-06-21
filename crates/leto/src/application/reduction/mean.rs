@@ -3,7 +3,6 @@
 use num_traits::Float;
 
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::reduction::iter_elements;
 use crate::application::reduction::sum::sum_axis;
 use crate::domain::error::{LetoError, Result};
@@ -69,14 +68,16 @@ where
     let sum_view = sum.view();
     let sum_size = sum_view.size();
     let sum_shape = sum_view.shape();
-    let sum_layout = sum_view.layout();
-    let sum_data = sum_view.data();
 
     let mut buf: Vec<T> = Vec::with_capacity(sum_size);
-    for flat in 0..sum_size {
-        let idx = index_from_flat(flat, &sum_shape);
-        let off = sum_layout.offset_of(idx)?;
-        buf.push(sum_data[off] / count);
+    if let Some(slice) = sum_view.as_slice() {
+        for &val in slice {
+            buf.push(val / count);
+        }
+    } else {
+        for val in sum_view.iter() {
+            buf.push(*val / count);
+        }
     }
 
     let out_layout = Layout::c_contiguous(sum_shape)?;

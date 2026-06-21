@@ -24,11 +24,47 @@
 //! indices map to distinct physical offsets, so the physical element sets of
 //! distinct lanes are disjoint — which is what makes the mutable iterator sound. ∎
 
-use crate::application::index::index_from_flat;
+
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::remove_axis::RemoveAxis;
+
+#[inline]
+fn odometer_step<const N: usize>(
+    index: &mut [usize; N],
+    shape: &[usize; N],
+    strides: &[isize; N],
+    offset: &mut usize,
+) {
+    for i in (0..N).rev() {
+        index[i] += 1;
+        if index[i] < shape[i] {
+            *offset = (*offset as isize + strides[i]) as usize;
+            break;
+        }
+        *offset = (*offset as isize - (shape[i] - 1) as isize * strides[i]) as usize;
+        index[i] = 0;
+    }
+}
+
+#[inline]
+fn odometer_step_back<const N: usize>(
+    index: &mut [usize; N],
+    shape: &[usize; N],
+    strides: &[isize; N],
+    offset: &mut usize,
+) {
+    for i in (0..N).rev() {
+        if index[i] > 0 {
+            index[i] -= 1;
+            *offset = (*offset as isize - strides[i]) as usize;
+            break;
+        }
+        *offset = (*offset as isize + (shape[i] - 1) as isize * strides[i]) as usize;
+        index[i] = shape[i] - 1;
+    }
+}
 
 /// Build the reduced (axis-removed) complement layout plus the lane's own
 /// `(length, stride)` along `axis`. Shared by [`Lanes`] and [`LanesMut`] (SSOT).
@@ -64,6 +100,10 @@ pub struct Lanes<'a, T, const N: usize, const M: usize> {
     axis_stride: isize,
     front: usize,
     back: usize,
+    front_index: [usize; M],
+    front_offset: usize,
+    back_index: [usize; M],
+    back_offset: usize,
 }
 
 impl<'a, T, const N: usize, const M: usize> Lanes<'a, T, N, M> {
@@ -84,6 +124,16 @@ impl<'a, T, const N: usize, const M: usize> Lanes<'a, T, N, M> {
         let (complement, axis_len, axis_stride) =
             lane_geometry(view.shape(), view.strides(), view.offset(), axis, marker)?;
         let back = complement.size();
+        let (back_index, back_offset) = if back > 0 {
+            let mut idx = [0usize; M];
+            for (i, item) in idx.iter_mut().enumerate() {
+                *item = complement.shape[i] - 1;
+            }
+            let offset = complement.offset_of(idx).expect("invariant: last index is valid");
+            (idx, offset)
+        } else {
+            ([0usize; M], complement.offset)
+        };
         Ok(Self {
             data: view.data(),
             complement,
@@ -91,19 +141,11 @@ impl<'a, T, const N: usize, const M: usize> Lanes<'a, T, N, M> {
             axis_stride,
             front: 0,
             back,
+            front_index: [0usize; M],
+            front_offset: complement.offset,
+            back_index,
+            back_offset,
         })
-    }
-
-    /// Materialize the lane whose origin has linear rank `flat`.
-    #[inline]
-    fn lane_at(&self, flat: usize) -> ArrayView<'a, T, 1> {
-        let origin = index_from_flat(flat, &self.complement.shape);
-        let offset = self
-            .complement
-            .offset_of(origin)
-            .expect("invariant: complement index is within the complement shape");
-        let layout = Layout::new([self.axis_len], [self.axis_stride], offset);
-        ArrayView::new(layout, self.data)
     }
 }
 
@@ -115,9 +157,10 @@ impl<'a, T, const N: usize, const M: usize> Iterator for Lanes<'a, T, N, M> {
         if self.front >= self.back {
             return None;
         }
-        let lane = self.lane_at(self.front);
+        let layout = Layout::new([self.axis_len], [self.axis_stride], self.front_offset);
+        odometer_step(&mut self.front_index, &self.complement.shape, &self.complement.strides, &mut self.front_offset);
         self.front += 1;
-        Some(lane)
+        Some(ArrayView::new(layout, self.data))
     }
 
     #[inline]
@@ -134,7 +177,9 @@ impl<'a, T, const N: usize, const M: usize> DoubleEndedIterator for Lanes<'a, T,
             return None;
         }
         self.back -= 1;
-        Some(self.lane_at(self.back))
+        let layout = Layout::new([self.axis_len], [self.axis_stride], self.back_offset);
+        odometer_step_back(&mut self.back_index, &self.complement.shape, &self.complement.strides, &mut self.back_offset);
+        Some(ArrayView::new(layout, self.data))
     }
 }
 
@@ -148,12 +193,13 @@ impl<'a, T, const N: usize, const M: usize> ExactSizeIterator for Lanes<'a, T, N
 /// and [`ExactSizeIterator`] only.
 pub struct LanesMut<'a, T, const N: usize, const M: usize> {
     ptr: *mut T,
-    data_len: usize,
     complement: Layout<M>,
     axis_len: usize,
     axis_stride: isize,
     front: usize,
     back: usize,
+    front_index: [usize; M],
+    front_offset: usize,
     _marker: std::marker::PhantomData<&'a mut [T]>,
 }
 
@@ -185,12 +231,13 @@ impl<'a, T, const N: usize, const M: usize> LanesMut<'a, T, N, M> {
         let ptr = view.data_mut().as_mut_ptr();
         Ok(Self {
             ptr,
-            data_len,
             complement,
             axis_len,
             axis_stride,
             front: 0,
             back,
+            front_index: [0usize; M],
+            front_offset: complement.offset,
             _marker: std::marker::PhantomData,
         })
     }
@@ -204,13 +251,13 @@ impl<'a, T, const N: usize, const M: usize> Iterator for LanesMut<'a, T, N, M> {
         if self.front >= self.back {
             return None;
         }
-        let origin = index_from_flat(self.front, &self.complement.shape);
-        let offset = self
-            .complement
-            .offset_of(origin)
-            .expect("invariant: complement index is within the complement shape");
+        let layout = Layout::new([self.axis_len], [self.axis_stride], self.front_offset);
+        odometer_step(&mut self.front_index, &self.complement.shape, &self.complement.strides, &mut self.front_offset);
         self.front += 1;
-        let layout = Layout::new([self.axis_len], [self.axis_stride], offset);
+
+        let (min_offset, max_offset) = layout.min_max_offsets();
+        let span_len = max_offset - min_offset + 1;
+        let adjusted_layout = Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
 
         // SAFETY: distinct lanes have distinct complement origins; under the
         // non-aliasing layout validated in `new`, the index→offset map is
@@ -218,8 +265,8 @@ impl<'a, T, const N: usize, const M: usize> Iterator for LanesMut<'a, T, N, M> {
         // (see the partition theorem). Each yielded mutable view therefore
         // borrows a region no other yielded view touches.
         unsafe {
-            let slice = std::slice::from_raw_parts_mut(self.ptr, self.data_len);
-            Some(ArrayViewMut::new(layout, slice))
+            let slice = std::slice::from_raw_parts_mut(self.ptr.add(min_offset), span_len);
+            Some(ArrayViewMut::new(adjusted_layout, slice))
         }
     }
 

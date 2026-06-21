@@ -28,10 +28,14 @@ where
     if len == 0 {
         return;
     }
-    let num_chunks = len.div_ceil(chunk_size);
-    moirai::for_each_index_with::<moirai::Adaptive, _>(num_chunks, move |chunk_idx| {
-        let start = chunk_idx * chunk_size;
-        let end = (start + chunk_size).min(len);
-        f(start, end);
-    });
+    if len >= 16384 {
+        let num_chunks = len.div_ceil(chunk_size);
+        moirai::for_each_index_with::<moirai::Parallel, _>(num_chunks, move |chunk_idx| {
+            let start = chunk_idx * chunk_size;
+            let end = (start + chunk_size).min(len);
+            f(start, end);
+        });
+    } else {
+        f(0, len);
+    }
 }

@@ -155,9 +155,12 @@ impl<T> ArrayD<T, VecStorage<T>> {
     where
         T: Clone,
     {
+        if self.layout.is_c_contiguous() {
+            return Ok(self.storage.as_slice()[self.layout.offset..self.layout.offset + self.size()].to_vec());
+        }
         let size = self.size();
         let ndim = self.ndim();
-        let mut out = Vec::with_capacity(size);
+        let mut out: Vec<T> = Vec::with_capacity(size);
         let mut index = vec![0usize; ndim];
         for flat in 0..size {
             kernels::fill_index_from_flat(flat, &self.layout.shape, &mut index);

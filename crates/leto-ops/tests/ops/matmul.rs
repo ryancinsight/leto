@@ -65,34 +65,77 @@ fn test_matmul_strided_and_transposed() {
 }
 
 #[test]
-fn matmul_auto_matches_dense_on_sparse_and_dense_inputs() {
-    use leto_ops::matmul_auto;
-
+fn matmul_matches_dense_on_sparse_and_dense_inputs() {
     let b = Array::from_shape_vec([5, 3], (0..15).map(|i| i as f64 + 1.0).collect()).unwrap();
 
-    // Sparse lhs: 2 of 25 nonzero (8% < 10% threshold → sparse route). Each
-    // output row has at most one contributing term, so the result is bitwise
-    // identical to dense (no summation-order divergence).
+    // Sparse lhs: 2 of 25 nonzero (8% < 10% threshold).
     let mut sparse = vec![0.0f64; 25];
     sparse[1] = 3.0; // (0, 1)
     sparse[3 * 5 + 2] = -2.0; // (3, 2)
     let a = Array::from_shape_vec([5, 5], sparse).unwrap();
 
     let mut out_auto = Array::zeros([5, 3]);
-    matmul_auto(&a.view(), &b.view(), &mut out_auto.view_mut()).unwrap();
-    let mut out_dense = Array::zeros([5, 3]);
-    matmul(&a.view(), &b.view(), &mut out_dense.view_mut()).unwrap();
+    matmul(&a.view(), &b.view(), &mut out_auto.view_mut()).unwrap();
+    
+    // Compare with manual/direct spmm:
+    let csr = leto_ops::CsrMatrix::from_dense(&a.view());
+    let mut out_spmm = vec![0.0f64; 15];
+    leto_ops::spmm_into(&csr, &b.view(), &mut out_spmm).unwrap();
     assert_eq!(
         out_auto.storage().as_slice(),
-        out_dense.storage().as_slice(),
-        "sparse-routed auto matmul must match dense"
+        &out_spmm[..],
+        "sparse-routed matmul must match spmm"
     );
 
-    // Dense lhs (all nonzero) → dense route; identical to matmul by construction.
+    // Dense lhs (all nonzero) → dense route.
     let dense = Array::from_shape_vec([5, 5], (1..=25).map(|i| i as f64).collect()).unwrap();
     let mut o1 = Array::zeros([5, 3]);
     let mut o2 = Array::zeros([5, 3]);
-    matmul_auto(&dense.view(), &b.view(), &mut o1.view_mut()).unwrap();
+    matmul(&dense.view(), &b.view(), &mut o1.view_mut()).unwrap();
     matmul(&dense.view(), &b.view(), &mut o2.view_mut()).unwrap();
     assert_eq!(o1.storage().as_slice(), o2.storage().as_slice());
+}
+
+#[test]
+fn test_matmul_non_contiguous_all() {
+    use leto::SliceArg;
+    
+    // Both lhs, rhs, and out are non-contiguous.
+    let a_data = vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let a = Array::from_shape_vec([4, 2], a_data).unwrap();
+    let a_sliced = a.slice_with::<2>(&[SliceArg::range(None, None, 2), SliceArg::All]).unwrap(); // shape [2, 2]
+
+    let b_data = vec![9.0f32, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0];
+    let b = Array::from_shape_vec([4, 2], b_data).unwrap();
+    let b_sliced = b.slice_with::<2>(&[SliceArg::range(None, None, 2), SliceArg::All]).unwrap(); // shape [2, 2]
+
+    // Non-contiguous output
+    let mut out_base = Array::zeros([4, 2]);
+    {
+        let mut out_sliced = out_base.slice_with_mut::<2>(&[SliceArg::range(None, None, 2), SliceArg::All]).unwrap(); // shape [2, 2]
+        matmul(&a_sliced, &b_sliced, &mut out_sliced).unwrap();
+    }
+
+    assert_eq!(out_base.storage().as_slice(), &[35.0, 38.0, 0.0, 0.0, 123.0, 134.0, 0.0, 0.0]);
+}
+
+#[test]
+fn test_matmul_hang_reproduction() {
+    let n = 256usize;
+    let k = 32usize;
+    
+    let mut dense_a = vec![0.0f64; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            if (i * 7 + j * 13) % 20 == 0 {
+                dense_a[i * n + j] = ((i + j) % 7 + 1) as f64;
+            }
+        }
+    }
+    
+    let a = Array::from_shape_vec([n, n], dense_a).unwrap();
+    let b = Array::from_shape_vec([n, k], (0..n*k).map(|i| (i as f64 * 0.731 + 1.0) * 1.0e-3).collect()).unwrap();
+    let mut out = Array::zeros([n, k]);
+    
+    matmul(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
 }

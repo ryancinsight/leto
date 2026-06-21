@@ -77,7 +77,6 @@ impl<'a, T, const N: usize, const M: usize> ExactSizeIterator for AxisIter<'a, T
 /// An iterator yielding mutable subviews along a given axis.
 pub struct AxisIterMut<'a, T, const N: usize, const M: usize> {
     ptr: *mut T,
-    data_len: usize,
     sub_shape: [usize; M],
     sub_strides: [isize; M],
     step_stride: isize,
@@ -118,7 +117,6 @@ impl<'a, T, const N: usize, const M: usize> AxisIterMut<'a, T, N, M> {
 
         Ok(Self {
             ptr,
-            data_len,
             sub_shape,
             sub_strides,
             step_stride,
@@ -143,11 +141,16 @@ impl<'a, T, const N: usize, const M: usize> Iterator for AxisIterMut<'a, T, N, M
             self.current_offset += self.step_stride;
             self.index += 1;
 
+            let (min_offset, max_offset) = layout.min_max_offsets();
+            let span_len = max_offset - min_offset + 1;
+            let adjusted_layout = Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
+
             // SAFETY: The iterator yields disjoint subviews along the axis, so mutable slices
-            // do not overlap and aliasing invariants are preserved.
+            // do not overlap and aliasing invariants are preserved. We construct the slice
+            // on the narrowest addressable physical span for the subview for safety.
             unsafe {
-                let slice = std::slice::from_raw_parts_mut(self.ptr, self.data_len);
-                Some(ArrayViewMut::new(layout, slice))
+                let slice = std::slice::from_raw_parts_mut(self.ptr.add(min_offset), span_len);
+                Some(ArrayViewMut::new(adjusted_layout, slice))
             }
         }
     }

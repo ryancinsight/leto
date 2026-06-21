@@ -66,13 +66,25 @@ fn one_sided_jacobi<T: RealScalar>(
 
     // Row-major working copy of the matrix being orthogonalized (A or Aᵀ).
     let mut w = vec![T::ZERO; wm * wn];
-    for i in 0..wm {
-        for j in 0..wn {
-            w[i * wn + j] = if tall {
-                *matrix.get([i, j])?
-            } else {
-                *matrix.get([j, i])?
-            };
+    if let Some(slice) = matrix.as_slice() {
+        if tall {
+            w.copy_from_slice(&slice[..wm * wn]);
+        } else {
+            for i in 0..wm {
+                for j in 0..wn {
+                    w[i * wn + j] = slice[j * wm + i];
+                }
+            }
+        }
+    } else {
+        for i in 0..wm {
+            for j in 0..wn {
+                w[i * wn + j] = if tall {
+                    *matrix.get([i, j])?
+                } else {
+                    *matrix.get([j, i])?
+                };
+            }
         }
     }
 

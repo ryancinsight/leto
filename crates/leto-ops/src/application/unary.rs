@@ -3,7 +3,7 @@ use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
 #[cfg(feature = "parallel")]
-const PARALLEL_THRESHOLD: usize = 8192;
+const PARALLEL_THRESHOLD: usize = 32768;
 
 #[cfg(feature = "parallel")]
 struct StridedMapContext<'a, T, U, const N: usize> {

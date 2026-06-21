@@ -212,7 +212,6 @@ where
 /// Generic axis-reduce kernel applying a binary `fold` elementwise across lanes.
 ///
 /// The first lane is used as the initial accumulator — no identity value needed.
-#[allow(clippy::needless_range_loop)]
 fn axis_reduce_lanes<T, S, const N: usize, const M: usize, F>(
     arr: &Array<T, S, N>,
     axis: usize,
@@ -243,24 +242,24 @@ where
     let mut iter: AxisIter<'_, T, N, M> = AxisIter::new(&view, axis, RankMarker::<N>)?;
 
     let first = iter.next().expect("axis_len > 0 implies at least one lane");
-    let first_layout = first.layout();
-    let first_data = first.data();
-    let first_shape = first_layout.shape;
     let mut buf: Vec<T> = Vec::with_capacity(out_size);
-    for flat in 0..out_size {
-        let idx = index_from_flat(flat, &first_shape);
-        let off = first_layout.offset_of(idx)?;
-        buf.push(first_data[off]);
+    if let Some(slice) = first.as_slice() {
+        buf.extend_from_slice(slice);
+    } else {
+        for val in first.iter() {
+            buf.push(*val);
+        }
     }
 
     for lane in iter {
-        let lane_layout = lane.layout();
-        let lane_data = lane.data();
-        let lane_shape = lane_layout.shape;
-        for flat in 0..out_size {
-            let idx = index_from_flat(flat, &lane_shape);
-            let off = lane_layout.offset_of(idx)?;
-            buf[flat] = fold(buf[flat], lane_data[off]);
+        if let Some(slice) = lane.as_slice() {
+            for (buf_val, &lane_val) in buf.iter_mut().zip(slice) {
+                *buf_val = fold(*buf_val, lane_val);
+            }
+        } else {
+            for (flat, val) in lane.iter().enumerate() {
+                buf[flat] = fold(buf[flat], *val);
+            }
         }
     }
 
@@ -273,7 +272,6 @@ where
 ///
 /// `is_better(current_best, candidate) -> bool` returns `true` when `candidate`
 /// should replace `current_best`.
-#[allow(clippy::needless_range_loop)]
 fn axis_arg_reduce<T, S, const N: usize, const M: usize>(
     arr: &Array<T, S, N>,
     axis: usize,
@@ -303,30 +301,32 @@ where
     let mut iter: AxisIter<'_, T, N, M> = AxisIter::new(&view, axis, RankMarker::<N>)?;
 
     let first = iter.next().expect("axis_len > 0 implies at least one lane");
-    let first_layout = first.layout();
-    let first_data = first.data();
-    let first_shape = first_layout.shape;
-
     let mut best_val: Vec<T> = Vec::with_capacity(out_size);
-    let mut best_idx: Vec<usize> = vec![0usize; out_size];
-    for flat in 0..out_size {
-        let idx = index_from_flat(flat, &first_shape);
-        let off = first_layout.offset_of(idx)?;
-        best_val.push(first_data[off]);
+    if let Some(slice) = first.as_slice() {
+        best_val.extend_from_slice(slice);
+    } else {
+        for val in first.iter() {
+            best_val.push(*val);
+        }
     }
+    let mut best_idx: Vec<usize> = vec![0usize; out_size];
 
     for (lane_pos, lane) in iter.enumerate() {
         let lane_axis_pos = lane_pos + 1;
-        let lane_layout = lane.layout();
-        let lane_data = lane.data();
-        let lane_shape = lane_layout.shape;
-        for flat in 0..out_size {
-            let idx = index_from_flat(flat, &lane_shape);
-            let off = lane_layout.offset_of(idx)?;
-            let candidate = lane_data[off];
-            if is_better(best_val[flat], candidate) {
-                best_val[flat] = candidate;
-                best_idx[flat] = lane_axis_pos;
+        if let Some(slice) = lane.as_slice() {
+            for ((val_ref, idx_ref), &candidate) in best_val.iter_mut().zip(&mut best_idx).zip(slice) {
+                if is_better(*val_ref, candidate) {
+                    *val_ref = candidate;
+                    *idx_ref = lane_axis_pos;
+                }
+            }
+        } else {
+            for ((val_ref, idx_ref), val) in best_val.iter_mut().zip(&mut best_idx).zip(lane.iter()) {
+                let candidate = *val;
+                if is_better(*val_ref, candidate) {
+                    *val_ref = candidate;
+                    *idx_ref = lane_axis_pos;
+                }
             }
         }
     }

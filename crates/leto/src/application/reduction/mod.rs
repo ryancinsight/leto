@@ -25,7 +25,6 @@ pub use quantile::{median_all, median_axis, quantile_all, quantile_axis, Interpo
 pub use sum::{sum_all, sum_axis};
 pub use variance::{std_all, std_axis, var_all, var_axis};
 
-use crate::application::index::index_from_flat;
 use crate::application::view::ArrayView;
 
 /// Iterate every logical element of `view` in row-major index order.
@@ -38,18 +37,7 @@ use crate::application::view::ArrayView;
 pub(crate) fn iter_elements<'a, T, const N: usize>(
     view: &'a ArrayView<'a, T, N>,
 ) -> impl Iterator<Item = &'a T> + 'a {
-    let data = view.data();
-    let layout = view.layout();
-    let size = layout.size();
-    let shape = layout.shape;
-
-    (0..size).map(move |flat| {
-        let index = index_from_flat(flat, &shape);
-        let offset = layout
-            .offset_of(index)
-            .expect("index_from_flat produced a valid index");
-        &data[offset]
-    })
+    view.iter()
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

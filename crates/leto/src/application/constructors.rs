@@ -100,7 +100,7 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     {
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
-        let mut vec = Vec::with_capacity(size);
+        let mut vec: Vec<T> = Vec::with_capacity(size);
         for flat_idx in 0..size {
             vec.push(f(index_from_flat(flat_idx, &shape)));
         }
@@ -121,13 +121,8 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
         }
 
         let size = self.layout.size();
-        let mut vec = Vec::with_capacity(size);
-        let shape = self.layout.shape;
-        for flat_idx in 0..size {
-            let index = index_from_flat(flat_idx, &shape);
-            let val = self.get(index).expect("validated layout index").clone();
-            vec.push(val);
-        }
+        let mut vec: Vec<T> = Vec::with_capacity(size);
+        vec.extend(self.iter().cloned());
         vec
     }
 }
@@ -173,7 +168,7 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
     {
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
-        let mut vec = Vec::with_capacity(size);
+        let mut vec: Vec<T> = Vec::with_capacity(size);
         for flat_idx in 0..size {
             vec.push(f(index_from_flat(flat_idx, &shape)));
         }
@@ -214,13 +209,8 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
         }
 
         let size = self.layout.size();
-        let mut vec = Vec::with_capacity(size);
-        let shape = self.layout.shape;
-        for flat_idx in 0..size {
-            let index = index_from_flat(flat_idx, &shape);
-            let val = self.get(index).expect("validated layout index").clone();
-            vec.push(val);
-        }
+        let mut vec: Vec<T> = Vec::with_capacity(size);
+        vec.extend(self.iter().cloned());
         vec
     }
 }

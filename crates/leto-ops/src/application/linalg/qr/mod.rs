@@ -70,6 +70,25 @@ pub struct QrDecomposition<T> {
 }
 
 impl<T: RealScalar> QrDecomposition<T> {
+    /// Construct a QR decomposition directly from its raw components.
+    #[must_use]
+    #[inline]
+    pub fn from_raw_parts(
+        packed: Vec<T>,
+        heads: Vec<T>,
+        betas: Vec<T>,
+        rows: usize,
+        cols: usize,
+    ) -> Self {
+        Self {
+            packed,
+            heads,
+            betas,
+            rows,
+            cols,
+        }
+    }
+
     /// `(rows, cols)` of the factored matrix.
     #[must_use]
     #[inline]

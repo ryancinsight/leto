@@ -64,9 +64,18 @@ pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<
 fn transpose_to_owned<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     let [rows, cols] = matrix.shape();
     let mut values = vec![T::ZERO; rows * cols];
-    for i in 0..rows {
-        for j in 0..cols {
-            values[j * rows + i] = *matrix.get([i, j])?;
+    if let Some(slice) = matrix.as_slice() {
+        for i in 0..rows {
+            let row = &slice[i * cols..i * cols + cols];
+            for (j, &val) in row.iter().enumerate() {
+                values[j * rows + i] = val;
+            }
+        }
+    } else {
+        for i in 0..rows {
+            for j in 0..cols {
+                values[j * rows + i] = *matrix.get([i, j])?;
+            }
         }
     }
     Array2::from_shape_vec([cols, rows], values)
@@ -298,12 +307,14 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
     let mut ut = transpose_square(bidiag.u().storage().as_slice(), m);
     let mut vt = transpose_square(bidiag.v().storage().as_slice(), n);
     let b = bidiag.b();
+    let b_slice = b.storage().as_slice();
+    let cols = b.shape()[1];
     let mut d = vec![T::ZERO; n];
     let mut e = vec![T::ZERO; n];
     for i in 0..n {
-        d[i] = *b.get([i, i])?;
+        d[i] = b_slice[i * cols + i];
         if i + 1 < n {
-            e[i] = *b.get([i, i + 1])?;
+            e[i] = b_slice[i * cols + i + 1];
         }
     }
 

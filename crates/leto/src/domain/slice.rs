@@ -64,7 +64,7 @@ pub(crate) fn normalize_range(
     step: isize,
     axis_len: usize,
 ) -> Result<NormalizedRange> {
-    if step == 0 {
+    if step == 0 || step == isize::MIN {
         return Err(LetoError::IncompatibleSlice {
             range: (0, axis_len),
             shape: vec![axis_len],

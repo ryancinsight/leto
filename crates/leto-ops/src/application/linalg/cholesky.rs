@@ -1,5 +1,5 @@
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result, Storage};
+use leto::{Array1, Array2, ArrayView1, ArrayView2, ArrayViewMut1, LetoError, Result, Storage};
 
 /// Cholesky factorization of a symmetric positive-definite matrix:
 /// `A = L · Lᵀ` with `L` lower-triangular.
@@ -37,21 +37,19 @@ pub fn cholesky_decompose<T: RealScalar>(
     // One bulk row-major copy + a single finiteness scan, then contiguous
     // indexing in the factorization — replacing per-element bounds-checked,
     // stride-recomputing `matrix.get` calls inside the hot loop.
-    let contiguous = matrix.to_contiguous();
-    let a = contiguous.storage().as_slice();
+    let mut a = matrix.to_contiguous().into_storage().into_inner();
     if !a.iter().all(|value| value.is_finite()) {
         return Err(LetoError::StorageError {
             reason: "Cholesky input contains a non-finite value".to_string(),
         });
     }
 
-    let mut l = vec![T::ZERO; n * n];
     for r in 0..n {
         for c in 0..=r {
             // acc = A[r][c] - Σ_{k<c} L[r][k]·L[c][k]
             let mut acc = a[r * n + c];
             for k in 0..c {
-                acc = acc.sub(l[r * n + k].mul(l[c * n + k]));
+                acc = acc.sub(a[r * n + k].mul(a[c * n + k]));
             }
             if r == c {
                 if acc <= T::ZERO {
@@ -61,20 +59,31 @@ pub fn cholesky_decompose<T: RealScalar>(
                         ),
                     });
                 }
-                l[r * n + c] = acc.sqrt();
+                a[r * n + c] = acc.sqrt();
             } else {
-                l[r * n + c] = acc.div(l[c * n + c]);
+                a[r * n + c] = acc.div(a[c * n + c]);
             }
+        }
+        for c in (r + 1)..n {
+            a[r * n + c] = T::ZERO;
         }
     }
 
     Ok(CholeskyDecomposition {
-        lower: Array2::from_shape_vec([n, n], l).expect("square factor storage"),
+        lower: Array2::from_shape_vec([n, n], a).expect("square factor storage"),
         dim: n,
     })
 }
 
 impl<T: RealScalar> CholeskyDecomposition<T> {
+    /// Construct a Cholesky decomposition directly from its raw lower factor.
+    #[must_use]
+    #[inline]
+    pub fn from_raw_parts(lower: Array2<T>) -> Self {
+        let dim = lower.shape()[0];
+        Self { lower, dim }
+    }
+
     /// Matrix dimension `n`.
     #[must_use]
     #[inline]
@@ -100,8 +109,9 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
         det
     }
 
-    /// Solve `A · x = rhs` via `L · y = rhs` then `Lᵀ · x = y`.
-    pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+    /// Solve `A · x = rhs` directly into a caller-owned view `out`.
+    #[allow(clippy::needless_range_loop)]
+    pub fn solve_into(&self, rhs: &ArrayView1<'_, T>, out: &mut ArrayViewMut1<'_, T>) -> Result<()> {
         let n = self.dim;
         if rhs.shape() != [n] {
             return Err(LetoError::ShapeMismatch {
@@ -109,12 +119,66 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
                 rhs: vec![n],
             });
         }
-        let mut x = Vec::with_capacity(n);
-        for k in 0..n {
-            x.push(*rhs.get([k])?);
+        if out.shape() != [n] {
+            return Err(LetoError::ShapeMismatch {
+                lhs: out.shape().to_vec(),
+                rhs: vec![n],
+            });
         }
-        self.solve_in_place(&mut x);
-        Array1::from_shape_vec([n], x)
+
+        if let Some(out_slice) = out.as_mut_slice() {
+            if let Some(rhs_slice) = rhs.as_slice() {
+                out_slice[..n].copy_from_slice(&rhs_slice[..n]);
+            } else {
+                for k in 0..n {
+                    out_slice[k] = *rhs.get([k])?;
+                }
+            }
+            self.solve_in_place(out_slice);
+        } else {
+            if let Some(rhs_slice) = rhs.as_slice() {
+                for k in 0..n {
+                    *out.get_mut([k])? = rhs_slice[k];
+                }
+            } else {
+                for k in 0..n {
+                    *out.get_mut([k])? = *rhs.get([k])?;
+                }
+            }
+            let l = self.lower.storage().as_slice();
+
+            // Forward: L · y = rhs. yᵣ = (xᵣ − Σ_{c<r} L[r,c]·y_c) / L[r,r].
+            for r in 0..n {
+                let mut dot = T::ZERO;
+                for c in 0..r {
+                    let l_rc = l[r * n + c];
+                    let x_c = *out.get([c])?;
+                    dot = dot.add(l_rc.mul(x_c));
+                }
+                let out_r = out.get_mut([r])?;
+                *out_r = out_r.sub(dot).div(l[r * n + r]);
+            }
+            // Backward: Lᵀ · x = y (Lᵀ[r][c] = L[c][r], a strided column read).
+            for r in (0..n).rev() {
+                let mut acc = *out.get([r])?;
+                for c in (r + 1)..n {
+                    let l_cr = l[c * n + r];
+                    let solved = *out.get([c])?;
+                    acc = acc.sub(l_cr.mul(solved));
+                }
+                let out_r = out.get_mut([r])?;
+                *out_r = acc.div(l[r * n + r]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Solve `A · x = rhs` via `L · y = rhs` then `Lᵀ · x = y`.
+    pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+        let n = self.dim;
+        let mut out = Array1::from_elem([n], T::ZERO);
+        self.solve_into(rhs, &mut out.view_mut())?;
+        Ok(out)
     }
 
     /// Inverse of the original SPD matrix, solving against identity columns.

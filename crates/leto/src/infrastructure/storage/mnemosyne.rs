@@ -118,17 +118,21 @@ impl<T> MnemosyneStorage<T> {
 impl<T> Drop for MnemosyneStorage<T> {
     #[inline]
     fn drop(&mut self) {
-        if !self.ptr.is_null() && self.layout.size() > 0 {
-            for index in 0..self.len {
-                // SAFETY: all public constructors initialize every element.
-                unsafe {
-                    std::ptr::drop_in_place(self.ptr.add(index));
+        if !self.ptr.is_null() {
+            if std::mem::needs_drop::<T>() {
+                for index in 0..self.len {
+                    // SAFETY: all public constructors initialize every element.
+                    unsafe {
+                        std::ptr::drop_in_place(self.ptr.add(index));
+                    }
                 }
             }
-            use std::alloc::GlobalAlloc;
-            // SAFETY: `self.ptr` was previously allocated with this layout.
-            unsafe {
-                mnemosyne::Mnemosyne.dealloc(self.ptr as *mut u8, self.layout);
+            if self.layout.size() > 0 {
+                use std::alloc::GlobalAlloc;
+                // SAFETY: `self.ptr` was previously allocated with this layout.
+                unsafe {
+                    mnemosyne::Mnemosyne.dealloc(self.ptr as *mut u8, self.layout);
+                }
             }
         }
     }

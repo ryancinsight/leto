@@ -3,7 +3,7 @@
 
 use super::dense::{add, identity, inf_norm, mul, scale, sub};
 use crate::domain::real::RealScalar;
-use leto::{Array2, ArrayView2, LetoError, Result, Storage};
+use leto::{Array2, ArrayView2, LetoError, Result};
 
 /// Degree of the diagonal Padé approximant.
 const PADE_Q: usize = 6;
@@ -47,20 +47,25 @@ pub fn matexp<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
             rhs: vec![rows, rows],
         });
     }
-    let a = matrix.to_contiguous();
-    if rows == 0 {
-        return Ok(a);
-    }
-    if !a.storage().as_slice().iter().all(|x| x.is_finite()) {
+    let is_finite = if let Some(slice) = matrix.as_slice() {
+        slice.iter().all(|x| x.is_finite())
+    } else {
+        matrix.iter().all(|x| x.is_finite())
+    };
+    if !is_finite {
         return Err(LetoError::StorageError {
             reason: "matrix exponential requires finite entries".to_string(),
         });
     }
 
+    if rows == 0 {
+        return Ok(Array2::from_shape_vec([0, 0], vec![]).unwrap());
+    }
+
     // 1. Scaling: choose s with ‖A / 2ˢ‖_∞ ≤ 1/2.
     let half = T::from_f64(SCALE_THRESHOLD);
     let two = T::from_f64(2.0);
-    let mut scaled_norm = inf_norm(&a);
+    let mut scaled_norm = inf_norm(matrix);
     let mut s: u32 = 0;
     while scaled_norm > half {
         scaled_norm = scaled_norm.div(two);
@@ -71,7 +76,7 @@ pub fn matexp<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
             });
         }
     }
-    let b = scale(&a, T::from_f64(2f64.powi(-(s as i32)))); // B = A / 2ˢ
+    let b = scale(matrix, T::from_f64(2f64.powi(-(s as i32)))); // B = A / 2ˢ
 
     // 2. Diagonal Padé(q, q) via the even/odd split. Writing
     //    N(B) = Σ_{k} c_k Bᵏ = U + B·V and D(B) = Σ_{k} (−1)ᵏ c_k Bᵏ = U − B·V
@@ -81,31 +86,31 @@ pub fn matexp<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     //    Horner/iterated-power scheme (Paterson–Stockmeyer even/odd factoring).
     let c = pade_coefficients::<T>();
     let id = identity::<T>(rows);
-    let b2 = mul(&b, &b)?;
-    let b4 = mul(&b2, &b2)?;
-    let b6 = mul(&b2, &b4)?;
+    let b2 = mul(&b.view(), &b.view())?;
+    let b4 = mul(&b2.view(), &b2.view())?;
+    let b6 = mul(&b2.view(), &b4.view())?;
     // U = c₀I + c₂B² + c₄B⁴ + c₆B⁶ (even); V = c₁I + c₃B² + c₅B⁴ (odd shifted).
     let u_even = add(
         &add(
-            &add(&scale(&id, c[0]), &scale(&b2, c[2])),
-            &scale(&b4, c[4]),
-        ),
-        &scale(&b6, c[6]),
+            &add(&scale(&id.view(), c[0]).view(), &scale(&b2.view(), c[2]).view()).view(),
+            &scale(&b4.view(), c[4]).view(),
+        ).view(),
+        &scale(&b6.view(), c[6]).view(),
     );
     let v_odd = add(
-        &add(&scale(&id, c[1]), &scale(&b2, c[3])),
-        &scale(&b4, c[5]),
+        &add(&scale(&id.view(), c[1]).view(), &scale(&b2.view(), c[3]).view()).view(),
+        &scale(&b4.view(), c[5]).view(),
     );
-    let bv = mul(&b, &v_odd)?;
-    let numerator = add(&u_even, &bv);
-    let denominator = sub(&u_even, &bv);
+    let bv = mul(&b.view(), &v_odd.view())?;
+    let numerator = add(&u_even.view(), &bv.view());
+    let denominator = sub(&u_even.view(), &bv.view());
 
     let inv_denominator = crate::application::linalg::lu::inv(&denominator.view())?;
-    let mut result = mul(&inv_denominator, &numerator)?; // r_q(B) ≈ e^B
+    let mut result = mul(&inv_denominator.view(), &numerator.view())?; // r_q(B) ≈ e^B
 
     // 3. Squaring: e^A = (e^B)^{2ˢ}.
     for _ in 0..s {
-        result = mul(&result, &result)?;
+        result = mul(&result.view(), &result.view())?;
     }
     Ok(result)
 }

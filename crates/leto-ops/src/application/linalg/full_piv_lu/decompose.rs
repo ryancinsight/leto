@@ -31,20 +31,20 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         });
     }
 
-    let mut a = vec![T::ZERO; n * n];
+    let mut a = if let Some(slice) = matrix.as_slice() {
+        slice.to_vec()
+    } else {
+        matrix.to_contiguous().into_storage().into_inner()
+    };
     let mut global_max = T::ZERO;
-    for i in 0..n {
-        for j in 0..n {
-            let value = *matrix.get([i, j])?;
-            if !value.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "FullPivLU input contains a non-finite value".to_string(),
-                });
-            }
-            a[i * n + j] = value;
-            if value.abs() > global_max {
-                global_max = value.abs();
-            }
+    for &value in &a {
+        if !value.is_finite() {
+            return Err(LetoError::StorageError {
+                reason: "FullPivLU input contains a non-finite value".to_string(),
+            });
+        }
+        if value.abs() > global_max {
+            global_max = value.abs();
         }
     }
 

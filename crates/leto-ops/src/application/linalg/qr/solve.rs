@@ -2,14 +2,16 @@
 
 use super::{qr_decompose, QrDecomposition};
 use crate::domain::real::RealScalar;
-use leto::{Array1, ArrayView1, ArrayView2, LetoError, Result};
+use leto::{Array1, ArrayView1, ArrayView2, ArrayViewMut1, LetoError, Result};
 
 impl<T: RealScalar> QrDecomposition<T> {
     /// Solve `min ‖A·x − rhs‖₂` (least squares; exact solve when `m = n`).
     ///
     /// Applies the stored reflectors to `rhs` (computing `Qᵀ·rhs` without
     /// materializing `Q`), then back-substitutes against `R`.
-    pub fn solve_least_squares(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+    /// Solve `min ‖A·x − rhs‖₂` directly into a caller-owned view `out`.
+    #[allow(clippy::needless_range_loop)]
+    pub fn solve_least_squares_into(&self, rhs: &ArrayView1<'_, T>, out: &mut ArrayViewMut1<'_, T>) -> Result<()> {
         let (m, n) = (self.rows, self.cols);
         if rhs.shape() != [m] {
             return Err(LetoError::ShapeMismatch {
@@ -17,11 +19,35 @@ impl<T: RealScalar> QrDecomposition<T> {
                 rhs: vec![m],
             });
         }
-
-        let mut y = Vec::with_capacity(m);
-        for k in 0..m {
-            y.push(*rhs.get([k])?);
+        if out.shape() != [n] {
+            return Err(LetoError::ShapeMismatch {
+                lhs: out.shape().to_vec(),
+                rhs: vec![n],
+            });
         }
+
+        let mut y_stack = [T::ZERO; 128];
+        let mut y_vec = Vec::new();
+        let y = if m <= 128 {
+            if let Some(slice) = rhs.as_slice() {
+                y_stack[..m].copy_from_slice(&slice[..m]);
+            } else {
+                for k in 0..m {
+                    y_stack[k] = *rhs.get([k])?;
+                }
+            }
+            &mut y_stack[..m]
+        } else {
+            if let Some(slice) = rhs.as_slice() {
+                y_vec = slice.to_vec();
+            } else {
+                y_vec.reserve_exact(m);
+                for k in 0..m {
+                    y_vec.push(*rhs.get([k])?);
+                }
+            }
+            &mut y_vec[..]
+        };
 
         // y ← Qᵀ·y, one reflector at a time.
         for k in 0..n {
@@ -38,16 +64,34 @@ impl<T: RealScalar> QrDecomposition<T> {
         }
 
         // Back-substitute R·x = y[..n].
-        let mut x = y;
-        x.truncate(n);
         for r in (0..n).rev() {
-            let mut acc = x[r];
-            for (offset, &solved) in x[(r + 1)..n].iter().enumerate() {
+            let mut acc = y[r];
+            for (offset, &solved) in y[(r + 1)..n].iter().enumerate() {
                 acc = acc.sub(self.packed[r * n + r + 1 + offset].mul(solved));
             }
-            x[r] = acc.div(self.packed[r * n + r]);
+            y[r] = acc.div(self.packed[r * n + r]);
         }
-        Array1::from_shape_vec([n], x)
+
+        // Write x to out.
+        if let Some(out_slice) = out.as_mut_slice() {
+            out_slice.copy_from_slice(&y[..n]);
+        } else {
+            for k in 0..n {
+                *out.get_mut([k])? = y[k];
+            }
+        }
+        Ok(())
+    }
+
+    /// Solve `min ‖A·x − rhs‖₂` (least squares; exact solve when `m = n`).
+    ///
+    /// Applies the stored reflectors to `rhs` (computing `Qᵀ·rhs` without
+    /// materializing `Q`), then back-substitutes against `R`.
+    pub fn solve_least_squares(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+        let n = self.cols;
+        let mut out = Array1::from_elem([n], T::ZERO);
+        self.solve_least_squares_into(rhs, &mut out.view_mut())?;
+        Ok(out)
     }
 }
 

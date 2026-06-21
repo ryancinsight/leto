@@ -1,5 +1,4 @@
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::iter::{ElementIter, IndexedIter, Windows};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -172,12 +171,8 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
             Some(slice) => slice.to_vec(),
             None => {
                 let size = self.layout.size();
-                let shape = self.shape();
-                let mut values = Vec::with_capacity(size);
-                for flat_idx in 0..size {
-                    let index = index_from_flat(flat_idx, &shape);
-                    values.push(self.get(index).expect("validated logical index").clone());
-                }
+                let mut values: Vec<T> = Vec::with_capacity(size);
+                values.extend(self.iter().cloned());
                 values
             }
         };

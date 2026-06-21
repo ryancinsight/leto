@@ -75,14 +75,15 @@ pub(super) fn validate_input<T: RealScalar>(
             reason: "SVD tolerance must be finite and non-negative".to_string(),
         });
     }
-    for row in 0..rows {
-        for col in 0..cols {
-            if !matrix.get([row, col])?.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "SVD input contains a non-finite value".to_string(),
-                });
-            }
-        }
+    let all_finite = if let Some(slice) = matrix.as_slice() {
+        slice.iter().all(|x| x.is_finite())
+    } else {
+        matrix.iter().all(|x| x.is_finite())
+    };
+    if !all_finite {
+        return Err(LetoError::StorageError {
+            reason: "SVD input contains a non-finite value".to_string(),
+        });
     }
     Ok(())
 }

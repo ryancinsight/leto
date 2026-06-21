@@ -21,6 +21,7 @@
 //! small `O(m)`/`O(n)` reflector gathers touch strided memory.
 
 use crate::domain::real::RealScalar;
+use leto::ArrayView2;
 
 /// In-place Householder (`dlarfg`): `x[0] ← β`, `x[1..] ← v` (implicit `v[0]=1`);
 /// returns `(τ, β)`.
@@ -57,15 +58,24 @@ fn larfg<T: RealScalar>(x: &mut [T]) -> (T, T) {
     (tau, beta)
 }
 
-/// Reduce row-major `a` (`m×n`, `m ≥ n`) to the bidiagonal `(d, e)` via a
+/// Reduce row-major `matrix` (`m×n`, `m ≥ n`) to the bidiagonal `(d, e)` via a
 /// column-major working buffer.
-pub(super) fn reduce_values<T: RealScalar>(a: &[T], m: usize, n: usize) -> (Vec<T>, Vec<T>) {
+pub(super) fn reduce_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> (Vec<T>, Vec<T>) {
+    let [m, n] = matrix.shape();
     // Transpose into column-major: cm[j*m + i] = A[i][j]; column j is contiguous.
     let mut cm = vec![T::ZERO; m * n];
-    for i in 0..m {
-        let row = &a[i * n..i * n + n];
-        for (j, &val) in row.iter().enumerate() {
-            cm[j * m + i] = val;
+    if let Some(a) = matrix.as_slice() {
+        for i in 0..m {
+            let row = &a[i * n..i * n + n];
+            for (j, &val) in row.iter().enumerate() {
+                cm[j * m + i] = val;
+            }
+        }
+    } else {
+        for i in 0..m {
+            for j in 0..n {
+                cm[j * m + i] = *matrix.get([i, j]).expect("in bounds");
+            }
         }
     }
 

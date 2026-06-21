@@ -86,30 +86,56 @@ impl<T: RealScalar> ColPivQrDecomposition<T> {
             });
         }
 
+        let mut qtb_stack = [T::ZERO; 128];
+        let mut qtb_vec = Vec::new();
+        let qtb = if m <= 128 {
+            &mut qtb_stack[..m]
+        } else {
+            qtb_vec.resize(m, T::ZERO);
+            &mut qtb_vec[..]
+        };
+
+        let mut rhs_stack = [T::ZERO; 128];
+        let mut rhs_vec = Vec::new();
+        let rhs_slice = if let Some(slice) = rhs.as_slice() {
+            slice
+        } else {
+            if m <= 128 {
+                for (k, slot) in rhs_stack[..m].iter_mut().enumerate() {
+                    *slot = *rhs.get([k])?;
+                }
+                &rhs_stack[..m]
+            } else {
+                rhs_vec.reserve_exact(m);
+                for k in 0..m {
+                    rhs_vec.push(*rhs.get([k])?);
+                }
+                &rhs_vec[..]
+            }
+        };
+
         // qtb = Qᵀ b (Qᵀ[i][k] = q[k][i]).
-        let mut qtb = vec![T::ZERO; m];
         for (i, slot) in qtb.iter_mut().enumerate() {
             let mut acc = T::ZERO;
-            for k in 0..m {
-                acc = acc.add(rhs.get([k])?.mul(self.q[k * m + i]));
+            for (k, &rhs_val) in rhs_slice.iter().enumerate() {
+                acc = acc.add(rhs_val.mul(self.q[k * m + i]));
             }
             *slot = acc;
         }
 
-        // Back-substitute R y = qtb[0..n].
-        let mut y = vec![T::ZERO; n];
+        // Back-substitute R y = qtb[0..n] in place in qtb.
         for i in (0..n).rev() {
             let mut s = qtb[i];
-            for (j, &yj) in y.iter().enumerate().skip(i + 1) {
-                s = s.sub(self.r[i * n + j].mul(yj));
+            for (j, &qtb_j) in qtb.iter().enumerate().take(n).skip(i + 1) {
+                s = s.sub(self.r[i * n + j].mul(qtb_j));
             }
-            y[i] = s.div(self.r[i * n + i]);
+            qtb[i] = s.div(self.r[i * n + i]);
         }
 
         // x = P y.
         let mut x = vec![T::ZERO; n];
-        for (k, &yk) in y.iter().enumerate() {
-            x[self.perm[k]] = yk;
+        for k in 0..n {
+            x[self.perm[k]] = qtb[k];
         }
         Array1::from_shape_vec([n], x)
     }

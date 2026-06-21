@@ -19,10 +19,45 @@
 //! physical offset `o + Σᵢ tᵢ·strideᵢ` (the parent layout's `offset_of(t)`) and
 //! inherits the parent strides, so it is a valid view into the same buffer. ∎
 
-use crate::application::index::index_from_flat;
 use crate::application::view::ArrayView;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
+
+#[inline]
+fn odometer_step<const N: usize>(
+    index: &mut [usize; N],
+    shape: &[usize; N],
+    strides: &[isize; N],
+    offset: &mut usize,
+) {
+    for i in (0..N).rev() {
+        index[i] += 1;
+        if index[i] < shape[i] {
+            *offset = (*offset as isize + strides[i]) as usize;
+            break;
+        }
+        *offset = (*offset as isize - (shape[i] - 1) as isize * strides[i]) as usize;
+        index[i] = 0;
+    }
+}
+
+#[inline]
+fn odometer_step_back<const N: usize>(
+    index: &mut [usize; N],
+    shape: &[usize; N],
+    strides: &[isize; N],
+    offset: &mut usize,
+) {
+    for i in (0..N).rev() {
+        if index[i] > 0 {
+            index[i] -= 1;
+            *offset = (*offset as isize - strides[i]) as usize;
+            break;
+        }
+        *offset = (*offset as isize + (shape[i] - 1) as isize * strides[i]) as usize;
+        index[i] = shape[i] - 1;
+    }
+}
 
 /// Iterator over every sliding window of a fixed shape, in row-major order of
 /// window start position.
@@ -39,6 +74,10 @@ pub struct Windows<'a, T, const N: usize> {
     counts: [usize; N],
     front: usize,
     back: usize,
+    front_index: [usize; N],
+    front_offset: usize,
+    back_index: [usize; N],
+    back_offset: usize,
 }
 
 impl<'a, T, const N: usize> Windows<'a, T, N> {
@@ -67,6 +106,19 @@ impl<'a, T, const N: usize> Windows<'a, T, N> {
             counts[i] = shape[i] - window_shape[i] + 1;
         }
         let total: usize = counts.iter().product();
+        let (back_index, back_offset) = if total > 0 {
+            let mut idx = [0usize; N];
+            for (i, item) in idx.iter_mut().enumerate() {
+                *item = counts[i] - 1;
+            }
+            let offset = view
+                .layout()
+                .offset_of(idx)
+                .expect("invariant: last window start is valid");
+            (idx, offset)
+        } else {
+            ([0usize; N], view.layout().offset)
+        };
         Ok(Self {
             data: view.data(),
             base_layout: view.layout(),
@@ -74,19 +126,11 @@ impl<'a, T, const N: usize> Windows<'a, T, N> {
             counts,
             front: 0,
             back: total,
+            front_index: [0usize; N],
+            front_offset: view.layout().offset,
+            back_index,
+            back_offset,
         })
-    }
-
-    /// Materialize the window whose start position has linear rank `flat`.
-    #[inline]
-    fn window_at(&self, flat: usize) -> ArrayView<'a, T, N> {
-        let starts = index_from_flat(flat, &self.counts);
-        let offset = self
-            .base_layout
-            .offset_of(starts)
-            .expect("invariant: window start is within parent shape by construction");
-        let layout = Layout::new(self.window_shape, self.base_layout.strides, offset);
-        ArrayView::new(layout, self.data)
     }
 }
 
@@ -98,9 +142,10 @@ impl<'a, T, const N: usize> Iterator for Windows<'a, T, N> {
         if self.front >= self.back {
             return None;
         }
-        let window = self.window_at(self.front);
+        let layout = Layout::new(self.window_shape, self.base_layout.strides, self.front_offset);
+        odometer_step(&mut self.front_index, &self.counts, &self.base_layout.strides, &mut self.front_offset);
         self.front += 1;
-        Some(window)
+        Some(ArrayView::new(layout, self.data))
     }
 
     #[inline]
@@ -117,7 +162,9 @@ impl<'a, T, const N: usize> DoubleEndedIterator for Windows<'a, T, N> {
             return None;
         }
         self.back -= 1;
-        Some(self.window_at(self.back))
+        let layout = Layout::new(self.window_shape, self.base_layout.strides, self.back_offset);
+        odometer_step_back(&mut self.back_index, &self.counts, &self.base_layout.strides, &mut self.back_offset);
+        Some(ArrayView::new(layout, self.data))
     }
 }
 

@@ -35,16 +35,16 @@ fn tail_norm_sq<T: RealScalar>(r: &[T], n: usize, m: usize, j: usize, r0: usize)
 pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factored<T>> {
     let [m, n] = matrix.shape();
 
-    let mut r = vec![T::ZERO; m * n];
-    for i in 0..m {
-        for j in 0..n {
-            let value = *matrix.get([i, j])?;
-            if !value.is_finite() {
-                return Err(LetoError::StorageError {
-                    reason: "ColPivQR input contains a non-finite value".to_string(),
-                });
-            }
-            r[i * n + j] = value;
+    let mut r = if let Some(slice) = matrix.as_slice() {
+        slice.to_vec()
+    } else {
+        matrix.to_contiguous().into_storage().into_inner()
+    };
+    for &value in &r {
+        if !value.is_finite() {
+            return Err(LetoError::StorageError {
+                reason: "ColPivQR input contains a non-finite value".to_string(),
+            });
         }
     }
 
@@ -91,8 +91,23 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         }
 
         // Householder on column k, rows k..m.
-        let col: Vec<T> = (k..m).map(|i| r[i * n + k]).collect();
-        if let Some((refl, _alpha)) = reflector(&col) {
+        let len = m - k;
+        let mut col_stack = [T::ZERO; 128];
+        let mut col_vec = Vec::new();
+        let col = if len <= 128 {
+            for i in 0..len {
+                col_stack[i] = r[(k + i) * n + k];
+            }
+            &col_stack[..len]
+        } else {
+            col_vec.reserve_exact(len);
+            for i in 0..len {
+                col_vec.push(r[(k + i) * n + k]);
+            }
+            &col_vec[..]
+        };
+
+        if let Some((refl, _alpha)) = reflector(col) {
             apply_left(&refl, &mut r, n, k, k, n, &mut alw); // rows k..m, cols k..n
             apply_right(&refl, &mut q, m, k, 0, m); // Q ← Q Hₖ
         }

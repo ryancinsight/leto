@@ -9,6 +9,69 @@ fn idx(i: usize, j: usize, n: usize) -> usize {
     i * n + j
 }
 
+fn solve_impl<T: RealScalar>(
+    factor: &Factored<T>,
+    buf: &mut [T],
+    x: &mut [T],
+) -> Result<()> {
+    let n = factor.n;
+
+    // Step 1: Forward solve L z = b in-place in buf
+    for i in 0..n {
+        let mut acc = buf[i];
+        for (j, &buf_j) in buf[..i].iter().enumerate() {
+            acc = acc.sub(factor.l[idx(i, j, n)].mul(buf_j));
+        }
+        buf[i] = acc;
+    }
+
+    // Step 2: Block-diagonal solve D w = z in-place in buf
+    let mut k = 0usize;
+    while k < n {
+        if factor.two[k] {
+            let d00 = factor.d[idx(k, k, n)];
+            let d01 = factor.d[idx(k, k + 1, n)];
+            let d11 = factor.d[idx(k + 1, k + 1, n)];
+            let det = d00.mul(d11).sub(d01.mul(d01));
+            if det == T::ZERO {
+                return Err(LetoError::StorageError {
+                    reason: "Bunch-Kaufman solve: singular 2x2 block".to_string(),
+                });
+            }
+            let zk = buf[k];
+            let zk1 = buf[k + 1];
+            buf[k] = d11.mul(zk).sub(d01.mul(zk1)).div(det);
+            buf[k + 1] = d00.mul(zk1).sub(d01.mul(zk)).div(det);
+            k += 2;
+        } else {
+            let d = factor.d[idx(k, k, n)];
+            if d == T::ZERO {
+                return Err(LetoError::StorageError {
+                    reason: "Bunch-Kaufman solve: singular pivot".to_string(),
+                });
+            }
+            buf[k] = buf[k].div(d);
+            k += 1;
+        }
+    }
+
+    // Step 3: Back-solve Lᵀ y = w in-place in buf
+    for i in (0..n).rev() {
+        let mut acc = buf[i];
+        for (j, &buf_j) in buf.iter().enumerate().take(n).skip(i + 1) {
+            acc = acc.sub(factor.l[idx(j, i, n)].mul(buf_j));
+        }
+        buf[i] = acc;
+    }
+
+    // Step 4: Inverse permutation: x[perm[i]] = buf[i]
+    for i in 0..n {
+        x[factor.perm[i]] = buf[i];
+    }
+
+    Ok(())
+}
+
 /// Solve `A x = rhs` via `P A Pᵀ = L D Lᵀ`:
 /// permute `rhs`, forward-solve `L z = Pb`, block-solve `D w = z`, back-solve
 /// `Lᵀ y = w`, then inverse-permute `x[perm[i]] = y[i]`.
@@ -24,67 +87,27 @@ pub(super) fn solve<T: RealScalar>(
         });
     }
 
-    // Pb: b_perm[i] = rhs[perm[i]].
-    let mut b = vec![T::ZERO; n];
-    for (slot, &p) in b.iter_mut().zip(factor.perm.iter()) {
-        *slot = *rhs.get([p])?;
-    }
+    let mut buf_stack = [T::ZERO; 128];
+    let mut buf_vec = Vec::new();
+    let buf = if n <= 128 {
+        &mut buf_stack[..n]
+    } else {
+        buf_vec.resize(n, T::ZERO);
+        &mut buf_vec[..]
+    };
 
-    // Forward: L z = b (unit lower).
-    let mut z = vec![T::ZERO; n];
-    for i in 0..n {
-        let mut acc = b[i];
-        for (j, &zj) in z.iter().enumerate().take(i) {
-            acc = acc.sub(factor.l[idx(i, j, n)].mul(zj));
+    if let Some(rhs_slice) = rhs.as_slice() {
+        for (i, buf_i) in buf.iter_mut().enumerate().take(n) {
+            *buf_i = rhs_slice[factor.perm[i]];
         }
-        z[i] = acc;
-    }
-
-    // Block-diagonal solve D w = z.
-    let mut w = vec![T::ZERO; n];
-    let mut k = 0usize;
-    while k < n {
-        if factor.two[k] {
-            let d00 = factor.d[idx(k, k, n)];
-            let d01 = factor.d[idx(k, k + 1, n)];
-            let d11 = factor.d[idx(k + 1, k + 1, n)];
-            let det = d00.mul(d11).sub(d01.mul(d01));
-            if det == T::ZERO {
-                return Err(LetoError::StorageError {
-                    reason: "Bunch-Kaufman solve: singular 2x2 block".to_string(),
-                });
-            }
-            // [w_k; w_{k+1}] = E⁻¹ [z_k; z_{k+1}].
-            w[k] = d11.mul(z[k]).sub(d01.mul(z[k + 1])).div(det);
-            w[k + 1] = d00.mul(z[k + 1]).sub(d01.mul(z[k])).div(det);
-            k += 2;
-        } else {
-            let d = factor.d[idx(k, k, n)];
-            if d == T::ZERO {
-                return Err(LetoError::StorageError {
-                    reason: "Bunch-Kaufman solve: singular pivot".to_string(),
-                });
-            }
-            w[k] = z[k].div(d);
-            k += 1;
+    } else {
+        for (i, buf_i) in buf.iter_mut().enumerate().take(n) {
+            *buf_i = *rhs.get([factor.perm[i]])?;
         }
     }
 
-    // Back: Lᵀ y = w (unit upper).
-    let mut y = vec![T::ZERO; n];
-    for i in (0..n).rev() {
-        let mut acc = w[i];
-        for (j, &yj) in y.iter().enumerate().skip(i + 1) {
-            acc = acc.sub(factor.l[idx(j, i, n)].mul(yj));
-        }
-        y[i] = acc;
-    }
-
-    // Inverse permutation: x[perm[i]] = y[i].
     let mut x = vec![T::ZERO; n];
-    for i in 0..n {
-        x[factor.perm[i]] = y[i];
-    }
+    solve_impl(factor, buf, &mut x)?;
     Array1::from_shape_vec([n], x)
 }
 
@@ -92,13 +115,34 @@ pub(super) fn solve<T: RealScalar>(
 pub(super) fn inverse<T: RealScalar>(factor: &Factored<T>) -> Result<Array2<T>> {
     let n = factor.n;
     let mut values = vec![T::ZERO; n * n];
+
+    let mut buf_stack = [T::ZERO; 128];
+    let mut buf_vec = Vec::new();
+    let buf = if n <= 128 {
+        &mut buf_stack[..n]
+    } else {
+        buf_vec.resize(n, T::ZERO);
+        &mut buf_vec[..]
+    };
+
+    let mut x_stack = [T::ZERO; 128];
+    let mut x_vec = Vec::new();
+    let x = if n <= 128 {
+        &mut x_stack[..n]
+    } else {
+        x_vec.resize(n, T::ZERO);
+        &mut x_vec[..]
+    };
+
     for col in 0..n {
-        let mut rhs = vec![T::ZERO; n];
-        rhs[col] = T::ONE;
-        let rhs = Array1::from_shape_vec([n], rhs)?;
-        let x = solve(factor, &rhs.view())?;
+        // e_col: rhs[i] = 1 if i == col else 0.
+        // buf[i] = rhs[perm[i]] = 1 if perm[i] == col else 0.
+        for (i, buf_i) in buf.iter_mut().enumerate().take(n) {
+            *buf_i = if factor.perm[i] == col { T::ONE } else { T::ZERO };
+        }
+        solve_impl(factor, buf, x)?;
         for row in 0..n {
-            values[idx(row, col, n)] = *x.get([row])?;
+            values[idx(row, col, n)] = x[row];
         }
     }
     Array2::from_shape_vec([n, n], values)

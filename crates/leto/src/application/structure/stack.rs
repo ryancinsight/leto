@@ -1,5 +1,4 @@
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::view::ArrayView;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::insert_axis::InsertAxis;
@@ -41,23 +40,42 @@ where
     let out_shape = RankMarker::<N>.insert_shape(base_shape, axis, inputs.len())?;
     let out_layout = Layout::c_contiguous(out_shape)?;
     let size = out_layout.size();
-    let mut values = Vec::with_capacity(size);
-
-    for flat in 0..size {
-        let out_index = index_from_flat(flat, &out_shape);
-        let which = out_index[axis];
-        // Project the rank-M output index back to the rank-N source index by
-        // dropping the stacked axis.
-        let mut src_index = [0usize; N];
-        for (j, slot) in src_index.iter_mut().enumerate() {
-            *slot = if j < axis {
-                out_index[j]
-            } else {
-                out_index[j + 1]
-            };
+    if axis == 0 {
+        let mut values: Vec<T> = Vec::with_capacity(size);
+        for input_view in inputs {
+            values.extend(input_view.iter().cloned());
         }
-        values.push(inputs[which].get(src_index)?.clone());
+        return Array::new(out_layout, VecStorage::new(values));
     }
+
+    let mut values: Vec<std::mem::MaybeUninit<T>> = Vec::with_capacity(size);
+    unsafe { values.set_len(size); }
+
+    for (which, input_view) in inputs.iter().enumerate() {
+        for (src_index, val) in input_view.indexed_iter() {
+            let mut out_index = [0usize; M];
+            for j in 0..M {
+                if j < axis {
+                    out_index[j] = src_index[j];
+                } else if j == axis {
+                    out_index[j] = which;
+                } else {
+                    out_index[j] = src_index[j - 1];
+                }
+            }
+            let out_off = out_layout.offset_of(out_index)?;
+            values[out_off].write(val.clone());
+        }
+    }
+
+    let values = unsafe {
+        let mut values = std::mem::ManuallyDrop::new(values);
+        Vec::from_raw_parts(
+            values.as_mut_ptr() as *mut T,
+            values.len(),
+            values.capacity(),
+        )
+    };
 
     Array::new(out_layout, VecStorage::new(values))
 }

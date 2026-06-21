@@ -66,7 +66,10 @@ pub use matrix::{
     MatrixSolve,
 };
 pub use matrix_function::{matexp, matpow};
-pub use norms::{norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2, NormMax};
+pub use norms::{
+    l2_normalize, l2_normalize_into, norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2,
+    NormMax,
+};
 pub use products::kron;
 pub use properties::{matrix_rank, matrix_rank_with_tolerance, trace};
 pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};

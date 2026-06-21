@@ -1,5 +1,4 @@
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::view::ArrayView;
 use crate::domain::error::Result;
 use crate::domain::layout::Layout;
@@ -26,25 +25,15 @@ pub fn pad<T: Clone, const N: usize>(
 
     let out_layout = Layout::c_contiguous(out_shape)?;
     let size = out_layout.size();
-    let mut values = Vec::with_capacity(size);
+    let mut values = vec![fill; size];
 
-    for flat in 0..size {
-        let out_index = index_from_flat(flat, &out_shape);
-        let mut src_index = [0usize; N];
-        let mut inside = true;
+    for (src_index, val) in input.indexed_iter() {
+        let mut out_index = [0usize; N];
         for d in 0..N {
-            let before = width[d].0;
-            if out_index[d] < before || out_index[d] >= before + in_shape[d] {
-                inside = false;
-                break;
-            }
-            src_index[d] = out_index[d] - before;
+            out_index[d] = src_index[d] + width[d].0;
         }
-        if inside {
-            values.push(input.get(src_index)?.clone());
-        } else {
-            values.push(fill.clone());
-        }
+        let out_off = out_layout.offset_of(out_index)?;
+        values[out_off] = val.clone();
     }
 
     Array::new(out_layout, VecStorage::new(values))

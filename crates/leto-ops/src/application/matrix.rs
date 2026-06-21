@@ -1,6 +1,5 @@
-use crate::application::sparse::{spmm_into, CsrMatrix};
 use crate::domain::scalar::Scalar;
-use leto::{ArrayView, ArrayViewMut, Layout, LetoError, Result, Storage};
+use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result};
 
 /// Nonzero density of `lhs` at or below which [`matmul_auto`] routes to the
 /// sparse CSR kernel instead of dense [`matmul`].
@@ -11,10 +10,6 @@ use leto::{ArrayView, ArrayViewMut, Layout, LetoError, Result, Storage};
 /// the CSR gather's larger per-flop constant. A conservative `0.1` keeps the
 /// sparse path strictly winning (measured ~17× at `0.05`) and never regresses the
 /// dense majority case, which pays only the `O(m·s)` density scan.
-const SPARSE_DENSITY_THRESHOLD: f64 = 0.1;
-
-#[cfg(feature = "parallel")]
-const PARALLEL_ROW_THRESHOLD: usize = 16;
 // Thirty-two f64 output rows plus one RHS row fit inside the conservative
 // 256 KiB L2 fallback at the 256-column benchmark shape while preserving a
 // single const-generic kernel instantiation.
@@ -120,80 +115,392 @@ fn zero_output<T: Scalar>(layout: MatmulLayout, out: &mut ArrayViewMut<'_, T, 2>
 /// each RHS row across a small output-row block, handles strided and
 /// transposed inputs, and dispatches row partitions through Moirai when the
 /// `parallel` feature is enabled and the row count is large enough.
+#[inline]
+fn copy_back_to_out<T: Scalar>(
+    src: &ArrayViewMut<'_, T, 2>,
+    dst: &mut ArrayViewMut<'_, T, 2>,
+) -> Result<()> {
+    let shape = dst.shape();
+    let src_ptr = src.data().as_ptr();
+    let dst_ptr = dst.data_mut().as_mut_ptr();
+    
+    for r in 0..shape[0] {
+        let src_row_offset = r as isize * shape[1] as isize;
+        let dst_row_offset = dst.layout().offset as isize + r as isize * dst.strides()[0];
+        
+        if dst.strides()[1] == 1 {
+            // SAFETY: src is C-contiguous, dst is verified valid by validate_matmul,
+            // and this row is unit-stride.
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    src_ptr.offset(src_row_offset),
+                    dst_ptr.offset(dst_row_offset),
+                    shape[1],
+                );
+            }
+        } else {
+            // SAFETY: dst is validated, this handles strided copy elements.
+            for c in 0..shape[1] {
+                unsafe {
+                    let val = *src_ptr.offset(src_row_offset + c as isize);
+                    let dst_addr = dst_ptr.offset(dst_row_offset + c as isize * dst.strides()[1]);
+                    *dst_addr = val;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Perform matrix multiplication `out = lhs * rhs` for 2D views.
+///
+/// The output is caller-owned. This function automatically detects when `lhs` is
+/// sparse (below `SPARSE_DENSITY_THRESHOLD`) and `out` is contiguous, routing to the
+/// sparse `spmm` kernel. Otherwise, it executes the optimized dense `matmul` logic,
+/// which uses an `i-k-j` loop order for locality, row-blocks dense rows to reuse
+/// RHS values, and dispatches parallel tasks when `parallel` is enabled.
+#[inline]
+fn is_parallel_beneficial(layout: MatmulLayout) -> bool {
+    layout.rows * layout.cols * layout.shared >= 262_144 && layout.rows >= 64
+}
+
+fn serial_dot_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    accumulate: bool,
+) {
+    let [m, k] = lhs.shape();
+    let [_, n] = rhs.shape();
+    let lhs_offset = lhs.offset();
+    let rhs_offset = rhs.offset();
+    let out_offset = out.offset();
+    let lhs_data = lhs.data();
+    let rhs_data = rhs.data();
+    let out_data = out.data_mut();
+
+    for i in 0..m {
+        let lhs_row = &lhs_data[lhs_offset + i * k..lhs_offset + i * k + k];
+        for j in 0..n {
+            let rhs_col = &rhs_data[rhs_offset + j * k..rhs_offset + j * k + k];
+            let val = T::dot_slice(lhs_row, rhs_col);
+            let out_idx = out_offset + i * n + j;
+            if accumulate {
+                out_data[out_idx] = out_data[out_idx].add(val);
+            } else {
+                out_data[out_idx] = val;
+            }
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn parallel_dot_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    accumulate: bool,
+) {
+    let [m, k] = lhs.shape();
+    let [_, n] = rhs.shape();
+    let lhs_offset = lhs.offset();
+    let rhs_offset = rhs.offset();
+    let out_offset = out.offset();
+    let lhs_ptr = lhs.data().as_ptr() as usize;
+    let rhs_ptr = rhs.data().as_ptr() as usize;
+    let out_ptr = out.data_mut().as_mut_ptr() as usize;
+
+    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(m, move |i| {
+        let lhs_ptr = lhs_ptr as *const T;
+        let rhs_ptr = rhs_ptr as *const T;
+        let out_ptr = out_ptr as *mut T;
+        unsafe {
+            let lhs_row = core::slice::from_raw_parts(lhs_ptr.add(lhs_offset + i * k), k);
+            for j in 0..n {
+                let rhs_col = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + j * k), k);
+                let val = T::dot_slice(lhs_row, rhs_col);
+                let out_addr = out_ptr.add(out_offset + i * n + j);
+                if accumulate {
+                    *out_addr = (*out_addr).add(val);
+                } else {
+                    *out_addr = val;
+                }
+            }
+        }
+    });
+}
+
+fn serial_cc_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    accumulate: bool,
+) {
+    let [m, k] = lhs.shape();
+    let [_, n] = rhs.shape();
+
+    if !accumulate {
+        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+    }
+
+    let lhs_offset = lhs.offset();
+    let rhs_offset = rhs.offset();
+    let out_offset = out.offset();
+    let lhs_data = lhs.data();
+    let rhs_data = rhs.data();
+    let out_data = out.data_mut();
+
+    for i in 0..m {
+        unsafe {
+            let out_ptr = out_data.as_mut_ptr().add(out_offset + i * n);
+            let out_row = core::slice::from_raw_parts_mut(out_ptr, n);
+            for kk in 0..k {
+                let alpha = *lhs_data.get_unchecked(lhs_offset + i * k + kk);
+                if alpha == T::ZERO {
+                    continue;
+                }
+                let rhs_row = &rhs_data[rhs_offset + kk * n..rhs_offset + kk * n + n];
+                T::axpy_slice(alpha, rhs_row, out_row);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn parallel_cc_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    accumulate: bool,
+) {
+    let [m, k] = lhs.shape();
+    let [_, n] = rhs.shape();
+
+    if !accumulate {
+        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+    }
+
+    let lhs_offset = lhs.offset();
+    let rhs_offset = rhs.offset();
+    let out_offset = out.offset();
+    let lhs_ptr = lhs.data().as_ptr() as usize;
+    let rhs_ptr = rhs.data().as_ptr() as usize;
+    let out_ptr = out.data_mut().as_mut_ptr() as usize;
+
+    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(m, move |i| {
+        let lhs_ptr = lhs_ptr as *const T;
+        let rhs_ptr = rhs_ptr as *const T;
+        let out_ptr = out_ptr as *mut T;
+        unsafe {
+            let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
+            for kk in 0..k {
+                let alpha = *lhs_ptr.add(lhs_offset + i * k + kk);
+                if alpha == T::ZERO {
+                    continue;
+                }
+                let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
+                T::axpy_slice(alpha, rhs_row, out_row);
+            }
+        }
+    });
+}
+
+fn serial_outer_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    accumulate: bool,
+) {
+    let [m, k] = lhs.shape();
+    let [_, n] = rhs.shape();
+
+    if !accumulate {
+        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+    }
+
+    let lhs_offset = lhs.offset();
+    let rhs_offset = rhs.offset();
+    let out_offset = out.offset();
+    let lhs_data = lhs.data();
+    let rhs_data = rhs.data();
+    let out_data = out.data_mut();
+
+    for i in 0..m {
+        unsafe {
+            let out_ptr = out_data.as_mut_ptr().add(out_offset + i * n);
+            let out_row = core::slice::from_raw_parts_mut(out_ptr, n);
+            for kk in 0..k {
+                let alpha = *lhs_data.get_unchecked(lhs_offset + kk * m + i);
+                if alpha == T::ZERO {
+                    continue;
+                }
+                let rhs_row = &rhs_data[rhs_offset + kk * n..rhs_offset + kk * n + n];
+                T::axpy_slice(alpha, rhs_row, out_row);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn parallel_outer_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    accumulate: bool,
+) {
+    let [m, k] = lhs.shape();
+    let [_, n] = rhs.shape();
+
+    if !accumulate {
+        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+    }
+
+    let lhs_offset = lhs.offset();
+    let rhs_offset = rhs.offset();
+    let out_offset = out.offset();
+    let lhs_ptr = lhs.data().as_ptr() as usize;
+    let rhs_ptr = rhs.data().as_ptr() as usize;
+    let out_ptr = out.data_mut().as_mut_ptr() as usize;
+
+    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(m, move |i| {
+        let lhs_ptr = lhs_ptr as *const T;
+        let rhs_ptr = rhs_ptr as *const T;
+        let out_ptr = out_ptr as *mut T;
+        unsafe {
+            let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
+            for kk in 0..k {
+                let alpha = *lhs_ptr.add(lhs_offset + kk * m + i);
+                if alpha == T::ZERO {
+                    continue;
+                }
+                let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
+                T::axpy_slice(alpha, rhs_row, out_row);
+            }
+        }
+    });
+}
+
+fn route_matmul<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    accumulate: bool,
+) -> Result<()> {
+    let layout = validate_matmul(lhs, rhs, out)?;
+
+    if lhs.is_c_contiguous() && rhs.is_f_contiguous() && out.is_c_contiguous() {
+        #[cfg(feature = "parallel")]
+        {
+            if is_parallel_beneficial(layout) {
+                parallel_dot_matmul(lhs, rhs, out, accumulate);
+                return Ok(());
+            }
+        }
+        serial_dot_matmul(lhs, rhs, out, accumulate);
+        return Ok(());
+    }
+
+    if lhs.is_f_contiguous() && rhs.is_c_contiguous() && out.is_c_contiguous() {
+        #[cfg(feature = "parallel")]
+        {
+            if is_parallel_beneficial(layout) {
+                parallel_outer_matmul(lhs, rhs, out, accumulate);
+                return Ok(());
+            }
+        }
+        serial_outer_matmul(lhs, rhs, out, accumulate);
+        return Ok(());
+    }
+
+    if lhs.is_c_contiguous() && rhs.is_c_contiguous() && out.is_c_contiguous() {
+        #[cfg(feature = "parallel")]
+        {
+            if is_parallel_beneficial(layout) {
+                parallel_cc_matmul(lhs, rhs, out, accumulate);
+                return Ok(());
+            }
+        }
+        serial_cc_matmul(lhs, rhs, out, accumulate);
+        return Ok(());
+    }
+
+    // Fallback: copy non-contiguous operands to contiguous
+    let lhs_contig;
+    let lhs_view = if lhs.is_c_contiguous() {
+        lhs.reborrow()
+    } else {
+        lhs_contig = lhs.to_contiguous();
+        lhs_contig.view()
+    };
+
+    let rhs_contig;
+    let rhs_view = if rhs.is_c_contiguous() {
+        rhs.reborrow()
+    } else {
+        rhs_contig = rhs.to_contiguous();
+        rhs_contig.view()
+    };
+
+    let layout = validate_matmul(&lhs_view, &rhs_view, out)?;
+    if !accumulate {
+        zero_output(layout, out);
+    }
+
+    #[cfg(feature = "parallel")]
+    {
+        if is_parallel_beneficial(layout) {
+            parallel_matmul(&lhs_view, &rhs_view, out, layout);
+            return Ok(());
+        }
+    }
+    serial_matmul(&lhs_view, &rhs_view, out, layout);
+    Ok(())
+}
+
+/// Perform matrix multiplication `out = lhs * rhs` for 2D views.
 pub fn matmul<T: Scalar>(
     lhs: &ArrayView<'_, T, 2>,
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
 ) -> Result<()> {
-    let layout = validate_matmul(lhs, rhs, out)?;
-    zero_output(layout, out);
-
-    #[cfg(feature = "parallel")]
-    {
-        if layout.rows >= PARALLEL_ROW_THRESHOLD {
-            parallel_matmul(lhs, rhs, out, layout);
-            return Ok(());
-        }
+    if out.is_c_contiguous() {
+        let mut out_view = out.reborrow();
+        route_matmul(lhs, rhs, &mut out_view, false)
+    } else if out.is_f_contiguous() {
+        let lhs_t = lhs.transpose([1, 0])?;
+        let rhs_t = rhs.transpose([1, 0])?;
+        let mut out_t = out.reborrow().transpose_mut([1, 0])?;
+        route_matmul(&rhs_t, &lhs_t, &mut out_t, false)
+    } else {
+        let mut out_contig = Array::from_elem(out.shape(), T::ZERO);
+        let mut out_view = out_contig.view_mut();
+        route_matmul(lhs, rhs, &mut out_view, false)?;
+        copy_back_to_out(&out_view, out)?;
+        Ok(())
     }
-
-    serial_matmul(lhs, rhs, out, layout);
-    Ok(())
 }
 
-/// Matrix product `out = lhs · rhs` that **automatically exploits sparsity**.
-///
-/// Scans `lhs` once for its nonzero density; when it is below the internal
-/// sparse-density threshold — and `out` is contiguous row-major — it compresses
-/// `lhs` to CSR and runs the `Θ(nnz·n)` sparse kernel
-/// ([`crate::spmm`]), else it runs the dense [`matmul`]. The chosen path is an
-/// implementation detail: the mathematical result is the same up to
-/// floating-point summation order between the two accumulation schemes.
-///
-/// This is the automatic-sparsity entry point: callers who do not know whether an
-/// operand is sparse get the fast path for free, paying only an `O(m·s)` density
-/// scan in the dense case. Callers that *know* the density should call [`matmul`]
-/// (always dense) or [`crate::spmm`] (already-CSR) directly.
-///
-/// # Errors
-/// As [`matmul`]: [`LetoError::ShapeMismatch`] for incompatible operand shapes.
-pub fn matmul_auto<T: Scalar>(
+/// Perform accumulating matrix multiplication `out += lhs * rhs` for 2D views.
+pub fn matmul_accumulate<T: Scalar>(
     lhs: &ArrayView<'_, T, 2>,
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
 ) -> Result<()> {
-    let [rows, shared] = lhs.shape();
-    let [_, cols] = rhs.shape();
-    let total = rows.saturating_mul(shared);
-
-    // Density detection: one O(rows·shared) nonzero count over lhs (no copy when
-    // it is already contiguous).
-    let route_dense = if total == 0 {
-        true
+    if out.is_c_contiguous() {
+        let mut out_view = out.reborrow();
+        route_matmul(lhs, rhs, &mut out_view, true)
+    } else if out.is_f_contiguous() {
+        let lhs_t = lhs.transpose([1, 0])?;
+        let rhs_t = rhs.transpose([1, 0])?;
+        let mut out_t = out.reborrow().transpose_mut([1, 0])?;
+        route_matmul(&rhs_t, &lhs_t, &mut out_t, true)
     } else {
-        let nnz = if let Some(slice) = lhs.as_slice() {
-            slice.iter().filter(|&&v| v != T::ZERO).count()
-        } else {
-            lhs.to_contiguous()
-                .storage()
-                .as_slice()
-                .iter()
-                .filter(|&&v| v != T::ZERO)
-                .count()
-        };
-        (nnz as f64) > SPARSE_DENSITY_THRESHOLD * total as f64
-    };
-
-    // The sparse route writes `spmm` into a contiguous row-major output region;
-    // otherwise (strided/transposed output, or dense lhs) defer to dense matmul.
-    let out_contiguous = out.strides()[1] == 1 && out.strides()[0] == cols as isize;
-    if route_dense || !out_contiguous {
-        return matmul(lhs, rhs, out);
+        let mut out_contig = out.to_contiguous();
+        let mut out_view = out_contig.view_mut();
+        route_matmul(lhs, rhs, &mut out_view, true)?;
+        copy_back_to_out(&out_view, out)?;
+        Ok(())
     }
-
-    let csr = CsrMatrix::from_dense(lhs);
-    let offset = out.offset();
-    let len = rows.saturating_mul(cols);
-    spmm_into(&csr, rhs, &mut out.data_mut()[offset..offset + len])
 }
 
 #[inline]
@@ -491,7 +798,7 @@ fn parallel_matmul<T: Scalar>(
         let out_ptr = out.data_mut().as_mut_ptr() as usize;
         let block_count = layout.rows.div_ceil(MATMUL_ROW_BLOCK);
 
-        crate::infrastructure::parallel::parallel_for(0, block_count, move |block| {
+        moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<2>, _>(block_count, move |block| {
             let lhs_ptr = lhs_ptr as *const T;
             let rhs_ptr = rhs_ptr as *const T;
             let out_ptr = out_ptr as *mut T;
@@ -508,7 +815,7 @@ fn parallel_matmul<T: Scalar>(
     let rhs_ptr = rhs.data().as_ptr() as usize;
     let out_ptr = out.data_mut().as_mut_ptr() as usize;
 
-    crate::infrastructure::parallel::parallel_for(0, layout.rows, move |row| {
+    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(layout.rows, move |row| {
         let lhs_ptr = lhs_ptr as *const T;
         let rhs_ptr = rhs_ptr as *const T;
         let out_ptr = out_ptr as *mut T;

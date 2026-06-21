@@ -13,7 +13,7 @@ impl<T> VecStorage<T> {
     where
         F: FnMut() -> T,
     {
-        let mut data = Vec::with_capacity(len);
+        let mut data: Vec<T> = Vec::with_capacity(len);
         for _ in 0..len {
             data.push(f());
         }

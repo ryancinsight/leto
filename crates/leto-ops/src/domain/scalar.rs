@@ -95,6 +95,27 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     fn min_slice(s: &[Self]) -> Self;
     /// Max reduction over a slice.
     fn max_slice(s: &[Self]) -> Self;
+
+    /// Bitwise AND.
+    fn bitand(self, other: Self) -> Self;
+    /// Bitwise OR.
+    fn bitor(self, other: Self) -> Self;
+    /// Bitwise XOR.
+    fn bitxor(self, other: Self) -> Self;
+    /// Population count.
+    fn count_ones(self) -> u32;
+    /// Convert self to f64.
+    fn to_f64(self) -> f64;
+    /// Jaccard distance between two slices.
+    #[inline]
+    fn jaccard_distance(_a: &[Self], _b: &[Self]) -> Option<f64> {
+        None
+    }
+    /// Hamming distance between two slices.
+    #[inline]
+    fn hamming_distance(_a: &[Self], _b: &[Self]) -> Option<u64> {
+        None
+    }
 }
 
 // Helper macros for implementing Scalar for native and half types
@@ -123,6 +144,35 @@ macro_rules! impl_scalar_native {
             #[inline(always)]
             fn from_usize(value: usize) -> Self {
                 value as $t
+            }
+
+            #[inline(always)]
+            fn bitand(self, other: Self) -> Self {
+                Self::from_bits(self.to_bits() & other.to_bits())
+            }
+            #[inline(always)]
+            fn bitor(self, other: Self) -> Self {
+                Self::from_bits(self.to_bits() | other.to_bits())
+            }
+            #[inline(always)]
+            fn bitxor(self, other: Self) -> Self {
+                Self::from_bits(self.to_bits() ^ other.to_bits())
+            }
+            #[inline(always)]
+            fn count_ones(self) -> u32 {
+                self.to_bits().count_ones()
+            }
+            #[inline(always)]
+            fn to_f64(self) -> f64 {
+                self as f64
+            }
+            #[inline]
+            fn jaccard_distance(a: &[Self], b: &[Self]) -> Option<f64> {
+                <SimdStrategy as SimdOperations<Self>>::jaccard_distance(a, b)
+            }
+            #[inline]
+            fn hamming_distance(a: &[Self], b: &[Self]) -> Option<u64> {
+                <SimdStrategy as SimdOperations<Self>>::hamming_distance(a, b)
             }
 
             #[inline]
@@ -330,6 +380,27 @@ macro_rules! impl_scalar_half {
             #[inline(always)]
             fn from_usize(value: usize) -> Self {
                 Self::from_f32(value as f32)
+            }
+
+            #[inline(always)]
+            fn bitand(self, other: Self) -> Self {
+                Self::from_bits(self.to_bits() & other.to_bits())
+            }
+            #[inline(always)]
+            fn bitor(self, other: Self) -> Self {
+                Self::from_bits(self.to_bits() | other.to_bits())
+            }
+            #[inline(always)]
+            fn bitxor(self, other: Self) -> Self {
+                Self::from_bits(self.to_bits() ^ other.to_bits())
+            }
+            #[inline(always)]
+            fn count_ones(self) -> u32 {
+                self.to_bits().count_ones()
+            }
+            #[inline(always)]
+            fn to_f64(self) -> f64 {
+                self.to_f64()
             }
 
             #[inline]
@@ -542,6 +613,27 @@ macro_rules! impl_scalar_int {
             #[inline(always)]
             fn from_usize(value: usize) -> Self {
                 value as $t
+            }
+
+            #[inline(always)]
+            fn bitand(self, other: Self) -> Self {
+                self & other
+            }
+            #[inline(always)]
+            fn bitor(self, other: Self) -> Self {
+                self | other
+            }
+            #[inline(always)]
+            fn bitxor(self, other: Self) -> Self {
+                self ^ other
+            }
+            #[inline(always)]
+            fn count_ones(self) -> u32 {
+                (self).count_ones()
+            }
+            #[inline(always)]
+            fn to_f64(self) -> f64 {
+                self as f64
             }
 
             #[inline]

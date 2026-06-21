@@ -31,15 +31,13 @@ mod accumulate;
 
 use crate::domain::real::RealScalar;
 
-/// Transpose a row-major `rows × cols` matrix into a fresh `cols × rows` buffer.
-fn transpose<T: RealScalar>(src: &[T], rows: usize, cols: usize) -> Vec<T> {
-    let mut out = vec![T::ZERO; rows * cols];
+/// Transpose a row-major `rows × cols` matrix into a mutable slice `out` (`cols × rows`).
+fn transpose_into<T: RealScalar>(src: &[T], out: &mut [T], rows: usize, cols: usize) {
     for r in 0..rows {
         for c in 0..cols {
             out[c * rows + r] = src[r * cols + c];
         }
     }
-    out
 }
 
 /// Apply `Qᵀ` (where `Q = I − V T Vᵀ` is the panel's `r` reflectors) to the
@@ -61,23 +59,72 @@ pub(super) fn apply_block_left<T: RealScalar>(
     if r == 0 || ncols == 0 {
         return;
     }
-    let t = accumulate::build_t(v, beta, m, r);
+
+    let t_len = r * r;
+    let mut t_stack = [T::ZERO; 1024];
+    let mut t_vec = Vec::new();
+    let t = if t_len <= 1024 {
+        &mut t_stack[..t_len]
+    } else {
+        t_vec.resize(t_len, T::ZERO);
+        &mut t_vec[..]
+    };
+    accumulate::build_t(v, beta, t, m, r);
 
     // W = Vᵀ C  (r × ncols). tiled_gemm needs A row-major (r × m) = Vᵀ.
-    let vt = transpose(v, m, r); // r × m
-    let mut w = vec![T::ZERO; r * ncols];
-    T::tiled_gemm(&vt, c, &mut w, r, ncols, m);
+    let vt_len = r * m;
+    let mut vt_stack = [T::ZERO; 2048];
+    let mut vt_vec = Vec::new();
+    let vt = if vt_len <= 2048 {
+        &mut vt_stack[..vt_len]
+    } else {
+        vt_vec.resize(vt_len, T::ZERO);
+        &mut vt_vec[..]
+    };
+    transpose_into(v, vt, m, r);
+
+    let w_len = r * ncols;
+    let mut w_stack = [T::ZERO; 2048];
+    let mut w_vec = Vec::new();
+    let w = if w_len <= 2048 {
+        &mut w_stack[..w_len]
+    } else {
+        w_vec.resize(w_len, T::ZERO);
+        &mut w_vec[..]
+    };
+    w.fill(T::ZERO);
+
+    T::tiled_gemm(vt, c, w, r, ncols, m);
 
     // W₂ = Tᵀ W  (r × ncols). Tᵀ is r × r.
-    let tt = transpose(&t, r, r);
-    let mut w2 = vec![T::ZERO; r * ncols];
-    T::tiled_gemm(&tt, &w, &mut w2, r, ncols, r);
+    let tt_len = r * r;
+    let mut tt_stack = [T::ZERO; 1024];
+    let mut tt_vec = Vec::new();
+    let tt = if tt_len <= 1024 {
+        &mut tt_stack[..tt_len]
+    } else {
+        tt_vec.resize(tt_len, T::ZERO);
+        &mut tt_vec[..]
+    };
+    transpose_into(t, tt, r, r);
+
+    let mut w2_stack = [T::ZERO; 2048];
+    let mut w2_vec = Vec::new();
+    let w2 = if w_len <= 2048 {
+        &mut w2_stack[..w_len]
+    } else {
+        w2_vec.resize(w_len, T::ZERO);
+        &mut w2_vec[..]
+    };
+    w2.fill(T::ZERO);
+
+    T::tiled_gemm(tt, w, w2, r, ncols, r);
 
     // C −= V W₂  ≡  C += V·(−W₂); tiled_gemm accumulates into C.
     for x in w2.iter_mut() {
         *x = T::ZERO.sub(*x);
     }
-    T::tiled_gemm(v, &w2, c, m, ncols, r);
+    T::tiled_gemm(v, w2, c, m, ncols, r);
 }
 
 #[cfg(test)]

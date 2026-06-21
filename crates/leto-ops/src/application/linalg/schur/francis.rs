@@ -325,7 +325,14 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     }
     // Reusable left-apply accumulator `w`, sized to the widest possible column
     // span (`n`); reused across every reflector so the hot path allocates once.
-    let mut scratch = vec![T::ZERO; n];
+    let mut scratch_stack = [T::ZERO; 128];
+    let mut scratch_vec = Vec::new();
+    let scratch = if n <= 128 {
+        &mut scratch_stack[..n]
+    } else {
+        scratch_vec.resize(n, T::ZERO);
+        &mut scratch_vec[..]
+    };
     let mut hi = n - 1;
     let mut iter = 0usize;
     loop {
@@ -367,7 +374,7 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
                 reason: "Schur QR iteration failed to converge".to_string(),
             });
         }
-        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10), &mut scratch);
+        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10), &mut *scratch);
     }
     Ok(())
 }

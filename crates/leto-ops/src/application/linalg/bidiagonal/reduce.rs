@@ -3,7 +3,7 @@
 
 use crate::application::linalg::householder::{apply_left, apply_right, reflector};
 use crate::domain::real::RealScalar;
-use leto::{ArrayView2, LetoError, Result, Storage};
+use leto::{ArrayView2, LetoError, Result};
 
 struct BidiagonalWork<T> {
     u: Option<Vec<T>>,
@@ -43,27 +43,40 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
     // Working B ← A (m×n) via one bulk row-major copy, validating finiteness in
     // the same pass (SSOT — the caller no longer pre-scans element-by-element).
     // U ← I (m×m), V ← I (n×n) only when requested.
-    let contiguous = matrix.to_contiguous();
-    let b_src = contiguous.storage().as_slice();
-    if !b_src.iter().all(|value| value.is_finite()) {
+    let mut b = if let Some(slice) = matrix.as_slice() {
+        slice.to_vec()
+    } else {
+        matrix.to_contiguous().into_storage().into_inner()
+    };
+    if !b.iter().all(|value| value.is_finite()) {
         return Err(LetoError::StorageError {
             reason: "bidiagonalization input contains a non-finite value".to_string(),
         });
     }
-    let mut b = b_src.to_vec();
     let mut u = ACCUMULATE_FACTORS.then(|| identity::<T>(m));
     let mut v = ACCUMULATE_FACTORS.then(|| identity::<T>(n));
 
-    // Reused scratch (allocation-free reduction hot loop): the column/row
-    // gathers and the left-apply accumulator `w`.
-    let mut col: Vec<T> = Vec::with_capacity(m);
-    let mut row: Vec<T> = Vec::with_capacity(n);
+    // Reused scratch (allocation-free reduction hot loop): the left-apply accumulator `w`.
     let mut alw: Vec<T> = Vec::with_capacity(n);
     for k in 0..n {
         // Left reflector: column k, rows k..m.
-        col.clear();
-        col.extend((k..m).map(|i| b[i * n + k]));
-        if let Some((refl, _alpha)) = reflector(&col) {
+        let len_col = m - k;
+        let mut col_stack = [T::ZERO; 128];
+        let mut col_vec = Vec::new();
+        let col = if len_col <= 128 {
+            for i in 0..len_col {
+                col_stack[i] = b[(k + i) * n + k];
+            }
+            &col_stack[..len_col]
+        } else {
+            col_vec.reserve_exact(len_col);
+            for i in 0..len_col {
+                col_vec.push(b[(k + i) * n + k]);
+            }
+            &col_vec[..]
+        };
+
+        if let Some((refl, _alpha)) = reflector(col) {
             apply_left(&refl, &mut b, n, k, k, n, &mut alw); // rows k..m, cols k..n
             if let Some(u) = u.as_mut() {
                 apply_right(&refl, u, m, k, 0, m); // U ← U·Lₖ
@@ -72,9 +85,23 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
 
         // Right reflector: row k, columns k+1..n.
         if k + 1 < n {
-            row.clear();
-            row.extend((k + 1..n).map(|j| b[k * n + j]));
-            if let Some((refl, _alpha)) = reflector(&row) {
+            let len_row = n - (k + 1);
+            let mut row_stack = [T::ZERO; 128];
+            let mut row_vec = Vec::new();
+            let row = if len_row <= 128 {
+                for j in 0..len_row {
+                    row_stack[j] = b[k * n + k + 1 + j];
+                }
+                &row_stack[..len_row]
+            } else {
+                row_vec.reserve_exact(len_row);
+                for j in 0..len_row {
+                    row_vec.push(b[k * n + k + 1 + j]);
+                }
+                &row_vec[..]
+            };
+
+            if let Some((refl, _alpha)) = reflector(row) {
                 apply_right(&refl, &mut b, n, k + 1, k, m); // cols k+1..n, rows k..m
                 if let Some(v) = v.as_mut() {
                     apply_right(&refl, v, n, k + 1, 0, n); // V ← V·Rₖ

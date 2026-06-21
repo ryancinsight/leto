@@ -16,9 +16,9 @@ impl<const N: usize> Layout<N> {
 
     /// Slice the layout on each axis given a slice definition `(start, end, step)`.
     pub fn slice(&self, ranges: &[(usize, usize, isize); N]) -> Result<Self> {
-        let mut args = Vec::with_capacity(N);
-        for &(start, end, step) in ranges {
-            if start > self.shape[args.len()] || end > self.shape[args.len()] {
+        let mut args = [SliceArg::All; N];
+        for (i, &(start, end, step)) in ranges.iter().enumerate() {
+            if start > self.shape[i] || end > self.shape[i] {
                 return Err(LetoError::IncompatibleSlice {
                     range: (start, end),
                     shape: self.shape.to_vec(),
@@ -30,7 +30,7 @@ impl<const N: usize> Layout<N> {
             let end = isize::try_from(end).map_err(|_| LetoError::Overflow {
                 reason: "slice end conversion",
             })?;
-            args.push(SliceArg::range(Some(start), Some(end), step));
+            args[i] = SliceArg::range(Some(start), Some(end), step);
         }
         self.slice_with(&args)
     }

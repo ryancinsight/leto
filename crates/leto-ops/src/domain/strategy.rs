@@ -97,6 +97,10 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn min_slice(s: &[T]) -> Option<T>;
     /// Vectorized max reduction.
     fn max_slice(s: &[T]) -> Option<T>;
+    /// Jaccard distance between two binary vectors.
+    fn jaccard_distance(a: &[T], b: &[T]) -> Option<f64>;
+    /// Hamming distance between two binary vectors.
+    fn hamming_distance(a: &[T], b: &[T]) -> Option<u64>;
 }
 
 #[cfg(feature = "simd")]
@@ -209,6 +213,21 @@ macro_rules! impl_simd_ops_native {
             #[inline(always)]
             fn max_slice(s: &[$t]) -> Option<$t> {
                 Some(hermes_simd::max::<$t>(s))
+            }
+            #[inline(always)]
+            fn jaccard_distance(a: &[$t], b: &[$t]) -> Option<f64> {
+                let intersection = hermes_simd::reduce_popcount_and(a, b).ok()?;
+                let union = hermes_simd::reduce_popcount_or(a, b).ok()?;
+                if union == 0 {
+                    Some(0.0)
+                } else {
+                    Some(1.0 - (intersection as f64) / (union as f64))
+                }
+            }
+            #[inline(always)]
+            fn hamming_distance(a: &[$t], b: &[$t]) -> Option<u64> {
+                let dist = hermes_simd::reduce_popcount_xor(a, b).ok()?;
+                Some(dist as u64)
             }
         }
     };
@@ -323,6 +342,14 @@ macro_rules! impl_simd_ops_fallback {
             fn max_slice(_s: &[$t]) -> Option<$t> {
                 None
             }
+            #[inline(always)]
+            fn jaccard_distance(_a: &[$t], _b: &[$t]) -> Option<f64> {
+                None
+            }
+            #[inline(always)]
+            fn hamming_distance(_a: &[$t], _b: &[$t]) -> Option<u64> {
+                None
+            }
         }
     };
 }
@@ -434,6 +461,14 @@ macro_rules! impl_simd_ops_unsupported {
             }
             #[inline(always)]
             fn max_slice(_s: &[$t]) -> Option<$t> {
+                None
+            }
+            #[inline(always)]
+            fn jaccard_distance(_a: &[$t], _b: &[$t]) -> Option<f64> {
+                None
+            }
+            #[inline(always)]
+            fn hamming_distance(_a: &[$t], _b: &[$t]) -> Option<u64> {
                 None
             }
         }

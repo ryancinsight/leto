@@ -2,7 +2,7 @@
 
 use crate::application::linalg::householder::{apply_left, apply_right, reflector};
 use crate::domain::real::RealScalar;
-use leto::{ArrayView2, LetoError, Result, Storage};
+use leto::{ArrayView2, LetoError, Result};
 
 /// Reduce `A` (n×n) to upper Hessenberg `H`, optionally accumulating the
 /// orthogonal `Q`, returning row-major `(h, q, n)` such that `A = Q H Qᵀ`.
@@ -28,14 +28,16 @@ pub(super) fn reduce_to_hessenberg<T: RealScalar, const ACCUMULATE_Q: bool>(
 
     // Row-major working copy H ← A via one bulk copy, validating finiteness in the
     // same pass (SSOT — the caller no longer pre-scans element-by-element).
-    let contiguous = matrix.to_contiguous();
-    let h_src = contiguous.storage().as_slice();
-    if !h_src.iter().all(|value| value.is_finite()) {
+    let mut h = if let Some(slice) = matrix.as_slice() {
+        slice.to_vec()
+    } else {
+        matrix.to_contiguous().into_storage().into_inner()
+    };
+    if !h.iter().all(|value| value.is_finite()) {
         return Err(LetoError::StorageError {
             reason: "Hessenberg input contains a non-finite value".to_string(),
         });
     }
-    let mut h = h_src.to_vec();
     // Q ← I only when requested; otherwise an empty, never-touched buffer.
     let mut q = if ACCUMULATE_Q {
         let mut q = vec![T::ZERO; n * n];
@@ -52,8 +54,23 @@ pub(super) fn reduce_to_hessenberg<T: RealScalar, const ACCUMULATE_Q: bool>(
     // k runs to n−3 inclusive: the final subdiagonal entry needs no reflector.
     for k in 0..n.saturating_sub(2) {
         // Sub-column below the subdiagonal: rows k+1..n of column k.
-        let x: Vec<T> = (k + 1..n).map(|i| h[i * n + k]).collect();
-        if let Some((refl, _alpha)) = reflector(&x) {
+        let len = n - (k + 1);
+        let mut x_stack = [T::ZERO; 128];
+        let mut x_vec = Vec::new();
+        let x = if len <= 128 {
+            for i in 0..len {
+                x_stack[i] = h[(k + 1 + i) * n + k];
+            }
+            &x_stack[..len]
+        } else {
+            x_vec.reserve_exact(len);
+            for i in 0..len {
+                x_vec.push(h[(k + 1 + i) * n + k]);
+            }
+            &x_vec[..]
+        };
+
+        if let Some((refl, _alpha)) = reflector(x) {
             // Left apply starts at column k: the reflector touches rows [k+1, n),
             // which are already zero in columns [0, k) (those columns are reduced
             // to Hessenberg form by prior steps), so the skipped columns are a

@@ -11,7 +11,7 @@
 use super::QrDecomposition;
 use crate::application::linalg::reflector_block::apply_block_left;
 use crate::domain::real::RealScalar;
-use leto::{ArrayView2, LetoError, Result, Storage};
+use leto::{ArrayView2, LetoError, Result};
 
 /// Panel width for blocked QR. 32 matches the GEMM tile and the `axpy` crossover.
 const BLOCK_WIDTH: usize = 32;
@@ -45,20 +45,43 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
     // One bulk row-major copy into working storage, then a single tight
     // finiteness scan — replacing `rows*cols` bounds-checked element gets. The
     // factorization mutates `a` in place.
-    let contiguous = matrix.to_contiguous();
-    let a_slice = contiguous.storage().as_slice();
-    if !a_slice.iter().all(|value| value.is_finite()) {
+    let mut a = if let Some(slice) = matrix.as_slice() {
+        slice.to_vec()
+    } else {
+        matrix.to_contiguous().into_storage().into_inner()
+    };
+    if !a.iter().all(|value| value.is_finite()) {
         return Err(LetoError::StorageError {
             reason: "QR input contains a non-finite value".to_string(),
         });
     }
-    let mut a = a_slice.to_vec();
 
-    let mut heads = vec![T::ZERO; cols];
-    let mut betas = vec![T::ZERO; cols];
-    // Reused row-vector scratch `w = vᵀ·A_trailing` for the rank-1 reflector
-    // update (see the trailing-column apply); one allocation, not one per column.
-    let mut w = vec![T::ZERO; cols];
+    let mut heads_stack = [T::ZERO; 128];
+    let mut heads_vec = Vec::new();
+    let heads = if cols <= 128 {
+        &mut heads_stack[..cols]
+    } else {
+        heads_vec.resize(cols, T::ZERO);
+        &mut heads_vec[..]
+    };
+
+    let mut betas_stack = [T::ZERO; 128];
+    let mut betas_vec = Vec::new();
+    let betas = if cols <= 128 {
+        &mut betas_stack[..cols]
+    } else {
+        betas_vec.resize(cols, T::ZERO);
+        &mut betas_vec[..]
+    };
+
+    let mut w_stack = [T::ZERO; 128];
+    let mut w_vec = Vec::new();
+    let w = if cols <= 128 {
+        &mut w_stack[..cols]
+    } else {
+        w_vec.resize(cols, T::ZERO);
+        &mut w_vec[..]
+    };
 
     // Block only when the matrix is large enough that the trailing GEMM amortizes
     // the panel overhead; otherwise a single full-width panel reproduces the exact
@@ -69,6 +92,11 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
         cols.max(1)
     };
     let mut panel_start = 0;
+
+    let mut v = Vec::new();
+    let mut panel_betas = Vec::new();
+    let mut c_block = Vec::new();
+
     while panel_start < cols {
         let panel_end = (panel_start + panel_width).min(cols);
 
@@ -151,8 +179,10 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
         if ntrail > 0 {
             let m_sub = rows - panel_start;
             // V (m_sub × nb): column j is reflector (panel_start + j).
-            let mut v = vec![T::ZERO; m_sub * nb];
-            let mut panel_betas = vec![T::ZERO; nb];
+            v.clear();
+            v.resize(m_sub * nb, T::ZERO);
+            panel_betas.clear();
+            panel_betas.resize(nb, T::ZERO);
             for j in 0..nb {
                 let col = panel_start + j;
                 panel_betas[j] = betas[col];
@@ -162,7 +192,8 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
                 }
             }
             // C (m_sub × ntrail): trailing columns extracted contiguously.
-            let mut c_block = vec![T::ZERO; m_sub * ntrail];
+            c_block.clear();
+            c_block.resize(m_sub * ntrail, T::ZERO);
             for r in panel_start..rows {
                 for (jc, slot) in c_block
                     [(r - panel_start) * ntrail..(r - panel_start) * ntrail + ntrail]
@@ -186,8 +217,8 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
 
     Ok(QrDecomposition {
         packed: a,
-        heads,
-        betas,
+        heads: heads.to_vec(),
+        betas: betas.to_vec(),
         rows,
         cols,
     })

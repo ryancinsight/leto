@@ -228,3 +228,70 @@ fn qr_and_cholesky_are_generic_over_reduced_width_scalar() {
         assert!((q - c).abs() < 1e-4, "qr {q} vs cholesky {c}");
     }
 }
+
+#[test]
+fn test_cholesky_solve_into_strided() {
+    let values = vec![6.0f64, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let rhs_values = vec![9.0f64, 9.0, 7.0];
+    let a = Array::from_shape_vec([3, 3], values).unwrap();
+    let rhs = Array::from_shape_vec([3], rhs_values).unwrap();
+
+    let decomp = cholesky_decompose(&a.view()).unwrap();
+    
+    let mut out_large = Array::from_shape_vec([6], vec![0.0f64; 6]).unwrap();
+    {
+        let mut out_strided = out_large.slice_mut(&[(0, 6, 2)]).unwrap();
+        decomp.solve_into(&rhs.view(), &mut out_strided).unwrap();
+    }
+    
+    let expected = decomp.solve(&rhs.view()).unwrap();
+    
+    assert_close(*out_large.get([0]).unwrap(), *expected.get([0]).unwrap());
+    assert_close(*out_large.get([2]).unwrap(), *expected.get([1]).unwrap());
+    assert_close(*out_large.get([4]).unwrap(), *expected.get([2]).unwrap());
+}
+
+#[test]
+fn test_lu_solve_into_strided() {
+    let values = vec![6.0f64, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let rhs_values = vec![9.0f64, 9.0, 7.0];
+    let a = Array::from_shape_vec([3, 3], values).unwrap();
+    let rhs = Array::from_shape_vec([3], rhs_values).unwrap();
+
+    let decomp = cholesky_decompose(&a.view()).unwrap();
+    let lu_decomp = leto_ops::lu_decompose(&a.view()).unwrap();
+    
+    let mut out_large = Array::from_shape_vec([6], vec![0.0f64; 6]).unwrap();
+    {
+        let mut out_strided = out_large.slice_mut(&[(0, 6, 2)]).unwrap();
+        lu_decomp.solve_into(&rhs.view(), &mut out_strided).unwrap();
+    }
+    
+    let expected = decomp.solve(&rhs.view()).unwrap();
+    
+    assert_close(*out_large.get([0]).unwrap(), *expected.get([0]).unwrap());
+    assert_close(*out_large.get([2]).unwrap(), *expected.get([1]).unwrap());
+    assert_close(*out_large.get([4]).unwrap(), *expected.get([2]).unwrap());
+}
+
+#[test]
+fn test_qr_solve_least_squares_into_strided() {
+    let values = vec![6.0f64, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
+    let rhs_values = vec![9.0f64, 9.0, 7.0];
+    let a = Array::from_shape_vec([3, 3], values).unwrap();
+    let rhs = Array::from_shape_vec([3], rhs_values).unwrap();
+
+    let decomp = qr_decompose(&a.view()).unwrap();
+    
+    let mut out_large = Array::from_shape_vec([6], vec![0.0f64; 6]).unwrap();
+    {
+        let mut out_strided = out_large.slice_mut(&[(0, 6, 2)]).unwrap();
+        decomp.solve_least_squares_into(&rhs.view(), &mut out_strided).unwrap();
+    }
+    
+    let expected = decomp.solve_least_squares(&rhs.view()).unwrap();
+    
+    assert_close(*out_large.get([0]).unwrap(), *expected.get([0]).unwrap());
+    assert_close(*out_large.get([2]).unwrap(), *expected.get([1]).unwrap());
+    assert_close(*out_large.get([4]).unwrap(), *expected.get([2]).unwrap());
+}

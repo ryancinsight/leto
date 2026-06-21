@@ -1,6 +1,6 @@
 use crate::application::index::{unit_stride_row_slice, RowMajorTraversal};
 use crate::domain::real::RealScalar;
-use leto::{ArrayView, Result};
+use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
 /// Zero-sized norm-kind contract: an accumulation step and a finishing map.
 ///
@@ -178,4 +178,41 @@ pub fn norm_l2<T: RealScalar, const N: usize>(view: &ArrayView<'_, T, N>) -> Res
 #[inline]
 pub fn norm_max<T: RealScalar, const N: usize>(view: &ArrayView<'_, T, N>) -> Result<T> {
     norm::<NormMax, T, N>(view)
+}
+
+/// L2 normalize every element of `input` directly into caller-owned `output`.
+pub fn l2_normalize_into<T: RealScalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    output: &mut ArrayViewMut<'_, T, N>,
+    epsilon: T,
+) -> Result<()> {
+    if input.shape() != output.shape() {
+        return Err(LetoError::ShapeMismatch {
+            lhs: input.shape().to_vec(),
+            rhs: output.shape().to_vec(),
+        });
+    }
+    input.layout().validate_storage_len(input.data().len())?;
+    output.layout().validate_storage_len(output.data().len())?;
+
+    let l2 = norm_l2(input)?;
+    let denom = l2.add(epsilon);
+    if denom == T::ZERO {
+        crate::application::unary::map_into(input, output, |_| T::ZERO)?;
+        return Ok(());
+    }
+
+    let scale = T::ONE.div(denom);
+    crate::application::unary::map_into(input, output, move |val| val.mul(scale))?;
+    Ok(())
+}
+
+/// L2 normalize every element of `input` and return the owned array.
+pub fn l2_normalize<T: RealScalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    epsilon: T,
+) -> Result<Array<T, VecStorage<T>, N>> {
+    let mut output = Array::from_elem(input.shape(), T::ZERO);
+    l2_normalize_into(input, &mut output.view_mut(), epsilon)?;
+    Ok(output)
 }

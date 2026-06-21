@@ -37,13 +37,13 @@ pub fn matpow<T: Scalar>(matrix: &ArrayView2<'_, T>, exponent: u32) -> Result<Ar
     let mut remaining = exponent;
     loop {
         if remaining & 1 == 1 {
-            result = mul(&result, &base)?;
+            result = mul(&result.view(), &base.view())?;
         }
         remaining >>= 1;
         if remaining == 0 {
             break;
         }
-        base = mul(&base, &base)?; // A^{2^{i+1}} = (A^{2ⁱ})²
+        base = mul(&base.view(), &base.view())?; // A^{2^{i+1}} = (A^{2ⁱ})²
     }
     Ok(result)
 }

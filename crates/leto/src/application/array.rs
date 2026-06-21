@@ -74,6 +74,12 @@ where
         &mut self.storage
     }
 
+    /// Consume the array and return its underlying storage.
+    #[inline]
+    pub fn into_storage(self) -> S {
+        self.storage
+    }
+
     /// Returns an immutable read-only view of this array.
     #[inline]
     pub fn view(&self) -> ArrayView<'_, T, N> {

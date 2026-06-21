@@ -1,4 +1,4 @@
-use leto::{Array, Layout, SliceArg, VecStorage};
+use leto::{Array, Layout, SliceArg, Storage, VecStorage};
 use leto_ops::{norm_l1, norm_l2, norm_max};
 
 const EPS: f64 = 1e-12;
@@ -92,4 +92,76 @@ fn norms_run_at_reduced_precision() {
     assert_eq!(norm_l2(&array.view()).unwrap(), f16::from_f32(5.0));
     assert_eq!(norm_l1(&array.view()).unwrap(), f16::from_f32(7.0));
     assert_eq!(norm_max(&array.view()).unwrap(), f16::from_f32(4.0));
+}
+
+#[test]
+fn test_l2_normalize_generic() {
+    // 1D test
+    let array = Array::from_shape_vec([3], vec![3.0f64, 0.0, 4.0]).unwrap();
+    let mut out = Array::from_elem([3], 0.0f64);
+    leto_ops::l2_normalize_into(&array.view(), &mut out.view_mut(), 0.0).unwrap();
+    assert_close(*out.get([0]).unwrap(), 0.6);
+    assert_close(*out.get([1]).unwrap(), 0.0);
+    assert_close(*out.get([2]).unwrap(), 0.8);
+
+    let owned = leto_ops::l2_normalize(&array.view(), 0.0).unwrap();
+    assert_close(*owned.get([0]).unwrap(), 0.6);
+    assert_close(*owned.get([1]).unwrap(), 0.0);
+    assert_close(*owned.get([2]).unwrap(), 0.8);
+
+    // Epsilon stability test
+    let mut out_eps = Array::from_elem([3], 0.0f64);
+    leto_ops::l2_normalize_into(&array.view(), &mut out_eps.view_mut(), 5.0).unwrap();
+    // l2 norm is 5.0. denom is 5.0 + 5.0 = 10.0.
+    // values should be 3/10 = 0.3, 0.0, 4/10 = 0.4.
+    assert_close(*out_eps.get([0]).unwrap(), 0.3);
+    assert_close(*out_eps.get([1]).unwrap(), 0.0);
+    assert_close(*out_eps.get([2]).unwrap(), 0.4);
+}
+
+#[test]
+fn test_random_into() {
+    let mut out1 = Array::from_elem([10], 0.0f64);
+    leto_ops::uniform_with_seed_into(&mut out1.view_mut(), -1.0, 1.0, 42).unwrap();
+    for &val in out1.storage().as_slice() {
+        assert!((-1.0..1.0).contains(&val));
+    }
+
+    let mut out2 = Array::from_elem([10], 0.0f64);
+    leto_ops::normal_with_seed_into(&mut out2.view_mut(), 5.0, 2.0, 42).unwrap();
+    // deterministic seed should produce same output as normal_with_seed
+    let normal_owned = leto_ops::normal_with_seed([10], 5.0, 2.0, 42).unwrap();
+    assert_eq!(out2.storage().as_slice(), normal_owned.storage().as_slice());
+}
+
+#[test]
+fn test_solvers_into() {
+    // LU solve_into
+    let a_mat = Array::from_shape_vec([2, 2], vec![4.0f64, 3.0, 6.0, 3.0]).unwrap();
+    let b_vec = Array::from_shape_vec([2], vec![10.0f64, 9.0]).unwrap();
+    let lu = leto_ops::lu_decompose(&a_mat.view()).unwrap();
+    let mut x_lu = Array::from_elem([2], 0.0f64);
+    lu.solve_into(&b_vec.view(), &mut x_lu.view_mut()).unwrap();
+    // Verification: A * x should equal b.
+    // 4*(-0.5) + 3*4 = -2 + 12 = 10.
+    // 6*(-0.5) + 3*4 = -3 + 12 = 9.
+    assert_close(*x_lu.get([0]).unwrap(), -0.5);
+    assert_close(*x_lu.get([1]).unwrap(), 4.0);
+
+    // Cholesky solve_into (requires SPD matrix)
+    let spd = Array::from_shape_vec([2, 2], vec![2.0f64, -1.0, -1.0, 2.0]).unwrap();
+    let rhs_cholesky = Array::from_shape_vec([2], vec![1.0f64, 1.0]).unwrap();
+    let chol = leto_ops::cholesky_decompose(&spd.view()).unwrap();
+    let mut x_chol = Array::from_elem([2], 0.0f64);
+    chol.solve_into(&rhs_cholesky.view(), &mut x_chol.view_mut()).unwrap();
+    // A * x = [2*1 - 1, -1*1 + 2*1] = [1, 1]. x = [1, 1].
+    assert_close(*x_chol.get([0]).unwrap(), 1.0);
+    assert_close(*x_chol.get([1]).unwrap(), 1.0);
+
+    // QR solve_least_squares_into
+    let qr = leto_ops::qr_decompose(&a_mat.view()).unwrap();
+    let mut x_qr = Array::from_elem([2], 0.0f64);
+    qr.solve_least_squares_into(&b_vec.view(), &mut x_qr.view_mut()).unwrap();
+    assert_close(*x_qr.get([0]).unwrap(), -0.5);
+    assert_close(*x_qr.get([1]).unwrap(), 4.0);
 }

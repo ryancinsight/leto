@@ -550,7 +550,11 @@ fn bench_sparse_compare(c: &mut Criterion) {
 
 criterion_group! {
     name = kernels;
-    config = Criterion::default().sample_size(20).without_plots();
+    config = Criterion::default()
+        .sample_size(10)
+        .warm_up_time(std::time::Duration::from_millis(500))
+        .measurement_time(std::time::Duration::from_millis(500))
+        .without_plots();
     targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_sparse_compare
 }
 criterion_main!(kernels);

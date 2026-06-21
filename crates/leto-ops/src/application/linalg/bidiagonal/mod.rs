@@ -29,7 +29,7 @@ mod colmajor;
 mod reduce;
 
 use crate::domain::real::RealScalar;
-use leto::{Array2, ArrayView2, LetoError, Result, Storage};
+use leto::{Array2, ArrayView2, LetoError, Result};
 
 /// Bidiagonal decomposition `A = U B Vᵀ` (`B` upper bidiagonal).
 #[derive(Debug, Clone)]
@@ -104,11 +104,13 @@ pub(crate) fn bidiagonal_diag_colmajor<T: RealScalar>(
             rhs: vec![n, n],
         });
     }
-    let contiguous = matrix.to_contiguous();
-    let a = contiguous.storage().as_slice();
     debug_assert!(
-        a.iter().all(|x| x.is_finite()),
+        if let Some(slice) = matrix.as_slice() {
+            slice.iter().all(|x| x.is_finite())
+        } else {
+            matrix.iter().all(|x| x.is_finite())
+        },
         "bidiagonal_diag_colmajor precondition: caller (validate_input) guarantees finite entries"
     );
-    Ok(colmajor::reduce_values(a, m, n))
+    Ok(colmajor::reduce_values(matrix))
 }
