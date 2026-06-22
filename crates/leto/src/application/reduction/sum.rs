@@ -3,7 +3,6 @@
 use num_traits::Zero;
 
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::iter::AxisIter;
 use crate::application::reduction::iter_elements;
 use crate::domain::error::{LetoError, Result};
@@ -58,13 +57,14 @@ where
 
     let mut buf: Vec<T> = vec![T::zero(); out_size];
     for lane in iter {
-        let lane_layout = lane.layout();
-        let lane_data = lane.data();
-        let lane_shape = lane_layout.shape;
-        for flat in 0..out_size {
-            let idx = index_from_flat(flat, &lane_shape);
-            let off = lane_layout.offset_of(idx)?;
-            buf[flat] = buf[flat] + lane_data[off];
+        if let Some(slice) = lane.as_slice() {
+            for (buf_val, &lane_val) in buf.iter_mut().zip(slice) {
+                *buf_val = *buf_val + lane_val;
+            }
+        } else {
+            for (buf_val, &lane_val) in buf.iter_mut().zip(lane.iter()) {
+                *buf_val = *buf_val + lane_val;
+            }
         }
     }
 

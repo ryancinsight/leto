@@ -10,8 +10,8 @@
 use num_traits::Float;
 
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::iter::AxisIter;
+use crate::application::reduction::iter_elements;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::remove_axis::{RankMarker, RemoveAxis};
@@ -71,14 +71,7 @@ where
         });
     }
     let view = arr.view();
-    let layout = view.layout();
-    let data = view.data();
-    let shape = layout.shape;
-    let mut values: Vec<T> = Vec::with_capacity(n);
-    for flat in 0..n {
-        let off = layout.offset_of(index_from_flat(flat, &shape))?;
-        values.push(data[off]);
-    }
+    let mut values: Vec<T> = iter_elements(&view).copied().collect();
     quantile_of_slice(&mut values, q, method)
 }
 
@@ -137,12 +130,14 @@ where
     let iter: AxisIter<'_, T, N, M> = AxisIter::new(&view, axis, RankMarker::<N>)?;
     let mut scratch = vec![T::zero(); out_size * axis_len];
     for (k, lane) in iter.enumerate() {
-        let lane_layout = lane.layout();
-        let lane_data = lane.data();
-        let lane_shape = lane_layout.shape;
-        for flat in 0..out_size {
-            let off = lane_layout.offset_of(index_from_flat(flat, &lane_shape))?;
-            scratch[flat * axis_len + k] = lane_data[off];
+        if let Some(slice) = lane.as_slice() {
+            for (flat, &lane_val) in slice.iter().enumerate() {
+                scratch[flat * axis_len + k] = lane_val;
+            }
+        } else {
+            for (flat, &lane_val) in lane.iter().enumerate() {
+                scratch[flat * axis_len + k] = lane_val;
+            }
         }
     }
 

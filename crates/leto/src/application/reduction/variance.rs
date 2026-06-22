@@ -3,7 +3,6 @@
 use num_traits::Float;
 
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::application::iter::AxisIter;
 use crate::application::reduction::iter_elements;
 use crate::application::reduction::mean::{mean_all, mean_axis};
@@ -103,14 +102,18 @@ where
     let view = arr.view();
     let iter: AxisIter<'_, T, N, M> = AxisIter::new(&view, axis, RankMarker::<N>)?;
     let mut buf = vec![T::zero(); out_size];
+    let mean_slice = &mean_data[..out_size];
     for lane in iter {
-        let lane_layout = lane.layout();
-        let lane_data = lane.data();
-        let lane_shape = lane_layout.shape;
-        for (flat, slot) in buf.iter_mut().enumerate() {
-            let off = lane_layout.offset_of(index_from_flat(flat, &lane_shape))?;
-            let deviation = lane_data[off] - mean_data[flat];
-            *slot = *slot + deviation * deviation;
+        if let Some(slice) = lane.as_slice() {
+            for ((slot, &lane_val), &mean_val) in buf.iter_mut().zip(slice).zip(mean_slice) {
+                let deviation = lane_val - mean_val;
+                *slot = *slot + deviation * deviation;
+            }
+        } else {
+            for ((slot, &lane_val), &mean_val) in buf.iter_mut().zip(lane.iter()).zip(mean_slice) {
+                let deviation = lane_val - mean_val;
+                *slot = *slot + deviation * deviation;
+            }
         }
     }
     for value in buf.iter_mut() {
