@@ -85,10 +85,19 @@ where
     );
     let lhs_view = lhs.view();
     let rhs_view = rhs.view();
-    let values: Vec<T> = iter_elements(&lhs_view)
-        .zip(iter_elements(&rhs_view))
-        .map(|(a, b)| op(*a, *b))
-        .collect();
+    let values: Vec<T> =
+        if let (Some(l_slice), Some(r_slice)) = (lhs_view.as_slice(), rhs_view.as_slice()) {
+            l_slice
+                .iter()
+                .zip(r_slice)
+                .map(|(&a, &b)| op(a, b))
+                .collect()
+        } else {
+            iter_elements(&lhs_view)
+                .zip(iter_elements(&rhs_view))
+                .map(|(a, b)| op(*a, *b))
+                .collect()
+        };
     Array::from_shape_vec(shape, values)
         .expect("invariant: C-contiguous shape matches the produced element count")
 }
@@ -105,7 +114,11 @@ where
 {
     let shape = arr.shape();
     let view = arr.view();
-    let values: Vec<T> = iter_elements(&view).map(|a| op(*a)).collect();
+    let values: Vec<T> = if let Some(slice) = view.as_slice() {
+        slice.iter().map(|&a| op(a)).collect()
+    } else {
+        iter_elements(&view).map(|a| op(*a)).collect()
+    };
     Array::from_shape_vec(shape, values)
         .expect("invariant: C-contiguous shape matches the produced element count")
 }
