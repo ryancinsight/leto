@@ -117,7 +117,11 @@ pub(super) fn inverse<T: RealScalar>(factored: &Factored<T>) -> Result<Array2<T>
         // e = basis vector where e[col] = 1, others 0.
         // row permuted e: z[k] = e[row_perm[k]] = 1 if row_perm[k] == col else 0.
         for (k, z_k) in z.iter_mut().enumerate().take(n) {
-            *z_k = if factored.row_perm[k] == col { T::ONE } else { T::ZERO };
+            *z_k = if factored.row_perm[k] == col {
+                T::ONE
+            } else {
+                T::ZERO
+            };
         }
         solve_packed_impl(factored, z, x)?;
         for row in 0..n {

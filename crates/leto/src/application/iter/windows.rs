@@ -142,8 +142,17 @@ impl<'a, T, const N: usize> Iterator for Windows<'a, T, N> {
         if self.front >= self.back {
             return None;
         }
-        let layout = Layout::new(self.window_shape, self.base_layout.strides, self.front_offset);
-        odometer_step(&mut self.front_index, &self.counts, &self.base_layout.strides, &mut self.front_offset);
+        let layout = Layout::new(
+            self.window_shape,
+            self.base_layout.strides,
+            self.front_offset,
+        );
+        odometer_step(
+            &mut self.front_index,
+            &self.counts,
+            &self.base_layout.strides,
+            &mut self.front_offset,
+        );
         self.front += 1;
         Some(ArrayView::new(layout, self.data))
     }
@@ -162,8 +171,17 @@ impl<'a, T, const N: usize> DoubleEndedIterator for Windows<'a, T, N> {
             return None;
         }
         self.back -= 1;
-        let layout = Layout::new(self.window_shape, self.base_layout.strides, self.back_offset);
-        odometer_step_back(&mut self.back_index, &self.counts, &self.base_layout.strides, &mut self.back_offset);
+        let layout = Layout::new(
+            self.window_shape,
+            self.base_layout.strides,
+            self.back_offset,
+        );
+        odometer_step_back(
+            &mut self.back_index,
+            &self.counts,
+            &self.base_layout.strides,
+            &mut self.back_offset,
+        );
         Some(ArrayView::new(layout, self.data))
     }
 }

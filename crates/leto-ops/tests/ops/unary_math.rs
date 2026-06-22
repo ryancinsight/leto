@@ -1,7 +1,7 @@
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
-    dot, map_inplace, scalar_map, scalar_map_into, unary_map, unary_map_into, AbsOp, AddOp, ExpOp,
-    MulOp, NegOp, PowfOp, SqrtOp, l2_normalize_into, jaccard_distance, hamming_distance,
+    dot, hamming_distance, jaccard_distance, l2_normalize_into, map_inplace, scalar_map,
+    scalar_map_into, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, MulOp, NegOp, PowfOp, SqrtOp,
 };
 
 const EPS: f64 = 1e-12;
@@ -153,8 +153,16 @@ fn test_l2_normalize() {
 #[test]
 fn test_jaccard_distance() {
     let layout = Layout::c_contiguous([4]).unwrap();
-    let a = Array::new(layout, VecStorage::new(vec![0b1100u32, 0b1010, 0b1111, 0b0000])).unwrap();
-    let b = Array::new(layout, VecStorage::new(vec![0b1010u32, 0b1100, 0b1111, 0b0000])).unwrap();
+    let a = Array::new(
+        layout,
+        VecStorage::new(vec![0b1100u32, 0b1010, 0b1111, 0b0000]),
+    )
+    .unwrap();
+    let b = Array::new(
+        layout,
+        VecStorage::new(vec![0b1010u32, 0b1100, 0b1111, 0b0000]),
+    )
+    .unwrap();
     let dist = jaccard_distance(&a.view(), &b.view()).unwrap();
     assert!((dist - 0.4).abs() <= EPS);
 }
@@ -162,8 +170,16 @@ fn test_jaccard_distance() {
 #[test]
 fn test_hamming_distance() {
     let layout = Layout::c_contiguous([4]).unwrap();
-    let a = Array::new(layout, VecStorage::new(vec![0b1100u32, 0b1010, 0b1111, 0b0000])).unwrap();
-    let b = Array::new(layout, VecStorage::new(vec![0b1010u32, 0b1100, 0b1111, 0b0000])).unwrap();
+    let a = Array::new(
+        layout,
+        VecStorage::new(vec![0b1100u32, 0b1010, 0b1111, 0b0000]),
+    )
+    .unwrap();
+    let b = Array::new(
+        layout,
+        VecStorage::new(vec![0b1010u32, 0b1100, 0b1111, 0b0000]),
+    )
+    .unwrap();
     let dist = hamming_distance(&a.view(), &b.view()).unwrap();
     assert_eq!(dist, 4);
 }

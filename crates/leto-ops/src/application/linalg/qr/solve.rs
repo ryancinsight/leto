@@ -11,7 +11,11 @@ impl<T: RealScalar> QrDecomposition<T> {
     /// materializing `Q`), then back-substitutes against `R`.
     /// Solve `min ‖A·x − rhs‖₂` directly into a caller-owned view `out`.
     #[allow(clippy::needless_range_loop)]
-    pub fn solve_least_squares_into(&self, rhs: &ArrayView1<'_, T>, out: &mut ArrayViewMut1<'_, T>) -> Result<()> {
+    pub fn solve_least_squares_into(
+        &self,
+        rhs: &ArrayView1<'_, T>,
+        out: &mut ArrayViewMut1<'_, T>,
+    ) -> Result<()> {
         let (m, n) = (self.rows, self.cols);
         if rhs.shape() != [m] {
             return Err(LetoError::ShapeMismatch {

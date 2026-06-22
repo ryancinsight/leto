@@ -1,6 +1,6 @@
+use crate::application::index::RowMajorTraversal;
 use crate::domain::real::RealScalar;
 use crate::domain::rng::Xorshift64;
-use crate::application::index::RowMajorTraversal;
 use leto::{Array, ArrayViewMut, LetoError, Result, VecStorage};
 
 /// Fill a caller-owned view with i.i.d. uniform samples in `[low, high)`,

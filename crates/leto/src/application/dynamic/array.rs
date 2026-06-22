@@ -156,7 +156,9 @@ impl<T> ArrayD<T, VecStorage<T>> {
         T: Clone,
     {
         if self.layout.is_c_contiguous() {
-            return Ok(self.storage.as_slice()[self.layout.offset..self.layout.offset + self.size()].to_vec());
+            return Ok(self.storage.as_slice()
+                [self.layout.offset..self.layout.offset + self.size()]
+                .to_vec());
         }
         let size = self.size();
         let ndim = self.ndim();

@@ -143,7 +143,8 @@ impl<'a, T, const N: usize, const M: usize> Iterator for AxisIterMut<'a, T, N, M
 
             let (min_offset, max_offset) = layout.min_max_offsets();
             let span_len = max_offset - min_offset + 1;
-            let adjusted_layout = Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
+            let adjusted_layout =
+                Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
 
             // SAFETY: The iterator yields disjoint subviews along the axis, so mutable slices
             // do not overlap and aliasing invariants are preserved. We construct the slice

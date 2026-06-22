@@ -56,17 +56,82 @@ pub fn concat<T: Clone, const N: usize>(
         values.set_len(size);
     }
 
+    struct ConcatDropGuard<'a, T: Clone, const N: usize> {
+        ptr: *mut std::mem::MaybeUninit<T>,
+        out_layout: &'a Layout<N>,
+        inputs: &'a [ArrayView<'a, T, N>],
+        axis: usize,
+        completed_inputs: usize,
+        current_input_written: usize,
+    }
+
+    impl<'a, T: Clone, const N: usize> Drop for ConcatDropGuard<'a, T, N> {
+        fn drop(&mut self) {
+            if self.completed_inputs < self.inputs.len() {
+                let mut base = 0usize;
+                for i in 0..self.completed_inputs {
+                    let input_view = &self.inputs[i];
+                    let input_axis_len = input_view.shape()[self.axis];
+                    for (src_index, _) in input_view.indexed_iter() {
+                        let mut out_index = src_index;
+                        out_index[self.axis] += base;
+                        if let Ok(out_off) = self.out_layout.offset_of(out_index) {
+                            unsafe {
+                                std::ptr::drop_in_place(self.ptr.add(out_off) as *mut T);
+                            }
+                        }
+                    }
+                    base += input_axis_len;
+                }
+                if self.completed_inputs < self.inputs.len() {
+                    let input_view = &self.inputs[self.completed_inputs];
+                    for (idx, (src_index, _)) in input_view.indexed_iter().enumerate() {
+                        if idx >= self.current_input_written {
+                            break;
+                        }
+                        let mut out_index = src_index;
+                        out_index[self.axis] += base;
+                        if let Ok(out_off) = self.out_layout.offset_of(out_index) {
+                            unsafe {
+                                std::ptr::drop_in_place(self.ptr.add(out_off) as *mut T);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut guard = ConcatDropGuard {
+        ptr: values.as_mut_ptr(),
+        out_layout: &out_layout,
+        inputs,
+        axis,
+        completed_inputs: 0,
+        current_input_written: 0,
+    };
+
     let mut base = 0usize;
     for input_view in inputs {
         let input_axis_len = input_view.shape()[axis];
+        guard.current_input_written = 0;
         for (src_index, val) in input_view.indexed_iter() {
             let mut out_index = src_index;
             out_index[axis] += base;
             let out_off = out_layout.offset_of(out_index)?;
-            values[out_off].write(val.clone());
+            unsafe {
+                guard
+                    .ptr
+                    .add(out_off)
+                    .write(std::mem::MaybeUninit::new(val.clone()));
+            }
+            guard.current_input_written += 1;
         }
         base += input_axis_len;
+        guard.completed_inputs += 1;
     }
+
+    std::mem::forget(guard);
 
     let values = unsafe {
         let mut values = std::mem::ManuallyDrop::new(values);

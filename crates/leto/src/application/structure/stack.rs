@@ -49,9 +49,80 @@ where
     }
 
     let mut values: Vec<std::mem::MaybeUninit<T>> = Vec::with_capacity(size);
-    unsafe { values.set_len(size); }
+    unsafe {
+        values.set_len(size);
+    }
+
+    struct StackDropGuard<'a, T: Clone, const N: usize, const M: usize> {
+        ptr: *mut std::mem::MaybeUninit<T>,
+        out_layout: &'a Layout<M>,
+        inputs: &'a [ArrayView<'a, T, N>],
+        axis: usize,
+        completed_inputs: usize,
+        current_input_written: usize,
+    }
+
+    impl<'a, T: Clone, const N: usize, const M: usize> Drop for StackDropGuard<'a, T, N, M> {
+        fn drop(&mut self) {
+            if self.completed_inputs < self.inputs.len() {
+                for i in 0..self.completed_inputs {
+                    let input_view = &self.inputs[i];
+                    for (src_index, _) in input_view.indexed_iter() {
+                        let mut out_index = [0usize; M];
+                        for j in 0..M {
+                            if j < self.axis {
+                                out_index[j] = src_index[j];
+                            } else if j == self.axis {
+                                out_index[j] = i;
+                            } else {
+                                out_index[j] = src_index[j - 1];
+                            }
+                        }
+                        if let Ok(out_off) = self.out_layout.offset_of(out_index) {
+                            unsafe {
+                                std::ptr::drop_in_place(self.ptr.add(out_off) as *mut T);
+                            }
+                        }
+                    }
+                }
+                if self.completed_inputs < self.inputs.len() {
+                    let input_view = &self.inputs[self.completed_inputs];
+                    for (idx, (src_index, _)) in input_view.indexed_iter().enumerate() {
+                        if idx >= self.current_input_written {
+                            break;
+                        }
+                        let mut out_index = [0usize; M];
+                        for j in 0..M {
+                            if j < self.axis {
+                                out_index[j] = src_index[j];
+                            } else if j == self.axis {
+                                out_index[j] = self.completed_inputs;
+                            } else {
+                                out_index[j] = src_index[j - 1];
+                            }
+                        }
+                        if let Ok(out_off) = self.out_layout.offset_of(out_index) {
+                            unsafe {
+                                std::ptr::drop_in_place(self.ptr.add(out_off) as *mut T);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut guard = StackDropGuard {
+        ptr: values.as_mut_ptr(),
+        out_layout: &out_layout,
+        inputs,
+        axis,
+        completed_inputs: 0,
+        current_input_written: 0,
+    };
 
     for (which, input_view) in inputs.iter().enumerate() {
+        guard.current_input_written = 0;
         for (src_index, val) in input_view.indexed_iter() {
             let mut out_index = [0usize; M];
             for j in 0..M {
@@ -64,9 +135,18 @@ where
                 }
             }
             let out_off = out_layout.offset_of(out_index)?;
-            values[out_off].write(val.clone());
+            unsafe {
+                guard
+                    .ptr
+                    .add(out_off)
+                    .write(std::mem::MaybeUninit::new(val.clone()));
+            }
+            guard.current_input_written += 1;
         }
+        guard.completed_inputs += 1;
     }
+
+    std::mem::forget(guard);
 
     let values = unsafe {
         let mut values = std::mem::ManuallyDrop::new(values);

@@ -101,7 +101,11 @@ impl<T: RealScalar> LuDecomposition<T> {
     #[must_use]
     #[inline]
     pub fn from_raw_parts(factors: Array2<T>, pivots: Vec<usize>, sign: i8) -> Self {
-        Self { factors, pivots, sign }
+        Self {
+            factors,
+            pivots,
+            sign,
+        }
     }
 
     /// Matrix dimension `n`.
@@ -143,7 +147,11 @@ impl<T: RealScalar> LuDecomposition<T> {
 
     /// Solve `A · x = rhs` directly into a caller-owned view `out`.
     #[allow(clippy::needless_range_loop)]
-    pub fn solve_into(&self, rhs: &ArrayView1<'_, T>, out: &mut ArrayViewMut1<'_, T>) -> Result<()> {
+    pub fn solve_into(
+        &self,
+        rhs: &ArrayView1<'_, T>,
+        out: &mut ArrayViewMut1<'_, T>,
+    ) -> Result<()> {
         let n = self.dim();
         if rhs.shape() != [n] {
             return Err(LetoError::ShapeMismatch {

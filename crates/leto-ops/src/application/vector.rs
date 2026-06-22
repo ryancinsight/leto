@@ -36,10 +36,11 @@ pub fn dot<T: Scalar>(a: &ArrayView<'_, T, 1>, b: &ArrayView<'_, T, 1>) -> Resul
     Ok(acc)
 }
 
-
-
 /// Jaccard distance between two binary rank-1 views: `1.0 - (popcount(a & b) / popcount(a | b))`.
-pub fn jaccard_distance<T: Scalar>(a: &ArrayView<'_, T, 1>, b: &ArrayView<'_, T, 1>) -> Result<f64> {
+pub fn jaccard_distance<T: Scalar>(
+    a: &ArrayView<'_, T, 1>,
+    b: &ArrayView<'_, T, 1>,
+) -> Result<f64> {
     if a.shape() != b.shape() {
         return Err(LetoError::ShapeMismatch {
             lhs: a.shape().to_vec(),
@@ -82,7 +83,10 @@ pub fn jaccard_distance<T: Scalar>(a: &ArrayView<'_, T, 1>, b: &ArrayView<'_, T,
 }
 
 /// Hamming distance between two binary rank-1 views: `popcount(a ^ b)`.
-pub fn hamming_distance<T: Scalar>(a: &ArrayView<'_, T, 1>, b: &ArrayView<'_, T, 1>) -> Result<u64> {
+pub fn hamming_distance<T: Scalar>(
+    a: &ArrayView<'_, T, 1>,
+    b: &ArrayView<'_, T, 1>,
+) -> Result<u64> {
     if a.shape() != b.shape() {
         return Err(LetoError::ShapeMismatch {
             lhs: a.shape().to_vec(),

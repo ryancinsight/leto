@@ -92,13 +92,22 @@ pub fn matexp<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     // U = c₀I + c₂B² + c₄B⁴ + c₆B⁶ (even); V = c₁I + c₃B² + c₅B⁴ (odd shifted).
     let u_even = add(
         &add(
-            &add(&scale(&id.view(), c[0]).view(), &scale(&b2.view(), c[2]).view()).view(),
+            &add(
+                &scale(&id.view(), c[0]).view(),
+                &scale(&b2.view(), c[2]).view(),
+            )
+            .view(),
             &scale(&b4.view(), c[4]).view(),
-        ).view(),
+        )
+        .view(),
         &scale(&b6.view(), c[6]).view(),
     );
     let v_odd = add(
-        &add(&scale(&id.view(), c[1]).view(), &scale(&b2.view(), c[3]).view()).view(),
+        &add(
+            &scale(&id.view(), c[1]).view(),
+            &scale(&b2.view(), c[3]).view(),
+        )
+        .view(),
         &scale(&b4.view(), c[5]).view(),
     );
     let bv = mul(&b.view(), &v_odd.view())?;

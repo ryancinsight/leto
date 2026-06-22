@@ -9,11 +9,7 @@ fn idx(i: usize, j: usize, n: usize) -> usize {
     i * n + j
 }
 
-fn solve_impl<T: RealScalar>(
-    factor: &Factored<T>,
-    buf: &mut [T],
-    x: &mut [T],
-) -> Result<()> {
+fn solve_impl<T: RealScalar>(factor: &Factored<T>, buf: &mut [T], x: &mut [T]) -> Result<()> {
     let n = factor.n;
 
     // Step 1: Forward solve L z = b in-place in buf
@@ -138,7 +134,11 @@ pub(super) fn inverse<T: RealScalar>(factor: &Factored<T>) -> Result<Array2<T>> 
         // e_col: rhs[i] = 1 if i == col else 0.
         // buf[i] = rhs[perm[i]] = 1 if perm[i] == col else 0.
         for (i, buf_i) in buf.iter_mut().enumerate().take(n) {
-            *buf_i = if factor.perm[i] == col { T::ONE } else { T::ZERO };
+            *buf_i = if factor.perm[i] == col {
+                T::ONE
+            } else {
+                T::ZERO
+            };
         }
         solve_impl(factor, buf, x)?;
         for row in 0..n {

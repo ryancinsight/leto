@@ -24,7 +24,6 @@
 //! indices map to distinct physical offsets, so the physical element sets of
 //! distinct lanes are disjoint — which is what makes the mutable iterator sound. ∎
 
-
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -129,7 +128,9 @@ impl<'a, T, const N: usize, const M: usize> Lanes<'a, T, N, M> {
             for (i, item) in idx.iter_mut().enumerate() {
                 *item = complement.shape[i] - 1;
             }
-            let offset = complement.offset_of(idx).expect("invariant: last index is valid");
+            let offset = complement
+                .offset_of(idx)
+                .expect("invariant: last index is valid");
             (idx, offset)
         } else {
             ([0usize; M], complement.offset)
@@ -158,7 +159,12 @@ impl<'a, T, const N: usize, const M: usize> Iterator for Lanes<'a, T, N, M> {
             return None;
         }
         let layout = Layout::new([self.axis_len], [self.axis_stride], self.front_offset);
-        odometer_step(&mut self.front_index, &self.complement.shape, &self.complement.strides, &mut self.front_offset);
+        odometer_step(
+            &mut self.front_index,
+            &self.complement.shape,
+            &self.complement.strides,
+            &mut self.front_offset,
+        );
         self.front += 1;
         Some(ArrayView::new(layout, self.data))
     }
@@ -178,7 +184,12 @@ impl<'a, T, const N: usize, const M: usize> DoubleEndedIterator for Lanes<'a, T,
         }
         self.back -= 1;
         let layout = Layout::new([self.axis_len], [self.axis_stride], self.back_offset);
-        odometer_step_back(&mut self.back_index, &self.complement.shape, &self.complement.strides, &mut self.back_offset);
+        odometer_step_back(
+            &mut self.back_index,
+            &self.complement.shape,
+            &self.complement.strides,
+            &mut self.back_offset,
+        );
         Some(ArrayView::new(layout, self.data))
     }
 }
@@ -252,7 +263,12 @@ impl<'a, T, const N: usize, const M: usize> Iterator for LanesMut<'a, T, N, M> {
             return None;
         }
         let layout = Layout::new([self.axis_len], [self.axis_stride], self.front_offset);
-        odometer_step(&mut self.front_index, &self.complement.shape, &self.complement.strides, &mut self.front_offset);
+        odometer_step(
+            &mut self.front_index,
+            &self.complement.shape,
+            &self.complement.strides,
+            &mut self.front_offset,
+        );
         self.front += 1;
 
         let (min_offset, max_offset) = layout.min_max_offsets();

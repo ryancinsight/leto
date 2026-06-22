@@ -123,11 +123,11 @@ fn copy_back_to_out<T: Scalar>(
     let shape = dst.shape();
     let src_ptr = src.data().as_ptr();
     let dst_ptr = dst.data_mut().as_mut_ptr();
-    
+
     for r in 0..shape[0] {
         let src_row_offset = r as isize * shape[1] as isize;
         let dst_row_offset = dst.layout().offset as isize + r as isize * dst.strides()[0];
-        
+
         if dst.strides()[1] == 1 {
             // SAFETY: src is C-contiguous, dst is verified valid by validate_matmul,
             // and this row is unit-stride.
@@ -798,16 +798,19 @@ fn parallel_matmul<T: Scalar>(
         let out_ptr = out.data_mut().as_mut_ptr() as usize;
         let block_count = layout.rows.div_ceil(MATMUL_ROW_BLOCK);
 
-        moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<2>, _>(block_count, move |block| {
-            let lhs_ptr = lhs_ptr as *const T;
-            let rhs_ptr = rhs_ptr as *const T;
-            let out_ptr = out_ptr as *mut T;
-            let start_row = block * MATMUL_ROW_BLOCK;
-            let end_row = (start_row + MATMUL_ROW_BLOCK).min(layout.rows);
-            row_blocked_matmul::<T, MATMUL_ROW_BLOCK>(
-                lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout,
-            );
-        });
+        moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<2>, _>(
+            block_count,
+            move |block| {
+                let lhs_ptr = lhs_ptr as *const T;
+                let rhs_ptr = rhs_ptr as *const T;
+                let out_ptr = out_ptr as *mut T;
+                let start_row = block * MATMUL_ROW_BLOCK;
+                let end_row = (start_row + MATMUL_ROW_BLOCK).min(layout.rows);
+                row_blocked_matmul::<T, MATMUL_ROW_BLOCK>(
+                    lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout,
+                );
+            },
+        );
         return;
     }
 
@@ -896,6 +899,77 @@ pub fn batched_matmul<T: Scalar>(
     };
     let out_offset = out.offset() as isize;
     let out_strides = [out.strides()[1], out.strides()[2]];
+
+    #[cfg(feature = "parallel")]
+    {
+        if batch > 1 {
+            let error_cell = std::sync::Arc::new(std::sync::Mutex::new(Ok(())));
+            let error_cell_clone = error_cell.clone();
+            let lhs_ptr = lhs.data().as_ptr() as usize;
+            let rhs_ptr = rhs.data().as_ptr() as usize;
+            let out_ptr = out.data_mut().as_mut_ptr() as usize;
+            let lhs_len = lhs.data().len();
+            let rhs_len = rhs.data().len();
+            let out_len = out.data().len();
+
+            let lhs_offset = lhs.offset() as isize;
+            let rhs_offset = rhs.offset() as isize;
+            let lhs_strides = [lhs.strides()[1], lhs.strides()[2]];
+            let rhs_strides = [rhs.strides()[1], rhs.strides()[2]];
+
+            moirai::for_each_index_with::<moirai::Adaptive, _>(batch, move |b| {
+                if error_cell_clone.lock().unwrap().is_err() {
+                    return;
+                }
+
+                let lhs_ptr = lhs_ptr as *const T;
+                let rhs_ptr = rhs_ptr as *const T;
+                let out_ptr = out_ptr as *mut T;
+
+                let lhs_layout = Layout::new(
+                    [m, lhs_k],
+                    lhs_strides,
+                    (lhs_offset + b as isize * lhs_batch_stride) as usize,
+                );
+                let rhs_layout = Layout::new(
+                    [rhs_k, n],
+                    rhs_strides,
+                    (rhs_offset + b as isize * rhs_batch_stride) as usize,
+                );
+
+                let lhs_view = unsafe {
+                    ArrayView::new(lhs_layout, core::slice::from_raw_parts(lhs_ptr, lhs_len))
+                };
+                let rhs_view = unsafe {
+                    ArrayView::new(rhs_layout, core::slice::from_raw_parts(rhs_ptr, rhs_len))
+                };
+                let out_layout = Layout::new(
+                    [out_m, out_n],
+                    out_strides,
+                    (out_offset + b as isize * out_batch_stride) as usize,
+                );
+                let mut out_view = unsafe {
+                    ArrayViewMut::new(
+                        out_layout,
+                        core::slice::from_raw_parts_mut(out_ptr, out_len),
+                    )
+                };
+
+                if let Err(e) = matmul(&lhs_view, &rhs_view, &mut out_view) {
+                    let mut lock = error_cell_clone.lock().unwrap();
+                    if lock.is_ok() {
+                        *lock = Err(e);
+                    }
+                }
+            });
+
+            let lock = error_cell.lock().unwrap();
+            if let Err(e) = &*lock {
+                return Err(e.clone());
+            }
+            return Ok(());
+        }
+    }
 
     for b in 0..batch {
         let lhs_view = ArrayView::new(lhs_mat(b), lhs.data());

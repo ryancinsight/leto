@@ -314,14 +314,17 @@ where
     for (lane_pos, lane) in iter.enumerate() {
         let lane_axis_pos = lane_pos + 1;
         if let Some(slice) = lane.as_slice() {
-            for ((val_ref, idx_ref), &candidate) in best_val.iter_mut().zip(&mut best_idx).zip(slice) {
+            for ((val_ref, idx_ref), &candidate) in
+                best_val.iter_mut().zip(&mut best_idx).zip(slice)
+            {
                 if is_better(*val_ref, candidate) {
                     *val_ref = candidate;
                     *idx_ref = lane_axis_pos;
                 }
             }
         } else {
-            for ((val_ref, idx_ref), val) in best_val.iter_mut().zip(&mut best_idx).zip(lane.iter()) {
+            for ((val_ref, idx_ref), val) in best_val.iter_mut().zip(&mut best_idx).zip(lane.iter())
+            {
                 let candidate = *val;
                 if is_better(*val_ref, candidate) {
                     *val_ref = candidate;

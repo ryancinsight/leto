@@ -237,15 +237,15 @@ fn test_cholesky_solve_into_strided() {
     let rhs = Array::from_shape_vec([3], rhs_values).unwrap();
 
     let decomp = cholesky_decompose(&a.view()).unwrap();
-    
+
     let mut out_large = Array::from_shape_vec([6], vec![0.0f64; 6]).unwrap();
     {
         let mut out_strided = out_large.slice_mut(&[(0, 6, 2)]).unwrap();
         decomp.solve_into(&rhs.view(), &mut out_strided).unwrap();
     }
-    
+
     let expected = decomp.solve(&rhs.view()).unwrap();
-    
+
     assert_close(*out_large.get([0]).unwrap(), *expected.get([0]).unwrap());
     assert_close(*out_large.get([2]).unwrap(), *expected.get([1]).unwrap());
     assert_close(*out_large.get([4]).unwrap(), *expected.get([2]).unwrap());
@@ -260,15 +260,15 @@ fn test_lu_solve_into_strided() {
 
     let decomp = cholesky_decompose(&a.view()).unwrap();
     let lu_decomp = leto_ops::lu_decompose(&a.view()).unwrap();
-    
+
     let mut out_large = Array::from_shape_vec([6], vec![0.0f64; 6]).unwrap();
     {
         let mut out_strided = out_large.slice_mut(&[(0, 6, 2)]).unwrap();
         lu_decomp.solve_into(&rhs.view(), &mut out_strided).unwrap();
     }
-    
+
     let expected = decomp.solve(&rhs.view()).unwrap();
-    
+
     assert_close(*out_large.get([0]).unwrap(), *expected.get([0]).unwrap());
     assert_close(*out_large.get([2]).unwrap(), *expected.get([1]).unwrap());
     assert_close(*out_large.get([4]).unwrap(), *expected.get([2]).unwrap());
@@ -282,15 +282,17 @@ fn test_qr_solve_least_squares_into_strided() {
     let rhs = Array::from_shape_vec([3], rhs_values).unwrap();
 
     let decomp = qr_decompose(&a.view()).unwrap();
-    
+
     let mut out_large = Array::from_shape_vec([6], vec![0.0f64; 6]).unwrap();
     {
         let mut out_strided = out_large.slice_mut(&[(0, 6, 2)]).unwrap();
-        decomp.solve_least_squares_into(&rhs.view(), &mut out_strided).unwrap();
+        decomp
+            .solve_least_squares_into(&rhs.view(), &mut out_strided)
+            .unwrap();
     }
-    
+
     let expected = decomp.solve_least_squares(&rhs.view()).unwrap();
-    
+
     assert_close(*out_large.get([0]).unwrap(), *expected.get([0]).unwrap());
     assert_close(*out_large.get([2]).unwrap(), *expected.get([1]).unwrap());
     assert_close(*out_large.get([4]).unwrap(), *expected.get([2]).unwrap());

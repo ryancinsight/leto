@@ -111,7 +111,11 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
 
     /// Solve `A · x = rhs` directly into a caller-owned view `out`.
     #[allow(clippy::needless_range_loop)]
-    pub fn solve_into(&self, rhs: &ArrayView1<'_, T>, out: &mut ArrayViewMut1<'_, T>) -> Result<()> {
+    pub fn solve_into(
+        &self,
+        rhs: &ArrayView1<'_, T>,
+        out: &mut ArrayViewMut1<'_, T>,
+    ) -> Result<()> {
         let n = self.dim;
         if rhs.shape() != [n] {
             return Err(LetoError::ShapeMismatch {

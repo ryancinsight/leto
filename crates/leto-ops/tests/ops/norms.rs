@@ -153,7 +153,8 @@ fn test_solvers_into() {
     let rhs_cholesky = Array::from_shape_vec([2], vec![1.0f64, 1.0]).unwrap();
     let chol = leto_ops::cholesky_decompose(&spd.view()).unwrap();
     let mut x_chol = Array::from_elem([2], 0.0f64);
-    chol.solve_into(&rhs_cholesky.view(), &mut x_chol.view_mut()).unwrap();
+    chol.solve_into(&rhs_cholesky.view(), &mut x_chol.view_mut())
+        .unwrap();
     // A * x = [2*1 - 1, -1*1 + 2*1] = [1, 1]. x = [1, 1].
     assert_close(*x_chol.get([0]).unwrap(), 1.0);
     assert_close(*x_chol.get([1]).unwrap(), 1.0);
@@ -161,7 +162,8 @@ fn test_solvers_into() {
     // QR solve_least_squares_into
     let qr = leto_ops::qr_decompose(&a_mat.view()).unwrap();
     let mut x_qr = Array::from_elem([2], 0.0f64);
-    qr.solve_least_squares_into(&b_vec.view(), &mut x_qr.view_mut()).unwrap();
+    qr.solve_least_squares_into(&b_vec.view(), &mut x_qr.view_mut())
+        .unwrap();
     assert_close(*x_qr.get([0]).unwrap(), -0.5);
     assert_close(*x_qr.get([1]).unwrap(), 4.0);
 }

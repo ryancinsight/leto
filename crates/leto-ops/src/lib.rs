@@ -55,7 +55,7 @@ pub use application::unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ExpOp, LnOp, NegOp,
     PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
 };
-pub use application::vector::{dot, jaccard_distance, hamming_distance};
+pub use application::vector::{dot, hamming_distance, jaccard_distance};
 pub use application::zip::{
     indexed_zip2_mut_with, indexed_zip_mut_with, zip2_mut_with, zip_mut_with,
 };
