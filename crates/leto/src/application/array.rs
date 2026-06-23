@@ -1,6 +1,6 @@
 use crate::application::iter::{ElementIter, IndexedIter, Lanes, LanesMut, Windows};
 use crate::application::view::{ArrayView, ArrayViewMut};
-use crate::domain::error::Result;
+use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
 use crate::infrastructure::storage::{Storage, StorageMut};
@@ -201,7 +201,16 @@ where
     #[inline]
     pub fn get(&self, index: [usize; N]) -> Result<&T> {
         let offset = self.layout.offset_of(index)?;
-        Ok(&self.storage.as_slice()[offset])
+        let slice = self.storage.as_slice();
+        if offset >= slice.len() {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "physical offset {offset} exceeds backing slice length {}",
+                    slice.len()
+                ),
+            });
+        }
+        Ok(&slice[offset])
     }
 }
 
@@ -295,6 +304,15 @@ where
     #[inline]
     pub fn get_mut(&mut self, index: [usize; N]) -> Result<&mut T> {
         let offset = self.layout.offset_of(index)?;
-        Ok(&mut self.storage.as_mut_slice()[offset])
+        let slice = self.storage.as_mut_slice();
+        if offset >= slice.len() {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "physical offset {offset} exceeds backing slice length {}",
+                    slice.len()
+                ),
+            });
+        }
+        Ok(&mut slice[offset])
     }
 }
