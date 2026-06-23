@@ -36,17 +36,48 @@ impl<T> MnemosyneStorage<T> {
     }
 }
 
+struct MnemosyneInitGuard<T> {
+    ptr: *mut T,
+    initialized: usize,
+    layout: std::alloc::Layout,
+}
+
+impl<T> Drop for MnemosyneInitGuard<T> {
+    fn drop(&mut self) {
+        if self.initialized > 0 && std::mem::needs_drop::<T>() {
+            for idx in 0..self.initialized {
+                unsafe {
+                    std::ptr::drop_in_place(self.ptr.add(idx));
+                }
+            }
+        }
+        if self.layout.size() > 0 {
+            use std::alloc::GlobalAlloc;
+            unsafe {
+                mnemosyne::Mnemosyne.dealloc(self.ptr as *mut u8, self.layout);
+            }
+        }
+    }
+}
+
 impl<T: Default> MnemosyneStorage<T> {
     /// Allocate storage via Mnemosyne and initialize each element with `T::default()`.
     pub fn new(len: usize) -> Self {
         let storage = Self::allocate_raw(len);
-        if !storage.ptr.is_null() {
+        if !storage.ptr.is_null() && len > 0 {
+            let mut guard = MnemosyneInitGuard {
+                ptr: storage.ptr,
+                initialized: 0,
+                layout: storage.layout,
+            };
             for index in 0..len {
                 // SAFETY: `index < len`; allocation holds `len` elements.
                 unsafe {
-                    storage.ptr.add(index).write(T::default());
+                    guard.ptr.add(index).write(T::default());
                 }
+                guard.initialized += 1;
             }
+            std::mem::forget(guard);
         }
         storage
     }
