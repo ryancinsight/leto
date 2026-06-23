@@ -926,6 +926,7 @@ dependencies = [
 name = "moirai-core"
 version = "0.2.0"
 dependencies = [
+ "bytemuck",
  "libc",
  "mnemosyne",
  "moirai-utils",
