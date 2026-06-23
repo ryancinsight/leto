@@ -104,3 +104,16 @@ fn lanes_mut_along_axis0_writes_columns_disjointly() {
     let contents: Vec<i32> = a.iter().copied().collect();
     assert_eq!(contents, vec![0, 100, 1, 101, 2, 102]);
 }
+
+#[test]
+fn test_lanes_mut_collect_aliasing() {
+    let mut a = leto2([2, 3], vec![0; 6]);
+    let mut lanes: Vec<_> = a.lanes_mut::<1>(0).unwrap().collect();
+    *lanes[0].get_mut([0]).unwrap() = 1;
+    *lanes[1].get_mut([0]).unwrap() = 2;
+    *lanes[0].get_mut([1]).unwrap() = 3;
+    assert_eq!(
+        a.iter().copied().collect::<Vec<_>>(),
+        vec![1, 2, 0, 3, 0, 0]
+    );
+}

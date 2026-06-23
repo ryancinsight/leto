@@ -279,27 +279,39 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
 /// A mutable zero-copy view of an N-dimensional strided array.
 pub struct ArrayViewMut<'a, T, const N: usize> {
     pub(crate) layout: Layout<N>,
-    pub(crate) data: &'a mut [T],
+    pub(crate) ptr: std::ptr::NonNull<T>,
+    pub(crate) len: usize,
+    pub(crate) _marker: std::marker::PhantomData<&'a mut [T]>,
 }
 
 impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// Create a new ArrayViewMut from a layout and mutable slice.
     #[inline]
     pub fn new(layout: Layout<N>, data: &'a mut [T]) -> Self {
-        Self { layout, data }
+        Self {
+            layout,
+            ptr: unsafe { std::ptr::NonNull::new_unchecked(data.as_mut_ptr()) },
+            len: data.len(),
+            _marker: std::marker::PhantomData,
+        }
     }
 
     /// Create a bounds-checked ArrayViewMut from a layout and mutable slice.
     #[inline]
     pub fn try_new(layout: Layout<N>, data: &'a mut [T]) -> Result<Self> {
         layout.validate_storage_len(data.len())?;
-        Ok(Self { layout, data })
+        Ok(Self::new(layout, data))
     }
 
     /// Reborrow the mutable view with a shorter lifetime.
     #[inline]
     pub fn reborrow(&mut self) -> ArrayViewMut<'_, T, N> {
-        ArrayViewMut::new(self.layout, self.data)
+        ArrayViewMut {
+            layout: self.layout,
+            ptr: self.ptr,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        }
     }
 
     /// Returns the shape of the view.
@@ -335,50 +347,66 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// Returns the raw data slice as read-only.
     #[inline]
     pub fn data(&self) -> &[T] {
-        self.data
+        // SAFETY: self.ptr is valid for self.len elements.
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
     }
 
     /// Returns the raw mutable data slice.
     #[inline]
     pub fn data_mut(&mut self) -> &mut [T] {
-        self.data
+        // SAFETY: self.ptr is valid for self.len elements.
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+    }
+
+    /// Consume the view and return the backing mutable slice with lifetime `'a`.
+    #[inline]
+    pub fn into_slice(self) -> &'a mut [T] {
+        // SAFETY: self.ptr is valid for self.len elements and lifetime 'a.
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 
     /// Get a reference to the element at the specified index.
     #[inline]
     pub fn get(&self, index: [usize; N]) -> Result<&T> {
         let offset = self.layout.offset_of(index)?;
-        if offset >= self.data.len() {
+        if offset >= self.len {
             return Err(LetoError::StorageError {
                 reason: format!(
                     "physical offset {offset} exceeds backing slice length {}",
-                    self.data.len()
+                    self.len
                 ),
             });
         }
-        Ok(&self.data[offset])
+        // SAFETY: self.ptr is valid for self.len elements.
+        unsafe { Ok(&*self.ptr.as_ptr().add(offset)) }
     }
 
     /// Get a mutable reference to the element at the specified index.
     #[inline]
     pub fn get_mut(&mut self, index: [usize; N]) -> Result<&mut T> {
         let offset = self.layout.offset_of(index)?;
-        if offset >= self.data.len() {
+        if offset >= self.len {
             return Err(LetoError::StorageError {
                 reason: format!(
                     "physical offset {offset} exceeds backing slice length {}",
-                    self.data.len()
+                    self.len
                 ),
             });
         }
-        Ok(&mut self.data[offset])
+        // SAFETY: self.ptr is valid for self.len elements.
+        unsafe { Ok(&mut *self.ptr.as_ptr().add(offset)) }
     }
 
     /// Slice the mutable view, returning a sub-view.
     #[inline]
     pub fn slice_mut(self, ranges: &[(usize, usize, isize); N]) -> Result<ArrayViewMut<'a, T, N>> {
         let sliced_layout = self.layout.slice(ranges)?;
-        Ok(ArrayViewMut::new(sliced_layout, self.data))
+        Ok(ArrayViewMut {
+            layout: sliced_layout,
+            ptr: self.ptr,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Slice the mutable view with ndarray-style arguments.
@@ -388,14 +416,24 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         args: &[SliceArg],
     ) -> Result<ArrayViewMut<'a, T, M>> {
         let sliced_layout = self.layout.slice_with(args)?;
-        Ok(ArrayViewMut::new(sliced_layout, self.data))
+        Ok(ArrayViewMut {
+            layout: sliced_layout,
+            ptr: self.ptr,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Transpose the mutable view by permuting axes.
     #[inline]
     pub fn transpose_mut(self, axes: [usize; N]) -> Result<ArrayViewMut<'a, T, N>> {
         let transposed_layout = self.layout.transpose(axes)?;
-        Ok(ArrayViewMut::new(transposed_layout, self.data))
+        Ok(ArrayViewMut {
+            layout: transposed_layout,
+            ptr: self.ptr,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Broadcast the mutable view to a larger dimensional shape.
@@ -413,7 +451,12 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
                 to: target_shape.to_vec(),
             });
         }
-        Ok(ArrayViewMut::new(broadcasted_layout, self.data))
+        Ok(ArrayViewMut {
+            layout: broadcasted_layout,
+            ptr: self.ptr,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Reinterpret this mutable view with a new shape without copying.
@@ -423,7 +466,12 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn reshape_mut<const M: usize>(self, shape: [usize; M]) -> Result<ArrayViewMut<'a, T, M>> {
         let reshaped_layout = self.layout.reshape(shape)?;
-        Ok(ArrayViewMut::new(reshaped_layout, self.data))
+        Ok(ArrayViewMut {
+            layout: reshaped_layout,
+            ptr: self.ptr,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        })
     }
 
     /// Named alias for [`transpose_mut`](Self::transpose_mut).
@@ -465,7 +513,17 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_slice(&self) -> Option<&[T]> {
         if self.layout.is_c_dense() {
-            self.data.get(dense_block_range(&self.layout)?)
+            let range = dense_block_range(&self.layout)?;
+            if range.end <= self.len {
+                unsafe {
+                    Some(std::slice::from_raw_parts(
+                        self.ptr.as_ptr().add(range.start),
+                        range.len(),
+                    ))
+                }
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -476,7 +534,17 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_mut_slice(&mut self) -> Option<&mut [T]> {
         if self.layout.is_c_dense() {
-            self.data.get_mut(dense_block_range(&self.layout)?)
+            let range = dense_block_range(&self.layout)?;
+            if range.end <= self.len {
+                unsafe {
+                    Some(std::slice::from_raw_parts_mut(
+                        self.ptr.as_ptr().add(range.start),
+                        range.len(),
+                    ))
+                }
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -487,7 +555,17 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_slice_memory_order(&self) -> Option<&[T]> {
         if self.layout.is_contiguous() {
-            self.data.get(dense_block_range(&self.layout)?)
+            let range = dense_block_range(&self.layout)?;
+            if range.end <= self.len {
+                unsafe {
+                    Some(std::slice::from_raw_parts(
+                        self.ptr.as_ptr().add(range.start),
+                        range.len(),
+                    ))
+                }
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -500,7 +578,17 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_mut_slice_memory_order(&mut self) -> Option<&mut [T]> {
         if self.layout.is_contiguous() {
-            self.data.get_mut(dense_block_range(&self.layout)?)
+            let range = dense_block_range(&self.layout)?;
+            if range.end <= self.len {
+                unsafe {
+                    Some(std::slice::from_raw_parts_mut(
+                        self.ptr.as_ptr().add(range.start),
+                        range.len(),
+                    ))
+                }
+            } else {
+                None
+            }
         } else {
             None
         }

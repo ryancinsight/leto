@@ -275,14 +275,13 @@ impl<'a, T, const N: usize, const M: usize> Iterator for LanesMut<'a, T, N, M> {
         let span_len = max_offset - min_offset + 1;
         let adjusted_layout = Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
 
-        // SAFETY: distinct lanes have distinct complement origins; under the
-        // non-aliasing layout validated in `new`, the index→offset map is
-        // injective, so the physical element sets of distinct lanes are disjoint
-        // (see the partition theorem). Each yielded mutable view therefore
-        // borrows a region no other yielded view touches.
         unsafe {
-            let slice = std::slice::from_raw_parts_mut(self.ptr.add(min_offset), span_len);
-            Some(ArrayViewMut::new(adjusted_layout, slice))
+            Some(ArrayViewMut {
+                layout: adjusted_layout,
+                ptr: std::ptr::NonNull::new_unchecked(self.ptr.add(min_offset)),
+                len: span_len,
+                _marker: std::marker::PhantomData,
+            })
         }
     }
 

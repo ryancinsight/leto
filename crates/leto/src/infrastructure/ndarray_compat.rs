@@ -134,7 +134,7 @@ where
             .into_dimension()
             .strides(strides_usize.into_dimension());
         let offset = view.offset();
-        let slice = &mut view.data[offset..];
+        let slice = &mut view.into_slice()[offset..];
         let nd_view = ndarray::ArrayViewMut::from_shape(nd_shape, slice).map_err(|e| {
             LetoError::StorageError {
                 reason: e.to_string(),

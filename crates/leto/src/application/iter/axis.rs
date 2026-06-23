@@ -146,12 +146,13 @@ impl<'a, T, const N: usize, const M: usize> Iterator for AxisIterMut<'a, T, N, M
             let adjusted_layout =
                 Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
 
-            // SAFETY: The iterator yields disjoint subviews along the axis, so mutable slices
-            // do not overlap and aliasing invariants are preserved. We construct the slice
-            // on the narrowest addressable physical span for the subview for safety.
             unsafe {
-                let slice = std::slice::from_raw_parts_mut(self.ptr.add(min_offset), span_len);
-                Some(ArrayViewMut::new(adjusted_layout, slice))
+                Some(ArrayViewMut {
+                    layout: adjusted_layout,
+                    ptr: std::ptr::NonNull::new_unchecked(self.ptr.add(min_offset)),
+                    len: span_len,
+                    _marker: std::marker::PhantomData,
+                })
             }
         }
     }
