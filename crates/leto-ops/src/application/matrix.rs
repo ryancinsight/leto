@@ -388,7 +388,13 @@ fn route_matmul<T: Scalar>(
 ) -> Result<()> {
     let layout = validate_matmul(lhs, rhs, out)?;
 
-    if lhs.is_c_contiguous() && rhs.is_f_contiguous() && out.is_c_contiguous() {
+    // Fast-path selection uses offset-independent dense predicates: the dot/cc/
+    // outer kernels address every operand through its layout's own `offset`, so
+    // a batched or sliced sub-view that is dense-but-offset (e.g. batch `b` of a
+    // C-contiguous 3-D output, offset `b·m·n`) is served in place with no
+    // operand copy and no scratch allocation. Pinning `offset == 0` here
+    // (`is_c_contiguous`) was forcing those views down the allocating fallback.
+    if lhs.is_c_dense() && rhs.is_f_dense() && out.is_c_dense() {
         #[cfg(feature = "parallel")]
         {
             if is_parallel_beneficial(layout) {
@@ -400,7 +406,7 @@ fn route_matmul<T: Scalar>(
         return Ok(());
     }
 
-    if lhs.is_f_contiguous() && rhs.is_c_contiguous() && out.is_c_contiguous() {
+    if lhs.is_f_dense() && rhs.is_c_dense() && out.is_c_dense() {
         #[cfg(feature = "parallel")]
         {
             if is_parallel_beneficial(layout) {
@@ -412,7 +418,7 @@ fn route_matmul<T: Scalar>(
         return Ok(());
     }
 
-    if lhs.is_c_contiguous() && rhs.is_c_contiguous() && out.is_c_contiguous() {
+    if lhs.is_c_dense() && rhs.is_c_dense() && out.is_c_dense() {
         #[cfg(feature = "parallel")]
         {
             if is_parallel_beneficial(layout) {
@@ -424,9 +430,11 @@ fn route_matmul<T: Scalar>(
         return Ok(());
     }
 
-    // Fallback: copy non-contiguous operands to contiguous
+    // Fallback: copy only genuinely non-dense operands to contiguous. A
+    // dense-but-offset operand is kept in place (the generic kernel addresses it
+    // through its layout offset), so only strided/broadcast operands pay a copy.
     let lhs_contig;
-    let lhs_view = if lhs.is_c_contiguous() {
+    let lhs_view = if lhs.is_c_dense() {
         lhs.reborrow()
     } else {
         lhs_contig = lhs.to_contiguous();
@@ -434,7 +442,7 @@ fn route_matmul<T: Scalar>(
     };
 
     let rhs_contig;
-    let rhs_view = if rhs.is_c_contiguous() {
+    let rhs_view = if rhs.is_c_dense() {
         rhs.reborrow()
     } else {
         rhs_contig = rhs.to_contiguous();
@@ -463,10 +471,13 @@ pub fn matmul<T: Scalar>(
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
 ) -> Result<()> {
-    if out.is_c_contiguous() {
+    // Dense-but-offset outputs (a batched/sliced sub-view) route in place: the
+    // kernels write through the layout offset, so only a genuinely strided
+    // output needs the scratch + copy-back.
+    if out.is_c_dense() {
         let mut out_view = out.reborrow();
         route_matmul(lhs, rhs, &mut out_view, false)
-    } else if out.is_f_contiguous() {
+    } else if out.is_f_dense() {
         let lhs_t = lhs.transpose([1, 0])?;
         let rhs_t = rhs.transpose([1, 0])?;
         let mut out_t = out.reborrow().transpose_mut([1, 0])?;
@@ -486,10 +497,12 @@ pub fn matmul_accumulate<T: Scalar>(
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
 ) -> Result<()> {
-    if out.is_c_contiguous() {
+    // Dense-but-offset outputs route in place (kernels honor the layout offset);
+    // only a genuinely strided output needs the scratch + copy-back.
+    if out.is_c_dense() {
         let mut out_view = out.reborrow();
         route_matmul(lhs, rhs, &mut out_view, true)
-    } else if out.is_f_contiguous() {
+    } else if out.is_f_dense() {
         let lhs_t = lhs.transpose([1, 0])?;
         let rhs_t = rhs.transpose([1, 0])?;
         let mut out_t = out.reborrow().transpose_mut([1, 0])?;
@@ -903,8 +916,15 @@ pub fn batched_matmul<T: Scalar>(
     #[cfg(feature = "parallel")]
     {
         if batch > 1 {
-            let error_cell = std::sync::Arc::new(std::sync::Mutex::new(Ok(())));
-            let error_cell_clone = error_cell.clone();
+            // Hot-path early-out uses a relaxed atomic flag rather than locking a
+            // mutex on every batch index; the mutex is acquired only on the
+            // (pre-validated, effectively unreachable) error path to record the
+            // first failure. The `for_each_index_with` join supplies the
+            // happens-before barrier for the recorded error.
+            let had_error = std::sync::Arc::new(core::sync::atomic::AtomicBool::new(false));
+            let error_slot = std::sync::Arc::new(std::sync::Mutex::new(None::<LetoError>));
+            let had_error_w = had_error.clone();
+            let error_slot_w = error_slot.clone();
             let lhs_ptr = lhs.data().as_ptr() as usize;
             let rhs_ptr = rhs.data().as_ptr() as usize;
             let out_ptr = out.data_mut().as_mut_ptr() as usize;
@@ -918,7 +938,7 @@ pub fn batched_matmul<T: Scalar>(
             let rhs_strides = [rhs.strides()[1], rhs.strides()[2]];
 
             moirai::for_each_index_with::<moirai::Adaptive, _>(batch, move |b| {
-                if error_cell_clone.lock().unwrap().is_err() {
+                if had_error_w.load(core::sync::atomic::Ordering::Relaxed) {
                     return;
                 }
 
@@ -956,16 +976,16 @@ pub fn batched_matmul<T: Scalar>(
                 };
 
                 if let Err(e) = matmul(&lhs_view, &rhs_view, &mut out_view) {
-                    let mut lock = error_cell_clone.lock().unwrap();
-                    if lock.is_ok() {
-                        *lock = Err(e);
+                    let mut slot = error_slot_w.lock().unwrap();
+                    if slot.is_none() {
+                        *slot = Some(e);
                     }
+                    had_error_w.store(true, core::sync::atomic::Ordering::Relaxed);
                 }
             });
 
-            let lock = error_cell.lock().unwrap();
-            if let Err(e) = &*lock {
-                return Err(e.clone());
+            if let Some(e) = error_slot.lock().unwrap().take() {
+                return Err(e);
             }
             return Ok(());
         }

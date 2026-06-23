@@ -199,6 +199,22 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
         self.layout.is_contiguous()
     }
 
+    /// Returns true when the view's strides are canonically C (row-major),
+    /// independent of the base offset (offset-independent half of
+    /// [`is_c_contiguous`](Self::is_c_contiguous)).
+    #[inline]
+    pub fn is_c_dense(&self) -> bool {
+        self.layout.is_c_dense()
+    }
+
+    /// Returns true when the view's strides are canonically Fortran
+    /// (column-major), independent of the base offset (offset-independent half
+    /// of [`is_f_contiguous`](Self::is_f_contiguous)).
+    #[inline]
+    pub fn is_f_dense(&self) -> bool {
+        self.layout.is_f_dense()
+    }
+
     /// Expose the underlying slice if the elements form a dense row-major
     /// (C-order) block, independent of offset.
     #[inline]
@@ -506,6 +522,22 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn is_contiguous(&self) -> bool {
         self.layout.is_contiguous()
+    }
+
+    /// Returns true when the view's strides are canonically C (row-major),
+    /// independent of the base offset (offset-independent half of
+    /// [`is_c_contiguous`](Self::is_c_contiguous)).
+    #[inline]
+    pub fn is_c_dense(&self) -> bool {
+        self.layout.is_c_dense()
+    }
+
+    /// Returns true when the view's strides are canonically Fortran
+    /// (column-major), independent of the base offset (offset-independent half
+    /// of [`is_f_contiguous`](Self::is_f_contiguous)).
+    #[inline]
+    pub fn is_f_dense(&self) -> bool {
+        self.layout.is_f_dense()
     }
 
     /// Expose the underlying slice if the elements form a dense row-major

@@ -137,6 +137,40 @@ rev-bumps to leto 0.24.0.
 
 ## D. Residual Risk Register
 
+Update 2026-06-23 (matmul offset-routing audit). Deep safety/contention/memory
+audit of the highest-unsafe-density paths (`view.rs` aliasing, storage
+exception-safety, `matrix.rs` parallel matmul). Conclusions:
+- **Storage (`infrastructure/storage/mnemosyne.rs`): clean.** No leak, double-free,
+  UAF, misalignment, ZST/zero-length mishandling, or overflow gap; the
+  `MnemosyneInitGuard` drops the initialized prefix and frees exactly once with
+  `mem::forget` on success. One non-defect noted: the `if !ptr.is_null()` guards
+  are dead branches (`allocate_raw` returns `dangling()` for size 0 and panics on
+  failure, never null) — correctness-clarity only, left as-is.
+- **`matrix.rs` parallel matmul: no data race on output** — every `for_each_index`
+  task writes disjoint output rows/batches (`validate_matmul` rejects zero-stride
+  output aliasing). Two real perf/memory defects found and **fixed this cycle**:
+  (1) batched/offset-subview matmul fell to the allocating fallback because the
+  routing predicates pinned `offset == 0`; relaxed to `is_c_dense`/`is_f_dense`
+  (kernels already honor the layout offset) → no per-batch scratch/copy-back,
+  fast kernels run; (2) per-batch `Mutex` poll replaced with a relaxed
+  `AtomicBool` early-out.
+- **RESIDUAL RISK / follow-on [patch]:** in `batched_matmul`'s parallel closure
+  each task materializes `slice::from_raw_parts_mut(out_ptr, out_len)` over the
+  **full** output backing buffer, then writes only its batch sub-region. The
+  writes are disjoint (sound at runtime), but holding N concurrent `&mut [T]`
+  over the same full range is UB under Stacked/Tree Borrows even when writes do
+  not overlap. The per-row parallel kernels (`parallel_dot/cc/outer`) are clean —
+  they build per-row disjoint `from_raw_parts_mut(out_ptr.add(off + i·n), n)`
+  slices. Closing the batched case means borrowing only each batch's disjoint
+  sub-slice (clean for contiguous outputs) or a raw-pointer view that never
+  forms a full-buffer `&mut`; deferred as its own change needing Tree-Borrows/Miri
+  verification (Miri unavailable in this Windows env), not folded into this
+  allocation/contention fix.
+- **Hygiene:** removed the stale orphaned `target_ag/` second target tree (1.5 GiB,
+  5 days untouched, gitignored, not the configured target dir) — it had filled
+  the disk and violates the single-`CARGO_TARGET_DIR` rule.
+
+
 Update 2026-06-15 (v0.24.0): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through

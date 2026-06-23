@@ -6,8 +6,34 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Added
+
+- `leto` [minor]: offset-independent dense-stride predicates `Layout::is_f_dense`
+  and `is_c_dense`/`is_f_dense` on `ArrayView`/`ArrayViewMut` (the offset-free
+  halves of `is_c_contiguous`/`is_f_contiguous`). They let kernels that address
+  operands through the layout's own `offset` route a dense-but-offset sub-view
+  (a batched/sliced block) without pinning `offset == 0`.
+
 ### Changed
 
+- `leto-ops` [patch]: `matmul`/`matmul_accumulate`/`route_matmul` now select the
+  in-place fast paths on the offset-independent `is_c_dense`/`is_f_dense`
+  predicates instead of `is_c_contiguous`/`is_f_contiguous`. A dense output (or
+  operand) at a non-zero offset — every batch `b > 0` of a contiguous
+  `batched_matmul`, and any matmul into a sliced sub-array — previously fell to
+  the allocating fallback (a per-call scratch `[M,N]` array, an operand
+  `to_contiguous` copy, and a copy-back), bypassing the dot/cc/outer/row-blocked
+  kernels entirely. Those kernels already address through the layout offset, so
+  the views now route in place: no per-batch heap allocation, no copy-back, and
+  the tuned kernels run. Offset-0 contiguous inputs (the benchmarked case) take
+  the identical branch as before — `is_c_dense == is_c_contiguous` at offset 0 —
+  so the change is allocation/contention reduction for offset views with no
+  codegen change on the existing hot paths.
+- `leto-ops` [patch]: `batched_matmul`'s parallel path no longer acquires a
+  `Mutex` on every batch index. The per-batch early-out now reads a relaxed
+  `AtomicBool`; the mutex (recording the first error) is taken only on the
+  pre-validated, effectively-unreachable failure path, removing a serialization
+  point from the parallel dispatch loop.
 - `leto-ops` [minor]: added a narrow CPU CSR matrix representation, SpMV, and
   SpMM kernels (`CsrMatrix`, `spmv`, `spmv_into`, `spmm`, `spmm_into`) for sparse parity. CSR compression
   scans strided dense views without materializing a dense copy; SpMV borrows

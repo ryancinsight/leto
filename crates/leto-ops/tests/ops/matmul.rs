@@ -154,3 +154,32 @@ fn test_matmul_hang_reproduction() {
 
     matmul(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
 }
+
+/// A C-dense output view at a non-zero offset (a sliced sub-array, as produced
+/// per-batch by `batched_matmul`) must route through the in-place fast path:
+/// the result is correct, no scratch/copy-back corrupts it, and elements
+/// outside the view are left untouched. Pins the offset-independent
+/// `is_c_dense` routing that replaced the offset-pinned `is_c_contiguous`.
+#[test]
+fn test_matmul_into_offset_c_dense_view_writes_in_place() {
+    let lhs = Array::from_shape_vec([2, 3], vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let rhs = Array::from_shape_vec([3, 2], vec![7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0]).unwrap();
+
+    // 4x2 backing buffer; rows 0..2 are a sentinel that must stay untouched.
+    let mut out = Array::from_shape_vec([4, 2], vec![-1.0f32; 8]).unwrap();
+
+    {
+        // Rows 2..4 form a [2,2] C-dense view at offset 4 (strides [2,1]):
+        // is_c_dense() == true while is_c_contiguous() == false.
+        let mut out_sub = out.slice_mut(&[(2, 4, 1), (0, 2, 1)]).unwrap();
+        assert!(out_sub.is_c_dense());
+        assert!(!out_sub.is_c_contiguous());
+        matmul(&lhs.view(), &rhs.view(), &mut out_sub).unwrap();
+    }
+
+    let data = out.storage().as_slice();
+    // Sentinel rows untouched (no over-write outside the view).
+    assert_eq!(&data[0..4], &[-1.0, -1.0, -1.0, -1.0]);
+    // Product written in place at the view's offset.
+    assert_eq!(&data[4..8], &[58.0, 64.0, 139.0, 154.0]);
+}

@@ -1,5 +1,25 @@
 # Leto Development Checklist
 
+2026-06-23 (matmul offset-routing). Audited the highest-unsafe-density paths
+(`view.rs` aliasing, storage exception-safety, parallel `matrix.rs`). Storage is
+clean; parallel output writes are disjoint. Fixed two real perf/memory defects:
+(1) `matmul`/`route_matmul` now route dense-but-offset views (every batch `b>0`
+of `batched_matmul`, any sliced sub-array output) through the in-place fast
+kernels via new offset-independent `is_c_dense`/`is_f_dense` predicates instead
+of the offset-pinned `is_c_contiguous` — eliminating the per-batch scratch
+allocation + operand copy + copy-back; (2) `batched_matmul`'s parallel path
+replaced the per-batch `Mutex` poll with a relaxed `AtomicBool` early-out.
+Offset-0 contiguous inputs take the identical branch (no codegen change on
+benchmarked paths). New test `test_matmul_into_offset_c_dense_view_writes_in_place`
+pins value-correctness + no out-of-view writes. Recorded residual risk: the
+batched parallel closure's full-buffer `&mut` aliasing (Tree-Borrows UB though
+runtime-disjoint) — filed as a follow-on [patch]. Removed the stale 1.5 GiB
+`target_ag/` orphan target tree (disk was 100% full). Evidence: `cargo fmt --all
+--check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo nextest
+run --workspace` (405 passed); `cargo test --doc --workspace` (5 doctests);
+`cargo doc -p leto` (3 pre-existing unrelated warnings; `leto-python` rustdoc
+ICE is a pre-existing toolchain bug, not this change).
+
 Sprint phase: Execution (performance track). Target version: 0.35.1 [patch]
 (Cargo.toml bumped; CHANGELOG synced). Unreleased minor/patch lane: Leto owns
 narrow CPU CSR sparse-dense parity kernels while Coeus keeps higher sparse

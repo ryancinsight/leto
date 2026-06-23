@@ -84,4 +84,17 @@ impl<const N: usize> Layout<N> {
     pub fn is_c_dense(&self) -> bool {
         self.matches_c_strides()
     }
+
+    /// Returns true when the strides match the Fortran pattern for this shape,
+    /// independent of the base offset. Column-major dense block predicate.
+    ///
+    /// This is the offset-independent half of [`is_f_contiguous`]; kernels that
+    /// address elements through the layout's own `offset` (e.g. matmul on a
+    /// batched or sliced sub-view) only require the dense stride pattern, not
+    /// the canonical `offset == 0`.
+    ///
+    /// [`is_f_contiguous`]: Layout::is_f_contiguous
+    pub fn is_f_dense(&self) -> bool {
+        self.matches_f_strides()
+    }
 }
