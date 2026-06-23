@@ -194,7 +194,7 @@ fn test_stack_panic_cleanup() {
 
     std::mem::drop(a);
 
-    assert_eq!(drop_count.load(Ordering::SeqCst), 5);
+    assert_eq!(drop_count.load(Ordering::SeqCst), 7);
 }
 
 #[test]
