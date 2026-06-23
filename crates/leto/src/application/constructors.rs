@@ -1,7 +1,17 @@
 use crate::application::array::Array;
-use crate::application::index::index_from_flat;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
+
+#[inline]
+fn increment_index<const N: usize>(index: &mut [usize; N], shape: &[usize; N]) {
+    for i in (0..N).rev() {
+        index[i] += 1;
+        if index[i] < shape[i] {
+            break;
+        }
+        index[i] = 0;
+    }
+}
 #[cfg(feature = "mnemosyne-alloc")]
 use crate::infrastructure::storage::MnemosyneStorage;
 use crate::infrastructure::storage::{StackStorage, VecStorage};
@@ -101,8 +111,10 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
         let mut vec: Vec<T> = Vec::with_capacity(size);
-        for flat_idx in 0..size {
-            vec.push(f(index_from_flat(flat_idx, &shape)));
+        let mut index = [0usize; N];
+        for _ in 0..size {
+            vec.push(f(index));
+            increment_index(&mut index, &shape);
         }
         let storage = VecStorage::new(vec);
         Self::new(layout, storage).expect("Valid layout bounds")
@@ -169,8 +181,10 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
         let mut vec: Vec<T> = Vec::with_capacity(size);
-        for flat_idx in 0..size {
-            vec.push(f(index_from_flat(flat_idx, &shape)));
+        let mut index = [0usize; N];
+        for _ in 0..size {
+            vec.push(f(index));
+            increment_index(&mut index, &shape);
         }
         let storage = MnemosyneStorage::from_vec(vec);
         Self::new(layout, storage).expect("Valid layout bounds")
