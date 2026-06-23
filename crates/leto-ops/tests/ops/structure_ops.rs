@@ -22,6 +22,56 @@ fn test_batched_matmul_two_batches() {
     );
 }
 
+/// An empty output matrix (`M == 0`) has no work and must not panic in the
+/// disjointness/span computation; it routes to the sequential loop.
+#[test]
+fn test_batched_matmul_empty_output_matrix_is_noop() {
+    let lhs = arr([2, 0, 3], vec![]);
+    let rhs = arr([2, 3, 2], (0..12).map(|x| x as f64).collect());
+    let mut out = arr([2, 0, 2], vec![]);
+    batched_matmul(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice().len(), 0);
+}
+
+/// An interleaved-batch output view (batch stride < one matrix's physical span)
+/// cannot give parallel tasks disjoint `&mut` slices, so `batched_matmul` routes
+/// it through the unconditionally-sound sequential path. Pins the disjointness
+/// guard: the result must equal the C-contiguous reference element-for-element.
+#[test]
+fn test_batched_matmul_interleaved_output_matches_contiguous_reference() {
+    let lhs = arr([2, 2, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+    let rhs = arr([2, 2, 2], vec![1.0, 0.0, 2.0, 1.0, 0.0, 3.0, 1.0, 2.0]);
+
+    // Reference: C-contiguous [B, M, N] output (disjoint per-batch blocks).
+    let mut out_ref = arr([2, 2, 2], vec![0.0; 8]);
+    batched_matmul(&lhs.view(), &rhs.view(), &mut out_ref.view_mut()).unwrap();
+
+    // Interleaved output: permute a [M, N, B] buffer to [B, M, N] so the batch
+    // axis carries stride 1 (< the per-matrix span) — `batches_disjoint` is
+    // false and the sequential fallback must run.
+    let mut base = arr([2, 2, 2], vec![0.0; 8]);
+    {
+        let mut out = base.transpose_mut([2, 0, 1]).unwrap();
+        assert_eq!(
+            out.strides()[0],
+            1,
+            "batch axis must be the interleaved (stride-1) axis"
+        );
+        batched_matmul(&lhs.view(), &rhs.view(), &mut out).unwrap();
+        for b in 0..2 {
+            for i in 0..2 {
+                for j in 0..2 {
+                    assert_eq!(
+                        *out.get([b, i, j]).unwrap(),
+                        *out_ref.get([b, i, j]).unwrap(),
+                        "interleaved-output mismatch at batch {b} ({i},{j})"
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn test_batched_matmul_broadcasts_rhs_batch() {
     // rhs batch dim is 1, broadcast across both lhs batches.

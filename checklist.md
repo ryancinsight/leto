@@ -1,5 +1,22 @@
 # Leto Development Checklist
 
+2026-06-23 (batched-matmul aliasing UB). Closed the recorded follow-on: the
+parallel `batched_matmul` closure formed a full-buffer `&mut [T]` per task
+(`from_raw_parts_mut(out_ptr, out_len)`), writing only its batch sub-region —
+runtime-disjoint but Tree-Borrows UB to hold N concurrent full-range `&mut`.
+Each task now borrows only its batch's physical span (`min_max_offsets`) with a
+rebased offset; a disjointness guard (`batch_stride ≥ per-matrix span`, non-empty)
+routes interleaved-batch outputs to the sound sequential loop. A full-surface
+sweep confirmed this was the only such site (per-row/per-block/per-chunk kernels
+already disjoint). New tests: interleaved-output fallback (vs C-contiguous
+reference) + empty-output boundary. Evidence: `cargo fmt --all --check`; `cargo
+clippy --workspace --all-targets -- -D warnings`; `cargo nextest run --workspace`
+(407 passed); `cargo test --doc --workspace` (5 doctests). Soundness is by
+Tree-Borrows reasoning + differential oracles (Miri unavailable on this
+Windows/moirai-asm env). Note: the shared `moirai` path-patched dep was
+transiently broken mid-session by a concurrent agent and self-recovered; not
+touched per non-interference.
+
 2026-06-23 (matmul offset-routing). Audited the highest-unsafe-density paths
 (`view.rs` aliasing, storage exception-safety, parallel `matrix.rs`). Storage is
 clean; parallel output writes are disjoint. Fixed two real perf/memory defects:

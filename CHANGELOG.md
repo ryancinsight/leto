@@ -109,6 +109,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- `leto-ops` [patch]: eliminated an aliasing-UB hazard in `batched_matmul`'s
+  parallel path. Each batch task materialized `from_raw_parts_mut(out_ptr,
+  out_len)` over the **full** output buffer and wrote only its batch sub-region;
+  the writes were physically disjoint, but holding N concurrent `&mut [T]` over
+  the same range is undefined behavior under Stacked/Tree Borrows regardless.
+  Each task now borrows only its batch's physical span (`min_max_offsets`) with a
+  rebased offset, so concurrent `&mut` slices never overlap. A disjointness guard
+  (`batch_stride ≥ per-matrix span`) routes the rare interleaved-batch output —
+  where bounding spans would overlap — to the unconditionally-sound sequential
+  loop. Per-row/per-block kernels were already disjoint and are unchanged. New
+  tests cover the interleaved-output fallback (vs C-contiguous reference) and the
+  empty-output boundary; 407 workspace tests pass.
 - `leto-ops` [patch]: `Scalar::tiled_gemm` now defaults to the scalar GEMM
   fallback, with SIMD dispatch provided only by concrete scalar impls whose
   `SimdStrategy: SimdOperations<T>` implementation exists. This preserves the

@@ -915,7 +915,23 @@ pub fn batched_matmul<T: Scalar>(
 
     #[cfg(feature = "parallel")]
     {
-        if batch > 1 {
+        // The parallel path hands each task a `&mut` over only its own batch's
+        // physical footprint, so concurrent tasks never hold overlapping `&mut`
+        // slices. (Forming N `&mut` over the same full buffer is UB under
+        // Stacked/Tree Borrows even when the writes are physically disjoint.)
+        // This requires the per-batch footprints to be physically disjoint;
+        // they are unless the batch stride is smaller than one matrix's physical
+        // span (an interleaved-batch output view), in which case we fall through
+        // to the sequential loop below, which reborrows one batch at a time and
+        // is unconditionally sound.
+        let out_span = 1
+            + out_m.saturating_sub(1) * out_strides[0].unsigned_abs()
+            + out_n.saturating_sub(1) * out_strides[1].unsigned_abs();
+        let batches_disjoint = out_batch_stride.unsigned_abs() >= out_span;
+        // Non-empty guard: an empty output matrix has no work and would make the
+        // per-batch `min_max_offsets` on a zero-shape layout degenerate, so let
+        // the sequential loop handle it.
+        if batch > 1 && batches_disjoint && out_m > 0 && out_n > 0 {
             // Hot-path early-out uses a relaxed atomic flag rather than locking a
             // mutex on every batch index; the mutex is acquired only on the
             // (pre-validated, effectively unreachable) error path to record the
@@ -930,7 +946,6 @@ pub fn batched_matmul<T: Scalar>(
             let out_ptr = out.data_mut().as_mut_ptr() as usize;
             let lhs_len = lhs.data().len();
             let rhs_len = rhs.data().len();
-            let out_len = out.data().len();
 
             let lhs_offset = lhs.offset() as isize;
             let rhs_offset = rhs.offset() as isize;
@@ -963,15 +978,17 @@ pub fn batched_matmul<T: Scalar>(
                 let rhs_view = unsafe {
                     ArrayView::new(rhs_layout, core::slice::from_raw_parts(rhs_ptr, rhs_len))
                 };
-                let out_layout = Layout::new(
-                    [out_m, out_n],
-                    out_strides,
-                    (out_offset + b as isize * out_batch_stride) as usize,
-                );
+                let abs_offset = (out_offset + b as isize * out_batch_stride) as usize;
+                let out_layout = Layout::new([out_m, out_n], out_strides, abs_offset);
+                // Borrow only this batch's physical span `[lo, hi]` and rebase
+                // the offset into it. `batches_disjoint` (checked above)
+                // guarantees these per-batch slices never overlap across tasks,
+                // so no two concurrent `&mut` alias.
+                let (lo, hi) = out_layout.min_max_offsets();
                 let mut out_view = unsafe {
                     ArrayViewMut::new(
-                        out_layout,
-                        core::slice::from_raw_parts_mut(out_ptr, out_len),
+                        Layout::new([out_m, out_n], out_strides, abs_offset - lo),
+                        core::slice::from_raw_parts_mut(out_ptr.add(lo), hi - lo + 1),
                     )
                 };
 

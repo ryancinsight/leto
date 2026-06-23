@@ -154,18 +154,25 @@ exception-safety, `matrix.rs` parallel matmul). Conclusions:
   (kernels already honor the layout offset) → no per-batch scratch/copy-back,
   fast kernels run; (2) per-batch `Mutex` poll replaced with a relaxed
   `AtomicBool` early-out.
-- **RESIDUAL RISK / follow-on [patch]:** in `batched_matmul`'s parallel closure
-  each task materializes `slice::from_raw_parts_mut(out_ptr, out_len)` over the
-  **full** output backing buffer, then writes only its batch sub-region. The
-  writes are disjoint (sound at runtime), but holding N concurrent `&mut [T]`
-  over the same full range is UB under Stacked/Tree Borrows even when writes do
-  not overlap. The per-row parallel kernels (`parallel_dot/cc/outer`) are clean —
-  they build per-row disjoint `from_raw_parts_mut(out_ptr.add(off + i·n), n)`
-  slices. Closing the batched case means borrowing only each batch's disjoint
-  sub-slice (clean for contiguous outputs) or a raw-pointer view that never
-  forms a full-buffer `&mut`; deferred as its own change needing Tree-Borrows/Miri
-  verification (Miri unavailable in this Windows env), not folded into this
-  allocation/contention fix.
+- **RESIDUAL RISK / follow-on [patch]: CLOSED 2026-06-23.** `batched_matmul`'s
+  parallel closure previously materialized `from_raw_parts_mut(out_ptr, out_len)`
+  over the **full** output buffer per task — runtime-disjoint writes but UB under
+  Stacked/Tree Borrows (N concurrent full-range `&mut`). Fixed: each task now
+  borrows only its batch's physical span (`Layout::min_max_offsets` → `[lo, hi]`)
+  with the offset rebased into that sub-slice, so concurrent `&mut` slices never
+  overlap. A disjointness guard (`|out_batch_stride| ≥ per-matrix bounding span`,
+  plus non-empty matrices) gates the parallel path; an interleaved-batch output
+  (batch stride < span → overlapping bounding boxes) falls through to the
+  sequential loop, which reborrows one batch at a time and is unconditionally
+  sound. Evidence tier: Tree-Borrows soundness reasoning (each task's `&mut`
+  range is provably disjoint) + value-semantic tests — new interleaved-output
+  (vs C-contiguous reference) and empty-output boundary tests, plus the batched
+  differential/parity oracles vs ndarray (407 workspace tests). Miri remains
+  unavailable in this Windows env (moirai inline-asm/platform), so soundness is
+  by reasoning, not a Miri run. A full-surface paranoid sweep confirmed this was
+  the **only** full-buffer-`&mut`-per-task site: every other parallel kernel
+  (`parallel_dot/cc/outer`, row-blocked, chunked map) builds disjoint per-row /
+  per-block / per-chunk slices.
 - **Hygiene:** removed the stale orphaned `target_ag/` second target tree (1.5 GiB,
   5 days untouched, gitignored, not the configured target dir) — it had filled
   the disk and violates the single-`CARGO_TARGET_DIR` rule.
