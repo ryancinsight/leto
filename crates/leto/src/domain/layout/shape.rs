@@ -17,8 +17,24 @@ impl<const N: usize> Layout<N> {
 
     /// Returns the minimum and maximum physical offsets spanned by this layout.
     pub fn min_max_offsets(&self) -> (usize, usize) {
-        self.checked_min_max_offsets()
-            .expect("layout physical offsets must be non-negative and fit in usize")
+        if N == 1 {
+            let dim = self.shape[0];
+            if dim == 0 {
+                return (self.offset, self.offset);
+            }
+            let s = self.strides[0];
+            let bound = (dim - 1) as isize * s;
+            if bound >= 0 {
+                (self.offset, self.offset + bound as usize)
+            } else {
+                let min_offset = self.offset as isize + bound;
+                assert!(min_offset >= 0, "layout accesses negative physical offset");
+                (min_offset as usize, self.offset)
+            }
+        } else {
+            self.checked_min_max_offsets()
+                .expect("layout physical offsets must be non-negative and fit in usize")
+        }
     }
 
     /// Returns the minimum and maximum physical offsets with signed overflow validation.
