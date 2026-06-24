@@ -194,6 +194,15 @@ fn serial_dot_matmul<T: Scalar>(
     }
 }
 
+/// Number of output rows processed per parallel task.
+///
+/// Each task handles `PARALLEL_ROW_BLOCK` consecutive rows of the output
+/// matrix.  Blocking reduces the task-dispatch overhead by `PARALLEL_ROW_BLOCK×`
+/// vs one-task-per-row, and ensures each task writes to a contiguous output
+/// region of at least `PARALLEL_ROW_BLOCK * n * size_of::<T>()` bytes — large
+/// enough to avoid false sharing for any practical `n`.
+const PARALLEL_ROW_BLOCK: usize = 4;
+
 #[cfg(feature = "parallel")]
 fn parallel_dot_matmul<T: Scalar>(
     lhs: &ArrayView<'_, T, 2>,
@@ -210,20 +219,26 @@ fn parallel_dot_matmul<T: Scalar>(
     let rhs_ptr = rhs.data().as_ptr() as usize;
     let out_ptr = out.data_mut().as_mut_ptr() as usize;
 
-    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(m, move |i| {
+    // Dispatch in row blocks to amortise per-task scheduling overhead.
+    let n_blocks = m.div_ceil(PARALLEL_ROW_BLOCK);
+    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(n_blocks, move |block| {
         let lhs_ptr = lhs_ptr as *const T;
         let rhs_ptr = rhs_ptr as *const T;
         let out_ptr = out_ptr as *mut T;
-        unsafe {
-            let lhs_row = core::slice::from_raw_parts(lhs_ptr.add(lhs_offset + i * k), k);
-            for j in 0..n {
-                let rhs_col = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + j * k), k);
-                let val = T::dot_slice(lhs_row, rhs_col);
-                let out_addr = out_ptr.add(out_offset + i * n + j);
-                if accumulate {
-                    *out_addr = (*out_addr).add(val);
-                } else {
-                    *out_addr = val;
+        let i_start = block * PARALLEL_ROW_BLOCK;
+        let i_end = (i_start + PARALLEL_ROW_BLOCK).min(m);
+        for i in i_start..i_end {
+            unsafe {
+                let lhs_row = core::slice::from_raw_parts(lhs_ptr.add(lhs_offset + i * k), k);
+                for j in 0..n {
+                    let rhs_col = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + j * k), k);
+                    let val = T::dot_slice(lhs_row, rhs_col);
+                    let out_addr = out_ptr.add(out_offset + i * n + j);
+                    if accumulate {
+                        *out_addr = (*out_addr).add(val);
+                    } else {
+                        *out_addr = val;
+                    }
                 }
             }
         }
@@ -287,19 +302,26 @@ fn parallel_cc_matmul<T: Scalar>(
     let rhs_ptr = rhs.data().as_ptr() as usize;
     let out_ptr = out.data_mut().as_mut_ptr() as usize;
 
-    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(m, move |i| {
+    // Dispatch in row blocks to amortise per-task scheduling overhead and
+    // avoid false sharing when n * size_of::<T>() < 64.
+    let n_blocks = m.div_ceil(PARALLEL_ROW_BLOCK);
+    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(n_blocks, move |block| {
         let lhs_ptr = lhs_ptr as *const T;
         let rhs_ptr = rhs_ptr as *const T;
         let out_ptr = out_ptr as *mut T;
-        unsafe {
-            let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
-            for kk in 0..k {
-                let alpha = *lhs_ptr.add(lhs_offset + i * k + kk);
-                if alpha == T::ZERO {
-                    continue;
+        let i_start = block * PARALLEL_ROW_BLOCK;
+        let i_end = (i_start + PARALLEL_ROW_BLOCK).min(m);
+        for i in i_start..i_end {
+            unsafe {
+                let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
+                for kk in 0..k {
+                    let alpha = *lhs_ptr.add(lhs_offset + i * k + kk);
+                    if alpha == T::ZERO {
+                        continue;
+                    }
+                    let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
+                    T::axpy_slice(alpha, rhs_row, out_row);
                 }
-                let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
-                T::axpy_slice(alpha, rhs_row, out_row);
             }
         }
     });
@@ -362,19 +384,24 @@ fn parallel_outer_matmul<T: Scalar>(
     let rhs_ptr = rhs.data().as_ptr() as usize;
     let out_ptr = out.data_mut().as_mut_ptr() as usize;
 
-    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(m, move |i| {
+    let n_blocks = m.div_ceil(PARALLEL_ROW_BLOCK);
+    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(n_blocks, move |block| {
         let lhs_ptr = lhs_ptr as *const T;
         let rhs_ptr = rhs_ptr as *const T;
         let out_ptr = out_ptr as *mut T;
-        unsafe {
-            let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
-            for kk in 0..k {
-                let alpha = *lhs_ptr.add(lhs_offset + kk * m + i);
-                if alpha == T::ZERO {
-                    continue;
+        let i_start = block * PARALLEL_ROW_BLOCK;
+        let i_end = (i_start + PARALLEL_ROW_BLOCK).min(m);
+        for i in i_start..i_end {
+            unsafe {
+                let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
+                for kk in 0..k {
+                    let alpha = *lhs_ptr.add(lhs_offset + kk * m + i);
+                    if alpha == T::ZERO {
+                        continue;
+                    }
+                    let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
+                    T::axpy_slice(alpha, rhs_row, out_row);
                 }
-                let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
-                T::axpy_slice(alpha, rhs_row, out_row);
             }
         }
     });
