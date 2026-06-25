@@ -26,6 +26,10 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [x] [minor] Unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`) with solve/inverse/determinant helpers. Verification: reconstruction, determinant/solve/inverse parity with nalgebra, invalid-input and zero-pivot rejection. Pivoted Bunch-Kaufman remains open for matrices requiring symmetric pivoting.
 
 ### Stage A2 — ndarray consolidation (support coeus/apollo)
+- [x] [patch] Extend stack fixed primitives for RITK spatial metadata:
+  `FixedVector::iter`, `FixedMatrix::iter`, and 3-D row-major/column-major
+  constructors/extractors. Verification: focused fixed primitive tests and
+  RITK consumer spatial gates.
 - [x] [minor] Add ndarray-stats variance/std parity for all-elements and axis
   reductions (`var_all`, `std_all`, `var_axis`, `std_axis`) with finite `ddof`
   validation and two-pass accumulation. Verification: closed-form population

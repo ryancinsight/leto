@@ -8,6 +8,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- `leto` [patch]: added `FixedVector::iter`, `FixedMatrix::iter`, and 3-D
+  `FixedMatrix<f64, 3, 3>` row-major/column-major constructors and extractors.
+  The driver is RITK's `ritk-spatial` storage migration off nalgebra.
 - `leto` [minor]: added stack-backed `FixedVector<T, N>` and
   `FixedMatrix<T, R, C>` primitives for small fixed-size math that should not use
   heap-backed strided arrays. The initial consumer is RITK classical registration:
