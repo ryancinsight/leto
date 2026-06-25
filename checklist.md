@@ -1,5 +1,14 @@
 # Leto Development Checklist
 
+2026-06-25 (fixed stack spatial helpers for RITK spatial SSOT). Extended
+`FixedVector<T, N>` with index-order iteration and `FixedMatrix<T, R, C>` with
+row-major iteration. Added 3-D `f64` row-major/column-major constructors and
+extractors for medical-image direction metadata interop. Driver: RITK Sprint 408
+`ritk-spatial` migration off `nalgebra`. Evidence tier: compile/lint/docs plus
+focused tests (`cargo clippy -p leto --all-targets -- -D warnings`;
+`cargo nextest run -p leto fixed` -> 6/6 passed; `cargo fmt --check -p leto`;
+`cargo test --doc -p leto`; `cargo doc -p leto --no-deps`).
+
 2026-06-25 (fixed stack math for RITK registration). Added
 `FixedVector<T, N>` and `FixedMatrix<T, R, C>` as stack-backed fixed-size
 primitives in `leto::application::fixed`, re-exported from `leto`. The initial

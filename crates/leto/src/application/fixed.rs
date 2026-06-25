@@ -27,6 +27,11 @@ impl<T, const N: usize> FixedVector<T, N> {
     pub const fn as_array(&self) -> &[T; N] {
         &self.data
     }
+
+    /// Iterate over vector components in index order.
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        self.data.iter()
+    }
 }
 
 impl<T, const N: usize> FixedVector<T, N>
@@ -156,6 +161,11 @@ impl<T, const R: usize, const C: usize> FixedMatrix<T, R, C> {
     pub const fn rows(&self) -> &[[T; C]; R] {
         &self.data
     }
+
+    /// Iterate over matrix entries in row-major order.
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.data.iter().flat_map(|row| row.iter())
+    }
 }
 
 impl<T, const R: usize, const C: usize> FixedMatrix<T, R, C>
@@ -206,6 +216,54 @@ where
 }
 
 impl FixedMatrix<f64, 3, 3> {
+    /// Create a 3x3 matrix from row-major storage.
+    pub const fn from_row_major(data: [f64; 9]) -> Self {
+        Self::from_rows([
+            [data[0], data[1], data[2]],
+            [data[3], data[4], data[5]],
+            [data[6], data[7], data[8]],
+        ])
+    }
+
+    /// Create a 3x3 matrix from column-major storage.
+    pub const fn from_column_major(data: [f64; 9]) -> Self {
+        Self::from_rows([
+            [data[0], data[3], data[6]],
+            [data[1], data[4], data[7]],
+            [data[2], data[5], data[8]],
+        ])
+    }
+
+    /// Return the matrix entries in row-major order.
+    pub fn into_row_major(self) -> [f64; 9] {
+        [
+            self[(0, 0)],
+            self[(0, 1)],
+            self[(0, 2)],
+            self[(1, 0)],
+            self[(1, 1)],
+            self[(1, 2)],
+            self[(2, 0)],
+            self[(2, 1)],
+            self[(2, 2)],
+        ]
+    }
+
+    /// Return the matrix entries in column-major order.
+    pub fn into_column_major(self) -> [f64; 9] {
+        [
+            self[(0, 0)],
+            self[(1, 0)],
+            self[(2, 0)],
+            self[(0, 1)],
+            self[(1, 1)],
+            self[(2, 1)],
+            self[(0, 2)],
+            self[(1, 2)],
+            self[(2, 2)],
+        ]
+    }
+
     /// Determinant of a 3x3 matrix.
     pub fn determinant(&self) -> f64 {
         let a = self[(0, 0)];
@@ -316,5 +374,37 @@ mod tests {
         let rhs = FixedVector::new([4.0, 5.0, 6.0]);
 
         assert_eq!(lhs.dot(&rhs), 32.0);
+    }
+
+    #[test]
+    fn fixed_vector_iterates_in_index_order() {
+        let vector = FixedVector::new([1.0, 2.0, 3.0]);
+
+        assert_eq!(
+            vector.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 3.0]
+        );
+    }
+
+    #[test]
+    fn fixed_matrix_iterates_in_row_major_order() {
+        let matrix = FixedMatrix::from_rows([[1.0, 2.0], [3.0, 4.0]]);
+
+        assert_eq!(
+            matrix.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 3.0, 4.0]
+        );
+    }
+
+    #[test]
+    fn fixed_matrix_converts_row_and_column_major_storage() {
+        let row_major = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+        let column_major = [1.0, 4.0, 7.0, 2.0, 5.0, 8.0, 3.0, 6.0, 9.0];
+
+        let matrix = FixedMatrix::from_row_major(row_major);
+
+        assert_eq!(matrix.into_row_major(), row_major);
+        assert_eq!(matrix.into_column_major(), column_major);
+        assert_eq!(FixedMatrix::from_column_major(column_major), matrix);
     }
 }

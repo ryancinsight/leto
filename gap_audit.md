@@ -1,5 +1,16 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-06-25 Addendum — RITK spatial fixed primitive helpers
+
+- **Closed**: RITK's `ritk-spatial` consumer needed stack fixed primitive
+  iteration and explicit 3-D row-major/column-major conversion to replace
+  nalgebra-backed direction storage without adding serde or nalgebra to Leto.
+  `FixedVector::iter`, `FixedMatrix::iter`, and the 3-D storage-order helpers
+  now provide that contract. Evidence tier: compile/lint/docs plus value
+  tests in Leto and focused RITK consumer gates.
+
+---
+
 Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
 `D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, current docs.rs pages for
 `ndarray 0.17` and `nalgebra`, and upstream Atlas crates. Counterparts:
