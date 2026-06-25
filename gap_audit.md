@@ -97,7 +97,7 @@ a named Atlas consumer driver.
 | Non-symmetric eigenvalues | `eigenvalues`, `complex_eigenvalues` | **Closed in 0.20.0** — ADR 0006 shifted complex QR after Hessenberg reduction; verifies exact spectra and nalgebra `complex_eigenvalues` parity |
 | Real Schur vectors/form | `Schur` | Open — [major], eigenvalue spectrum is delivered; Schur vectors/quasi-triangular form require a consumer driver |
 | UDU / LDLᵀ | `UDU` | **Closed in 0.21.0 for unpivoted UDU** — `udu_decompose` / `MatrixDecompose::udu`; verifies reconstruction, determinant/solve/inverse parity, and zero-pivot rejection. Pivoted Bunch-Kaufman remains open |
-| Small fixed-size matrix/vector types | `Matrix3`, `Vector3` | Non-goal — const-rank `Array<T, S, 2>` covers the layout; no consumer driver |
+| Small fixed-size matrix/vector types | `Matrix3`, `Vector3` | **Closed in 0.35.1** — `FixedVector<T, N>` and `FixedMatrix<T, R, C>` provide stack-backed fixed math for the RITK registration migration driver; verified by focused provider tests and RITK classical registration tests |
 
 Policy: linalg routines enter leto-ops only with a named consumer driver and
 a differential oracle (ndarray-linalg/nalgebra as dev-dependency oracle, per

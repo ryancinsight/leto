@@ -1,5 +1,17 @@
 # Leto Development Checklist
 
+2026-06-25 (fixed stack math for RITK registration). Added
+`FixedVector<T, N>` and `FixedMatrix<T, R, C>` as stack-backed fixed-size
+primitives in `leto::application::fixed`, re-exported from `leto`. The initial
+consumer is RITK Sprint 407: `ritk-registration` removed its direct `nalgebra`
+dependency by using these fixed primitives for classical landmark/perturbation
+math while keeping SVD in `leto-ops`. Also cleaned three redundant rustdoc link
+targets in `array.rs` so the touched provider doc gate is warning-clean.
+Evidence tier: compile/lint/docs plus focused tests (`cargo clippy -p leto
+--all-targets -- -D warnings`; `cargo nextest run -p leto fixed` -> 3/3 passed;
+`cargo fmt --check -p leto`; `cargo test --doc -p leto`; `cargo doc -p leto
+--no-deps`).
+
 2026-06-23 (batched-matmul aliasing UB). Closed the recorded follow-on: the
 parallel `batched_matmul` closure formed a full-buffer `&mut [T]` per task
 (`from_raw_parts_mut(out_ptr, out_len)`), writing only its batch sub-region —

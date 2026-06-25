@@ -9,6 +9,8 @@ mod axis;
 mod constructors;
 /// Runtime-rank array boundary layer (ADR 0007).
 pub mod dynamic;
+/// Stack-backed fixed-size vector and matrix primitives.
+pub mod fixed;
 mod index;
 /// Subview iteration.
 pub mod iter;
@@ -28,6 +30,7 @@ pub use aliases::{
 pub use arithmetic::ScalarOperand;
 pub use array::Array;
 pub use dynamic::ArrayD;
+pub use fixed::{FixedMatrix, FixedVector};
 pub use iter::{AxisIter, AxisIterMut, ElementIter, IndexedIter, Lanes, LanesMut, Windows};
 pub use reduction::{
     argmax, argmax_all, argmin, argmin_all, max_all, max_axis, mean_all, mean_axis, median_all,

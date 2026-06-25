@@ -104,7 +104,7 @@ where
     /// (ndarray `windows` parity).
     ///
     /// # Errors
-    /// [`LetoError`](crate::LetoError) if any `window_shape[i]` is `0` or exceeds
+    /// [`LetoError`] if any `window_shape[i]` is `0` or exceeds
     /// `shape[i]`.
     #[inline]
     pub fn windows(&self, window_shape: [usize; N]) -> Result<Windows<'_, T, N>> {
@@ -115,7 +115,7 @@ where
     /// (ndarray `lanes` parity; `M = N - 1`).
     ///
     /// # Errors
-    /// [`LetoError`](crate::LetoError) if `axis >= N` or the layout does not fit
+    /// [`LetoError`] if `axis >= N` or the layout does not fit
     /// its storage.
     #[inline]
     pub fn lanes<const M: usize>(&self, axis: usize) -> Result<Lanes<'_, T, N, M>>
@@ -228,7 +228,7 @@ where
     /// (ndarray `lanes_mut` parity; `M = N - 1`).
     ///
     /// # Errors
-    /// [`LetoError`](crate::LetoError) if `axis >= N`, the layout does not fit
+    /// [`LetoError`] if `axis >= N`, the layout does not fit
     /// its storage, or the layout aliases (a zero stride).
     #[inline]
     pub fn lanes_mut<const M: usize>(&mut self, axis: usize) -> Result<LanesMut<'_, T, N, M>>

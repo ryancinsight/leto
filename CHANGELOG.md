@@ -8,6 +8,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- `leto` [minor]: added stack-backed `FixedVector<T, N>` and
+  `FixedMatrix<T, R, C>` primitives for small fixed-size math that should not use
+  heap-backed strided arrays. The initial consumer is RITK classical registration:
+  rigid/affine perturbation and Kabsch/FRE math can move off `nalgebra` while
+  keeping 3-D vectors and matrices stack-local.
 - `leto` [minor]: offset-independent dense-stride predicates `Layout::is_f_dense`
   and `is_c_dense`/`is_f_dense` on `ArrayView`/`ArrayViewMut` (the offset-free
   halves of `is_c_contiguous`/`is_f_contiguous`). They let kernels that address
