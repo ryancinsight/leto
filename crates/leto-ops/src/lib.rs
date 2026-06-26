@@ -14,7 +14,6 @@ pub use domain::scalar::Scalar;
 pub use domain::strategy::{ExecutionStrategy, ScalarStrategy};
 pub use infrastructure::cache::{cache_geometry, CacheGeometry};
 
-#[cfg(feature = "simd")]
 pub use domain::strategy::SimdStrategy;
 
 #[cfg(feature = "parallel")]

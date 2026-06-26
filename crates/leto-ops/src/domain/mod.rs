@@ -13,7 +13,6 @@ pub use scalar::Scalar;
 pub use strategy::ExecutionStrategy;
 pub use strategy::ScalarStrategy;
 
-#[cfg(feature = "simd")]
 pub use strategy::SimdStrategy;
 
 #[cfg(feature = "parallel")]

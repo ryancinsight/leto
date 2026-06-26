@@ -6,6 +6,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Changed
+
+- `leto-ops` [minor]: removed the `simd` cargo feature; `hermes-simd` is now an
+  unconditional dependency. SIMD is not a build-time toggle — Hermes already
+  runtime-dispatches AVX-512/AVX2/NEON with a scalar fallback (CPUID), so it is
+  the automated-SIMD layer and is always compiled in. `f32`/`f64` slice ops
+  always route through Hermes; the per-method scalar loop remains only as the
+  fallback for Hermes-uncovered types (`f16`/`bf16`). The dead
+  `impl_simd_ops_fallback!` "simd disabled" stub is deleted. **Breaking** for
+  anyone selecting `--features simd` / `--no-default-features` expecting the flag;
+  default builds are unaffected (it was a default feature).
+
 ### Added
 
 - `leto` [patch]: added `FixedVector::iter`, `FixedMatrix::iter`, and 3-D

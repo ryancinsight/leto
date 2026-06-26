@@ -108,8 +108,11 @@ caller-owned output shape, so `[N, 1]` and `[1, C]` views write directly into
 `[N, C]` outputs without materializing broadcasted arrays.
 
 - Contiguous views use slice kernels on the `Scalar` trait. Native `f32` and
-  `f64` implementations call Hermes SIMD when the `simd` feature is enabled
-  and fall back to scalar loops when Hermes cannot handle the slice.
+  `f64` implementations always route through Hermes SIMD (which itself
+  runtime-dispatches AVX-512/AVX2/NEON and a scalar fallback via CPUID); a
+  per-method scalar loop remains as the fallback for types Hermes does not cover
+  (e.g. `f16`/`bf16`). SIMD is not a build feature — Hermes is an unconditional
+  dependency, so the best available path is always selected at runtime.
 - Large contiguous and strided elementwise operations use Moirai through the
   `parallel` feature after layout storage spans are validated.
 - Axis reductions use caller-owned output views and keep the reduced dimension

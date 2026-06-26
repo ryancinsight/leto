@@ -103,7 +103,6 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn hamming_distance(a: &[T], b: &[T]) -> Option<u64>;
 }
 
-#[cfg(feature = "simd")]
 macro_rules! impl_simd_ops_native {
     ($t:ty) => {
         impl SimdOperations<$t> for SimdStrategy {
@@ -233,131 +232,8 @@ macro_rules! impl_simd_ops_native {
     };
 }
 
-#[cfg(feature = "simd")]
 impl_simd_ops_native!(f32);
-#[cfg(feature = "simd")]
 impl_simd_ops_native!(f64);
-
-#[cfg(not(feature = "simd"))]
-macro_rules! impl_simd_ops_fallback {
-    ($t:ty) => {
-        impl SimdOperations<$t> for SimdStrategy {
-            #[inline(always)]
-            fn add_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn sub_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn mul_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn div_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn sum_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn dot_slice(_a: &[$t], _b: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn axpy_slice(_alpha: $t, _x: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn axpy_rows(
-                _alphas: &[$t],
-                _x: &[$t],
-                _out: &mut [$t],
-                _row_stride: usize,
-                _rows: usize,
-                _cols: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn axpy_rows_batch(
-                _alphas: &[$t],
-                _x_panel: &[$t],
-                _out: &mut [$t],
-                _row_stride: usize,
-                _rows: usize,
-                _depth: usize,
-                _cols: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn tiled_gemm(
-                _a: &[$t],
-                _b: &[$t],
-                _c: &mut [$t],
-                _m: usize,
-                _n: usize,
-                _k: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn gemv_strided(
-                _a: &[$t],
-                _x: &[$t],
-                _y: &mut [$t],
-                _nrows: usize,
-                _ncols: usize,
-                _lda: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn gemv_transpose_strided(
-                _a: &[$t],
-                _x: &[$t],
-                _y: &mut [$t],
-                _nrows: usize,
-                _ncols: usize,
-                _lda: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd disabled")
-            }
-            #[inline(always)]
-            fn abs_sum_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn abs_max_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn min_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn max_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn jaccard_distance(_a: &[$t], _b: &[$t]) -> Option<f64> {
-                None
-            }
-            #[inline(always)]
-            fn hamming_distance(_a: &[$t], _b: &[$t]) -> Option<u64> {
-                None
-            }
-        }
-    };
-}
-
-#[cfg(not(feature = "simd"))]
-impl_simd_ops_fallback!(f32);
-#[cfg(not(feature = "simd"))]
-impl_simd_ops_fallback!(f64);
 
 // f16 and bf16 always use fallback
 macro_rules! impl_simd_ops_unsupported {
