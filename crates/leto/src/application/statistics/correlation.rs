@@ -1,6 +1,6 @@
 //! Pearson correlation matrix (ndarray-stats `pearson_correlation` parity).
 
-use num_traits::Float;
+use eunomia::FloatElement;
 
 use crate::application::array::Array;
 use crate::application::statistics::covariance::covariance;
@@ -31,22 +31,22 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 /// [`covariance`]).
 pub fn pearson_correlation<T, S>(arr: &Array<T, S, 2>) -> Result<Array<T, VecStorage<T>, 2>>
 where
-    T: Float,
+    T: FloatElement,
     S: Storage<T>,
 {
     // ddof is immaterial (cancels in the ratio); population covariance keeps the
     // denominator positive for every n ≥ 1.
-    let cov = covariance(arr, T::zero())?;
+    let cov = covariance(arr, T::ZERO)?;
     let v = cov.shape()[0];
     let cov_view = cov.view();
     let cov_data = cov_view.data(); // C-contiguous, offset 0: [i*v + j]
 
-    let mut std = vec![T::zero(); v];
+    let mut std = vec![T::ZERO; v];
     for (i, s) in std.iter_mut().enumerate() {
         *s = cov_data[i * v + i].sqrt();
     }
 
-    let mut out = vec![T::zero(); v * v];
+    let mut out = vec![T::ZERO; v * v];
     for i in 0..v {
         for j in 0..v {
             out[i * v + j] = cov_data[i * v + j] / (std[i] * std[j]);

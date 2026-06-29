@@ -1,6 +1,6 @@
 //! Mean reductions over N-dimensional strided arrays.
 
-use num_traits::Float;
+use eunomia::FloatElement;
 
 use crate::application::array::Array;
 use crate::application::reduction::iter_elements;
@@ -16,7 +16,7 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 /// Returns `Err` if `arr` is empty.
 pub fn mean_all<T, S, const N: usize>(arr: &Array<T, S, N>) -> Result<T>
 where
-    T: Float + for<'a> std::ops::AddAssign<&'a T>,
+    T: FloatElement + for<'a> std::ops::AddAssign<&'a T>,
     S: Storage<T>,
 {
     if arr.size() == 0 {
@@ -25,13 +25,11 @@ where
         });
     }
     let view = arr.view();
-    let mut acc = T::zero();
+    let mut acc = T::ZERO;
     for elem in iter_elements(&view) {
         acc += elem;
     }
-    let count = T::from(arr.size()).ok_or(LetoError::StorageError {
-        reason: "element count exceeds float precision range".to_string(),
-    })?;
+    let count = T::from_f64((arr.size()) as f64);
     Ok(acc / count)
 }
 
@@ -44,7 +42,7 @@ pub fn mean_axis<T, S, const N: usize, const M: usize>(
     axis: usize,
 ) -> Result<Array<T, VecStorage<T>, M>>
 where
-    T: Float + std::ops::Add<Output = T> + Copy,
+    T: FloatElement + std::ops::Add<Output = T> + Copy,
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
@@ -59,9 +57,7 @@ where
             reason: format!("axis {axis} has length 0; mean is undefined"),
         });
     }
-    let count = T::from(axis_len).ok_or(LetoError::StorageError {
-        reason: "axis length exceeds float precision range".to_string(),
-    })?;
+    let count = T::from_f64((axis_len) as f64);
 
     let sum: Array<T, VecStorage<T>, M> = sum_axis::<T, S, N, M>(arr, axis)?;
 

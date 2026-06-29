@@ -1,6 +1,6 @@
 //! Sum reductions over N-dimensional strided arrays.
 
-use num_traits::Zero;
+use eunomia::NumericElement;
 
 use crate::application::array::Array;
 use crate::application::iter::AxisIter;
@@ -18,7 +18,7 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 /// Returns `Err` if `arr` is empty.
 pub fn sum_all<T, S, const N: usize>(arr: &Array<T, S, N>) -> Result<T>
 where
-    T: Zero + for<'a> std::ops::AddAssign<&'a T> + Copy,
+    T: NumericElement + for<'a> std::ops::AddAssign<&'a T> + Copy,
     S: Storage<T>,
 {
     if arr.size() == 0 {
@@ -27,7 +27,7 @@ where
         });
     }
     let view = arr.view();
-    let mut acc = T::zero();
+    let mut acc = T::ZERO;
     for elem in iter_elements(&view) {
         acc += elem;
     }
@@ -46,7 +46,7 @@ pub fn sum_axis<T, S, const N: usize, const M: usize>(
     axis: usize,
 ) -> Result<Array<T, VecStorage<T>, M>>
 where
-    T: Zero + std::ops::Add<Output = T> + Copy,
+    T: NumericElement + std::ops::Add<Output = T> + Copy,
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
@@ -55,15 +55,15 @@ where
     let out_shape = RankMarker::<N>.remove_shape(arr.shape(), axis)?;
     let out_size: usize = out_shape.iter().product();
 
-    let mut buf: Vec<T> = vec![T::zero(); out_size];
+    let mut buf: Vec<T> = vec![T::ZERO; out_size];
     for lane in iter {
         if let Some(slice) = lane.as_slice() {
             for (buf_val, &lane_val) in buf.iter_mut().zip(slice) {
-                *buf_val = *buf_val + lane_val;
+                *buf_val += lane_val;
             }
         } else {
             for (buf_val, &lane_val) in buf.iter_mut().zip(lane.iter()) {
-                *buf_val = *buf_val + lane_val;
+                *buf_val += lane_val;
             }
         }
     }

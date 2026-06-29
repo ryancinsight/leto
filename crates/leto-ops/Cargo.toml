@@ -15,7 +15,6 @@ hermes-simd = { workspace = true }
 themis = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
-num-traits = { workspace = true }
 bytemuck = { workspace = true }
 half = { workspace = true }
 
@@ -37,7 +36,7 @@ harness = false
 
 [features]
 default = ["std", "parallel", "mnemosyne-memory", "topology"]
-std = ["leto/std", "num-traits/std"]
+std = ["leto/std"]
 parallel = ["dep:moirai"]
 mnemosyne-memory = ["leto/mnemosyne-memory"]
 ndarray-compat = ["leto/ndarray-compat"]

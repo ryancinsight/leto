@@ -1,6 +1,6 @@
 //! Variance and standard-deviation reductions (ndarray-stats parity).
 
-use num_traits::Float;
+use eunomia::FloatElement;
 
 use crate::application::array::Array;
 use crate::application::iter::AxisIter;
@@ -27,7 +27,7 @@ use crate::infrastructure::storage::{Storage, StorageMut, VecStorage};
 /// [`LetoError`] if `arr` is empty or `n − ddof ≤ 0`.
 pub fn var_all<T, S, const N: usize>(arr: &Array<T, S, N>, ddof: T) -> Result<T>
 where
-    T: Float + for<'a> std::ops::AddAssign<&'a T>,
+    T: FloatElement + for<'a> std::ops::AddAssign<&'a T>,
     S: Storage<T>,
 {
     let n = arr.size();
@@ -38,10 +38,10 @@ where
     }
     let mean = mean_all(arr)?;
     let view = arr.view();
-    let mut acc = T::zero();
+    let mut acc = T::ZERO;
     for elem in iter_elements(&view) {
         let deviation = *elem - mean;
-        acc = acc + deviation * deviation;
+        acc += deviation * deviation;
     }
     let denom = degrees_of_freedom(n, ddof)?;
     Ok(acc / denom)
@@ -53,7 +53,7 @@ where
 /// [`LetoError`] if `arr` is empty or `n − ddof ≤ 0`.
 pub fn std_all<T, S, const N: usize>(arr: &Array<T, S, N>, ddof: T) -> Result<T>
 where
-    T: Float + for<'a> std::ops::AddAssign<&'a T>,
+    T: FloatElement + for<'a> std::ops::AddAssign<&'a T>,
     S: Storage<T>,
 {
     Ok(var_all(arr, ddof)?.sqrt())
@@ -72,7 +72,7 @@ pub fn var_axis<T, S, const N: usize, const M: usize>(
     ddof: T,
 ) -> Result<Array<T, VecStorage<T>, M>>
 where
-    T: Float + std::ops::Add<Output = T> + Copy,
+    T: FloatElement + std::ops::Add<Output = T> + Copy,
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
@@ -101,18 +101,18 @@ where
     // Accumulate squared deviations over the axis lanes.
     let view = arr.view();
     let iter: AxisIter<'_, T, N, M> = AxisIter::new(&view, axis, RankMarker::<N>)?;
-    let mut buf = vec![T::zero(); out_size];
+    let mut buf = vec![T::ZERO; out_size];
     let mean_slice = &mean_data[..out_size];
     for lane in iter {
         if let Some(slice) = lane.as_slice() {
             for ((slot, &lane_val), &mean_val) in buf.iter_mut().zip(slice).zip(mean_slice) {
                 let deviation = lane_val - mean_val;
-                *slot = *slot + deviation * deviation;
+                *slot += deviation * deviation;
             }
         } else {
             for ((slot, &lane_val), &mean_val) in buf.iter_mut().zip(lane.iter()).zip(mean_slice) {
                 let deviation = lane_val - mean_val;
-                *slot = *slot + deviation * deviation;
+                *slot += deviation * deviation;
             }
         }
     }
@@ -134,7 +134,7 @@ pub fn std_axis<T, S, const N: usize, const M: usize>(
     ddof: T,
 ) -> Result<Array<T, VecStorage<T>, M>>
 where
-    T: Float + std::ops::Add<Output = T> + Copy,
+    T: FloatElement + std::ops::Add<Output = T> + Copy,
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
@@ -149,17 +149,15 @@ where
 ///
 /// Shared by the variance reductions and the [`statistics`](crate::application::statistics)
 /// covariance kernel (SSOT for the degrees-of-freedom contract).
-pub(crate) fn degrees_of_freedom<T: Float>(count: usize, ddof: T) -> Result<T> {
+pub(crate) fn degrees_of_freedom<T: FloatElement>(count: usize, ddof: T) -> Result<T> {
     if !ddof.is_finite() {
         return Err(LetoError::StorageError {
             reason: "variance degrees of freedom must be finite".to_string(),
         });
     }
-    let count = T::from(count).ok_or(LetoError::StorageError {
-        reason: "element count exceeds float precision range".to_string(),
-    })?;
+    let count = T::from_f64((count) as f64);
     let denom = count - ddof;
-    if denom <= T::zero() {
+    if denom <= T::ZERO {
         return Err(LetoError::StorageError {
             reason: "variance degrees of freedom (n - ddof) must be positive".to_string(),
         });
