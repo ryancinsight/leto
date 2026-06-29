@@ -217,3 +217,67 @@ def test_bunch_kaufman_matches_scipy() -> None:
 
 def test_matexp_matches_scipy() -> None:
     _close("matexp", leto.matexp(_GEN), scipy_linalg.expm(_GEN), atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Further decompositions (invariant-verified, like QR/SVD/Schur above)
+# ---------------------------------------------------------------------------
+
+# Rectangular (tall) operand for bidiagonalization.
+_RECT = np.array(
+    [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 10.0], [1.0, 0.0, 2.0]],
+    dtype=np.float64,
+)
+
+
+def test_hessenberg_matches_scipy() -> None:
+    # leto returns (Q, H) with A = Q H Qᵀ (scipy.linalg.hessenberg returns (H, Q)).
+    # Hessenberg form is not unique, so verify invariants, not raw factor equality.
+    q, h = leto.hessenberg(_SPD)
+    q, h = np.asarray(q), np.asarray(h)
+    _close("hessenberg_reconstruct", q @ h @ q.T, _SPD, atol=1e-9)
+    _close("hessenberg_q_orthonormal", q.T @ q, np.eye(3), atol=1e-9)
+    assert np.allclose(np.tril(h, -2), 0.0, atol=1e-9), "H must be upper-Hessenberg"
+
+
+def test_eigenvalues_match_numpy() -> None:
+    # General real spectrum; compare the sorted multiset vs numpy.linalg.eigvals.
+    ev = np.asarray(leto.eigenvalues(_GEN))
+    expected = np.linalg.eigvals(_GEN)
+    key = lambda z: (round(float(z.real), 9), round(float(z.imag), 9))
+    _close(
+        "eigenvalues",
+        np.array(sorted(ev, key=key)),
+        np.array(sorted(expected, key=key)),
+        atol=1e-6,
+    )
+
+
+def test_full_piv_lu_matches_numpy() -> None:
+    # A[row_perm][:, col_perm] == L @ U, L unit-lower, U upper.
+    l, u, rp, cp = leto.full_piv_lu(_GEN)
+    l, u = np.asarray(l), np.asarray(u)
+    rp, cp = np.asarray(rp).astype(int), np.asarray(cp).astype(int)
+    _close("full_piv_lu_reconstruct", l @ u, _GEN[np.ix_(rp, cp)], atol=1e-9)
+    _close("full_piv_lu_l_unit_lower", np.diag(l), np.ones(3), atol=1e-9)
+    assert np.allclose(np.triu(l, 1), 0.0, atol=1e-9), "L must be lower-triangular"
+    assert np.allclose(np.tril(u, -1), 0.0, atol=1e-9), "U must be upper-triangular"
+
+
+def test_udu_matches_numpy() -> None:
+    # Symmetric A factored as U D Uᵀ with U upper-triangular, d the diagonal of D.
+    u, d = leto.udu(_SPD)
+    u, d = np.asarray(u), np.asarray(d)
+    _close("udu_reconstruct", u @ np.diag(d) @ u.T, _SPD, atol=1e-9)
+    assert np.allclose(np.tril(u, -1), 0.0, atol=1e-9), "U must be upper-triangular"
+
+
+def test_bidiagonalize_matches_numpy() -> None:
+    # A = U B Vᵀ, B upper-bidiagonal, U/V orthonormal (factors are sign-ambiguous).
+    u, b, v = leto.bidiagonalize(_RECT)
+    u, b, v = np.asarray(u), np.asarray(b), np.asarray(v)
+    _close("bidiagonalize_reconstruct", u @ b @ v.T, _RECT, atol=1e-8)
+    _close("bidiagonalize_u_orthonormal", u.T @ u, np.eye(u.shape[1]), atol=1e-8)
+    _close("bidiagonalize_v_orthonormal", v.T @ v, np.eye(v.shape[1]), atol=1e-8)
+    assert np.allclose(np.tril(b, -1), 0.0, atol=1e-9), "B must be upper-triangular"
+    assert np.allclose(np.triu(b, 2), 0.0, atol=1e-9), "B must be bidiagonal"

@@ -4,13 +4,14 @@ use leto::{
     Array, Array1, ArrayD, ArrayView, ArrayViewMut, Layout, LayoutDyn, SliceStorage, VecStorage,
 };
 use leto_ops::{
-    add, bunch_kaufman, cholesky_decompose, col_piv_qr, det, div, dot, inv, kron, matexp, matmul,
-    mul, norm_l1, norm_l2, norm_max, qr_decompose, schur, singular_values, solve, sub, sum,
-    svd_decompose, symmetric_eigen_jacobi, trace, RealScalar,
+    add, bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, det, div, dot, eigenvalues,
+    full_piv_lu, hessenberg, inv, kron, matexp, matmul, mul, norm_l1, norm_l2, norm_max,
+    qr_decompose, schur, singular_values, solve, sub, sum, svd_decompose, symmetric_eigen_jacobi,
+    trace, udu_decompose, RealScalar,
 };
 use numpy::{
-    PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArrayDyn,
-    PyUntypedArrayMethods,
+    Complex64, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
+    PyReadonlyArrayDyn, PyUntypedArrayMethods,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -575,6 +576,124 @@ fn trace_py(py: Python<'_>, a: PyReadonlyArray2<'_, f64>) -> PyResult<f64> {
     py.allow_threads(|| trace(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))
 }
 
+/// Hessenberg reduction `A = Q H Qᵀ` with `H` upper-Hessenberg, `Q` orthogonal.
+/// Returns `(Q, H)` (mirrors `scipy.linalg.hessenberg(a, calc_q=True)` ordered `(H, Q)`).
+#[pyfunction]
+#[pyo3(name = "hessenberg")]
+fn hessenberg_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f64>,
+) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
+    require_contiguous_2d(&a, "a")?;
+    let a_view = view_from_numpy(&a)?;
+    let decomp = py
+        .allow_threads(|| hessenberg(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let q = decomp.q().clone();
+    let h = decomp.h().clone();
+    let q_shape = [q.shape()[0], q.shape()[1]];
+    let h_shape = [h.shape()[0], h.shape()[1]];
+    let py_q = array_into_numpy2(py, q, q_shape)?;
+    let py_h = array_into_numpy2(py, h, h_shape)?;
+    Ok((py_q, py_h))
+}
+
+/// Eigenvalues of a general real matrix (Francis double-shift QR), returned as a
+/// complex vector — mirrors `numpy.linalg.eigvals`. Order is not specified.
+#[pyfunction]
+#[pyo3(name = "eigenvalues")]
+fn eigenvalues_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f64>,
+) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
+    require_contiguous_2d(&a, "a")?;
+    let a_view = view_from_numpy(&a)?;
+    let vals = py
+        .allow_threads(|| eigenvalues(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let out: Vec<Complex64> = vals.into_iter().map(|c| Complex64::new(c.re, c.im)).collect();
+    Ok(PyArray1::from_vec(py, out))
+}
+
+/// Full-pivoting LU: `A[row_perm][:, col_perm] = L U` with `L` unit-lower, `U` upper.
+/// Returns `(L, U, row_perm, col_perm)` (row/column permutations as index vectors).
+#[pyfunction]
+#[pyo3(name = "full_piv_lu")]
+fn full_piv_lu_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f64>,
+) -> PyResult<(
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray1<u64>>,
+    Bound<'py, PyArray1<u64>>,
+)> {
+    require_contiguous_2d(&a, "a")?;
+    let a_view = view_from_numpy(&a)?;
+    let decomp = py
+        .allow_threads(|| full_piv_lu(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let l = decomp.l();
+    let u = decomp.u();
+    let row: Vec<u64> = decomp.row_permutation().iter().map(|&x| x as u64).collect();
+    let col: Vec<u64> = decomp.col_permutation().iter().map(|&x| x as u64).collect();
+    let l_shape = [l.shape()[0], l.shape()[1]];
+    let u_shape = [u.shape()[0], u.shape()[1]];
+    let py_l = array_into_numpy2(py, l, l_shape)?;
+    let py_u = array_into_numpy2(py, u, u_shape)?;
+    Ok((
+        py_l,
+        py_u,
+        PyArray1::from_vec(py, row),
+        PyArray1::from_vec(py, col),
+    ))
+}
+
+/// Pivot-free `A = U D Uᵀ` factorization of a symmetric matrix.
+/// Returns `(U, d)` with `U` upper-triangular and `d` the diagonal of `D`.
+#[pyfunction]
+#[pyo3(name = "udu")]
+fn udu_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f64>,
+) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>)> {
+    require_contiguous_2d(&a, "a")?;
+    let a_view = view_from_numpy(&a)?;
+    let decomp = py
+        .allow_threads(|| udu_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let u = decomp.u();
+    let u_shape = [u.shape()[0], u.shape()[1]];
+    let d = decomp.diagonal().to_vec();
+    let py_u = array_into_numpy2(py, u, u_shape)?;
+    Ok((py_u, PyArray1::from_vec(py, d)))
+}
+
+/// Bidiagonalization `A = U B Vᵀ` with `B` upper-bidiagonal, `U`/`V` orthogonal.
+/// Returns `(U, B, V)`.
+#[pyfunction]
+#[pyo3(name = "bidiagonalize")]
+fn bidiagonalize_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f64>,
+) -> PyResult<(
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray2<f64>>,
+)> {
+    require_contiguous_2d(&a, "a")?;
+    let a_view = view_from_numpy(&a)?;
+    let decomp = py.allow_threads(|| {
+        bidiagonalize(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
+    })?;
+    let u = decomp.u().clone();
+    let b = decomp.b().clone();
+    let v = decomp.v().clone();
+    let u_shape = [u.shape()[0], u.shape()[1]];
+    let b_shape = [b.shape()[0], b.shape()[1]];
+    let v_shape = [v.shape()[0], v.shape()[1]];
+    let py_u = array_into_numpy2(py, u, u_shape)?;
+    let py_b = array_into_numpy2(py, b, b_shape)?;
+    let py_v = array_into_numpy2(py, v, v_shape)?;
+    Ok((py_u, py_b, py_v))
+}
+
 #[pymodule]
 fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(add_py, m)?)?;
@@ -601,6 +720,11 @@ fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(matexp_py, m)?)?;
     m.add_function(wrap_pyfunction!(kron_py, m)?)?;
     m.add_function(wrap_pyfunction!(trace_py, m)?)?;
+    m.add_function(wrap_pyfunction!(hessenberg_py, m)?)?;
+    m.add_function(wrap_pyfunction!(eigenvalues_py, m)?)?;
+    m.add_function(wrap_pyfunction!(full_piv_lu_py, m)?)?;
+    m.add_function(wrap_pyfunction!(udu_py, m)?)?;
+    m.add_function(wrap_pyfunction!(bidiagonalize_py, m)?)?;
     Ok(())
 }
 
