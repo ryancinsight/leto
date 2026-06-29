@@ -44,7 +44,7 @@ mod standardize;
 
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
-use num_complex::Complex;
+use leto::Complex;
 
 /// Real Schur decomposition `A = Q T Qᵀ`.
 #[derive(Debug, Clone)]
