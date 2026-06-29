@@ -9,6 +9,8 @@ use core::ops::{Add, Index, Sub};
 
 /// A point in `N`-dimensional affine space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(deserialize = "T: serde::Deserialize<'de> + Copy + Default")))]
 #[repr(C)]
 pub struct Point<T, const N: usize> {
     /// Position vector from the origin.
@@ -33,6 +35,20 @@ impl<T, const N: usize> Point<T, N> {
         Self {
             coords: Vector::new(data),
         }
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for Point<T, N> {
+    #[inline(always)]
+    fn from(data: [T; N]) -> Self {
+        Self::from_array(data)
+    }
+}
+
+impl<T, const N: usize> From<Vector<T, N>> for Point<T, N> {
+    #[inline(always)]
+    fn from(coords: Vector<T, N>) -> Self {
+        Self { coords }
     }
 }
 
