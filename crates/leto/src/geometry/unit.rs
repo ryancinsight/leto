@@ -69,12 +69,12 @@ mod tests {
 
     #[test]
     fn normalization_and_invariant() {
-        let u = Unit::new_normalize(Vector::new([3.0_f64, 4.0, 0.0]));
+        let u = Unit::new_normalize(Vector::from_array([3.0_f64, 4.0, 0.0]));
         assert!((u.as_vector().norm() - 1.0).abs() < 1e-12);
         assert!((u.as_vector().data[0] - 0.6).abs() < 1e-12);
         assert!((u.as_vector().data[1] - 0.8).abs() < 1e-12);
         // try_new rejects near-zero
-        assert!(Unit::try_new(Vector::new([0.0_f64, 0.0, 0.0]), 1e-9).is_none());
-        assert!(Unit::try_new(Vector::new([1.0_f64, 0.0, 0.0]), 1e-9).is_some());
+        assert!(Unit::try_new(Vector::from_array([0.0_f64, 0.0, 0.0]), 1e-9).is_none());
+        assert!(Unit::try_new(Vector::from_array([1.0_f64, 0.0, 0.0]), 1e-9).is_some());
     }
 }

@@ -25,7 +25,7 @@ pub type Point3<T> = Point<T, 3>;
 impl<T, const N: usize> Point<T, N> {
     /// Construct from a position vector.
     #[inline(always)]
-    pub const fn new(coords: Vector<T, N>) -> Self {
+    pub const fn from_coords(coords: Vector<T, N>) -> Self {
         Self { coords }
     }
 
@@ -33,7 +33,27 @@ impl<T, const N: usize> Point<T, N> {
     #[inline(always)]
     pub const fn from_array(data: [T; N]) -> Self {
         Self {
-            coords: Vector::new(data),
+            coords: Vector::from_array(data),
+        }
+    }
+}
+
+impl<T> Point<T, 2> {
+    /// Construct from `x`, `y` coordinates.
+    #[inline(always)]
+    pub const fn new(x: T, y: T) -> Self {
+        Self {
+            coords: Vector::from_array([x, y]),
+        }
+    }
+}
+
+impl<T> Point<T, 3> {
+    /// Construct from `x`, `y`, `z` coordinates.
+    #[inline(always)]
+    pub const fn new(x: T, y: T, z: T) -> Self {
+        Self {
+            coords: Vector::from_array([x, y, z]),
         }
     }
 }
