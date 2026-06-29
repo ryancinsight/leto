@@ -7,7 +7,7 @@
 //! statistics; [`Interpolation`] enumerates the five standard choices, matching
 //! numpy's `numpy.quantile` and `ndarray-stats`' `Quantile1dExt`.
 
-use num_traits::Float;
+use eunomia::FloatElement;
 
 use crate::application::array::Array;
 use crate::application::iter::AxisIter;
@@ -61,7 +61,7 @@ pub fn quantile_all<T, S, const N: usize>(
     method: Interpolation,
 ) -> Result<T>
 where
-    T: Float,
+    T: FloatElement,
     S: Storage<T>,
 {
     let n = arr.size();
@@ -81,12 +81,10 @@ where
 /// As [`quantile_all`].
 pub fn median_all<T, S, const N: usize>(arr: &Array<T, S, N>) -> Result<T>
 where
-    T: Float,
+    T: FloatElement,
     S: Storage<T>,
 {
-    let half = T::from(0.5).ok_or(LetoError::StorageError {
-        reason: "0.5 not representable in target float type".to_string(),
-    })?;
+    let half = T::from_f64(0.5);
     quantile_all(arr, half, Interpolation::Linear)
 }
 
@@ -106,7 +104,7 @@ pub fn quantile_axis<T, S, const N: usize, const M: usize>(
     method: Interpolation,
 ) -> Result<Array<T, VecStorage<T>, M>>
 where
-    T: Float,
+    T: FloatElement,
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
@@ -128,7 +126,7 @@ where
     // [out_size × axis_len] scratch buffer, then quantile each row in place.
     let view = arr.view();
     let iter: AxisIter<'_, T, N, M> = AxisIter::new(&view, axis, RankMarker::<N>)?;
-    let mut scratch = vec![T::zero(); out_size * axis_len];
+    let mut scratch = vec![T::ZERO; out_size * axis_len];
     for (k, lane) in iter.enumerate() {
         if let Some(slice) = lane.as_slice() {
             for (flat, &lane_val) in slice.iter().enumerate() {
@@ -141,7 +139,7 @@ where
         }
     }
 
-    let mut buf = vec![T::zero(); out_size];
+    let mut buf = vec![T::ZERO; out_size];
     for (flat, slot) in buf.iter_mut().enumerate() {
         let row = &mut scratch[flat * axis_len..(flat + 1) * axis_len];
         *slot = quantile_of_slice(row, q, method)?;
@@ -160,13 +158,11 @@ pub fn median_axis<T, S, const N: usize, const M: usize>(
     axis: usize,
 ) -> Result<Array<T, VecStorage<T>, M>>
 where
-    T: Float,
+    T: FloatElement,
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
-    let half = T::from(0.5).ok_or(LetoError::StorageError {
-        reason: "0.5 not representable in target float type".to_string(),
-    })?;
+    let half = T::from_f64(0.5);
     quantile_axis(arr, axis, half, Interpolation::Linear)
 }
 
@@ -174,8 +170,8 @@ where
 ///
 /// Shared SSOT kernel for [`quantile_all`] and [`quantile_axis`]. `values` is
 /// non-empty by construction at both call sites.
-fn quantile_of_slice<T: Float>(values: &mut [T], q: T, method: Interpolation) -> Result<T> {
-    if !q.is_finite() || q < T::zero() || q > T::one() {
+fn quantile_of_slice<T: FloatElement>(values: &mut [T], q: T, method: Interpolation) -> Result<T> {
+    if !q.is_finite() || q < T::ZERO || q > T::ONE {
         return Err(LetoError::StorageError {
             reason: "quantile q must be finite and within [0, 1]".to_string(),
         });
@@ -195,21 +191,18 @@ fn quantile_of_slice<T: Float>(values: &mut [T], q: T, method: Interpolation) ->
     if n == 1 {
         return Ok(values[0]);
     }
-    let len_minus_one = T::from(n - 1).ok_or(LetoError::StorageError {
-        reason: "sample size exceeds float precision range".to_string(),
-    })?;
+    let len_minus_one = T::from_f64((n - 1) as f64);
     let h = q * len_minus_one;
     let lo = h.floor();
-    let lo_idx = lo.to_usize().ok_or(LetoError::StorageError {
-        reason: "fractional rank not representable as index".to_string(),
-    })?;
+    // `lo` is floor-valued, so the conversion is exact for any in-range index.
+    let lo_idx = lo.to_f64() as usize;
     let g = h - lo;
 
     let value = match method {
         Interpolation::Lower => values[lo_idx],
         Interpolation::Higher => values[ceil_idx(lo_idx, g, n)],
         Interpolation::Nearest => {
-            let half = T::from(0.5).expect("invariant: 0.5 representable in float type");
+            let half = T::from_f64(0.5);
             if g > half || (g == half && lo_idx % 2 == 1) {
                 values[ceil_idx(lo_idx, g, n)]
             } else {
@@ -218,11 +211,11 @@ fn quantile_of_slice<T: Float>(values: &mut [T], q: T, method: Interpolation) ->
         }
         Interpolation::Midpoint => {
             let hi = values[ceil_idx(lo_idx, g, n)];
-            let two = T::from(2).expect("invariant: 2 representable in float type");
+            let two = T::from_f64(2.0);
             (values[lo_idx] + hi) / two
         }
         Interpolation::Linear => {
-            if g.is_zero() {
+            if g == T::ZERO {
                 values[lo_idx]
             } else {
                 let hi = values[lo_idx + 1];
@@ -236,8 +229,8 @@ fn quantile_of_slice<T: Float>(values: &mut [T], q: T, method: Interpolation) ->
 /// Index of the upper bracketing order statistic: `lo` when the rank is exact
 /// (`g = 0`), else `lo + 1`, clamped to the last valid index.
 #[inline]
-fn ceil_idx<T: Float>(lo_idx: usize, g: T, n: usize) -> usize {
-    if g.is_zero() {
+fn ceil_idx<T: FloatElement>(lo_idx: usize, g: T, n: usize) -> usize {
+    if g == T::ZERO {
         lo_idx
     } else {
         (lo_idx + 1).min(n - 1)

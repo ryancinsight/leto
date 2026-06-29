@@ -1,6 +1,6 @@
 //! Covariance matrix of a set of variables (ndarray-stats `cov` parity).
 
-use num_traits::Float;
+use eunomia::FloatElement;
 
 use crate::application::array::Array;
 use crate::application::reduction::variance::degrees_of_freedom;
@@ -31,7 +31,7 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 /// [`LetoError`] if either dimension is zero or `n − ddof ≤ 0`.
 pub fn covariance<T, S>(arr: &Array<T, S, 2>, ddof: T) -> Result<Array<T, VecStorage<T>, 2>>
 where
-    T: Float,
+    T: FloatElement,
     S: Storage<T>,
 {
     let [v, n] = arr.shape();
@@ -41,20 +41,18 @@ where
         });
     }
     let denom = degrees_of_freedom(n, ddof)?;
-    let nf = T::from(n).ok_or(LetoError::StorageError {
-        reason: "observation count exceeds float precision range".to_string(),
-    })?;
+    let nf = T::from_f64((n) as f64);
 
     let view = arr.view();
     let layout = view.layout();
     let data = view.data();
 
     // Center each variable by its mean into a contiguous v × n buffer.
-    let mut centered = vec![T::zero(); v * n];
+    let mut centered = vec![T::ZERO; v * n];
     for i in 0..v {
-        let mut sum = T::zero();
+        let mut sum = T::ZERO;
         for k in 0..n {
-            sum = sum + data[layout.offset_of([i, k])?];
+            sum += data[layout.offset_of([i, k])?];
         }
         let mean = sum / nf;
         for k in 0..n {
@@ -63,12 +61,12 @@ where
     }
 
     // Symmetric cross-products: compute the upper triangle, mirror to the lower.
-    let mut out = vec![T::zero(); v * v];
+    let mut out = vec![T::ZERO; v * v];
     for i in 0..v {
         for j in i..v {
-            let mut acc = T::zero();
+            let mut acc = T::ZERO;
             for k in 0..n {
-                acc = acc + centered[i * n + k] * centered[j * n + k];
+                acc += centered[i * n + k] * centered[j * n + k];
             }
             let c = acc / denom;
             out[i * v + j] = c;

@@ -73,11 +73,11 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     /// Create a new Array of a given shape filled with one.
     pub fn ones(shape: [usize; N]) -> Self
     where
-        T: num_traits::One + Clone,
+        T: eunomia::NumericElement + Clone,
     {
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
-        let storage = VecStorage::fill(size, T::one());
+        let storage = VecStorage::fill(size, T::ONE);
         Self::new(layout, storage).expect("Valid layout bounds")
     }
 

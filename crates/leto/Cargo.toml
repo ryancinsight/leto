@@ -10,7 +10,6 @@ license.workspace = true
 mnemosyne = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
-num-traits = { workspace = true }
 bytemuck = { workspace = true }
 eunomia = { workspace = true }
 half = { workspace = true }
@@ -23,7 +22,7 @@ ndarray = { workspace = true, optional = true }
 
 [features]
 default = ["std", "parallel", "mnemosyne-memory"]
-std = ["num-traits/std"]
+std = []
 alloc = []
 parallel = []
 # mnemosyne integration
