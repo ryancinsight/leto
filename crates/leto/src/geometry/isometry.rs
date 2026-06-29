@@ -5,6 +5,8 @@ use eunomia::RealField;
 
 /// A pure translation in 3-space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(deserialize = "T: serde::Deserialize<'de> + Copy + Default")))]
 #[repr(transparent)]
 pub struct Translation3<T> {
     /// Translation vector.
@@ -30,6 +32,8 @@ impl<T> Translation3<T> {
 /// A direct (orientation-preserving) rigid-body transform: a rotation followed
 /// by a translation, `p ↦ R·p + t`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(deserialize = "T: serde::Deserialize<'de> + Copy + Default")))]
 #[repr(C)]
 pub struct Isometry3<T> {
     /// Rotation component.

@@ -13,6 +13,52 @@ pub struct Vector<T, const N: usize> {
     pub data: [T; N],
 }
 
+// Const-generic `[T; N]` is not serde-derivable, so serialize as a fixed tuple
+// of `N` elements (a manual impl); dependent geometry types derive over this.
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize, const N: usize> serde::Serialize for Vector<T, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+        let mut tup = serializer.serialize_tuple(N)?;
+        for x in &self.data {
+            tup.serialize_element(x)?;
+        }
+        tup.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T, const N: usize> serde::Deserialize<'de> for Vector<T, N>
+where
+    T: serde::Deserialize<'de> + Copy + Default,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Vis<T, const N: usize>(core::marker::PhantomData<T>);
+        impl<'de, T, const N: usize> serde::de::Visitor<'de> for Vis<T, N>
+        where
+            T: serde::Deserialize<'de> + Copy + Default,
+        {
+            type Value = Vector<T, N>;
+            fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                write!(f, "a sequence of {N} numbers")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Vector<T, N>, A::Error> {
+                let mut data = [T::default(); N];
+                for (i, slot) in data.iter_mut().enumerate() {
+                    *slot = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
+                }
+                Ok(Vector { data })
+            }
+        }
+        deserializer.deserialize_tuple(N, Vis(core::marker::PhantomData))
+    }
+}
+
 impl<T: Default + Copy, const N: usize> Default for Vector<T, N> {
     #[inline(always)]
     fn default() -> Self {
@@ -160,7 +206,7 @@ impl<T: RealField, const N: usize> Vector<T, N> {
     }
 }
 
-/// 3-vector cross product.
+/// 3-vector cross product and canonical axes.
 impl<T: RealField> Vector<T, 3> {
     /// Cross product `self × rhs`.
     #[inline]
@@ -170,6 +216,36 @@ impl<T: RealField> Vector<T, 3> {
         Self {
             data: [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx],
         }
+    }
+
+    /// The `+x` unit axis `(1, 0, 0)`.
+    #[inline]
+    pub fn x_axis() -> super::Unit<T, 3> {
+        super::Unit::new_unchecked(Self::new([
+            <T as NumericElement>::ONE,
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ZERO,
+        ]))
+    }
+
+    /// The `+y` unit axis `(0, 1, 0)`.
+    #[inline]
+    pub fn y_axis() -> super::Unit<T, 3> {
+        super::Unit::new_unchecked(Self::new([
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ONE,
+            <T as NumericElement>::ZERO,
+        ]))
+    }
+
+    /// The `+z` unit axis `(0, 0, 1)`.
+    #[inline]
+    pub fn z_axis() -> super::Unit<T, 3> {
+        super::Unit::new_unchecked(Self::new([
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ONE,
+        ]))
     }
 }
 

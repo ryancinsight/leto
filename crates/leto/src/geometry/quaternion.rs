@@ -6,6 +6,7 @@ use core::ops::Mul;
 
 /// A quaternion `w + xi + yj + zk`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub struct Quaternion<T> {
     /// Scalar (real) component.
@@ -76,6 +77,7 @@ impl<T: RealField> Mul for Quaternion<T> {
 
 /// A unit quaternion — a rotation in 3-space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct UnitQuaternion<T> {
     q: Quaternion<T>,
