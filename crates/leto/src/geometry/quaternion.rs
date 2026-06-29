@@ -126,12 +126,16 @@ impl<T: RealField> UnitQuaternion<T> {
     }
 
     /// Rotate a vector, `v' = q·v·q⁻¹`.
+    ///
+    /// Evaluated in the Rodrigues form `t = 2·(q.xyz × v); v + q.w·t + q.xyz × t`
+    /// rather than the literal two-quaternion sandwich: ~30 flops vs ~56, on a
+    /// per-vertex-transform hot path. Differentially verified against the
+    /// sandwich in tests.
     #[inline]
     pub fn transform_vector(self, v: Vector3<T>) -> Vector3<T> {
-        let zero = <T as NumericElement>::ZERO;
-        let pure = Quaternion::new(zero, v.data[0], v.data[1], v.data[2]);
-        let r = self.q * pure * self.q.conjugate();
-        Vector3::from_array([r.x, r.y, r.z])
+        let u = Vector3::new(self.q.x, self.q.y, self.q.z);
+        let t = u.cross(v) * T::from_f64(2.0);
+        v + t * self.q.w + u.cross(t)
     }
 
     /// Compose two rotations (`self` applied after `rhs`).
@@ -171,5 +175,22 @@ mod tests {
         // inverse rotates back
         let back = r.inverse().transform_vector(rotated);
         assert!((back.data[0] - 1.0).abs() < 1e-12 && back.data[1].abs() < 1e-12);
+    }
+
+    #[test]
+    fn transform_vector_matches_qvq_sandwich() {
+        // The optimized Rodrigues form must equal the literal q·v·q⁻¹ sandwich
+        // for an arbitrary rotation and vector.
+        let axis = Unit::new_normalize(Vector::from_array([1.0_f64, 2.0, -3.0]));
+        let q = UnitQuaternion::from_axis_angle(axis, 0.7);
+        let v = Vector::from_array([4.0_f64, -1.0, 2.0]);
+        let opt = q.transform_vector(v);
+        let qq = q.into_inner();
+        let pure = Quaternion::new(0.0, v.data[0], v.data[1], v.data[2]);
+        let r = qq * pure * qq.conjugate();
+        let sandwich = [r.x, r.y, r.z];
+        for k in 0..3 {
+            assert!((opt.data[k] - sandwich[k]).abs() < 1e-12, "component {k}");
+        }
     }
 }
