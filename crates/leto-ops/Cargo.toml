@@ -16,7 +16,6 @@ themis = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
 num-traits = { workspace = true }
-num-complex = { workspace = true }
 bytemuck = { workspace = true }
 half = { workspace = true }
 
@@ -26,6 +25,7 @@ thiserror = { workspace = true }
 [dev-dependencies]
 ndarray = { workspace = true }
 nalgebra = { workspace = true }
+num-complex = { workspace = true }
 criterion = { workspace = true }
 ndarray-rand = "0.15"
 rand = "0.8"

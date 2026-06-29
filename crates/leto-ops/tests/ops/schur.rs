@@ -95,13 +95,13 @@ fn assert_schur_contract(a: &Array2<f64>, n: usize) {
 
 /// Greedy nearest-neighbour multiset match of two complex spectra.
 #[track_caller]
-fn assert_spectrum_matches(mut got: Vec<Complex<f64>>, want: &[Complex<f64>]) {
+fn assert_spectrum_matches(mut got: Vec<leto::Complex<f64>>, want: &[Complex<f64>]) {
     assert_eq!(got.len(), want.len());
     for w in want {
         let (idx, dist) = got
             .iter()
             .enumerate()
-            .map(|(k, g)| (k, (g - w).norm()))
+            .map(|(k, g)| (k, ((g.re - w.re).powi(2) + (g.im - w.im).powi(2)).sqrt()))
             .min_by(|x, y| x.1.total_cmp(&y.1))
             .unwrap();
         assert!(dist <= 1e-7, "no eigenvalue near {w}; closest dist {dist}");
@@ -171,7 +171,12 @@ fn schur_eigenvalues_agree_with_eigenvalues_kernel() {
         ],
     );
     let s = schur(&a.view()).unwrap();
-    assert_spectrum_matches(s.eigenvalues(), &eigenvalues(&a.view()).unwrap());
+    let free: Vec<Complex<f64>> = eigenvalues(&a.view())
+        .unwrap()
+        .into_iter()
+        .map(|c| Complex::new(c.re, c.im))
+        .collect();
+    assert_spectrum_matches(s.eigenvalues(), &free);
 }
 
 #[test]

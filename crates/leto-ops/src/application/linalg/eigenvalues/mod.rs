@@ -22,7 +22,7 @@
 
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, Result};
-use num_complex::Complex;
+use leto::Complex;
 
 /// Compute all eigenvalues of a square real matrix (real and complex).
 ///

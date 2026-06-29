@@ -19,7 +19,7 @@ const EXACT_TOL: f64 = 1.0e-7;
 /// Assert the two spectra are equal as multisets: every oracle eigenvalue is
 /// matched to a distinct leto eigenvalue within `tol`.
 #[track_caller]
-fn assert_spectra_close(leto: Vec<Complex<f64>>, oracle: Vec<Complex<f64>>, tol: f64) {
+fn assert_spectra_close(leto: Vec<leto::Complex<f64>>, oracle: Vec<Complex<f64>>, tol: f64) {
     assert_eq!(leto.len(), oracle.len(), "eigenvalue count mismatch");
     let mut used = vec![false; leto.len()];
     for o in &oracle {
@@ -58,7 +58,7 @@ fn backward_error_tol(values: &[f64]) -> f64 {
     8.0 * (f64::EPSILON * fro).sqrt()
 }
 
-fn leto_eigs(n: usize, values: &[f64]) -> Vec<Complex<f64>> {
+fn leto_eigs(n: usize, values: &[f64]) -> Vec<leto::Complex<f64>> {
     let a = Array2::from_shape_vec([n, n], values.to_vec()).unwrap();
     eigenvalues(&a.view()).unwrap()
 }

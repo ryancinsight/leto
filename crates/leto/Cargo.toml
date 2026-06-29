@@ -11,7 +11,6 @@ mnemosyne = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
 num-traits = { workspace = true }
-num-complex = { workspace = true }
 bytemuck = { workspace = true }
 half = { workspace = true }
 

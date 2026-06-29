@@ -10,6 +10,7 @@ pub mod infrastructure;
 
 // Re-exports
 pub use domain::dynamic::LayoutDyn;
+pub use domain::complex::Complex;
 pub use domain::error::{LetoError, Result};
 pub use domain::insert_axis::InsertAxis;
 pub use domain::layout::Layout;
