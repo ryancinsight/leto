@@ -12,7 +12,7 @@ mnemosyne = { workspace = true, optional = true }
 # ── Numeric Foundations ──
 num-traits = { workspace = true }
 bytemuck = { workspace = true }
-hermes-numeric = { workspace = true }
+eunomia = { workspace = true }
 half = { workspace = true }
 
 # ── Error Handling ──

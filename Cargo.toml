@@ -22,7 +22,7 @@ leto-ops = { path = "crates/leto-ops" }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "1e014d25461b322345c15fb3cf9467b5388616dd" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "03d9d0346f52b08946875ff54540431e178aa51d", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { path = "../hermes/crates/hermes-simd" }
-hermes-numeric = { path = "../hermes/crates/hermes-numeric" }
+eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
@@ -74,7 +74,9 @@ moirai-parallel = { path = "../moirai/moirai-parallel" }
 
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }
-hermes-numeric = { path = "../hermes/crates/hermes-numeric" }
+
+[patch."https://github.com/ryancinsight/eunomia"]
+eunomia = { path = "../eunomia/crates/eunomia" }
 
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
