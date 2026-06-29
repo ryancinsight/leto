@@ -5,19 +5,21 @@
 pub mod application;
 /// Domain-level layout, slicing, and error contracts.
 pub mod domain;
+pub mod geometry;
 /// Infrastructure storage backends.
 pub mod infrastructure;
 
 // Re-exports
 pub use domain::dynamic::LayoutDyn;
 pub use domain::error::{LetoError, Result};
-/// Complex number — re-exported from `eunomia`, the Atlas datatype SSOT
-/// ([ADR 0011](../docs/adr/0011-num-complex-removal.md ; see also eunomia ADR 0001)).
-pub use eunomia::Complex;
 pub use domain::insert_axis::InsertAxis;
 pub use domain::layout::Layout;
 pub use domain::remove_axis::{RankMarker, RemoveAxis};
 pub use domain::slice::SliceArg;
+/// Complex number — re-exported from `eunomia`, the Atlas datatype SSOT
+/// ([ADR 0011](../docs/adr/0011-num-complex-removal.md ; see also eunomia ADR 0001)).
+pub use eunomia::Complex;
+pub use geometry::{Vector, Vector2, Vector3};
 
 pub use infrastructure::storage::{
     CowStorage, SliceStorage, SliceStorageMut, StackStorage, Storage, StorageMut, VecStorage,
