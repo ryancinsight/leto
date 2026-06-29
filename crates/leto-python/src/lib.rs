@@ -4,7 +4,7 @@ use leto::{
     Array, Array1, ArrayD, ArrayView, ArrayViewMut, Layout, LayoutDyn, SliceStorage, VecStorage,
 };
 use leto_ops::{
-    add, bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, det, div, dot, eigenvalues,
+    add, bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_inv, cholesky_solve, col_piv_qr, det, div, dot, eigenvalues,
     full_piv_lu, hessenberg, inv, kron, matexp, matmul, mul, norm_l1, norm_l2, norm_max,
     qr_decompose, schur, singular_values, solve, sub, sum, svd_decompose, symmetric_eigen_jacobi,
     trace, udu_decompose, RealScalar,
@@ -341,6 +341,42 @@ fn cholesky_py<'py>(
     let lower = decomp.lower().clone();
     let shape = [lower.shape()[0], lower.shape()[1]];
     array_into_numpy2(py, lower, shape)
+}
+
+/// Solve `A x = b` for symmetric positive-definite `A` via its Cholesky factor.
+/// Equivalent to `numpy.linalg.solve` on an SPD matrix.
+#[pyfunction]
+#[pyo3(name = "cholesky_solve")]
+fn cholesky_solve_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f64>,
+    b: PyReadonlyArray1<'_, f64>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    require_contiguous_2d(&a, "a")?;
+    require_contiguous_1d(&b, "b")?;
+    let a_view = view_from_numpy(&a)?;
+    let b_view = view_from_numpy_1d(&b)?;
+    let out_arr = py.allow_threads(|| {
+        cholesky_solve(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string()))
+    })?;
+    array_into_numpy1(py, out_arr)
+}
+
+/// Inverse of a symmetric positive-definite matrix via its Cholesky factor.
+/// Equivalent to `numpy.linalg.inv` on an SPD matrix.
+#[pyfunction]
+#[pyo3(name = "cholesky_inv")]
+fn cholesky_inv_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray2<'_, f64>,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    require_contiguous_2d(&a, "a")?;
+    let a_view = view_from_numpy(&a)?;
+    let out_arr = py.allow_threads(|| {
+        cholesky_inv(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
+    })?;
+    let shape = [out_arr.shape()[0], out_arr.shape()[1]];
+    array_into_numpy2(py, out_arr, shape)
 }
 
 #[pyfunction]
@@ -709,6 +745,8 @@ fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(inv_py, m)?)?;
     m.add_function(wrap_pyfunction!(solve_py, m)?)?;
     m.add_function(wrap_pyfunction!(cholesky_py, m)?)?;
+    m.add_function(wrap_pyfunction!(cholesky_solve_py, m)?)?;
+    m.add_function(wrap_pyfunction!(cholesky_inv_py, m)?)?;
     m.add_function(wrap_pyfunction!(qr_py, m)?)?;
     m.add_function(wrap_pyfunction!(col_piv_qr_py, m)?)?;
     m.add_function(wrap_pyfunction!(svd_py, m)?)?;

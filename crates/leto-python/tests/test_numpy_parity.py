@@ -281,3 +281,23 @@ def test_bidiagonalize_matches_numpy() -> None:
     _close("bidiagonalize_v_orthonormal", v.T @ v, np.eye(v.shape[1]), atol=1e-8)
     assert np.allclose(np.tril(b, -1), 0.0, atol=1e-9), "B must be upper-triangular"
     assert np.allclose(np.triu(b, 2), 0.0, atol=1e-9), "B must be bidiagonal"
+
+
+# ---------------------------------------------------------------------------
+# Cholesky-based solve / inverse for SPD systems (exact vs numpy)
+# ---------------------------------------------------------------------------
+
+_RHS_CHOL = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+
+
+def test_cholesky_solve_matches_numpy() -> None:
+    # SPD A: cholesky_solve(A, b) == numpy.linalg.solve(A, b).
+    got = leto.cholesky_solve(_SPD, _RHS_CHOL)
+    _close("cholesky_solve", got, np.linalg.solve(_SPD, _RHS_CHOL), atol=1e-10)
+
+
+def test_cholesky_inv_matches_numpy() -> None:
+    # SPD A: cholesky_inv(A) == numpy.linalg.inv(A), and A @ inv == I.
+    inv = np.asarray(leto.cholesky_inv(_SPD))
+    _close("cholesky_inv", inv, np.linalg.inv(_SPD), atol=1e-10)
+    _close("cholesky_inv_identity", _SPD @ inv, np.eye(3), atol=1e-10)
