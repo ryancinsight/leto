@@ -11,9 +11,9 @@ pub mod infrastructure;
 // Re-exports
 pub use domain::dynamic::LayoutDyn;
 pub use domain::error::{LetoError, Result};
-/// Complex number — re-exported from `hermes-numeric`, the numeric SSOT
-/// ([ADR 0011](../docs/adr/0011-num-complex-removal.md)).
-pub use hermes_numeric::Complex;
+/// Complex number — re-exported from `eunomia`, the Atlas datatype SSOT
+/// ([ADR 0011](../docs/adr/0011-num-complex-removal.md ; see also eunomia ADR 0001)).
+pub use eunomia::Complex;
 pub use domain::insert_axis::InsertAxis;
 pub use domain::layout::Layout;
 pub use domain::remove_axis::{RankMarker, RemoveAxis};
