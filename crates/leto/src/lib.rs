@@ -19,7 +19,7 @@ pub use domain::slice::SliceArg;
 /// Complex number — re-exported from `eunomia`, the Atlas datatype SSOT
 /// ([ADR 0011](../docs/adr/0011-num-complex-removal.md ; see also eunomia ADR 0001)).
 pub use eunomia::Complex;
-pub use geometry::{Vector, Vector2, Vector3};
+pub use geometry::{Point, Point2, Point3, Unit, Vector, Vector2, Vector3};
 
 pub use infrastructure::storage::{
     CowStorage, SliceStorage, SliceStorageMut, StackStorage, Storage, StorageMut, VecStorage,
