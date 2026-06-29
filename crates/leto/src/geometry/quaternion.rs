@@ -131,7 +131,7 @@ impl<T: RealField> UnitQuaternion<T> {
         let zero = <T as NumericElement>::ZERO;
         let pure = Quaternion::new(zero, v.data[0], v.data[1], v.data[2]);
         let r = self.q * pure * self.q.conjugate();
-        Vector3::new([r.x, r.y, r.z])
+        Vector3::from_array([r.x, r.y, r.z])
     }
 
     /// Compose two rotations (`self` applied after `rhs`).
@@ -162,9 +162,9 @@ mod tests {
 
     #[test]
     fn rotation_90_about_z_maps_x_to_y() {
-        let z = Unit::new_normalize(Vector::new([0.0_f64, 0.0, 1.0]));
+        let z = Unit::new_normalize(Vector::from_array([0.0_f64, 0.0, 1.0]));
         let r = UnitQuaternion::from_axis_angle(z, core::f64::consts::FRAC_PI_2);
-        let rotated = r.transform_vector(Vector::new([1.0_f64, 0.0, 0.0]));
+        let rotated = r.transform_vector(Vector::from_array([1.0_f64, 0.0, 0.0]));
         assert!((rotated.data[0]).abs() < 1e-12);
         assert!((rotated.data[1] - 1.0).abs() < 1e-12);
         assert!((rotated.data[2]).abs() < 1e-12);

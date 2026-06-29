@@ -74,8 +74,32 @@ pub type Vector3<T> = Vector<T, 3>;
 impl<T, const N: usize> Vector<T, N> {
     /// Construct from a component array.
     #[inline(always)]
-    pub const fn new(data: [T; N]) -> Self {
+    pub const fn from_array(data: [T; N]) -> Self {
         Self { data }
+    }
+}
+
+impl<T> Vector<T, 2> {
+    /// Construct from `x`, `y` components.
+    #[inline(always)]
+    pub const fn new(x: T, y: T) -> Self {
+        Self { data: [x, y] }
+    }
+}
+
+impl<T> Vector<T, 3> {
+    /// Construct from `x`, `y`, `z` components.
+    #[inline(always)]
+    pub const fn new(x: T, y: T, z: T) -> Self {
+        Self { data: [x, y, z] }
+    }
+}
+
+impl<T> Vector<T, 4> {
+    /// Construct from `x`, `y`, `z`, `w` components.
+    #[inline(always)]
+    pub const fn new(x: T, y: T, z: T, w: T) -> Self {
+        Self { data: [x, y, z, w] }
     }
 }
 
@@ -221,7 +245,7 @@ impl<T: RealField> Vector<T, 3> {
     /// The `+x` unit axis `(1, 0, 0)`.
     #[inline]
     pub fn x_axis() -> super::Unit<T, 3> {
-        super::Unit::new_unchecked(Self::new([
+        super::Unit::new_unchecked(Self::from_array([
             <T as NumericElement>::ONE,
             <T as NumericElement>::ZERO,
             <T as NumericElement>::ZERO,
@@ -231,7 +255,7 @@ impl<T: RealField> Vector<T, 3> {
     /// The `+y` unit axis `(0, 1, 0)`.
     #[inline]
     pub fn y_axis() -> super::Unit<T, 3> {
-        super::Unit::new_unchecked(Self::new([
+        super::Unit::new_unchecked(Self::from_array([
             <T as NumericElement>::ZERO,
             <T as NumericElement>::ONE,
             <T as NumericElement>::ZERO,
@@ -241,7 +265,7 @@ impl<T: RealField> Vector<T, 3> {
     /// The `+z` unit axis `(0, 0, 1)`.
     #[inline]
     pub fn z_axis() -> super::Unit<T, 3> {
-        super::Unit::new_unchecked(Self::new([
+        super::Unit::new_unchecked(Self::from_array([
             <T as NumericElement>::ZERO,
             <T as NumericElement>::ZERO,
             <T as NumericElement>::ONE,
@@ -255,19 +279,19 @@ mod tests {
 
     #[test]
     fn dot_norm_normalize() {
-        let v = Vector3::new([3.0_f64, 4.0, 0.0]);
+        let v = Vector3::from_array([3.0_f64, 4.0, 0.0]);
         assert_eq!(v.norm_squared(), 25.0);
         assert_eq!(v.norm(), 5.0);
         assert!((v.normalize().norm() - 1.0).abs() < 1e-12);
-        let a = Vector3::new([1.0_f64, 2.0, 3.0]);
-        let b = Vector3::new([4.0_f64, 5.0, 6.0]);
+        let a = Vector3::from_array([1.0_f64, 2.0, 3.0]);
+        let b = Vector3::from_array([4.0_f64, 5.0, 6.0]);
         assert_eq!(a.dot(b), 32.0);
     }
 
     #[test]
     fn cross_is_right_handed() {
-        let x = Vector3::new([1.0_f64, 0.0, 0.0]);
-        let y = Vector3::new([0.0_f64, 1.0, 0.0]);
+        let x = Vector3::from_array([1.0_f64, 0.0, 0.0]);
+        let y = Vector3::from_array([0.0_f64, 1.0, 0.0]);
         assert_eq!(x.cross(y).data, [0.0, 0.0, 1.0]);
         // anti-commutative
         assert_eq!(y.cross(x).data, [0.0, 0.0, -1.0]);
@@ -275,8 +299,8 @@ mod tests {
 
     #[test]
     fn distance_and_arithmetic() {
-        let a = Vector3::new([0.0_f64, 0.0, 0.0]);
-        let b = Vector3::new([1.0_f64, 2.0, 2.0]);
+        let a = Vector3::from_array([0.0_f64, 0.0, 0.0]);
+        let b = Vector3::from_array([1.0_f64, 2.0, 2.0]);
         assert_eq!(a.distance(b), 3.0);
         assert_eq!((b * 2.0).data, [2.0, 4.0, 4.0]);
         assert_eq!((a - b).data, [-1.0, -2.0, -2.0]);

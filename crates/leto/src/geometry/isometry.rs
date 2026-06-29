@@ -18,7 +18,7 @@ impl<T> Translation3<T> {
     #[inline(always)]
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self {
-            vector: Vector3::new([x, y, z]),
+            vector: Vector3::from_array([x, y, z]),
         }
     }
 
@@ -64,7 +64,7 @@ impl<T: RealField> Isometry3<T> {
     /// Apply to a point: `R·p + t`.
     #[inline]
     pub fn transform_point(self, p: Point3<T>) -> Point3<T> {
-        Point3::new(self.rotation.transform_vector(p.coords) + self.translation)
+        Point3::from_coords(self.rotation.transform_vector(p.coords) + self.translation)
     }
 
     /// Apply to a vector: rotation only (vectors are translation-invariant).
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn transform_point_rotates_then_translates() {
-        let z = Unit::new_normalize(Vector::new([0.0_f64, 0.0, 1.0]));
+        let z = Unit::new_normalize(Vector::from_array([0.0_f64, 0.0, 1.0]));
         let rot = UnitQuaternion::from_axis_angle(z, core::f64::consts::FRAC_PI_2);
         let iso = Isometry3::from_parts(Translation3::new(10.0, 0.0, 0.0), rot);
         // x=(1,0,0) rotates to (0,1,0), then +translation (10,0,0) → (10,1,0)
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn inverse_round_trips() {
-        let axis = Unit::new_normalize(Vector::new([1.0_f64, 1.0, 1.0]));
+        let axis = Unit::new_normalize(Vector::from_array([1.0_f64, 1.0, 1.0]));
         let iso = Isometry3::from_parts(
             Translation3::new(3.0, -2.0, 5.0),
             UnitQuaternion::from_axis_angle(axis, 0.9),
