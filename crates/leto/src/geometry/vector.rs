@@ -174,6 +174,45 @@ impl<T: Mul<Output = T> + Copy, const N: usize> Mul<T> for Vector<T, N> {
     }
 }
 
+impl<T: core::ops::Div<Output = T> + Copy, const N: usize> core::ops::Div<T> for Vector<T, N> {
+    type Output = Self;
+    /// Scalar division.
+    #[inline(always)]
+    fn div(self, scalar: T) -> Self {
+        Self {
+            data: core::array::from_fn(|i| self.data[i] / scalar),
+        }
+    }
+}
+
+impl<T: Add<Output = T> + Copy, const N: usize> core::ops::AddAssign for Vector<T, N> {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl<T: Sub<Output = T> + Copy, const N: usize> core::ops::SubAssign for Vector<T, N> {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
+impl<T: Mul<Output = T> + Copy, const N: usize> core::ops::MulAssign<T> for Vector<T, N> {
+    #[inline(always)]
+    fn mul_assign(&mut self, scalar: T) {
+        *self = *self * scalar;
+    }
+}
+
+impl<T: core::ops::Div<Output = T> + Copy, const N: usize> core::ops::DivAssign<T> for Vector<T, N> {
+    #[inline(always)]
+    fn div_assign(&mut self, scalar: T) {
+        *self = *self / scalar;
+    }
+}
+
 /// Euclidean operations over a real scalar field.
 impl<T: RealField, const N: usize> Vector<T, N> {
     /// Inner product `Σ aᵢ·bᵢ`. Requires `N ≥ 1`.
