@@ -25,12 +25,19 @@ last such dependency for leto + hephaestus.
 
 ## Decision
 
-Introduce `leto::Complex<T>` (`crates/leto/src/domain/complex.rs`): a
+Define the native `Complex<T>` in **`hermes-numeric`**, which declares itself the
+Single Source of Truth for numeric representations and already owns the
+`F16`/`F32`/`F64`/`Bf16`/`I32` wrapper types. `hermes_numeric::Complex<T>` is a
 `#[repr(C)] #[derive(Clone, Copy, Debug, Default, PartialEq)]` pair of `re`/`im`
 with `const fn new`, `bytemuck::Pod`/`Zeroable` (gated on `T: Pod`/`Zeroable`),
 the four field-wise/algebraic `Add`/`Sub`/`Mul`/`Div`/`Neg` operators, and
-`Display`. It is a faithful drop-in for the `num_complex::Complex` surface leto
-and hephaestus actually use.
+`Display` — a faithful drop-in for the `num_complex::Complex` surface.
+
+leto **re-exports** it as `leto::Complex` (`pub use hermes_numeric::Complex`, via a
+direct `hermes-numeric` dependency); leto-ops and the hephaestus consumers import
+`leto::Complex` unchanged. Placing the type in the numeric foundation keeps one
+owned definition for the whole hermes-consuming stack rather than per-crate
+copies (SSOT + upstream-ownership).
 
 Migrate every production site (`num_complex::Complex` → `leto::Complex`) in
 leto-ops and the hephaestus consumers (wgpu/cuda/metal compute + python
@@ -46,19 +53,25 @@ collection type is fixed.
 
 ## Alternatives rejected
 
-- **Re-export coeus-core's `Complex`**: rejected — coeus is *downstream* of leto;
-  the dependency direction forbids it. leto owns the vocabulary; coeus-core can
-  later re-export `leto::Complex` to deduplicate (follow-up).
+- **Define `Complex` in leto** (initial approach, corrected): rejected — leto is
+  not the numeric SSOT; `hermes-numeric` is. A numeric vocabulary type needed by
+  leto, hephaestus, and coeus belongs in the deepest common foundation, not a
+  mid-layer crate. The leto-local definition was relocated to `hermes-numeric`.
 - **Keep `num-complex` as a production dep**: rejected — it is the explicit
   removal target and the type is trivial to own natively.
 
 ## Consequences
 
-- leto's production graph is `num-complex`-free; hephaestus production likewise.
-- Verified: `leto::Complex` unit tests (arithmetic/layout); 213 leto-ops tests
-  (eigenvalues + schur differential vs nalgebra) green; hephaestus wgpu
-  eigenvalue contract tests green on real GPU; cuda eigenvalue contract test
-  green on real GPU (leto::Complex round-trips a device buffer). All libs,
-  tests, and benches across both repos compile.
-- Follow-up (filed): coeus-core may re-export `leto::Complex` to collapse the two
-  native complex types into one authoritative vocabulary entry.
+- The native `Complex<T>` is owned once by `hermes-numeric` (SSOT); leto,
+  hephaestus, and coeus consume it via `leto::Complex`. Both leto and hephaestus
+  production graphs are `num-complex`-free.
+- Verified: `hermes_numeric::Complex` unit tests (arithmetic/fields); 213 leto-ops
+  tests (eigenvalues + schur differential vs nalgebra) green through the
+  re-export; hephaestus wgpu eigenvalue contract tests green on real GPU; cuda
+  eigenvalue contract test green on real GPU (the type round-trips a device
+  buffer); bytemuck `Pod` unifies across hermes → leto → hephaestus. All libs,
+  tests, and benches across the repos compile.
+- Follow-up (filed): coeus-core defines its own `Complex<T>` (with coeus-specific
+  `Scalar`/`FloatOps`/`CpuUnaryDispatch` impls) — consolidate it onto
+  `hermes_numeric::Complex` by moving those trait impls and re-exporting, closing
+  the last duplicate native complex type.

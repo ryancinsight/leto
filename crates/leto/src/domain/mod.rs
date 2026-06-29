@@ -1,7 +1,5 @@
 /// Runtime-rank (dynamic) layout primitives (ADR 0007).
 pub mod dynamic;
-/// Atlas-native complex number type (ADR: num-complex removal).
-pub mod complex;
 /// Error types and result alias.
 pub mod error;
 /// ZST-based compile-time rank expansion helper.
