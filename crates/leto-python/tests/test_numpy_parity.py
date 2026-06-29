@@ -301,3 +301,25 @@ def test_cholesky_inv_matches_numpy() -> None:
     inv = np.asarray(leto.cholesky_inv(_SPD))
     _close("cholesky_inv", inv, np.linalg.inv(_SPD), atol=1e-10)
     _close("cholesky_inv_identity", _SPD @ inv, np.eye(3), atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# Batched matmul (float32, 3D) — mirrors numpy.matmul on stacked matrices
+# ---------------------------------------------------------------------------
+
+
+def test_batched_matmul_matches_numpy() -> None:
+    a = np.arange(2 * 2 * 3, dtype=np.float32).reshape(2, 2, 3)
+    b = np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    got = np.asarray(leto.batched_matmul(a, b))
+    assert got.shape == (2, 2, 4)
+    _close("batched_matmul", got.ravel(), np.matmul(a, b).ravel(), atol=1e-4)
+
+
+def test_batched_matmul_broadcasts_batch_one() -> None:
+    # A leading batch of 1 broadcasts against a larger batch.
+    a = np.arange(1 * 2 * 3, dtype=np.float32).reshape(1, 2, 3)
+    b = np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    got = np.asarray(leto.batched_matmul(a, b))
+    assert got.shape == (2, 2, 4)
+    _close("batched_matmul_bcast", got.ravel(), np.matmul(a, b).ravel(), atol=1e-4)

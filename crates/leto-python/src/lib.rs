@@ -4,14 +4,15 @@ use leto::{
     Array, Array1, ArrayD, ArrayView, ArrayViewMut, Layout, LayoutDyn, SliceStorage, VecStorage,
 };
 use leto_ops::{
-    add, bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_inv, cholesky_solve, col_piv_qr, det, div, dot, eigenvalues,
+    add, batched_matmul, bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_inv,
+    cholesky_solve, col_piv_qr, det, div, dot, eigenvalues,
     full_piv_lu, hessenberg, inv, kron, matexp, matmul, mul, norm_l1, norm_l2, norm_max,
     qr_decompose, schur, singular_values, solve, sub, sum, svd_decompose, symmetric_eigen_jacobi,
     trace, udu_decompose, RealScalar,
 };
 use numpy::{
-    Complex64, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
-    PyReadonlyArrayDyn, PyUntypedArrayMethods,
+    Complex64, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
+    PyReadonlyArray3, PyReadonlyArrayDyn, PyUntypedArrayMethods,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -124,6 +125,68 @@ fn array_into_numpy2<'py, T: numpy::Element + Clone>(
     array: Array<T, VecStorage<T>, 2>,
     shape: [usize; 2],
 ) -> PyResult<Bound<'py, PyArray2<T>>> {
+    let py_arr1 = PyArray1::from_vec(py, array.into_vec());
+    py_arr1.reshape(shape)
+}
+
+fn require_contiguous_3d<T: numpy::Element>(
+    input: &PyReadonlyArray3<'_, T>,
+    name: &str,
+) -> PyResult<()> {
+    if input.is_c_contiguous() {
+        Ok(())
+    } else {
+        Err(PyValueError::new_err(format!("{name} must be C-contiguous")))
+    }
+}
+
+fn view_from_numpy_3d<'a, T: numpy::Element>(
+    arr: &'a PyReadonlyArray3<'_, T>,
+) -> PyResult<ArrayView<'a, T, 3>> {
+    let shape = arr.shape();
+    let strides = arr.strides();
+
+    let el_size = std::mem::size_of::<T>() as isize;
+    if el_size == 0 {
+        return Err(PyValueError::new_err(
+            "Zero-sized element type not supported",
+        ));
+    }
+
+    let mut el_strides = [0isize; 3];
+    for i in 0..3 {
+        if strides[i] % el_size != 0 {
+            return Err(PyValueError::new_err("Non-element-aligned NumPy stride"));
+        }
+        el_strides[i] = strides[i] / el_size;
+    }
+
+    let shape_arr = [shape[0], shape[1], shape[2]];
+    let layout = Layout::new(shape_arr, el_strides, 0);
+
+    let raw_slice = arr.as_slice().map_err(|_| {
+        PyValueError::new_err("Failed to extract contiguous slice from NumPy array")
+    })?;
+
+    ArrayView::try_new(layout, raw_slice).map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
+fn output_array_3d<T: RealScalar + numpy::Element>(
+    shape: [usize; 3],
+) -> PyResult<Array<T, VecStorage<T>, 3>> {
+    let layout = Layout::c_contiguous(shape).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let size = layout
+        .checked_size()
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Array::new(layout, VecStorage::fill(size, T::ZERO))
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
+fn array_into_numpy3<'py, T: numpy::Element + Clone>(
+    py: Python<'py>,
+    array: Array<T, VecStorage<T>, 3>,
+    shape: [usize; 3],
+) -> PyResult<Bound<'py, PyArray3<T>>> {
     let py_arr1 = PyArray1::from_vec(py, array.into_vec());
     py_arr1.reshape(shape)
 }
@@ -251,6 +314,39 @@ fn matmul_py<'py>(
     })?;
 
     array_into_numpy2(py, out_arr, out_shape)
+}
+
+/// Batched matrix multiply over 3D arrays `[batch, m, k] @ [batch, k, n] -> [batch, m, n]`.
+/// A batch dimension of 1 on either operand broadcasts. Mirrors `numpy.matmul` on 3D inputs.
+#[pyfunction]
+#[pyo3(name = "batched_matmul")]
+fn batched_matmul_py<'py>(
+    py: Python<'py>,
+    a: PyReadonlyArray3<'_, f32>,
+    b: PyReadonlyArray3<'_, f32>,
+) -> PyResult<Bound<'py, PyArray3<f32>>> {
+    require_contiguous_3d(&a, "a")?;
+    require_contiguous_3d(&b, "b")?;
+    let a_view = view_from_numpy_3d(&a)?;
+    let b_view = view_from_numpy_3d(&b)?;
+
+    let sa = a.shape();
+    let sb = b.shape();
+    if sa[2] != sb[1] {
+        return Err(PyValueError::new_err(
+            "Inner dimension mismatch for batched matmul",
+        ));
+    }
+    let batch = sa[0].max(sb[0]);
+    let out_shape = [batch, sa[1], sb[2]];
+    let mut out_arr = output_array_3d(out_shape)?;
+
+    py.allow_threads(|| {
+        batched_matmul(&a_view, &b_view, &mut out_arr.view_mut())
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    })?;
+
+    array_into_numpy3(py, out_arr, out_shape)
 }
 
 const MAX_DYNAMIC_RANK: usize = 6;
@@ -739,6 +835,7 @@ fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dot_py, m)?)?;
     m.add_function(wrap_pyfunction!(sum_py, m)?)?;
     m.add_function(wrap_pyfunction!(matmul_py, m)?)?;
+    m.add_function(wrap_pyfunction!(batched_matmul_py, m)?)?;
     m.add_function(wrap_pyfunction!(sum_dyn_py, m)?)?;
 
     m.add_function(wrap_pyfunction!(det_py, m)?)?;
