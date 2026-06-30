@@ -122,6 +122,17 @@ where
         }
     }
 
+    /// Set every element to a clone of `value` (ndarray `fill` parity).
+    ///
+    /// Traverses in logical order, so it is correct for any layout; a
+    /// C-contiguous array takes the contiguous fast path.
+    pub fn fill(&mut self, value: T)
+    where
+        T: Clone,
+    {
+        self.mapv_inplace(|_| value.clone());
+    }
+
     /// Copy every element of `src` into `self` in logical row-major order
     /// (ndarray `assign` parity). Both arrays are traversed logically, so the
     /// copy is correct regardless of either side's strides.
@@ -171,6 +182,13 @@ mod tests {
         assert_eq!(a.fold(0.0, |acc, x| acc + x), 10.0);
         // order-sensitive fold: subtract in row-major order 0-1-2-3-4 => -10
         assert_eq!(a.fold(0.0, |acc, x| acc - x), -10.0);
+    }
+
+    #[test]
+    fn fill_sets_every_element() {
+        let mut a = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        a.fill(7.0);
+        assert_eq!(a.iter().copied().collect::<Vec<_>>(), vec![7.0; 6]);
     }
 
     #[test]
