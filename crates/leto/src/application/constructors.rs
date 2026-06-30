@@ -228,3 +228,27 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
         vec
     }
 }
+
+/// Build a 1-D array from a `Vec` (its length becomes the shape), matching
+/// `ndarray::Array1::from(vec)` / `from_vec`. The vector's storage is moved in
+/// place — no copy.
+impl<T> From<Vec<T>> for Array<T, VecStorage<T>, 1> {
+    #[inline]
+    fn from(vec: Vec<T>) -> Self {
+        let len = vec.len();
+        Self::from_shape_vec([len], vec).expect("1-D length always matches a [len] shape")
+    }
+}
+
+#[cfg(test)]
+mod from_vec_tests {
+    use super::Array;
+    use crate::infrastructure::storage::VecStorage;
+
+    #[test]
+    fn array1_from_vec_uses_len_as_shape() {
+        let a: Array<f64, VecStorage<f64>, 1> = vec![1.0, 2.0, 3.0].into();
+        assert_eq!(a.shape(), [3]);
+        assert_eq!(a.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+}
