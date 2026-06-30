@@ -44,6 +44,35 @@ where
     {
         self.iter().fold(init, |acc, &x| f(acc, x))
     }
+
+    /// Apply `f` to each pair of co-located elements **by value**, returning a
+    /// new owned array of the same shape (ndarray `Zip::from(a).and(b).
+    /// map_collect(f)` parity). The result is C-contiguous.
+    ///
+    /// Both arrays are traversed in logical row-major order, so the pairing is
+    /// correct regardless of either side's strides. Fully monomorphized — the
+    /// supplied closure is the only cost over a hand-written zipped loop.
+    ///
+    /// # Panics
+    /// If `self.shape() != other.shape()`.
+    #[must_use]
+    pub fn zip_map<U, S2, V, F>(&self, other: &Array<U, S2, N>, mut f: F) -> Array<V, VecStorage<V>, N>
+    where
+        U: Copy,
+        S2: Storage<U>,
+        F: FnMut(T, U) -> V,
+    {
+        assert_eq!(
+            self.shape(),
+            other.shape(),
+            "zip_map requires matching shapes: self {:?} vs other {:?}",
+            self.shape(),
+            other.shape()
+        );
+        let data: Vec<V> = self.iter().zip(other.iter()).map(|(&a, &b)| f(a, b)).collect();
+        Array::<V, VecStorage<V>, N>::from_shape_vec(self.shape(), data)
+            .expect("invariant: zip_map preserves the element count and shape")
+    }
 }
 
 impl<T, S, const N: usize> Array<T, S, N>
@@ -161,6 +190,23 @@ mod tests {
         let mut dst = arr([2, 2], vec![0.0; 4]);
         let src = arr([2, 3], vec![0.0; 6]);
         dst.assign(&src.view());
+    }
+
+    #[test]
+    fn zip_map_pairs_colocated_elements() {
+        let a = arr([2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let b = arr([2, 2], vec![10.0, 20.0, 30.0, 40.0]);
+        let c = a.zip_map(&b, |x, y| x + y);
+        assert_eq!(c.shape(), [2, 2]);
+        assert_eq!(c.iter().copied().collect::<Vec<_>>(), vec![11.0, 22.0, 33.0, 44.0]);
+    }
+
+    #[test]
+    #[should_panic(expected = "matching shapes")]
+    fn zip_map_shape_mismatch_panics() {
+        let a = arr([2, 2], vec![0.0; 4]);
+        let b = arr([2, 3], vec![0.0; 6]);
+        let _ = a.zip_map(&b, |x, y| x + y);
     }
 
     #[test]
