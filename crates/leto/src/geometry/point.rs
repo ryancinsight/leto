@@ -4,8 +4,8 @@
 //! `Point ± Vector = Point`. There is intentionally no `Point + Point`.
 
 use super::Vector;
-use eunomia::RealField;
-use core::ops::{Add, Index, Sub};
+use eunomia::{NumericElement, RealField};
+use core::ops::{Add, AddAssign, Index, Sub, SubAssign};
 
 /// A point in `N`-dimensional affine space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,6 +125,30 @@ impl<T: Sub<Output = T> + Copy, const N: usize> Sub<Vector<T, N>> for Point<T, N
     }
 }
 
+/// Translate in place by a vector: `Point += Vector`.
+impl<T: Add<Output = T> + Copy, const N: usize> AddAssign<Vector<T, N>> for Point<T, N> {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Vector<T, N>) {
+        self.coords += rhs;
+    }
+}
+
+/// Translate in place by `−vector`: `Point −= Vector`.
+impl<T: Sub<Output = T> + Copy, const N: usize> SubAssign<Vector<T, N>> for Point<T, N> {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: Vector<T, N>) {
+        self.coords -= rhs;
+    }
+}
+
+/// The origin (all coordinates zero), matching nalgebra's `Point: Default`.
+impl<T: NumericElement, const N: usize> Default for Point<T, N> {
+    #[inline]
+    fn default() -> Self {
+        Self::from_coords(Vector::splat(<T as NumericElement>::ZERO))
+    }
+}
+
 impl<T, const N: usize> Index<usize> for Point<T, N> {
     type Output = T;
     #[inline(always)]
@@ -136,6 +160,21 @@ impl<T, const N: usize> Index<usize> for Point<T, N> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geometry::Vector3;
+
+    #[test]
+    fn assign_ops_translate_in_place() {
+        let mut p = Point3::new(1.0_f64, 2.0, 3.0);
+        p += Vector3::from_array([10.0, 20.0, 30.0]);
+        assert_eq!(p.coords.data, [11.0, 22.0, 33.0]);
+        p -= Vector3::from_array([1.0, 2.0, 3.0]);
+        assert_eq!(p.coords.data, [10.0, 20.0, 30.0]);
+    }
+
+    #[test]
+    fn default_is_origin() {
+        assert_eq!(Point3::<f64>::default().coords.data, [0.0, 0.0, 0.0]);
+    }
 
     #[test]
     fn affine_algebra() {
