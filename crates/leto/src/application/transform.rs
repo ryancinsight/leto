@@ -9,7 +9,7 @@
 //! loop.
 
 use crate::application::array::Array;
-use crate::infrastructure::storage::{Storage, VecStorage};
+use crate::infrastructure::storage::{Storage, StorageMut, VecStorage};
 
 impl<T, S, const N: usize> Array<T, S, N>
 where
@@ -35,6 +35,54 @@ where
         F: FnMut(B, T) -> B,
     {
         self.iter().fold(init, |acc, &x| f(acc, x))
+    }
+}
+
+impl<T, S, const N: usize> Array<T, S, N>
+where
+    S: StorageMut<T>,
+    T: Copy,
+{
+    /// Replace each element with `f(element)` **in place** (ndarray
+    /// `mapv_inplace` parity).
+    ///
+    /// A C-contiguous array (the result of every owned-array constructor) takes
+    /// the contiguous fast path; an arbitrarily strided array falls back to a
+    /// logical-order walk that visits each element's physical offset exactly
+    /// once, so the result is correct for any layout.
+    pub fn mapv_inplace<F>(&mut self, mut f: F)
+    where
+        F: FnMut(T) -> T,
+    {
+        let layout = self.layout;
+        let size = layout.size();
+        if size == 0 {
+            return;
+        }
+        if layout.is_c_dense() {
+            let start = layout.offset;
+            for slot in &mut self.storage.as_mut_slice()[start..start + size] {
+                *slot = f(*slot);
+            }
+        } else {
+            let shape = layout.shape;
+            let slice = self.storage.as_mut_slice();
+            let mut index = [0usize; N];
+            for _ in 0..size {
+                let off = layout
+                    .offset_of(index)
+                    .expect("invariant: logical index is in bounds");
+                slice[off] = f(slice[off]);
+                // row-major odometer increment of the multi-index.
+                for d in (0..N).rev() {
+                    index[d] += 1;
+                    if index[d] < shape[d] {
+                        break;
+                    }
+                    index[d] = 0;
+                }
+            }
+        }
     }
 }
 
@@ -68,5 +116,17 @@ mod tests {
         assert_eq!(a.fold(0.0, |acc, x| acc + x), 10.0);
         // order-sensitive fold: subtract in row-major order 0-1-2-3-4 => -10
         assert_eq!(a.fold(0.0, |acc, x| acc - x), -10.0);
+    }
+
+    #[test]
+    fn mapv_inplace_mutates_and_matches_mapv() {
+        let mut a = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let expected = a.mapv(|x| 2.0 * x + 1.0);
+        a.mapv_inplace(|x| 2.0 * x + 1.0);
+        assert_eq!(
+            a.iter().copied().collect::<Vec<_>>(),
+            expected.iter().copied().collect::<Vec<_>>()
+        );
+        assert_eq!(a.shape(), [2, 3]);
     }
 }
