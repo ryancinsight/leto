@@ -86,6 +86,18 @@ where
         ArrayView::new(self.layout, self.storage.as_slice())
     }
 
+    /// The elements as one contiguous slice in logical row-major order, or
+    /// `None` if the array is not C-contiguous (ndarray `as_slice` parity).
+    #[inline]
+    pub fn as_slice(&self) -> Option<&[T]> {
+        if self.layout.is_c_dense() {
+            let start = self.layout.offset;
+            Some(&self.storage.as_slice()[start..start + self.layout.size()])
+        } else {
+            None
+        }
+    }
+
     /// Iterator over the array's elements in logical row-major order
     /// (ndarray `iter` parity), respecting arbitrary strides.
     #[inline]
@@ -224,6 +236,21 @@ where
         ArrayViewMut::new(self.layout, self.storage.as_mut_slice())
     }
 
+    /// The elements as one mutable contiguous slice in logical row-major order,
+    /// or `None` if the array is not C-contiguous (ndarray `as_slice_mut`
+    /// parity). The safe basis for in-place element iteration: `if let Some(s) =
+    /// a.as_slice_mut() { for x in s.iter_mut() { … } }`.
+    #[inline]
+    pub fn as_slice_mut(&mut self) -> Option<&mut [T]> {
+        if self.layout.is_c_dense() {
+            let start = self.layout.offset;
+            let size = self.layout.size();
+            Some(&mut self.storage.as_mut_slice()[start..start + size])
+        } else {
+            None
+        }
+    }
+
     /// Zero-copy iterator over the mutable 1-D lanes along `axis`
     /// (ndarray `lanes_mut` parity; `M = N - 1`).
     ///
@@ -314,5 +341,22 @@ where
             });
         }
         Ok(&mut slice[offset])
+    }
+}
+
+#[cfg(test)]
+mod slice_access_tests {
+    use crate::application::array::Array;
+    use crate::infrastructure::storage::VecStorage;
+
+    #[test]
+    fn as_slice_and_as_slice_mut_on_contiguous() {
+        let mut a = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        assert_eq!(a.as_slice(), Some(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0][..]));
+        // mutate every element in place through the mutable slice (the iter_mut basis)
+        for (i, x) in a.as_slice_mut().unwrap().iter_mut().enumerate() {
+            *x = i as f64 * 10.0;
+        }
+        assert_eq!(a.as_slice(), Some(&[0.0, 10.0, 20.0, 30.0, 40.0, 50.0][..]));
     }
 }
