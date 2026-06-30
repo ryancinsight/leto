@@ -330,6 +330,16 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         }
     }
 
+    /// Borrow this mutable view as an immutable [`ArrayView`] (ndarray `.view()`
+    /// parity), sharing the same layout and backing memory.
+    #[inline]
+    pub fn as_view(&self) -> ArrayView<'_, T, N> {
+        // SAFETY: `ptr` is valid for `len` elements for the duration of the
+        // borrow of `self`, matching the immutable-view contract.
+        let data = unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) };
+        ArrayView::new(self.layout, data)
+    }
+
     /// Returns the shape of the view.
     #[inline]
     pub const fn shape(&self) -> [usize; N] {
@@ -411,6 +421,34 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         }
         // SAFETY: self.ptr is valid for self.len elements.
         unsafe { Ok(&mut *self.ptr.as_ptr().add(offset)) }
+    }
+
+    /// Set every element of the view to a clone of `value` (ndarray `fill`
+    /// parity). Walks the view in logical row-major order, so it is correct for
+    /// any strides.
+    pub fn fill(&mut self, value: T)
+    where
+        T: Clone,
+    {
+        let shape = self.shape();
+        let size = self.size();
+        if size == 0 {
+            return;
+        }
+        let mut index = [0usize; N];
+        for _ in 0..size {
+            *self
+                .get_mut(index)
+                .expect("invariant: logical index is in bounds") = value.clone();
+            // row-major odometer increment of the multi-index.
+            for d in (0..N).rev() {
+                index[d] += 1;
+                if index[d] < shape[d] {
+                    break;
+                }
+                index[d] = 0;
+            }
+        }
     }
 
     /// Slice the mutable view, returning a sub-view.
