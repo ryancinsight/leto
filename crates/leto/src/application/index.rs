@@ -32,6 +32,24 @@ impl<T, S: StorageMut<T>, const N: usize> IndexMut<[usize; N]> for Array<T, S, N
     }
 }
 
+/// Scalar `arr[i]` element access for 1-D arrays (ndarray parity); forwards to
+/// the `[usize; 1]` impl.
+impl<T, S: Storage<T>> Index<usize> for Array<T, S, 1> {
+    type Output = T;
+    #[inline]
+    fn index(&self, index: usize) -> &T {
+        &self[[index]]
+    }
+}
+
+/// Mutable scalar `arr[i]` access for 1-D arrays (ndarray parity).
+impl<T, S: StorageMut<T>> IndexMut<usize> for Array<T, S, 1> {
+    #[inline]
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        &mut self[[index]]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::application::array::Array;
