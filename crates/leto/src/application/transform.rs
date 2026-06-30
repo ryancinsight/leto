@@ -9,6 +9,7 @@
 //! loop.
 
 use crate::application::array::Array;
+use crate::application::view::ArrayView;
 use crate::infrastructure::storage::{Storage, StorageMut, VecStorage};
 
 impl<T, S, const N: usize> Array<T, S, N>
@@ -84,6 +85,24 @@ where
             }
         }
     }
+
+    /// Copy every element of `src` into `self` in logical row-major order
+    /// (ndarray `assign` parity). Both arrays are traversed logically, so the
+    /// copy is correct regardless of either side's strides.
+    ///
+    /// # Panics
+    /// If `self.shape() != src.shape()`.
+    pub fn assign(&mut self, src: &ArrayView<'_, T, N>) {
+        assert_eq!(
+            self.shape(),
+            src.shape(),
+            "assign requires matching shapes: self {:?} vs src {:?}",
+            self.shape(),
+            src.shape()
+        );
+        let mut it = src.iter();
+        self.mapv_inplace(|_| *it.next().expect("invariant: src has self.size() elements"));
+    }
 }
 
 #[cfg(test)]
@@ -116,6 +135,25 @@ mod tests {
         assert_eq!(a.fold(0.0, |acc, x| acc + x), 10.0);
         // order-sensitive fold: subtract in row-major order 0-1-2-3-4 => -10
         assert_eq!(a.fold(0.0, |acc, x| acc - x), -10.0);
+    }
+
+    #[test]
+    fn assign_copies_source_elementwise() {
+        let mut dst = arr([2, 3], vec![0.0; 6]);
+        let src = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        dst.assign(&src.view());
+        assert_eq!(
+            dst.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "matching shapes")]
+    fn assign_shape_mismatch_panics() {
+        let mut dst = arr([2, 2], vec![0.0; 4]);
+        let src = arr([2, 3], vec![0.0; 6]);
+        dst.assign(&src.view());
     }
 
     #[test]
