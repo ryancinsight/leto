@@ -6,6 +6,7 @@
 //! ([`eunomia::RealField`]).
 
 pub mod isometry;
+pub mod operators;
 pub mod point;
 pub mod quaternion;
 pub mod swizzle;
