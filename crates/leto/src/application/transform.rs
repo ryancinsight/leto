@@ -29,6 +29,13 @@ where
             .expect("invariant: mapv preserves the element count and shape")
     }
 
+    /// Collect the elements into a `Vec` in logical row-major order (ndarray
+    /// `to_vec` parity); correct for any strides.
+    #[must_use]
+    pub fn to_vec(&self) -> Vec<T> {
+        self.iter().copied().collect()
+    }
+
     /// Fold the elements in logical row-major order, threading `init` through
     /// `f` (ndarray `fold` parity).
     pub fn fold<B, F>(&self, init: B, mut f: F) -> B
