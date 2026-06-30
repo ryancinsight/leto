@@ -100,6 +100,37 @@ impl<T: RealField> Vector<T, 3> {
             <T as NumericElement>::ONE,
         ))
     }
+
+    /// The basis vector `(1, 0, 0)` (the [`x_axis`](Self::x_axis) direction as a
+    /// plain `Vector`, not wrapped in [`Unit`]).
+    #[inline]
+    pub fn x() -> Self {
+        Self::new(
+            <T as NumericElement>::ONE,
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ZERO,
+        )
+    }
+
+    /// The basis vector `(0, 1, 0)`.
+    #[inline]
+    pub fn y() -> Self {
+        Self::new(
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ONE,
+            <T as NumericElement>::ZERO,
+        )
+    }
+
+    /// The basis vector `(0, 0, 1)`.
+    #[inline]
+    pub fn z() -> Self {
+        Self::new(
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ONE,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -123,6 +154,15 @@ mod tests {
         let y = Vector3::new(0.0_f64, 1.0, 0.0);
         assert_eq!(x.cross(y).data, [0.0, 0.0, 1.0]);
         assert_eq!(y.cross(x).data, [0.0, 0.0, -1.0]);
+    }
+
+    #[test]
+    fn basis_vectors_are_the_axes() {
+        assert_eq!(Vector3::<f64>::x().data, [1.0, 0.0, 0.0]);
+        assert_eq!(Vector3::<f64>::y().data, [0.0, 1.0, 0.0]);
+        assert_eq!(Vector3::<f64>::z().data, [0.0, 0.0, 1.0]);
+        // basis `k()` equals the corresponding `k_axis()` direction
+        assert_eq!(Vector3::<f64>::z().data, Vector3::<f64>::z_axis().into_inner().data);
     }
 
     #[test]
