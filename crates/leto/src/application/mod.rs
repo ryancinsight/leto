@@ -20,6 +20,7 @@ pub mod reduction;
 pub mod statistics;
 /// Structural array operations (concat, pad, split).
 pub mod structure;
+pub mod transform;
 /// Borrowed array view types.
 pub mod view;
 
