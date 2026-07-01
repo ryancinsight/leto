@@ -4,13 +4,16 @@
 //! `Point ± Vector = Point`. There is intentionally no `Point + Point`.
 
 use super::Vector;
-use eunomia::{NumericElement, RealField};
 use core::ops::{Add, AddAssign, Index, Sub, SubAssign};
+use eunomia::{NumericElement, RealField};
 
 /// A point in `N`-dimensional affine space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "T: serde::Deserialize<'de> + Copy + Default")))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(deserialize = "T: serde::Deserialize<'de> + Copy + Default"))
+)]
 #[repr(C)]
 pub struct Point<T, const N: usize> {
     /// Position vector from the origin.

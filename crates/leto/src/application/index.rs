@@ -88,9 +88,11 @@ mod tests {
 
     #[test]
     fn index_and_index_mut_by_array() {
-        let mut a =
-            Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-                .unwrap();
+        let mut a = Array::<f64, VecStorage<f64>, 2>::from_shape_vec(
+            [2, 3],
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
         assert_eq!(a[[0, 0]], 1.0);
         assert_eq!(a[[1, 2]], 6.0);
         a[[1, 1]] = 50.0;

@@ -43,8 +43,8 @@ mod francis;
 mod standardize;
 
 use crate::domain::real::RealScalar;
-use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 use leto::Complex;
+use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
 /// Real Schur decomposition `A = Q T Qᵀ`.
 #[derive(Debug, Clone)]

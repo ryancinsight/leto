@@ -9,7 +9,10 @@ use eunomia::RealField;
 /// (rejects near-zero input); [`Unit::new_unchecked`] trusts the caller.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "T: serde::Deserialize<'de> + Copy + Default")))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(deserialize = "T: serde::Deserialize<'de> + Copy + Default"))
+)]
 #[repr(transparent)]
 pub struct Unit<T, const N: usize> {
     value: Vector<T, N>,

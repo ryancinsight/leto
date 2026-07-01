@@ -5,7 +5,8 @@ use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
 #[cfg(feature = "parallel")]
-const PARALLEL_THRESHOLD: usize = 32768;
+// Parallel threshold: 256 KB / 4 bytes (f32) = 65536 elements.
+const PARALLEL_THRESHOLD: usize = 65536;
 
 mod sealed {
     pub trait Sealed {}

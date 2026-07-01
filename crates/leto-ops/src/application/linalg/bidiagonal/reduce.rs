@@ -5,6 +5,8 @@ use crate::application::linalg::householder::{apply_left, apply_right, reflector
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
 
+const BLOCK_WIDTH: usize = 16;
+
 struct BidiagonalWork<T> {
     u: Option<Vec<T>>,
     b: Vec<T>,
@@ -56,8 +58,35 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
     let mut u = ACCUMULATE_FACTORS.then(|| identity::<T>(m));
     let mut v = ACCUMULATE_FACTORS.then(|| identity::<T>(n));
 
-    // Reused scratch (allocation-free reduction hot loop): the left-apply accumulator `w`.
+    // Reused scratch (allocation-free reduction hot loop): the left-apply
+    // accumulator `w`.
     let mut alw: Vec<T> = Vec::with_capacity(n);
+    let mut u_panel = Vec::<T>::new();
+    let mut u_panel_beta = Vec::<T>::new();
+    let mut v_panel = Vec::<T>::new();
+    let mut v_panel_beta = Vec::<T>::new();
+
+    let flush_u_panel =
+        |u: &mut Option<Vec<T>>, u_rows: &mut Vec<T>, u_betas: &mut Vec<T>, dim: usize| {
+            if !u_betas.is_empty() {
+                if let Some(u) = u.as_mut() {
+                    apply_reflectors_right(u_rows, u_betas, u, dim);
+                }
+                u_rows.clear();
+                u_betas.clear();
+            }
+        };
+    let flush_v_panel =
+        |v: &mut Option<Vec<T>>, v_rows: &mut Vec<T>, v_betas: &mut Vec<T>, dim: usize| {
+            if !v_betas.is_empty() {
+                if let Some(v) = v.as_mut() {
+                    apply_reflectors_right(v_rows, v_betas, v, dim);
+                }
+                v_rows.clear();
+                v_betas.clear();
+            }
+        };
+
     for k in 0..n {
         // Left reflector: column k, rows k..m.
         let len_col = m - k;
@@ -78,8 +107,18 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
 
         if let Some((refl, _alpha)) = reflector(col) {
             apply_left(&refl, &mut b, n, k, k, n, &mut alw); // rows k..m, cols k..n
-            if let Some(u) = u.as_mut() {
-                apply_right(&refl, u, m, k, 0, m); // U ← U·Lₖ
+            if u.is_some() {
+                for row in 0..m {
+                    if row < k {
+                        u_panel.push(T::ZERO);
+                    } else {
+                        u_panel.push(refl.v[row - k]);
+                    }
+                }
+                u_panel_beta.push(refl.beta);
+                if u_panel_beta.len() == BLOCK_WIDTH {
+                    flush_u_panel(&mut u, &mut u_panel, &mut u_panel_beta, m);
+                }
             }
         }
 
@@ -103,12 +142,25 @@ fn reduce_to_bidiagonal_impl<T: RealScalar, const ACCUMULATE_FACTORS: bool>(
 
             if let Some((refl, _alpha)) = reflector(row) {
                 apply_right(&refl, &mut b, n, k + 1, k, m); // cols k+1..n, rows k..m
-                if let Some(v) = v.as_mut() {
-                    apply_right(&refl, v, n, k + 1, 0, n); // V ← V·Rₖ
+                if v.is_some() {
+                    for row in 0..n {
+                        if row < k + 1 {
+                            v_panel.push(T::ZERO);
+                        } else {
+                            v_panel.push(refl.v[row - (k + 1)]);
+                        }
+                    }
+                    v_panel_beta.push(refl.beta);
+                    if v_panel_beta.len() == BLOCK_WIDTH {
+                        flush_v_panel(&mut v, &mut v_panel, &mut v_panel_beta, n);
+                    }
                 }
             }
         }
     }
+
+    flush_u_panel(&mut u, &mut u_panel, &mut u_panel_beta, m);
+    flush_v_panel(&mut v, &mut v_panel, &mut v_panel_beta, n);
 
     // Present exact upper-bidiagonal form (keep (i,i) and (i,i+1) only). Needed
     // only when the `B` matrix is an output (factor path); the values-only path
@@ -134,4 +186,25 @@ fn identity<T: RealScalar>(n: usize) -> Vec<T> {
         m[i * n + i] = T::ONE;
     }
     m
+}
+
+fn apply_reflectors_right<T: RealScalar>(vectors: &[T], betas: &[T], matrix: &mut [T], dim: usize) {
+    let count = betas.len();
+    debug_assert_eq!(vectors.len(), dim * count);
+    debug_assert_eq!(matrix.len(), dim * dim);
+    for reflector in 0..count {
+        let vector = &vectors[reflector * dim..(reflector + 1) * dim];
+        for row in 0..dim {
+            let row_start = row * dim;
+            let row_values = &mut matrix[row_start..row_start + dim];
+            let mut dot = T::ZERO;
+            for col in 0..dim {
+                dot = dot.add(row_values[col].mul(vector[col]));
+            }
+            let scale = betas[reflector].mul(dot);
+            for col in 0..dim {
+                row_values[col] = row_values[col].sub(scale.mul(vector[col]));
+            }
+        }
+    }
 }

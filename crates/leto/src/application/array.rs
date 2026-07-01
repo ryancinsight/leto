@@ -351,7 +351,11 @@ mod slice_access_tests {
 
     #[test]
     fn as_slice_and_as_slice_mut_on_contiguous() {
-        let mut a = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        let mut a = Array::<f64, VecStorage<f64>, 2>::from_shape_vec(
+            [2, 3],
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
         assert_eq!(a.as_slice(), Some(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0][..]));
         // mutate every element in place through the mutable slice (the iter_mut basis)
         for (i, x) in a.as_slice_mut().unwrap().iter_mut().enumerate() {
@@ -383,10 +387,14 @@ mod partial_eq_tests {
 
     #[test]
     fn equal_iff_same_shape_and_elements() {
-        let a = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
-        let b = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
-        let c = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 9.0]).unwrap();
-        let d = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([4, 1], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let a = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0])
+            .unwrap();
+        let b = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0])
+            .unwrap();
+        let c = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 9.0])
+            .unwrap();
+        let d = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([4, 1], vec![1.0, 2.0, 3.0, 4.0])
+            .unwrap();
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert_ne!(a, d); // same data, different shape

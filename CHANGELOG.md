@@ -6,7 +6,23 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Fixed
+
+- `leto-ops` [patch]: fixed bidiagonalization factor accumulation for returned
+  `U`/`V` matrices. The panel scratch stores each reflector contiguously
+  (reflector-major), while the compact-WY right-apply path read it as a row-major
+  `dim × count` panel, producing non-orthogonal factors on the tall
+  bidiagonalization contract. Returned factors now apply those reflector-major
+  panel slices sequentially, restoring the documented `A = U B V^T` contract.
+
 ### Changed
+
+- `leto-ops` [patch]: rank-2 row-major axis-0 reductions now use a contiguous
+  CPU fast path for keep-dim row-major outputs. The fast path traverses input
+  rows in storage order and accumulates all output columns, avoiding generic
+  flat-index reconstruction, `offset_of` per output column, and per-column
+  strided walks while preserving the existing generic strided/transposed
+  fallback.
 
 - `leto-ops` [minor]: removed the `simd` cargo feature; `hermes-simd` is now an
   unconditional dependency. SIMD is not a build-time toggle — Hermes already

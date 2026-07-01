@@ -3,6 +3,8 @@ use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
 #[cfg(feature = "parallel")]
+// Reductions benefit from parallelism at lower element counts than unary ops
+// because each output element requires a full axis scan (O(N/out_size) reads).
 const PARALLEL_THRESHOLD: usize = 32768;
 
 mod sealed {
@@ -213,6 +215,52 @@ where
     let output_layout = output.layout();
     let input_data = input.data();
     let output_data = output.data_mut();
+
+    if N == 2
+        && axis == 0
+        && input_layout.strides[1] == 1
+        && input_layout.strides[0] == input.shape()[1] as isize
+        && output_layout.strides[1] == 1
+        && output_layout.strides[0] == out_shape[1] as isize
+        && !output_layout.has_zero_stride_aliasing()
+    {
+        let rows = input.shape()[0];
+        let cols = input.shape()[1];
+        let row_stride = input_layout.strides[0];
+        let col_stride = input_layout.strides[1];
+        let input_base = input_layout.offset;
+        let output_base = output_layout.offset;
+        let output_col_stride = output_layout.strides[1];
+
+        if rows == 0 {
+            for col in 0..cols {
+                let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+                output_data[out_off] = Op::EMPTY;
+            }
+            return Ok(());
+        }
+
+        for col in 0..cols {
+            let input_off = (input_base as isize + col as isize * col_stride) as usize;
+            let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+            output_data[out_off] = Op::initial(input_data[input_off]);
+        }
+
+        for row in 1..rows {
+            let row_base = input_base as isize + row as isize * row_stride;
+            for col in 0..cols {
+                let input_off = (row_base + col as isize * col_stride) as usize;
+                let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+                output_data[out_off] = Op::fold(output_data[out_off], input_data[input_off]);
+            }
+        }
+
+        for col in 0..cols {
+            let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+            output_data[out_off] = Op::finalize(output_data[out_off], rows);
+        }
+        return Ok(());
+    }
 
     #[cfg(feature = "parallel")]
     {

@@ -19,7 +19,7 @@ impl<T: RealField, const N: usize> Vector<T, N> {
         let mut acc = self.data[0] * rhs.data[0];
         let mut i = 1;
         while i < N {
-            acc = acc + self.data[i] * rhs.data[i];
+            acc += self.data[i] * rhs.data[i];
             i += 1;
         }
         acc
@@ -162,7 +162,10 @@ mod tests {
         assert_eq!(Vector3::<f64>::y().data, [0.0, 1.0, 0.0]);
         assert_eq!(Vector3::<f64>::z().data, [0.0, 0.0, 1.0]);
         // basis `k()` equals the corresponding `k_axis()` direction
-        assert_eq!(Vector3::<f64>::z().data, Vector3::<f64>::z_axis().into_inner().data);
+        assert_eq!(
+            Vector3::<f64>::z().data,
+            Vector3::<f64>::z_axis().into_inner().data
+        );
     }
 
     #[test]

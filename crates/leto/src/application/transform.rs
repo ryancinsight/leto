@@ -56,7 +56,11 @@ where
     /// # Panics
     /// If `self.shape() != other.shape()`.
     #[must_use]
-    pub fn zip_map<U, S2, V, F>(&self, other: &Array<U, S2, N>, mut f: F) -> Array<V, VecStorage<V>, N>
+    pub fn zip_map<U, S2, V, F>(
+        &self,
+        other: &Array<U, S2, N>,
+        mut f: F,
+    ) -> Array<V, VecStorage<V>, N>
     where
         U: Copy,
         S2: Storage<U>,
@@ -69,7 +73,11 @@ where
             self.shape(),
             other.shape()
         );
-        let data: Vec<V> = self.iter().zip(other.iter()).map(|(&a, &b)| f(a, b)).collect();
+        let data: Vec<V> = self
+            .iter()
+            .zip(other.iter())
+            .map(|(&a, &b)| f(a, b))
+            .collect();
         Array::<V, VecStorage<V>, N>::from_shape_vec(self.shape(), data)
             .expect("invariant: zip_map preserves the element count and shape")
     }
@@ -163,7 +171,10 @@ mod tests {
         let a = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let b = a.mapv(|x| x * x);
         assert_eq!(b.shape(), [2, 3]);
-        assert_eq!(b.iter().copied().collect::<Vec<_>>(), vec![1.0, 4.0, 9.0, 16.0, 25.0, 36.0]);
+        assert_eq!(
+            b.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 4.0, 9.0, 16.0, 25.0, 36.0]
+        );
     }
 
     #[test]
@@ -213,7 +224,10 @@ mod tests {
         let b = arr([2, 2], vec![10.0, 20.0, 30.0, 40.0]);
         let c = a.zip_map(&b, |x, y| x + y);
         assert_eq!(c.shape(), [2, 2]);
-        assert_eq!(c.iter().copied().collect::<Vec<_>>(), vec![11.0, 22.0, 33.0, 44.0]);
+        assert_eq!(
+            c.iter().copied().collect::<Vec<_>>(),
+            vec![11.0, 22.0, 33.0, 44.0]
+        );
     }
 
     #[test]

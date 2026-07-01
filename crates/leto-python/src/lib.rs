@@ -5,10 +5,9 @@ use leto::{
 };
 use leto_ops::{
     add, batched_matmul, bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_inv,
-    cholesky_solve, col_piv_qr, det, div, dot, eigenvalues,
-    full_piv_lu, hessenberg, inv, kron, matexp, matmul, mul, norm_l1, norm_l2, norm_max,
-    qr_decompose, schur, singular_values, solve, sub, sum, svd_decompose, symmetric_eigen_jacobi,
-    trace, udu_decompose, RealScalar,
+    cholesky_solve, col_piv_qr, det, div, dot, eigenvalues, full_piv_lu, hessenberg, inv, kron,
+    matexp, matmul, mul, norm_l1, norm_l2, norm_max, qr_decompose, schur, singular_values, solve,
+    sub, sum, svd_decompose, symmetric_eigen_jacobi, trace, udu_decompose, RealScalar,
 };
 use numpy::{
     Complex64, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
@@ -136,7 +135,9 @@ fn require_contiguous_3d<T: numpy::Element>(
     if input.is_c_contiguous() {
         Ok(())
     } else {
-        Err(PyValueError::new_err(format!("{name} must be C-contiguous")))
+        Err(PyValueError::new_err(format!(
+            "{name} must be C-contiguous"
+        )))
     }
 }
 
@@ -718,8 +719,8 @@ fn hessenberg_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py
-        .allow_threads(|| hessenberg(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let decomp =
+        py.allow_threads(|| hessenberg(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let q = decomp.q().clone();
     let h = decomp.h().clone();
     let q_shape = [q.shape()[0], q.shape()[1]];
@@ -741,7 +742,10 @@ fn eigenvalues_py<'py>(
     let a_view = view_from_numpy(&a)?;
     let vals = py
         .allow_threads(|| eigenvalues(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
-    let out: Vec<Complex64> = vals.into_iter().map(|c| Complex64::new(c.re, c.im)).collect();
+    let out: Vec<Complex64> = vals
+        .into_iter()
+        .map(|c| Complex64::new(c.re, c.im))
+        .collect();
     Ok(PyArray1::from_vec(py, out))
 }
 
@@ -788,8 +792,9 @@ fn udu_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py
-        .allow_threads(|| udu_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let decomp = py.allow_threads(|| {
+        udu_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
+    })?;
     let u = decomp.u();
     let u_shape = [u.shape()[0], u.shape()[1]];
     let d = decomp.diagonal().to_vec();
