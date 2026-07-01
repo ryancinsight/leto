@@ -122,15 +122,12 @@ where
         }
     }
 
-    /// Set every element to a clone of `value` (ndarray `fill` parity).
+    /// Set every element to `value` (ndarray `fill` parity).
     ///
     /// Traverses in logical order, so it is correct for any layout; a
     /// C-contiguous array takes the contiguous fast path.
-    pub fn fill(&mut self, value: T)
-    where
-        T: Clone,
-    {
-        self.mapv_inplace(|_| value.clone());
+    pub fn fill(&mut self, value: T) {
+        self.mapv_inplace(|_| value);
     }
 
     /// Copy every element of `src` into `self` in logical row-major order
