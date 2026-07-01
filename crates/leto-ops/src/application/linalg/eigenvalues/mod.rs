@@ -21,8 +21,8 @@
 //! eigenvalues.
 
 use crate::domain::real::RealScalar;
-use leto::{ArrayView2, Result};
 use leto::Complex;
+use leto::{ArrayView2, Result};
 
 /// Compute all eigenvalues of a square real matrix (real and complex).
 ///

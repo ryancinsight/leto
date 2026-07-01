@@ -3,7 +3,7 @@ use crate::application::iter::{ElementIter, IndexedIter, Windows};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
-use crate::infrastructure::storage::VecStorage;
+use crate::infrastructure::storage::{SliceStorage, VecStorage};
 
 /// Computes the physical `[offset, offset + size)` range covered by a layout
 /// whose elements form a single dense block. Returns `None` only on size
@@ -180,6 +180,25 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
             .expect("logical row-major materialization has matching shape and storage")
     }
 
+    /// Wrap this view as a **zero-copy** borrowed [`Array`] over [`SliceStorage`],
+    /// sharing the view's layout (offset + strides) and backing slice with no
+    /// allocation or copy.
+    ///
+    /// Because the borrowed array carries the same layout, it indexes
+    /// identically to the view for both contiguous and strided/offset views, so
+    /// it can feed any storage-generic `Array<T, S, N>` consumer without the
+    /// [`to_contiguous`](Self::to_contiguous) materialization. Prefer this over
+    /// `to_contiguous` when the consumer only reads the input.
+    #[inline]
+    #[must_use]
+    pub fn as_array(&self) -> Array<T, SliceStorage<'a, T>, N> {
+        // The (layout, data) pair is exactly the one this view already indexes
+        // through, so the borrowed array's `get` (layout.offset_of into
+        // storage.as_slice) reproduces the view's element access bit-for-bit.
+        Array::new(self.layout, SliceStorage::new(self.data))
+            .expect("view layout is valid for its backing slice")
+    }
+
     /// Returns true when the view is canonically C-contiguous at offset 0.
     #[inline]
     pub fn is_c_contiguous(&self) -> bool {
@@ -330,6 +349,16 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         }
     }
 
+    /// Borrow this mutable view as an immutable [`ArrayView`] (ndarray `.view()`
+    /// parity), sharing the same layout and backing memory.
+    #[inline]
+    pub fn as_view(&self) -> ArrayView<'_, T, N> {
+        // SAFETY: `ptr` is valid for `len` elements for the duration of the
+        // borrow of `self`, matching the immutable-view contract.
+        let data = unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) };
+        ArrayView::new(self.layout, data)
+    }
+
     /// Returns the shape of the view.
     #[inline]
     pub const fn shape(&self) -> [usize; N] {
@@ -411,6 +440,34 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         }
         // SAFETY: self.ptr is valid for self.len elements.
         unsafe { Ok(&mut *self.ptr.as_ptr().add(offset)) }
+    }
+
+    /// Set every element of the view to a clone of `value` (ndarray `fill`
+    /// parity). Walks the view in logical row-major order, so it is correct for
+    /// any strides.
+    pub fn fill(&mut self, value: T)
+    where
+        T: Clone,
+    {
+        let shape = self.shape();
+        let size = self.size();
+        if size == 0 {
+            return;
+        }
+        let mut index = [0usize; N];
+        for _ in 0..size {
+            *self
+                .get_mut(index)
+                .expect("invariant: logical index is in bounds") = value.clone();
+            // row-major odometer increment of the multi-index.
+            for d in (0..N).rev() {
+                index[d] += 1;
+                if index[d] < shape[d] {
+                    break;
+                }
+                index[d] = 0;
+            }
+        }
     }
 
     /// Slice the mutable view, returning a sub-view.
@@ -669,5 +726,45 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             axis,
             crate::domain::remove_axis::RankMarker::<N>,
         )
+    }
+}
+
+#[cfg(test)]
+mod as_array_tests {
+    use crate::application::array::Array;
+    use crate::infrastructure::storage::VecStorage;
+
+    #[test]
+    fn as_array_matches_view_indexing_including_strided() {
+        // 3x4 source; take a strided sub-view (every other column) and confirm
+        // the zero-copy borrowed array indexes identically to the view.
+        let src = Array::<f64, VecStorage<f64>, 2>::from_shape_vec(
+            [3, 4],
+            (0..12).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        let view = src.view();
+        let borrowed = view.as_array();
+        assert_eq!(borrowed.shape(), view.shape());
+        for r in 0..3 {
+            for c in 0..4 {
+                assert_eq!(*borrowed.get([r, c]).unwrap(), *view.get([r, c]).unwrap());
+                assert_eq!(borrowed[[r, c]], src[[r, c]]);
+            }
+        }
+
+        // Strided sub-view: columns [1,3) step is exercised via slice.
+        let strided = src.view().slice(&[(0, 3, 1), (1, 4, 2)]).unwrap();
+        let strided_borrowed = strided.as_array();
+        assert_eq!(strided_borrowed.shape(), strided.shape());
+        for r in 0..strided.shape()[0] {
+            for c in 0..strided.shape()[1] {
+                assert_eq!(
+                    *strided_borrowed.get([r, c]).unwrap(),
+                    *strided.get([r, c]).unwrap(),
+                    "strided borrowed array must match the view at [{r},{c}]"
+                );
+            }
+        }
     }
 }

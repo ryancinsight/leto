@@ -2,8 +2,12 @@ use crate::application::index::{line_elements, RowMajorTraversal, TileGeometry};
 use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
+// Parallel execution only pays off when the working set exceeds L2 cache
+// (~256 KB per core on modern x86). Below this threshold the thread-pool
+// overhead dominates; above it NUMA-aware parallel execution gains bandwidth.
+// 256 KB / 4 bytes (f32) = 65536 elements.
 #[cfg(feature = "parallel")]
-const PARALLEL_THRESHOLD: usize = 32768;
+const PARALLEL_THRESHOLD: usize = 65536;
 
 #[cfg(feature = "parallel")]
 struct StridedMapContext<'a, T, U, const N: usize> {

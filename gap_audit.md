@@ -1,5 +1,31 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-01 Addendum — Rank-2 axis-0 reduction fast path
+
+- **Closed**: Hephaestus comparative benchmarks exposed avoidable Leto CPU
+  overhead for row-major 256x256 axis-0 sum/min/max/mean reductions versus
+  ndarray. `leto-ops` now routes row-major rank-2 axis-0 keep-dim reductions
+  through a row-major traversal that accumulates all output columns in cache
+  order, preserving generic `AxisReduction<T>` semantics and falling back to the
+  existing layout-generic path for transposed, reversed, or non-row-major views.
+  Evidence tier: value-semantic ndarray differential and strided-view tests
+  `cargo nextest run -p leto-ops reduction sum_mean_axis_match_ndarray` (16/16),
+  plus downstream Hephaestus empirical comparative rows. Latest observed local
+  range for 256x256 axis 0: sum 4.720-10.446 µs, min 5.316-5.406 µs, max
+  5.360-6.464 µs, mean 6.378-7.172 µs.
+
+## 2026-06-30 Addendum — Bidiagonal returned-factor contract
+
+- **Closed**: bidiagonalization returned non-orthogonal `U`/`V` factors for the
+  tall contract case because factor accumulation consumed reflector-major panel
+  scratch as though it were row-major `dim × count` storage. Returned-factor
+  accumulation now applies the stored reflector-major slices sequentially,
+  restoring the documented `A = U B V^T` contract. Evidence tier:
+  value-semantic focused provider contract
+  `cargo nextest run -p leto-ops bidiagonalize_tall` (1/1) plus downstream
+  Hephaestus WGPU contract `cargo nextest run -p hephaestus-wgpu --test
+  contract` (94/94).
+
 ## 2026-06-25 Addendum — RITK spatial fixed primitive helpers
 
 - **Closed**: RITK's `ritk-spatial` consumer needed stack fixed primitive
@@ -326,8 +352,16 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   **2.3×**). Residual gap is the scalar **Givens** bidiagonal-QR sweep (strided
   2×2 rotations, sequential bulge chase).
 
-  **ADR 0010 Phase 2 (blocked U/V factor formation) — implemented, verified, then
-  REVERTED as valueless.** The factor formation was rewritten to store the panel
+  **ADR 0010 Phase 2 (blocked U/V factor formation) — partially resumed.** The
+  full factor-blocking implementation was originally reverted as valueless because it
+  did not move full-SVD time. A narrow follow-on lane is resumed here: `U` and `V`
+  are now accumulated from individual reflectors into compact-WY panels and applied
+  in blocks via `apply_block_right` in the bidiagonal path, while leaving the
+  matrix reduction core and `B` update order unchanged. This lane targets full-path
+  factor throughput only (values path stays unchanged).
+
+  **Prior note (reverted):** The earlier full factor-blocking implementation was
+  rewritten to store the panel
   reflectors and form `U = L₀…L_{n-1}` / `V = R₀…R_{n-2}` by blocked compact-WY
   `apply_block_right` (one-sided, no `dlabrd` look-ahead); verified correct by a
   256² `A = U B Vᵀ` reconstruction + orthogonality + singular-value contract. But

@@ -1,5 +1,30 @@
 # Leto Development Checklist
 
+2026-07-01 (rank-2 axis-0 reduction fast path). Added a `leto-ops` fast path for
+row-major rank-2 axis-0 reductions into row-major keep-dim outputs. The path
+keeps the generic `AxisReduction<T>` operation contract and now traverses input
+rows in row-major order while accumulating all output columns, avoiding
+per-output strided column walks for the common `256x256 -> 1x256` reduction
+shape used by Hephaestus comparative benchmarks.
+Evidence tier: value-semantic ndarray differential and strided-view regression
+tests: `cargo nextest run -p leto-ops reduction sum_mean_axis_match_ndarray`
+(16/16). Downstream empirical evidence from Hephaestus:
+`HEPHAESTUS_BENCH_DISABLE_CUDA=1 cargo bench -p hephaestus-wgpu --bench
+comparative` shows Leto axis rows at sum 35.512 µs, min 44.348 µs, max 40.380
+µs, mean 35.920 µs for 256x256 axis 0. After the cache-order traversal update,
+the downstream harness has measured sum 4.720-10.446 µs, min 5.316-5.406 µs,
+max 5.360-6.464 µs, mean 6.378-7.172 µs across the latest local runs.
+
+2026-06-30 (bidiagonal returned-factor contract fix). Fixed
+`leto-ops` bidiagonalization returned `U`/`V` accumulation: the panel scratch is
+reflector-major, but the compact-WY right-apply helper consumed row-major
+`dim × count` panels. Returned factors now apply the stored reflector-major
+panel slices sequentially, restoring orthogonality and `A = U B V^T` for the
+tall contract case exposed by Hephaestus. Evidence tier: value-semantic focused
+provider contract `cargo nextest run -p leto-ops bidiagonalize_tall` (1/1) and
+downstream Hephaestus WGPU contract `cargo nextest run -p hephaestus-wgpu --test
+contract` (94/94).
+
 2026-06-25 (fixed stack spatial helpers for RITK spatial SSOT). Extended
 `FixedVector<T, N>` with index-order iteration and `FixedMatrix<T, R, C>` with
 row-major iteration. Added 3-D `f64` row-major/column-major constructors and
@@ -74,6 +99,13 @@ and concrete real/half scalar impls opt into `SimdStrategy`, fixing generic
 integer `Scalar` builds exposed by Hephaestus WGPU nextest. Evidence: `cargo fmt
 -p leto-ops --check`; `cargo clippy -p leto-ops --all-targets -- -D warnings`;
 Hephaestus dependent gate `cargo nextest run -p hephaestus-wgpu` (43 passed).
+
+- [x] [patch] Resume ADR 0010 narrow factor-path lane: compact-WY panelized
+  `U`/`V` accumulation in `bidiagonal/reduce.rs` using `apply_block_right`, with
+  values-only path unchanged and no full-`dlabrd` reintroductions.
+  Verification: `cargo nextest run -p leto-ops --test ops_tests oracle_parity --all-features`
+  and `cargo bench -p leto-ops --bench kernels`.
+
 Delivered 0.35.1: `matexp` even/odd Padé
 split (Paterson–Stockmeyer) — N=U+B·V, D=U−B·V via even powers B²/B⁴/B⁶ + one
 B·V product → **4 matmuls instead of 6** for the Padé step; added shared dense

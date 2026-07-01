@@ -1,8 +1,8 @@
 //! [`Quaternion`] and the rotation type [`UnitQuaternion`].
 
 use super::{Unit, Vector3};
-use eunomia::{NumericElement, RealField};
 use core::ops::Mul;
+use eunomia::{NumericElement, RealField};
 
 /// A quaternion `w + xi + yj + zk`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -141,9 +141,7 @@ impl<T: RealField> UnitQuaternion<T> {
     /// Compose two rotations (`self` applied after `rhs`).
     #[inline]
     pub fn mul_unit(self, rhs: Self) -> Self {
-        Self {
-            q: self.q * rhs.q,
-        }
+        Self { q: self.q * rhs.q }
     }
 }
 
@@ -189,8 +187,8 @@ mod tests {
         let pure = Quaternion::new(0.0, v.data[0], v.data[1], v.data[2]);
         let r = qq * pure * qq.conjugate();
         let sandwich = [r.x, r.y, r.z];
-        for k in 0..3 {
-            assert!((opt.data[k] - sandwich[k]).abs() < 1e-12, "component {k}");
+        for (k, &s) in sandwich.iter().enumerate() {
+            assert!((opt.data[k] - s).abs() < 1e-12, "component {k}");
         }
     }
 }

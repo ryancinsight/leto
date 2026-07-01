@@ -7,8 +7,39 @@ pub(crate) fn index_from_flat<const N: usize>(flat: usize, shape: &[usize; N]) -
 }
 
 use crate::application::array::Array;
+use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::infrastructure::storage::{Storage, StorageMut};
 use core::ops::{Index, IndexMut};
+
+/// `view[[i, j, …]]` element access by N-dimensional index (ndarray parity);
+/// delegates to [`ArrayView::get`](crate::application::view::ArrayView::get).
+impl<'a, T, const N: usize> Index<[usize; N]> for ArrayView<'a, T, N> {
+    type Output = T;
+    #[inline]
+    fn index(&self, index: [usize; N]) -> &T {
+        self.get(index)
+            .unwrap_or_else(|_| panic!("index {index:?} out of bounds"))
+    }
+}
+
+/// `view[[i, j, …]]` element access for a mutable view (ndarray parity).
+impl<'a, T, const N: usize> Index<[usize; N]> for ArrayViewMut<'a, T, N> {
+    type Output = T;
+    #[inline]
+    fn index(&self, index: [usize; N]) -> &T {
+        self.get(index)
+            .unwrap_or_else(|_| panic!("index {index:?} out of bounds"))
+    }
+}
+
+/// Mutable `view[[i, j, …]]` element access (ndarray parity).
+impl<'a, T, const N: usize> IndexMut<[usize; N]> for ArrayViewMut<'a, T, N> {
+    #[inline]
+    fn index_mut(&mut self, index: [usize; N]) -> &mut T {
+        self.get_mut(index)
+            .unwrap_or_else(|_| panic!("index {index:?} out of bounds"))
+    }
+}
 
 /// `arr[[i, j, …]]` element access by N-dimensional index (ndarray parity).
 ///
@@ -57,13 +88,31 @@ mod tests {
 
     #[test]
     fn index_and_index_mut_by_array() {
-        let mut a =
-            Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-                .unwrap();
+        let mut a = Array::<f64, VecStorage<f64>, 2>::from_shape_vec(
+            [2, 3],
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
         assert_eq!(a[[0, 0]], 1.0);
         assert_eq!(a[[1, 2]], 6.0);
         a[[1, 1]] = 50.0;
         assert_eq!(a[[1, 1]], 50.0);
+    }
+
+    #[test]
+    fn view_index_and_mut_view_index_fill() {
+        let mut a =
+            Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0])
+                .unwrap();
+        assert_eq!(a.view()[[1, 0]], 3.0);
+        {
+            let mut vm = a.view_mut();
+            vm[[0, 1]] = 9.0;
+            assert_eq!(vm[[0, 1]], 9.0);
+        }
+        assert_eq!(a[[0, 1]], 9.0);
+        a.view_mut().fill(7.0);
+        assert_eq!(a.iter().copied().collect::<Vec<_>>(), vec![7.0; 4]);
     }
 
     #[test]

@@ -4,6 +4,17 @@
   Superseded conclusion below (the "disparity" is a small-matrix artifact; leto's
   unblocked reduce is already at parity at scale).
 
+- Addendum (2026-06-30): **Narrow factor-path lane resumed.** Full `dlabrd`
+  trailing-block blocking is still reverted because it stays net-regressive, but the
+  compact-WY reflector accumulation path is being reintroduced narrowly for full
+  factor output (`U`/`V`) only. In this lane, `bidiagonal/reduce.rs` now
+  accumulates left/right reflectors into per-lane WY panels and applies them in
+  blocked form through `apply_block_right`, while preserving the scalar-by-scalar `B`
+  updates and never reintroducing panelized updates to the matrix diagonalization
+  core. The lane is explicitly scoped to the full-factor path (`m × n` reduction
+  followed by `A = U B Vᵀ`) and is intended to close gap residuals without revisiting
+  the reverted full-blocked `dlabrd` path.
+
 ## Outcome (measured)
 
 The blocked reduction (`dlabrd` panel `X`/`Y` look-ahead + `dgebrd` two-GEMM

@@ -32,8 +32,8 @@ use crate::{
     singular_values as singular_values_kernel, solve as solve_kernel,
     solve_least_squares as solve_least_squares_kernel, trace as trace_kernel,
 };
-use leto::{Array, Array1, Array2, ArrayView, ArrayView1, ArrayView2, Result, Storage};
 use leto::Complex;
+use leto::{Array, Array1, Array2, ArrayView, ArrayView1, ArrayView2, Result, Storage};
 
 /// Borrow any rank-2 receiver as a read-only [`ArrayView2`].
 ///

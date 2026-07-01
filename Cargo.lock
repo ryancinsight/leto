@@ -344,6 +344,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "eunomia"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "half",
+ "libm",
+ "rkyv",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -571,22 +581,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "hermes-numeric"
-version = "0.3.0"
-dependencies = [
- "bytemuck",
- "half",
- "libm",
- "rkyv",
-]
-
-[[package]]
 name = "hermes-simd"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "hermes-simd-core",
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
@@ -599,8 +599,8 @@ name = "hermes-simd-core"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "mnemosyne",
  "rkyv",
  "themis",
@@ -611,8 +611,8 @@ name = "hermes-simd-intrinsics"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
- "hermes-numeric",
  "hermes-simd-core",
  "rkyv",
 ]
@@ -705,12 +705,12 @@ name = "leto"
 version = "0.35.1"
 dependencies = [
  "bytemuck",
+ "eunomia",
  "half",
  "mnemosyne",
  "ndarray",
- "num-complex",
- "num-traits",
  "proptest",
+ "serde",
  "thiserror 2.0.18",
 ]
 
@@ -728,7 +728,6 @@ dependencies = [
  "ndarray",
  "ndarray-rand",
  "num-complex",
- "num-traits",
  "rand 0.8.6",
  "rand_chacha 0.3.1",
  "themis",
@@ -869,6 +868,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-local",
  "mnemosyne-prof",
+ "themis",
 ]
 
 [[package]]
@@ -1005,6 +1005,7 @@ dependencies = [
 name = "moirai-transport"
 version = "0.2.0"
 dependencies = [
+ "bytemuck",
  "moirai-core",
  "moirai-scheduler",
  "moirai-utils",
