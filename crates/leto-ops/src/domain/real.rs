@@ -1,63 +1,33 @@
 use crate::domain::scalar::Scalar;
-use half::{bf16, f16};
+use eunomia::{FloatElement, NumericElement};
 
-/// Floating-point scalars that provide the real transcendental and shape
-/// functions required by elementwise math operations.
+/// Floating-point scalars that provide the real math surface required by Leto
+/// operations.
 ///
-/// This is a deliberately segregated extension of [`Scalar`]: arithmetic and
-/// reductions live on `Scalar`, while the transcendental surface lives here so
-/// that integer scalars can implement `Scalar` without being forced to provide
-/// meaningless `exp`/`ln` operations.
-///
-/// Native types (`f32`, `f64`) map each method to the hardware/std operation.
-/// Reduced-precision types (`f16`, `bf16`) have no hardware transcendental
-/// path on common ISAs; their implementations document the single sanctioned
-/// fallback (compute in `f32`, round back) rather than a hidden widen-narrow.
-pub trait RealScalar: Scalar {
-    /// `e^self`.
-    fn exp(self) -> Self;
-    /// Natural logarithm.
-    fn ln(self) -> Self;
-    /// Sine (radians).
-    fn sin(self) -> Self;
-    /// Cosine (radians).
-    fn cos(self) -> Self;
-    /// Square root.
-    fn sqrt(self) -> Self;
-    /// Absolute value.
-    fn abs(self) -> Self;
-    /// Additive inverse.
-    fn neg(self) -> Self;
-    /// Reciprocal `1 / self`.
-    fn recip(self) -> Self;
-    /// `self` raised to the power `exponent`.
-    fn powf(self, exponent: Self) -> Self;
-    /// Four-quadrant arctangent of `self / other` (radians).
-    fn atan2(self, other: Self) -> Self;
-    /// Returns true when the value is neither infinite nor NaN.
-    fn is_finite(self) -> bool;
-    /// Construct from an `f64`. This is a construction-time conversion (random
-    /// sampling, mathematical constants), not a compute-path widen-narrow: it
-    /// turns a host-provided or PRNG-derived `f64` into the storage precision.
-    fn from_f64(value: f64) -> Self;
-
-    /// `Σ |x|` over a dense slice (L1-norm accumulator).
+/// Eunomia owns the real scalar SSOT through [`FloatElement`]. `RealScalar`
+/// only adds Leto's operation-local dense norm-reduction kernels. Arithmetic
+/// and reductions still execute in the selected scalar precision; no hidden
+/// wider compute path is introduced here.
+pub trait RealScalar: Scalar + FloatElement + core::ops::Neg<Output = Self> {
+    /// `sum |x|` over a dense slice (L1-norm accumulator).
     ///
     /// Default: scalar fold in the precision of `Self`. Native impls override
-    /// to route through the hermes abs-sum kernel.
+    /// through the same SIMD strategy used by [`Scalar`] reductions.
     #[inline]
     fn abs_sum_slice(s: &[Self]) -> Self {
-        s.iter().fold(Self::ZERO, |acc, &x| acc.add(x.abs()))
+        s.iter().fold(<Self as NumericElement>::ZERO, |acc, &x| {
+            acc.add(<Self as NumericElement>::abs(x))
+        })
     }
 
-    /// `max |x|` over a dense slice (∞-norm accumulator); `ZERO` for empty.
+    /// `max |x|` over a dense slice (infinity-norm accumulator); `ZERO` for empty.
     ///
-    /// Default: scalar fold. Native impls override to route through the
-    /// hermes abs-max kernel.
+    /// Default: scalar fold. Native impls override through the same SIMD
+    /// strategy used by [`Scalar`] reductions.
     #[inline]
     fn abs_max_slice(s: &[Self]) -> Self {
-        s.iter().fold(Self::ZERO, |acc, &x| {
-            let magnitude = x.abs();
+        s.iter().fold(<Self as NumericElement>::ZERO, |acc, &x| {
+            let magnitude = <Self as NumericElement>::abs(x);
             if magnitude > acc {
                 magnitude
             } else {
@@ -67,65 +37,18 @@ pub trait RealScalar: Scalar {
     }
 }
 
-macro_rules! impl_real_native {
+macro_rules! impl_real_simd {
     ($t:ty) => {
         impl RealScalar for $t {
-            #[inline(always)]
-            fn exp(self) -> Self {
-                self.exp()
-            }
-            #[inline(always)]
-            fn ln(self) -> Self {
-                self.ln()
-            }
-            #[inline(always)]
-            fn sin(self) -> Self {
-                self.sin()
-            }
-            #[inline(always)]
-            fn cos(self) -> Self {
-                self.cos()
-            }
-            #[inline(always)]
-            fn sqrt(self) -> Self {
-                self.sqrt()
-            }
-            #[inline(always)]
-            fn abs(self) -> Self {
-                self.abs()
-            }
-            #[inline(always)]
-            fn neg(self) -> Self {
-                -self
-            }
-            #[inline(always)]
-            fn recip(self) -> Self {
-                self.recip()
-            }
-            #[inline(always)]
-            fn powf(self, exponent: Self) -> Self {
-                self.powf(exponent)
-            }
-            #[inline(always)]
-            fn atan2(self, other: Self) -> Self {
-                self.atan2(other)
-            }
-            #[inline(always)]
-            fn is_finite(self) -> bool {
-                <$t>::is_finite(self)
-            }
-            #[inline(always)]
-            fn from_f64(value: f64) -> Self {
-                value as $t
-            }
-
             #[inline]
             fn abs_sum_slice(s: &[Self]) -> Self {
                 use crate::domain::strategy::{SimdOperations, SimdStrategy};
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::abs_sum_slice(s) {
                     res
                 } else {
-                    s.iter().fold(Self::ZERO, |acc, &x| acc + x.abs())
+                    s.iter().fold(<Self as NumericElement>::ZERO, |acc, &x| {
+                        acc + <Self as NumericElement>::abs(x)
+                    })
                 }
             }
 
@@ -135,74 +58,22 @@ macro_rules! impl_real_native {
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::abs_max_slice(s) {
                     res
                 } else {
-                    s.iter().fold(Self::ZERO, |acc, &x| acc.max(x.abs()))
+                    s.iter().fold(<Self as NumericElement>::ZERO, |acc, &x| {
+                        let magnitude = <Self as NumericElement>::abs(x);
+                        if magnitude > acc {
+                            magnitude
+                        } else {
+                            acc
+                        }
+                    })
                 }
             }
         }
     };
 }
 
-/// Reduced-precision implementation. No common ISA exposes scalar `f16`/`bf16`
-/// transcendental instructions, so the sanctioned fallback computes in `f32`
-/// and rounds back. This is the documented precision contract, not a hidden
-/// widen-narrow: the caller selected reduced precision and accepts a single
-/// rounding at the boundary of each elementwise call.
-macro_rules! impl_real_half {
-    ($t:ty) => {
-        impl RealScalar for $t {
-            #[inline]
-            fn exp(self) -> Self {
-                <$t>::from_f32(self.to_f32().exp())
-            }
-            #[inline]
-            fn ln(self) -> Self {
-                <$t>::from_f32(self.to_f32().ln())
-            }
-            #[inline]
-            fn sin(self) -> Self {
-                <$t>::from_f32(self.to_f32().sin())
-            }
-            #[inline]
-            fn cos(self) -> Self {
-                <$t>::from_f32(self.to_f32().cos())
-            }
-            #[inline]
-            fn sqrt(self) -> Self {
-                <$t>::from_f32(self.to_f32().sqrt())
-            }
-            #[inline]
-            fn abs(self) -> Self {
-                <$t>::from_f32(self.to_f32().abs())
-            }
-            #[inline]
-            fn neg(self) -> Self {
-                -self
-            }
-            #[inline]
-            fn recip(self) -> Self {
-                <$t>::from_f32(self.to_f32().recip())
-            }
-            #[inline]
-            fn powf(self, exponent: Self) -> Self {
-                <$t>::from_f32(self.to_f32().powf(exponent.to_f32()))
-            }
-            #[inline]
-            fn atan2(self, other: Self) -> Self {
-                <$t>::from_f32(self.to_f32().atan2(other.to_f32()))
-            }
-            #[inline]
-            fn is_finite(self) -> bool {
-                self.to_f32().is_finite()
-            }
-            #[inline]
-            fn from_f64(value: f64) -> Self {
-                <$t>::from_f32(value as f32)
-            }
-        }
-    };
-}
+impl_real_simd!(f32);
+impl_real_simd!(f64);
 
-impl_real_native!(f32);
-impl_real_native!(f64);
-impl_real_half!(f16);
-impl_real_half!(bf16);
+impl RealScalar for half::f16 {}
+impl RealScalar for half::bf16 {}

@@ -702,7 +702,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "leto"
-version = "0.35.1"
+version = "0.36.0"
 dependencies = [
  "bytemuck",
  "eunomia",
@@ -716,10 +716,11 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.35.1"
+version = "0.36.0"
 dependencies = [
  "bytemuck",
  "criterion",
+ "eunomia",
  "half",
  "hermes-simd",
  "leto",
@@ -736,7 +737,7 @@ dependencies = [
 
 [[package]]
 name = "leto-python"
-version = "0.35.1"
+version = "0.36.0"
 dependencies = [
  "anyhow",
  "leto",
