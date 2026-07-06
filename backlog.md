@@ -1,12 +1,11 @@
 # Leto Work Backlog
 
-## CR-4 SSOT rebind: `let''o_ops::Scalar` over `eunomia::NumericElement` (BLOCKED 2026-07-05)
+## CR-4 SSOT rebind: `leto_ops::Scalar` over `eunomia::NumericElement` (DONE 2026-07-05)
 
-[minor] Leto `leto_ops::Scalar` was planned to bind as `pub trait Scalar: NumericElement { fn from_usize(...) -> Self; /* default-bodied slice kernels */ }` per `atlas/docs/adr/0005-eunomia-scalar-ssot.md`. Implementation was attempted in working tree but **BLOCKED at push time**: `repos/leto origin/main` had diverted 47 commits ahead of the local maintainer branch through feat/array-to-vec PR #30, which declares its own `Scalar` shape (`ZERO/ONE/add/sub/mul/div/from_usize + add_slice/...` required methods) WITHOUT the eunomia `NumericElement` supertrait binding. File-level merge conflict at `crates/leto-ops/src/domain/scalar.rs`.
+[minor] Leto `leto_ops::Scalar` is now bound as `pub trait Scalar: NumericElement { fn from_usize(...) -> Self; /* default-bodied slice kernels */ }` per `atlas/docs/adr/0005-eunomia-scalar-ssot.md`. The local maintainer branch was rebased onto `origin/main` (PR #30 feat/array-to-vec, 47 commits ahead), resolving file-level merge conflicts at `crates/leto-ops/src/domain/scalar.rs`, `crates/leto/src/lib.rs`, `crates/leto/src/application/array.rs`, and `crates/leto-ops/src/application/sparse/mod.rs`. The old standalone `Scalar` trait methods (`ZERO/ONE/add/sub/mul/div/bitand/bitor/bitxor/count_ones/to_f64`) are inherited from `NumericElement`; `RealScalar` inherits from `FloatElement`. Leto keeps only `from_usize` and default-bodied slice kernels. No compatibility shims.
 
-- Action required: explicit user choice between (a) rebase leto-local onto `origin/main` with the SSOT migration plan for every `Scalar::add/sub/mul/div` → `NumericElement::+operator` rewrite, or (b) pivot to additive SSOT — make `NumericElement` an *additional* supertrait while preserving the existing `add/sub/mul/div` surface.
-- Implementation commits: parked in working tree (not committed, not pushed). `cargo nextest run -p leto-ops` returns 262 green on the local leto main with the SSOT rebind in working tree.
-- See `atlas/checklist.md` `## blocker ##` for full resolution path.
+- Downstream fallout remains consumer-owned: Apollo/Coeus code that explicitly names removed Leto UFCS items should import Eunomia traits directly.
+- Evidence: `rustup run nightly cargo check -p leto-ops --all-features`; `rustup run nightly cargo fmt --package leto-ops --check`; `rustup run nightly cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `rustup run nightly cargo nextest run -p leto-ops --all-features` (271/271 tests) pass. Clippy also reports the pre-existing upstream `hermes-simd-core::sparse::ValidatedData::new_unchecked` dead-code warning while exiting successfully for the `leto-ops` gate.
 
 ## Atlas in-house replacement roadmap — leto slice [arch]
 
@@ -349,7 +348,16 @@ no unmeasured "optimization" per performance_engineering.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
 - [x] [patch] `cargo test --all-features` is clean.
 - [x] [patch] `CowStorage` is available for Leto arrays that borrow read-only Apollo/Coeus inputs and clone only when mutable access is requested. Evidence tier: value-semantic tests assert pointer identity on read-only borrowed storage, source preservation after mutation, and owned-detach output values.
-- [ ] [patch] Full `cargo doc --no-deps` is blocked by a rustdoc internal compiler error in the `leto-python`/`numpy-0.23.0` documentation path. `cargo doc --no-deps -p leto -p leto-ops` passes.
+- [x] [patch] Full `cargo doc --workspace --all-features --no-deps` no longer
+  hits the `leto-python`/`numpy-0.23.0` rustdoc ICE. `leto-python` is a PyO3
+  extension boundary with no public Rust API, so its library target has
+  `doc = false`; Cargo still checks and tests the Rust crate, but rustdoc no
+  longer walks NumPy 0.23's broken intra-doc link path. Verification:
+  `cargo doc -p leto-python --all-features --no-deps`;
+  `cargo doc --workspace --all-features --no-deps`;
+  `cargo doc --no-deps`;
+  `cargo clippy -p leto-python --all-targets --all-features -- -D warnings`;
+  `cargo nextest run -p leto-python --all-features` (21 tests).
 
 ## Phase 1: Sound Core Layout and Storage [patch]
 - [x] Add ndarray-style slicing for full-axis selection, optional signed range bounds, negative indices, negative steps, integer axis removal, new-axis insertion, ellipsis expansion, and implicit trailing axes. Verification: three value-semantic tests over rank-preserving, rank-dropping, rank-adding, reverse, ellipsis, and implicit-tail cases.
@@ -398,11 +406,12 @@ no unmeasured "optimization" per performance_engineering.
 
 ## Phase 5: Python and Interop [minor]
 - [ ] Keep Python as a thin PyO3/NumPy boundary over Rust operations.
-- [ ] [patch] Resolve the reopened `numpy-0.23.0` rustdoc ICE in the Python FFI
-  documentation path. The prior NumPy 0.28/PyO3 0.28 update closed this gate,
-  but the current FFI alignment back to NumPy 0.23/PyO3 0.23 reopens it; full
-  workspace docs remain blocked while `cargo doc -p leto -p leto-ops
-  --all-features --no-deps` passes.
+- [x] [patch] Resolve the reopened `numpy-0.23.0` rustdoc ICE in the Python FFI
+  documentation path. `leto-python` is a PyO3 extension boundary, not a Rust
+  library API surface, so Cargo no longer invokes rustdoc for that target
+  (`doc = false`). Full workspace docs now complete without excluding
+  `leto-python`. Verification: package docs, full workspace docs, package
+  clippy, and package nextest all pass.
 - [x] Replace current Python result construction that clones through `Vec` after computation. Verification: `leto-python` now transfers owned `VecStorage` with `Array::into_vec()` and `PyArray1::from_vec`, then reshapes without the former `as_mut_slice().to_vec()` clone path.
 - [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 
