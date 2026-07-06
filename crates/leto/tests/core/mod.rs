@@ -1,10 +1,13 @@
 pub mod arithmetic;
+pub mod array_api;
 pub mod dynamic;
+pub mod geometry;
 pub mod indexing;
 pub mod iteration;
 pub mod lanes;
 pub mod layout;
 pub mod quantile;
+pub mod serde;
 pub mod slicing;
 pub mod stack_storage;
 pub mod statistics;

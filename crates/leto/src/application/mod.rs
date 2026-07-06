@@ -20,13 +20,12 @@ pub mod reduction;
 pub mod statistics;
 /// Structural array operations (concat, pad, split).
 pub mod structure;
-pub mod transform;
 /// Borrowed array view types.
 pub mod view;
 
 pub use aliases::{
-    Array1, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, ArrayViewMut2,
-    ArrayViewMut3,
+    Array1, Array2, Array3, Array4, ArrayView1, ArrayView2, ArrayView3, ArrayView4, ArrayViewMut1,
+    ArrayViewMut2, ArrayViewMut3, ArrayViewMut4,
 };
 pub use arithmetic::ScalarOperand;
 pub use array::Array;

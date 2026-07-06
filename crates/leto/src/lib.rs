@@ -5,6 +5,7 @@
 pub mod application;
 /// Domain-level layout, slicing, and error contracts.
 pub mod domain;
+/// Fixed-size geometry primitives.
 pub mod geometry;
 /// Infrastructure storage backends.
 pub mod infrastructure;
@@ -35,10 +36,10 @@ pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};
 pub use application::{
     concat, covariance, mean_all, mean_axis, median_all, median_axis, pad, pearson_correlation,
-    quantile_all, quantile_axis, split, stack, sum_all, sum_axis, Array1, Array2, Array3, ArrayD,
-    ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, ArrayViewMut2, ArrayViewMut3, AxisIter,
-    AxisIterMut, ElementIter, FixedMatrix, FixedVector, IndexedIter, Interpolation, Lanes,
-    LanesMut, PadWidth, ScalarOperand, Windows,
+    quantile_all, quantile_axis, split, stack, sum_all, sum_axis, Array1, Array2, Array3, Array4,
+    ArrayD, ArrayView1, ArrayView2, ArrayView3, ArrayView4, ArrayViewMut1, ArrayViewMut2,
+    ArrayViewMut3, ArrayViewMut4, AxisIter, AxisIterMut, ElementIter, FixedMatrix, FixedVector,
+    IndexedIter, Interpolation, Lanes, LanesMut, PadWidth, ScalarOperand, Windows,
 };
 
 #[cfg(feature = "ndarray-compat")]

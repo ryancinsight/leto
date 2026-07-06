@@ -20,6 +20,8 @@ pub struct Point<T, const N: usize> {
     pub coords: Vector<T, N>,
 }
 
+/// A 1-dimensional point.
+pub type Point1<T> = Point<T, 1>;
 /// A 2-dimensional point.
 pub type Point2<T> = Point<T, 2>;
 /// A 3-dimensional point.
@@ -37,6 +39,16 @@ impl<T, const N: usize> Point<T, N> {
     pub const fn from_array(data: [T; N]) -> Self {
         Self {
             coords: Vector::from_array(data),
+        }
+    }
+}
+
+impl<T> Point<T, 1> {
+    /// Construct from a single `x` coordinate.
+    #[inline(always)]
+    pub const fn new(x: T) -> Self {
+        Self {
+            coords: Vector::from_array([x]),
         }
     }
 }

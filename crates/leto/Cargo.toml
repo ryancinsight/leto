@@ -12,8 +12,8 @@ mnemosyne = { workspace = true, optional = true }
 # ── Numeric Foundations ──
 bytemuck = { workspace = true }
 eunomia = { workspace = true }
-serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 half = { workspace = true }
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 # ── Error Handling ──
 thiserror = { workspace = true }
@@ -23,8 +23,8 @@ ndarray = { workspace = true, optional = true }
 
 [features]
 default = ["std", "parallel", "mnemosyne-memory"]
-std = []
-alloc = []
+std = ["serde/std"]
+alloc = ["serde/alloc"]
 parallel = []
 # mnemosyne integration
 mnemosyne-alloc = ["dep:mnemosyne", "alloc"]
@@ -36,3 +36,4 @@ serde = ["dep:serde"]
 [dev-dependencies]
 proptest = { workspace = true }
 ndarray = { workspace = true }
+serde_json = { workspace = true }
