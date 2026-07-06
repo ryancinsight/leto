@@ -1,8 +1,45 @@
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
     add, binary_map, div, indexed_zip2_mut_with, indexed_zip_mut_with, map, map_into, mapv, mul,
-    scalar_map, sub, zip_mut_with, AddOp, MulOp,
+    scalar_map, sub, unary_map, zip_mut_with, AddOp, ErfOp, ErfcOp, LgammaOp, MulOp,
 };
+
+fn assert_scalar_supertrait<T>()
+where
+    T: leto_ops::Scalar + eunomia::NumericElement,
+{
+}
+
+fn assert_real_supertrait<T>()
+where
+    T: leto_ops::RealScalar + eunomia::FloatElement,
+{
+}
+
+#[test]
+fn scalar_traits_are_eunomia_extensions() {
+    assert_scalar_supertrait::<f32>();
+    assert_scalar_supertrait::<f64>();
+    assert_scalar_supertrait::<half::f16>();
+    assert_scalar_supertrait::<half::bf16>();
+    assert_scalar_supertrait::<i32>();
+    assert_scalar_supertrait::<u64>();
+    assert_scalar_supertrait::<isize>();
+    assert_scalar_supertrait::<usize>();
+
+    assert_real_supertrait::<f32>();
+    assert_real_supertrait::<f64>();
+    assert_real_supertrait::<half::f16>();
+    assert_real_supertrait::<half::bf16>();
+
+    assert_eq!(<f64 as leto_ops::Scalar>::from_usize(3), 3.0);
+    assert_eq!(<isize as leto_ops::Scalar>::from_usize(5), 5_isize);
+    assert_eq!(<usize as leto_ops::Scalar>::from_usize(6), 6_usize);
+    assert_eq!(
+        <half::f16 as leto_ops::Scalar>::from_usize(4),
+        half::f16::from_f32(4.0)
+    );
+}
 
 #[test]
 fn test_elementwise_binary_ops() {
@@ -125,6 +162,51 @@ fn test_map_into_uses_caller_owned_output() {
     map_into(&input.view(), &mut output.view_mut(), |value| value * value).unwrap();
 
     assert_eq!(output.storage().as_slice(), &[1.0, 4.0, 12.25, 16.0]);
+}
+
+#[test]
+fn special_unary_ops_match_eunomia_reference_values() {
+    let input = Array::from_shape_vec([4], vec![0.0f64, 0.5, 1.0, 5.0]).unwrap();
+
+    let erf = unary_map(ErfOp, &input.view()).unwrap();
+    let erfc = unary_map(ErfcOp, &input.view()).unwrap();
+    let lgamma = unary_map(LgammaOp, &input.view()).unwrap();
+
+    let erf_expected = [
+        0.0,
+        0.520_499_877_813_046_5,
+        0.842_700_792_949_714_9,
+        0.999_999_999_998_462_6,
+    ];
+    let erfc_expected = [
+        1.0,
+        0.479_500_122_186_953_5,
+        0.157_299_207_050_285_13,
+        1.537_459_794_428_034_7e-12,
+    ];
+    let lgamma_expected = [f64::INFINITY, 0.572_364_942_924_700_1, 0.0, 24.0_f64.ln()];
+
+    for index in 0..4 {
+        assert!(
+            (erf.storage().as_slice()[index] - erf_expected[index]).abs() <= 2.0e-15,
+            "erf[{index}]"
+        );
+        assert!(
+            (erfc.storage().as_slice()[index] - erfc_expected[index]).abs() <= 2.0e-15,
+            "erfc[{index}]"
+        );
+        if lgamma_expected[index].is_infinite() {
+            assert!(
+                lgamma.storage().as_slice()[index].is_infinite(),
+                "lgamma[{index}]"
+            );
+        } else {
+            assert!(
+                (lgamma.storage().as_slice()[index] - lgamma_expected[index]).abs() <= 2.0e-15,
+                "lgamma[{index}]"
+            );
+        }
+    }
 }
 
 #[test]

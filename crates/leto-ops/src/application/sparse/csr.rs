@@ -6,7 +6,9 @@
 //! [`CooMatrix`](super::CooMatrix), which converts here via
 //! [`CooMatrix::to_csr`](super::CooMatrix::to_csr).
 
+use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
+use eunomia::FloatElement;
 use leto::{Array2, ArrayView2, LetoError, Result};
 
 /// Compressed Sparse Row matrix: stores only the `nnz` nonzero entries.
@@ -23,6 +25,36 @@ pub struct CsrMatrix<T> {
     row_ptr: Vec<usize>,
     nrows: usize,
     ncols: usize,
+}
+
+/// Borrowed view over one CSR row.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CsrRow<'a, T> {
+    col_indices: &'a [usize],
+    values: &'a [T],
+}
+
+impl<'a, T> CsrRow<'a, T> {
+    /// Borrow the row column indices.
+    #[must_use]
+    #[inline]
+    pub fn col_indices(&self) -> &'a [usize] {
+        self.col_indices
+    }
+
+    /// Borrow the row values.
+    #[must_use]
+    #[inline]
+    pub fn values(&self) -> &'a [T] {
+        self.values
+    }
+
+    /// Number of stored entries in this row.
+    #[must_use]
+    #[inline]
+    pub fn nnz(&self) -> usize {
+        self.values.len()
+    }
 }
 
 impl<T: Scalar> CsrMatrix<T> {
@@ -149,6 +181,20 @@ impl<T: Scalar> CsrMatrix<T> {
         self.values.len()
     }
 
+    /// Number of rows.
+    #[must_use]
+    #[inline]
+    pub fn nrows(&self) -> usize {
+        self.nrows
+    }
+
+    /// Number of columns.
+    #[must_use]
+    #[inline]
+    pub fn ncols(&self) -> usize {
+        self.ncols
+    }
+
     /// Fraction of entries that are nonzero, in `[0, 1]` (`0` for an empty matrix).
     #[must_use]
     #[inline]
@@ -170,6 +216,216 @@ impl<T: Scalar> CsrMatrix<T> {
         (&self.values, &self.col_indices, &self.row_ptr)
     }
 
+    /// CSR row-offset array.
+    #[must_use]
+    #[inline]
+    pub fn row_ptr(&self) -> &[usize] {
+        &self.row_ptr
+    }
+
+    /// CSR column-index array.
+    #[must_use]
+    #[inline]
+    pub fn col_indices(&self) -> &[usize] {
+        &self.col_indices
+    }
+
+    /// CSR nonzero value array.
+    #[must_use]
+    #[inline]
+    pub fn values(&self) -> &[T] {
+        &self.values
+    }
+
+    /// Borrow one matrix row in CSR form.
+    #[must_use]
+    #[inline]
+    pub fn row(&self, row: usize) -> CsrRow<'_, T> {
+        let start = self.row_ptr[row];
+        let end = self.row_ptr[row + 1];
+        CsrRow {
+            col_indices: &self.col_indices[start..end],
+            values: &self.values[start..end],
+        }
+    }
+
+    /// Extract the diagonal as a dense vector.
+    #[must_use]
+    pub fn diagonal(&self) -> Vec<T> {
+        let mut diag = vec![T::ZERO; self.nrows];
+        for (row, d) in diag.iter_mut().enumerate().take(self.nrows) {
+            for p in self.row_ptr[row]..self.row_ptr[row + 1] {
+                if self.col_indices[p] == row {
+                    *d = self.values[p];
+                    break;
+                }
+            }
+        }
+        diag
+    }
+
+    /// Construct an all-zero CSR matrix with shape `(nrows, ncols)`.
+    #[must_use = "zeros returns the constructed sparse matrix"]
+    pub fn zeros(nrows: usize, ncols: usize) -> Self {
+        Self {
+            values: Vec::new(),
+            col_indices: Vec::new(),
+            row_ptr: vec![0; nrows.saturating_add(1)],
+            nrows,
+            ncols,
+        }
+    }
+
+    /// Mutably borrow the stored nonzero values.
+    ///
+    /// This preserves CSR structural invariants because row pointers and column
+    /// indices remain immutable. Use it for value-only transforms such as
+    /// scaling or replacing assembled coefficients.
+    #[must_use]
+    #[inline]
+    pub fn values_mut(&mut self) -> &mut [T] {
+        &mut self.values
+    }
+
+    /// Scale every stored nonzero by `factor`.
+    ///
+    /// The operation mutates values only; row pointers and column indices are
+    /// unchanged, so all CSR structural invariants are preserved.
+    pub fn scale_values(&mut self, factor: T) {
+        for value in &mut self.values {
+            *value *= factor;
+        }
+    }
+
+    /// Scale each row by the corresponding `scaling[row]`.
+    ///
+    /// # Errors
+    /// [`LetoError::ShapeMismatch`] if `scaling.len() != self.nrows()`.
+    pub fn scale_rows(&mut self, scaling: &[T]) -> Result<()> {
+        if scaling.len() != self.nrows {
+            return Err(LetoError::ShapeMismatch {
+                lhs: vec![self.nrows],
+                rhs: vec![scaling.len()],
+            });
+        }
+
+        for (row, &scale) in scaling.iter().enumerate() {
+            for index in self.row_ptr[row]..self.row_ptr[row + 1] {
+                self.values[index] *= scale;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scale each column by the corresponding `scaling[column]`.
+    ///
+    /// # Errors
+    /// [`LetoError::ShapeMismatch`] if `scaling.len() != self.ncols()`.
+    pub fn scale_columns(&mut self, scaling: &[T]) -> Result<()> {
+        if scaling.len() != self.ncols {
+            return Err(LetoError::ShapeMismatch {
+                lhs: vec![self.ncols],
+                rhs: vec![scaling.len()],
+            });
+        }
+
+        for (value, &column) in self.values.iter_mut().zip(self.col_indices.iter()) {
+            *value *= scaling[column];
+        }
+
+        Ok(())
+    }
+
+    /// Frobenius norm `sqrt(sum_ij A_ij^2)`.
+    ///
+    /// The reduction executes in `T`'s native precision through
+    /// [`eunomia::NumericElement`]; no hidden wider accumulator is introduced.
+    #[must_use]
+    pub fn frobenius_norm(&self) -> T {
+        self.values
+            .iter()
+            .copied()
+            .fold(T::ZERO, |acc, value| acc + value * value)
+            .sqrt()
+    }
+
+    /// Return whether every row is strictly diagonally dominant by absolute row
+    /// sum: `|a_ii| > sum_{j != i} |a_ij|`.
+    ///
+    /// Non-square matrices are not diagonally dominant under this contract.
+    #[must_use]
+    pub fn is_strictly_diagonally_dominant(&self) -> bool {
+        if self.nrows != self.ncols {
+            return false;
+        }
+
+        for row in 0..self.nrows {
+            let csr_row = self.row(row);
+            let mut diagonal = T::ZERO;
+            let mut off_diagonal_sum = T::ZERO;
+
+            for (&column, &value) in csr_row.col_indices.iter().zip(csr_row.values.iter()) {
+                let magnitude = value.abs();
+                if column == row {
+                    diagonal = magnitude;
+                } else {
+                    off_diagonal_sum += magnitude;
+                }
+            }
+
+            if diagonal <= off_diagonal_sum {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Return the CSR transpose `A^T`.
+    ///
+    /// The implementation counts nonzeros per output row, prefix-scans those
+    /// counts into the transposed `row_ptr`, then scatters each source entry
+    /// `(i, j, value)` into output row `j` with column `i`. Source rows are
+    /// traversed in ascending order, so each transposed row receives strictly
+    /// increasing column indices and preserves the [`from_parts`](Self::from_parts)
+    /// CSR invariant.
+    #[must_use = "transpose returns the transposed sparse matrix"]
+    pub fn transpose(&self) -> Self {
+        let mut row_counts = vec![0usize; self.ncols];
+        for &col in &self.col_indices {
+            row_counts[col] += 1;
+        }
+
+        let mut row_ptr = Vec::with_capacity(self.ncols + 1);
+        row_ptr.push(0);
+        for count in row_counts {
+            row_ptr.push(row_ptr.last().copied().expect("row_ptr has seed") + count);
+        }
+
+        let mut next = row_ptr[..self.ncols].to_vec();
+        let mut values = vec![T::ZERO; self.values.len()];
+        let mut col_indices = vec![0usize; self.col_indices.len()];
+
+        for source_row in 0..self.nrows {
+            for source_index in self.row_ptr[source_row]..self.row_ptr[source_row + 1] {
+                let transposed_row = self.col_indices[source_index];
+                let target_index = next[transposed_row];
+                values[target_index] = self.values[source_index];
+                col_indices[target_index] = source_row;
+                next[transposed_row] += 1;
+            }
+        }
+
+        Self {
+            values,
+            col_indices,
+            row_ptr,
+            nrows: self.ncols,
+            ncols: self.nrows,
+        }
+    }
+
     /// Reconstruct the dense matrix (`O(n·m)`; inverse of [`from_dense`](Self::from_dense)).
     #[must_use]
     pub fn to_dense(&self) -> Array2<T> {
@@ -180,5 +436,54 @@ impl<T: Scalar> CsrMatrix<T> {
             }
         }
         Array2::from_shape_vec([self.nrows, self.ncols], dense).expect("CSR dense shape is valid")
+    }
+}
+
+impl<T: RealScalar> CsrMatrix<T> {
+    /// Estimate a square matrix's conditioning from diagonal dominance.
+    ///
+    /// This inexpensive structural heuristic returns
+    /// `max_i((|a_ii| + sum_{j != i}|a_ij|) / |a_ii|)`, or `T::INFINITY`
+    /// when any diagonal magnitude is below `1e-12`.
+    ///
+    /// # Errors
+    /// [`LetoError::ShapeMismatch`] if the matrix is not square.
+    #[must_use = "condition_estimate reports the computed estimate or a shape error"]
+    pub fn condition_estimate(&self) -> Result<T> {
+        if self.nrows != self.ncols {
+            return Err(LetoError::ShapeMismatch {
+                lhs: vec![self.nrows, self.nrows],
+                rhs: vec![self.nrows, self.ncols],
+            });
+        }
+
+        let mut max_ratio = T::ONE;
+        let near_zero = <T as FloatElement>::from_f64(1.0e-12);
+
+        for row in 0..self.nrows {
+            let csr_row = self.row(row);
+            let mut diagonal = T::ZERO;
+            let mut off_diagonal_sum = T::ZERO;
+
+            for (&column, &value) in csr_row.col_indices.iter().zip(csr_row.values.iter()) {
+                let magnitude = value.abs();
+                if column == row {
+                    diagonal = magnitude;
+                } else {
+                    off_diagonal_sum += magnitude;
+                }
+            }
+
+            if diagonal < near_zero {
+                return Ok(T::INFINITY);
+            }
+
+            let ratio = (off_diagonal_sum + diagonal) / diagonal;
+            if ratio > max_ratio {
+                max_ratio = ratio;
+            }
+        }
+
+        Ok(max_ratio)
     }
 }

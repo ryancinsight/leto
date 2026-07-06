@@ -133,7 +133,7 @@ impl<T: Scalar> CooMatrix<T> {
     }
 
     /// Compress to CSR, summing duplicate `(i, j)` entries and dropping exact
-    /// zeros (`O(nnz log nnz)`; see the [module theorem](self)).
+    /// zeros (`O(nnz log nnz)`; see the [module theorem](crate::application::sparse)).
     #[must_use = "to_csr returns the compressed matrix"]
     pub fn to_csr(&self) -> CsrMatrix<T> {
         let nnz_in = self.values.len();

@@ -2,7 +2,10 @@
 //! and structural products (Kronecker), against nalgebra and oracle-independent
 //! identities.
 
-use leto::{Array2, SliceArg, Storage};
+use leto::{Array2, LetoError, SliceArg, Storage};
+use leto_ops::application::{
+    kron as application_kron, matrix_rank as application_matrix_rank, trace as application_trace,
+};
 use leto_ops::{kron, matrix_rank, trace, MatrixProduct, MatrixProperties};
 use nalgebra::DMatrix;
 
@@ -73,7 +76,13 @@ fn trace_is_scalar_generic_over_integers() {
 #[test]
 fn trace_rejects_non_square() {
     let a = Array2::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
-    assert!(trace(&a.view()).is_err());
+    assert_eq!(
+        trace(&a.view()).unwrap_err(),
+        LetoError::ShapeMismatch {
+            lhs: vec![2, 3],
+            rhs: vec![2, 2],
+        }
+    );
 }
 
 #[test]
@@ -122,6 +131,23 @@ fn rank_full_and_deficient_match_nalgebra() {
     let tall =
         Array2::from_shape_vec([4, 2], vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0]).unwrap();
     assert_eq!(matrix_rank(&tall.view()).unwrap(), 2);
+}
+
+#[test]
+fn rank_with_tolerance_matches_free_function_and_nalgebra() {
+    let values = vec![1.0, 0.0, 0.0, 1.0e-12];
+    let matrix = Array2::from_shape_vec([2, 2], values.clone()).unwrap();
+    let tolerance = 1.0e-9;
+
+    assert_eq!(matrix.rank_with_tolerance(tolerance).unwrap(), 1);
+    assert_eq!(
+        matrix.rank_with_tolerance(tolerance).unwrap(),
+        leto_ops::matrix_rank_with_tolerance(&matrix.view(), tolerance).unwrap()
+    );
+    assert_eq!(
+        matrix.rank_with_tolerance(tolerance).unwrap(),
+        dmatrix(2, 2, &values).rank(tolerance)
+    );
 }
 
 // ── Kronecker product ─────────────────────────────────────────────────────--
@@ -194,5 +220,27 @@ fn kron_mixed_product_property() {
     assert_close(
         a.kron(&b).unwrap().trace().unwrap(),
         a.trace().unwrap() * b.trace().unwrap(),
+    );
+}
+
+#[test]
+fn application_reexports_match_crate_root_exports() {
+    let a = Array2::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let b = Array2::from_shape_vec([1, 2], vec![5.0, 6.0]).unwrap();
+
+    assert_eq!(
+        application_trace(&a.view()).unwrap(),
+        trace(&a.view()).unwrap()
+    );
+    assert_eq!(
+        application_matrix_rank(&a.view()).unwrap(),
+        matrix_rank(&a.view()).unwrap()
+    );
+    assert_close_slice(
+        application_kron(&a.view(), &b.view())
+            .unwrap()
+            .storage()
+            .as_slice(),
+        kron(&a.view(), &b.view()).unwrap().storage().as_slice(),
     );
 }

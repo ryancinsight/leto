@@ -310,6 +310,12 @@ define_unary_op!(/// `e^x` operation marker.
     ExpOp => exp);
 define_unary_op!(/// Natural logarithm operation marker.
     LnOp => ln);
+define_unary_op!(/// Gauss error function operation marker.
+    ErfOp => erf);
+define_unary_op!(/// Complementary error function operation marker.
+    ErfcOp => erfc);
+define_unary_op!(/// Natural logarithm of the absolute gamma function operation marker.
+    LgammaOp => lgamma);
 define_unary_op!(/// Sine operation marker.
     SinOp => sin);
 define_unary_op!(/// Cosine operation marker.

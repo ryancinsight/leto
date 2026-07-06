@@ -43,18 +43,22 @@ pub use application::random::{
     normal_with_seed, normal_with_seed_into, uniform_with_seed, uniform_with_seed_into,
 };
 pub use application::reduction::{
-    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, reduce_axis,
-    reduce_axis_into, sum_axis, sum_axis_into, AxisReduction, MaxAxis, MeanAxis, MinAxis, SumAxis,
+    max, max_axis, max_axis_into, mean_axis, mean_axis_into, min, min_axis, min_axis_into,
+    reduce_all, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into, AxisReduction, MaxAxis,
+    MeanAxis, MinAxis, SumAxis,
 };
 pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
 };
-pub use application::sparse::{spmm, spmm_into, spmv, spmv_into, CsrMatrix};
+pub use application::sparse::{spgemm, spmm, spmm_into, spmv, spmv_into, CsrMatrix};
 pub use application::unary::{
-    map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ExpOp, LnOp, NegOp,
-    PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
+    map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ErfOp, ErfcOp,
+    ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
 };
 pub use application::vector::{dot, hamming_distance, jaccard_distance};
 pub use application::zip::{
-    indexed_zip2_mut_with, indexed_zip_mut_with, zip2_mut_with, zip_mut_with,
+    coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold,
+    indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip2_mut_with,
+    indexed_zip4_mut_with, indexed_zip_mut_with, zip2_mut_with, zip3_mut_with, zip5_mut_with,
+    zip_fold, zip_mut_with, CoordinateMapPlan,
 };

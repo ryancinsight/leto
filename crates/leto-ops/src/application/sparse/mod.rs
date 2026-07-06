@@ -7,14 +7,17 @@
 //! win once density `nnz/(n·m)` is small.
 //!
 //! Two storage formats, by lifecycle phase (SoC):
-//! - [`CooMatrix`] — **coordinate/triplet** list, the assembly target: each
-//!   contribution is one [`push`](CooMatrix::push); duplicates accumulate.
+//! - [`CooMatrix`](crate::application::sparse::CooMatrix) —
+//!   **coordinate/triplet** list, the assembly target: each contribution is one
+//!   [`push`](crate::application::sparse::CooMatrix::push); duplicates
+//!   accumulate.
 //! - [`CsrMatrix`] — **compressed sparse row**, the solve/kernel target consumed
 //!   by [`spmv`] (matrix–vector) and [`spmm`] (sparse–dense product).
 //!
-//! The canonical pipeline is *assemble in COO → [`to_csr`](CooMatrix::to_csr) →
-//! run kernels*. Both are generic over [`crate::domain::scalar::Scalar`] at
-//! native precision; the kernels are hermes-SIMD-backed.
+//! The canonical pipeline is *assemble in COO →
+//! [`to_csr`](crate::application::sparse::CooMatrix::to_csr) → run kernels*.
+//! Both are generic over [`crate::domain::scalar::Scalar`] at native precision;
+//! the kernels are hermes-SIMD-backed.
 //!
 //! # Theorem (CSR exactly represents the matrix; SpMV is `O(nnz)`)
 //! Let `A ∈ Tᵐˣⁿ` with `nnz` nonzeros. The CSR triple `(values, col_indices,
@@ -35,14 +38,18 @@
 //! x[col_indices[p]]`, by the identity above — exactly the loop [`spmv`] runs,
 //! touching each nonzero once: `Θ(nnz + m)` time, versus dense `Θ(m·n)`.
 //! [`spmm`] extends the same identity across each dense RHS column in
-//! `Θ(nnz·k + m·k)`. The [`CooMatrix`] theorem covers the assembly→CSR step. ∎
+//! `Θ(nnz·k + m·k)`.
+//! The [`CooMatrix`](crate::application::sparse::CooMatrix) theorem covers the
+//! assembly→CSR step. ∎
 
 mod coo;
 mod csr;
+mod spgemm;
 mod spmm;
 mod spmv;
 
 pub use coo::CooMatrix;
-pub use csr::CsrMatrix;
+pub use csr::{CsrMatrix, CsrRow};
+pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into};
 pub use spmv::{spmv, spmv_into};

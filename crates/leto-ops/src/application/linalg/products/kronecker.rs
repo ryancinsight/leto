@@ -5,6 +5,18 @@ use leto::{Array2, ArrayView2, Result};
 
 /// Kronecker product `A ⊗ B`.
 ///
+/// ```
+/// use leto::{Array2, Storage};
+/// use leto_ops::kron;
+///
+/// let a = Array2::from_shape_vec([1, 2], vec![2_i32, 3]).unwrap();
+/// let b = Array2::from_shape_vec([2, 1], vec![5_i32, 7]).unwrap();
+///
+/// let product = kron(&a.view(), &b.view()).unwrap();
+/// assert_eq!(product.shape(), [2, 2]);
+/// assert_eq!(product.storage().as_slice(), &[10, 15, 14, 21]);
+/// ```
+///
 /// For `A ∈ Tᵐˣⁿ` and `B ∈ Tᵖˣ۹` the result is the `mp × nq` block matrix whose
 /// `(i, j)` block is the scalar multiple `aᵢⱼ · B`:
 ///
