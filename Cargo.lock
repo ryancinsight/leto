@@ -824,7 +824,7 @@ dependencies = [
 name = "mnemosyne-local"
 version = "0.1.0"
 dependencies = [
- "melinoe 0.7.0",
+ "melinoe 0.8.0",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-build-util",
@@ -887,7 +887,7 @@ dependencies = [
 name = "moirai-executor"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.7.0",
+ "melinoe 0.8.0",
  "mnemosyne",
  "moirai-core",
  "moirai-pal",
@@ -916,7 +916,7 @@ version = "0.2.0"
 dependencies = [
  "js-sys",
  "libc",
- "melinoe 0.7.0",
+ "melinoe 0.8.0",
  "moirai-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -928,7 +928,7 @@ dependencies = [
 name = "moirai-parallel"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.7.0",
+ "melinoe 0.8.0",
  "moirai-executor",
 ]
 
