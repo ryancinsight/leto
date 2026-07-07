@@ -10,6 +10,14 @@
 use super::{Point, Vector};
 use core::ops::{Deref, DerefMut};
 
+/// Named-field view of a 1-component value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct X<T> {
+    /// First component.
+    pub x: T,
+}
+
 /// Named-field view of a 2-component value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
@@ -67,9 +75,11 @@ macro_rules! impl_named_access {
     };
 }
 
+impl_named_access!(Vector<T, 1>, X, 1);
 impl_named_access!(Vector<T, 2>, XY, 2);
 impl_named_access!(Vector<T, 3>, XYZ, 3);
 impl_named_access!(Vector<T, 4>, XYZW, 4);
+impl_named_access!(Point<T, 1>, X, 1);
 impl_named_access!(Point<T, 2>, XY, 2);
 impl_named_access!(Point<T, 3>, XYZ, 3);
 

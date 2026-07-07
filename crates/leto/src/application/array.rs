@@ -4,7 +4,49 @@ use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
 use crate::infrastructure::storage::{Storage, StorageMut};
+use serde::de::Error as DeserializeError;
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::marker::PhantomData;
+
+/// Read-only source for assigning values into an array.
+pub trait AssignSource<T, const N: usize> {
+    /// Shape of the assignment source.
+    fn assign_shape(&self) -> [usize; N];
+
+    /// Value at a logical index.
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] when the index is out of bounds for the source.
+    fn assign_get(&self, index: [usize; N]) -> Result<&T>;
+}
+
+impl<T, S, const N: usize> AssignSource<T, N> for Array<T, S, N>
+where
+    S: Storage<T>,
+{
+    #[inline]
+    fn assign_shape(&self) -> [usize; N] {
+        self.shape()
+    }
+
+    #[inline]
+    fn assign_get(&self, index: [usize; N]) -> Result<&T> {
+        self.get(index)
+    }
+}
+
+impl<T, const N: usize> AssignSource<T, N> for ArrayView<'_, T, N> {
+    #[inline]
+    fn assign_shape(&self) -> [usize; N] {
+        self.shape()
+    }
+
+    #[inline]
+    fn assign_get(&self, index: [usize; N]) -> Result<&T> {
+        self.get(index)
+    }
+}
 
 /// An N-dimensional strided array.
 #[derive(Debug, Clone)]
@@ -12,6 +54,40 @@ pub struct Array<T, S, const N: usize> {
     pub(crate) layout: Layout<N>,
     pub(crate) storage: S,
     pub(crate) _marker: PhantomData<T>,
+}
+
+impl<T, S, const N: usize> Serialize for Array<T, S, N>
+where
+    S: Serialize,
+{
+    fn serialize<Ser>(&self, serializer: Ser) -> core::result::Result<Ser::Ok, Ser::Error>
+    where
+        Ser: Serializer,
+    {
+        let mut state = serializer.serialize_struct("Array", 2)?;
+        state.serialize_field("layout", &self.layout)?;
+        state.serialize_field("storage", &self.storage)?;
+        state.end()
+    }
+}
+
+impl<'de, T, S, const N: usize> Deserialize<'de> for Array<T, S, N>
+where
+    S: Deserialize<'de> + Storage<T>,
+{
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct ArrayParts<S, const N: usize> {
+            layout: Layout<N>,
+            storage: S,
+        }
+
+        let parts = ArrayParts::<S, N>::deserialize(deserializer)?;
+        Self::new(parts.layout, parts.storage).map_err(D::Error::custom)
+    }
 }
 
 impl<T, S, const N: usize> Array<T, S, N>
@@ -90,12 +166,13 @@ where
     /// `None` if the array is not C-contiguous (ndarray `as_slice` parity).
     #[inline]
     pub fn as_slice(&self) -> Option<&[T]> {
-        if self.layout.is_c_dense() {
-            let start = self.layout.offset;
-            Some(&self.storage.as_slice()[start..start + self.layout.size()])
-        } else {
-            None
-        }
+        self.view().as_slice()
+    }
+
+    /// Expose the dense physical-memory slice when this array is contiguous.
+    #[inline]
+    pub fn as_slice_memory_order(&self) -> Option<&[T]> {
+        self.view().as_slice_memory_order()
     }
 
     /// Iterator over the array's elements in logical row-major order
@@ -224,6 +301,53 @@ where
         }
         Ok(&slice[offset])
     }
+
+    /// Map every logical element into a newly allocated array with the same shape.
+    #[inline]
+    pub fn mapv<U, F>(&self, mut f: F) -> Array<U, crate::infrastructure::storage::VecStorage<U>, N>
+    where
+        F: FnMut(T) -> U,
+        T: Copy,
+    {
+        let values = self.iter().map(|&value| f(value)).collect();
+        Array::<U, crate::infrastructure::storage::VecStorage<U>, N>::from_shape_vec(
+            self.shape(),
+            values,
+        )
+        .expect("invariant: logical map preserves element count")
+    }
+
+    /// Zip two arrays elementwise into a newly allocated array with this shape.
+    ///
+    /// # Panics
+    /// Panics when the shapes differ.
+    #[inline]
+    pub fn zip_map<S2, U, F>(
+        &self,
+        rhs: &Array<T, S2, N>,
+        mut f: F,
+    ) -> Array<U, crate::infrastructure::storage::VecStorage<U>, N>
+    where
+        F: FnMut(T, T) -> U,
+        T: Copy,
+        S2: Storage<T>,
+    {
+        assert_eq!(
+            self.shape(),
+            rhs.shape(),
+            "invariant: zip_map requires identical shapes"
+        );
+        let values = self
+            .iter()
+            .zip(rhs.iter())
+            .map(|(&left, &right)| f(left, right))
+            .collect();
+        Array::<U, crate::infrastructure::storage::VecStorage<U>, N>::from_shape_vec(
+            self.shape(),
+            values,
+        )
+        .expect("invariant: zip_map preserves element count")
+    }
 }
 
 impl<T, S, const N: usize> Array<T, S, N>
@@ -236,6 +360,15 @@ where
         ArrayViewMut::new(self.layout, self.storage.as_mut_slice())
     }
 
+    /// Fill every physical storage slot with `value`.
+    #[inline]
+    pub fn fill(&mut self, value: T)
+    where
+        T: Clone,
+    {
+        self.storage.as_mut_slice().fill(value);
+    }
+
     /// The elements as one mutable contiguous slice in logical row-major order,
     /// or `None` if the array is not C-contiguous (ndarray `as_slice_mut`
     /// parity). The safe basis for in-place element iteration: `if let Some(s) =
@@ -244,8 +377,20 @@ where
     pub fn as_slice_mut(&mut self) -> Option<&mut [T]> {
         if self.layout.is_c_dense() {
             let start = self.layout.offset;
-            let size = self.layout.size();
-            Some(&mut self.storage.as_mut_slice()[start..start + size])
+            let end = start.checked_add(self.layout.checked_size().ok()?)?;
+            self.storage.as_mut_slice().get_mut(start..end)
+        } else {
+            None
+        }
+    }
+
+    /// Expose the mutable dense physical-memory slice when this array is contiguous.
+    #[inline]
+    pub fn as_slice_memory_order_mut(&mut self) -> Option<&mut [T]> {
+        if self.layout.is_contiguous() {
+            let start = self.layout.offset;
+            let end = start.checked_add(self.layout.checked_size().ok()?)?;
+            self.storage.as_mut_slice().get_mut(start..end)
         } else {
             None
         }
@@ -341,6 +486,112 @@ where
             });
         }
         Ok(&mut slice[offset])
+    }
+
+    /// Assign all elements from another array with the same shape.
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] when the shapes differ.
+    #[inline]
+    pub fn try_assign<Rhs>(&mut self, rhs: &Rhs) -> Result<()>
+    where
+        T: Copy,
+        Rhs: AssignSource<T, N>,
+    {
+        let shape = self.shape();
+        if shape != rhs.assign_shape() {
+            return Err(LetoError::ShapeMismatch {
+                lhs: shape.to_vec(),
+                rhs: rhs.assign_shape().to_vec(),
+            });
+        }
+
+        for linear in 0..self.size() {
+            let index = linear_to_index(linear, shape);
+            *self.get_mut(index)? = *rhs.assign_get(index)?;
+        }
+        Ok(())
+    }
+
+    /// Assign all elements from another array with the same shape.
+    ///
+    /// # Panics
+    /// Panics when the shapes differ.
+    #[inline]
+    pub fn assign<Rhs>(&mut self, rhs: &Rhs)
+    where
+        T: Copy,
+        Rhs: AssignSource<T, N>,
+    {
+        self.try_assign(rhs)
+            .expect("invariant: assigned arrays have identical shape");
+    }
+}
+
+fn linear_to_index<const N: usize>(mut linear: usize, shape: [usize; N]) -> [usize; N] {
+    let mut index = [0; N];
+    for axis in (0..N).rev() {
+        let extent = shape[axis];
+        if extent != 0 {
+            index[axis] = linear % extent;
+            linear /= extent;
+        }
+    }
+    index
+}
+
+impl<T, S, const N: usize> Eq for Array<T, S, N>
+where
+    T: Eq,
+    S: Storage<T>,
+{
+}
+
+impl<T, S, const N: usize> std::ops::Index<[usize; N]> for Array<T, S, N>
+where
+    S: Storage<T>,
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: [usize; N]) -> &Self::Output {
+        self.get(index)
+            .expect("invariant: array index is within shape and storage bounds")
+    }
+}
+
+impl<T, S> std::ops::Index<usize> for Array<T, S, 1>
+where
+    S: Storage<T>,
+{
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: usize) -> &Self::Output {
+        self.get([index])
+            .expect("invariant: array index is within shape and storage bounds")
+    }
+}
+
+impl<T, S, const N: usize> std::ops::IndexMut<[usize; N]> for Array<T, S, N>
+where
+    S: StorageMut<T>,
+{
+    #[inline]
+    fn index_mut(&mut self, index: [usize; N]) -> &mut Self::Output {
+        self.get_mut(index)
+            .expect("invariant: array index is within shape and storage bounds")
+    }
+}
+
+impl<T, S> std::ops::IndexMut<usize> for Array<T, S, 1>
+where
+    S: StorageMut<T>,
+{
+    #[inline]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.get_mut([index])
+            .expect("invariant: array index is within shape and storage bounds")
     }
 }
 

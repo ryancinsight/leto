@@ -126,8 +126,8 @@ pub fn matexp<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
 
 /// Diagonal Padé coefficients `c_k`, `k = 0..=q`, via the exact ratio recurrence
 /// `c_k = c_{k-1} · (q − k + 1) / (k · (2q − k + 1))`, evaluated in `f64` and
-/// converted to `T` (construction-time constants, per the `RealScalar::from_f64`
-/// contract — not a compute-path widen-narrow).
+/// converted to `T` (construction-time constants, per Eunomia's
+/// `FloatElement::from_f64` contract — not a compute-path widen-narrow).
 fn pade_coefficients<T: RealScalar>() -> [T; PADE_Q + 1] {
     let q = PADE_Q as f64;
     let mut c = [0.0f64; PADE_Q + 1];

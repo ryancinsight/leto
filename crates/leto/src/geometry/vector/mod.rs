@@ -1,6 +1,6 @@
 //! Fixed-dimension geometric [`Vector`]: the type, constructors, and indexing.
 //!
-//! Operator overloads live in [`ops`], Euclidean geometry in [`euclidean`], and
+//! Operator overloads live in `ops`, Euclidean geometry in `euclidean`, and
 //! the const-generic serde impls in `serde` — one concern per leaf module.
 
 mod euclidean;

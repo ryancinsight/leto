@@ -1,5 +1,6 @@
 use leto::{
-    Array, Array1, Array2, ArrayView, ArrayViewMut, Layout, LetoError, Storage, VecStorage,
+    Array, Array1, Array2, Array4, ArrayView, ArrayView4, ArrayViewMut, ArrayViewMut4, Layout,
+    LetoError, Storage, VecStorage,
 };
 
 #[test]
@@ -53,6 +54,41 @@ fn test_rank_aliases_construct_owned_arrays_and_views() {
     )
     .unwrap();
     assert_eq!(*matrix.view().get([1, 0]).unwrap(), 3);
+
+    let mut volume_time: Array4<i32> =
+        Array::from_shape_vec([1, 2, 2, 2], vec![1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+    {
+        let view: ArrayView4<'_, i32> = volume_time.view();
+        assert_eq!(*view.get([0, 1, 1, 0]).unwrap(), 7);
+    }
+    {
+        let mut view: ArrayViewMut4<'_, i32> = volume_time.view_mut();
+        *view.get_mut([0, 1, 1, 1]).unwrap() = 10;
+    }
+    assert_eq!(*volume_time.get([0, 1, 1, 1]).unwrap(), 10);
+}
+
+#[test]
+fn test_array1_supports_usize_indexing() {
+    let mut vector = Array1::from_shape_vec([3], vec![1, 2, 3]).unwrap();
+
+    vector[1] = 20;
+
+    assert_eq!(vector[0], 1);
+    assert_eq!(vector[1], 20);
+    assert_eq!(vector[2], 3);
+}
+
+#[test]
+fn test_owned_array_equality_checks_shape_and_values() {
+    let lhs = Array2::from_shape_vec([1, 4], vec![1, 2, 3, 4]).unwrap();
+    let same = Array2::from_shape_vec([1, 4], vec![1, 2, 3, 4]).unwrap();
+    let different_shape = Array2::from_shape_vec([2, 2], vec![1, 2, 3, 4]).unwrap();
+    let different_value = Array2::from_shape_vec([1, 4], vec![1, 2, 3, 5]).unwrap();
+
+    assert_eq!(lhs, same);
+    assert_ne!(lhs, different_shape);
+    assert_ne!(lhs, different_value);
 }
 
 #[test]

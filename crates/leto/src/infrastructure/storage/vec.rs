@@ -1,7 +1,8 @@
 use super::traits::{Storage, StorageMut};
+use serde::{Deserialize, Serialize};
 
 /// Owned array storage backed by a standard heap `Vec`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VecStorage<T> {
     data: Vec<T>,
 }

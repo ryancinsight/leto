@@ -5,6 +5,17 @@ use leto::{ArrayView2, Result};
 
 /// Numerical rank: the count of singular values above a relative threshold.
 ///
+/// ```
+/// use leto::Array2;
+/// use leto_ops::{matrix_rank, matrix_rank_with_tolerance};
+///
+/// let full = Array2::from_shape_vec([2, 2], vec![1.0_f64, 0.0, 0.0, 3.0]).unwrap();
+/// assert_eq!(matrix_rank(&full.view()).unwrap(), 2);
+///
+/// let nearly_zero = Array2::from_shape_vec([2, 2], vec![1.0_f64, 0.0, 0.0, 1.0e-12]).unwrap();
+/// assert_eq!(matrix_rank_with_tolerance(&nearly_zero.view(), 1.0e-9).unwrap(), 1);
+/// ```
+///
 /// # Theorem (rank equals the number of nonzero singular values)
 /// For `A = U Σ Vᵀ` with `U, V` having orthonormal columns,
 /// `rank(A) = #{ i : σᵢ ≠ 0 }`.

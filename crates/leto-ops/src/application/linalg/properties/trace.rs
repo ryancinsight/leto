@@ -5,6 +5,14 @@ use leto::{ArrayView2, LetoError, Result};
 
 /// Trace `tr(A) = Σᵢ aᵢᵢ` of a square matrix.
 ///
+/// ```
+/// use leto::Array2;
+/// use leto_ops::trace;
+///
+/// let matrix = Array2::from_shape_vec([2, 2], vec![1_i32, 2, 3, 4]).unwrap();
+/// assert_eq!(trace(&matrix.view()).unwrap(), 5);
+/// ```
+///
 /// # Theorem (trace identities)
 /// For square `A ∈ Tⁿˣⁿ`:
 /// 1. **Spectral:** `tr(A) = Σᵢ λᵢ` — the sum of the eigenvalues with

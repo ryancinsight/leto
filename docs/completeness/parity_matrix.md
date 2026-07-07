@@ -80,9 +80,9 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 | QR, column pivoting (rank-revealing) | `ColPivQR` | `col_piv_qr` / `MatrixDecompose::col_piv_qr` | Verified | col_piv_qr/ — `A P = Q R`; reconstruction + orthogonality + rank + full-rank least squares vs leto QR & nalgebra normal equations |
 | UDU / LDLᵀ (symmetric indefinite, unpivoted) | `UDU` | `udu_decompose` / `MatrixDecompose::udu` | Verified | udu/ — unpivoted `A = U D Uᵀ`; reconstruction + determinant/solve/inverse vs nalgebra + zero-pivot rejection |
 | Bunch–Kaufman (symmetric indefinite, pivoted) | `BunchKaufman` | `bunch_kaufman` / `MatrixDecompose::bunch_kaufman` | Complete | bunch_kaufman/, kernels.rs — partial-pivot `P A Pᵀ = L D Lᵀ` (1×1/2×2 blocks, α=(1+√17)/8) with theorem+proof; **exact reconstruction** identity, det/solve/inverse vs LU, zero-diagonal indefinite (forces 2×2 pivot), rejection. Stable general form of UDU |
-| Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers) |
-| Numerical rank | `Matrix::rank` | `matrix_rank` / `MatrixProperties::rank` | Verified | properties (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall) |
-| Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`) |
+| Trace | `Matrix::trace` | `trace` / `MatrixProperties::trace` | Verified | properties + doctest (vs nalgebra; spectral + cyclic theorems; `Scalar`-generic incl. integers; crate-root and `application` exports pinned) |
+| Numerical rank | `Matrix::rank` | `matrix_rank` / `matrix_rank_with_tolerance` / `MatrixProperties::rank` | Verified | properties + doctest (vs nalgebra `rank`; rank = #nonzero σ; full/deficient/tall; explicit tolerance trait/free-function parity) |
+| Kronecker product | `kronecker` | `kron` / `MatrixProduct::kron` | Verified | properties + doctest (vs nalgebra `kronecker` + mixed-product `(A⊗B)(C⊗D)=(AC)⊗(BD)`; crate-root and `application` exports pinned) |
 | Matrix exp / power | nalgebra `exp` / `pow` | `matexp` / `matpow` + `MatrixFunction` | Verified | matrix_function/ — `matpow` exp-by-squaring (`Θ(log k)`, exact incl. integers); `matexp` scaling-and-squaring + diagonal Padé(6) with theorem+proof; closed-form (zero/diagonal/nilpotent/skew→rotation) + nalgebra `exp`/`pow` differential; reuses `matmul`+LU-inv (SSOT) |
 | Stack-allocated fixed-size arrays (allocation-free) | `Matrix3`/`Vector3` (stack aspect) | `StackStorage<T, CAP>` + `Array::from_stack`/`from_stack_elem` | Verified | core/stack_storage (ADR 0008) — inline `[T; CAP]` backing, `no_std`/`Copy`; reuses the **full** op surface via the `Storage` trait (SSOT, no per-backend code); construction/validation/reductions/iteration/transpose |
 | Compile-time fixed *shape* (type-level dims) | `Matrix3` shape-in-type | — | **Excluded(architecture)** | ADR 0008 — leto is const-*rank*/runtime-*dims* (ADR 0002); type-level dims fork the core type, no consumer driver |
@@ -110,9 +110,12 @@ Counting only rows enumerated above (not yet the full oracle surface):
 
 - ndarray array families tested/present: 28 of 28 rows at Verified+ / Complete.
   No remaining Partial or Missing rows.
-- nalgebra dense-decomposition families: 8 of ~15 at Verified+ → remaining:
-  rank-revealing SVD, non-symmetric/Schur/Hessenberg, secondary factorizations,
-  Kron/trace/rank; geometry + small-fixed pending exclude-vs-implement decision.
+- nalgebra dense-decomposition/property families enumerated above are
+  Verified+ / Complete for every implemented row, including rank-revealing SVD,
+  non-symmetric eigenvalues, Schur/Hessenberg, secondary factorizations,
+  trace, rank, and Kronecker. The remaining enumerated nalgebra rows are
+  explicit exclusions, not missing kernels: compile-time fixed shape and
+  geometry stay outside the parity denominator per ADR 0008.
 
 These counts are a **seed**. The authoritative percentage is produced after
 Stage 1 enumerates the complete oracle surface from locked source; this file is

@@ -1,5 +1,12 @@
 # Leto Work Backlog
 
+## CR-4 SSOT rebind: `leto_ops::Scalar` over `eunomia::NumericElement` (DONE 2026-07-05)
+
+[minor] Leto `leto_ops::Scalar` is now bound as `pub trait Scalar: NumericElement { fn from_usize(...) -> Self; /* default-bodied slice kernels */ }` per `atlas/docs/adr/0005-eunomia-scalar-ssot.md`. The local maintainer branch was rebased onto `origin/main` (PR #30 feat/array-to-vec, 47 commits ahead), resolving file-level merge conflicts at `crates/leto-ops/src/domain/scalar.rs`, `crates/leto/src/lib.rs`, `crates/leto/src/application/array.rs`, and `crates/leto-ops/src/application/sparse/mod.rs`. The old standalone `Scalar` trait methods (`ZERO/ONE/add/sub/mul/div/bitand/bitor/bitxor/count_ones/to_f64`) are inherited from `NumericElement`; `RealScalar` inherits from `FloatElement`. Leto keeps only `from_usize` and default-bodied slice kernels. No compatibility shims.
+
+- Downstream fallout remains consumer-owned: Apollo/Coeus code that explicitly names removed Leto UFCS items should import Eunomia traits directly.
+- Evidence: `rustup run nightly cargo check -p leto-ops --all-features`; `rustup run nightly cargo fmt --package leto-ops --check`; `rustup run nightly cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `rustup run nightly cargo nextest run -p leto-ops --all-features` (271/271 tests) pass. Clippy also reports the pre-existing upstream `hermes-simd-core::sparse::ValidatedData::new_unchecked` dead-code warning while exiting successfully for the `leto-ops` gate.
+
 ## Atlas in-house replacement roadmap — leto slice [arch]
 
 Cross-repo program to eliminate ndarray, nalgebra, rayon, tokio, std::simd, and
@@ -8,6 +15,151 @@ map: ndarray→leto, nalgebra→leto-ops linalg, rayon/tokio→moirai, std::simd
 burn→coeus, alloc→mnemosyne, capabilities→melinoe, GPU=wgpu+cuda-oxide behind
 coeus `ComputeBackend`. leto owns the CPU array substrate and stays CPU-only; GPU
 backends live in coeus/apollo and index leto-style host-side layout metadata.
+
+### Stage S0 — scalar SSOT audit
+
+- [x] [patch] Add the Atlas special-functions provider lane:
+  `leto_ops::{ErfOp,ErfcOp,LgammaOp}` over Eunomia `FloatElement`, with f64
+  value-semantic coverage against known `erf`/`erfc`/`lgamma` values. Driver:
+  Coeus exact GELU and `torch.special` parity surfaces.
+- [x] [major] Rebase `leto-ops::Scalar` and `RealScalar` onto Eunomia
+  supertraits instead of re-owning numeric constants, arithmetic/bit contracts,
+  finite predicates, and real transcendental methods. Leto keeps only
+  operation-local slice/SIMD hooks and `Scalar::from_usize`. Downstream fallout
+  stays in Apollo/Coeus: use `eunomia::NumericElement` /
+  `eunomia::FloatElement` directly for removed UFCS constants/constructors. No
+  Leto compatibility shims.
+- [x] [minor] Extend Eunomia's primitive numeric SSOT to `isize`/`usize`, then
+  re-enable the corresponding `leto-ops::Scalar` impls through the Eunomia
+  supertrait contract. Platform-sized scalar support remains upstream-owned; no
+  Leto compatibility shims.
+
+### Stage A0 — consumer-driven geometry and array surface
+
+- [x] [patch] Add the CFDrs sparse-extension CSR utility provider surface:
+  `CsrMatrix::diagonal`, `scale_values`, `scale_rows`, `scale_columns`,
+  `frobenius_norm`, `is_strictly_diagonally_dominant`, and
+  `condition_estimate`. Driver: CFDrs `SparseMatrixExt` can move remaining
+  CSR utility loops out of `cfd-math` and into Leto-owned CSR storage while
+  the downstream public sparse storage boundary is migrated separately.
+  Verification: provider fmt/check/clippy and focused sparse nextest (18/18),
+  plus downstream cfd-math fmt/check/focused sparse nextest/all-target clippy.
+- [x] [patch] Add the CFDrs AMG-driven CSR transpose provider surface:
+  `CsrMatrix::transpose()` constructs `A^T` with sorted CSR rows and no dense
+  materialization. Driver: CFDrs AMG restriction construction can move off
+  `nalgebra_sparse::transpose_as_csc` while preserving Leto-owned CSR
+  products. Verification: provider fmt/check/clippy/doc, focused sparse
+  nextest (16/16), and downstream cfd-math fmt/check/focused sparse+AMG
+  nextest/all-target clippy.
+- [x] [patch] Add the CFDrs AMG-driven CSR×CSR sparse product provider
+  surface: `leto_ops::spgemm` multiplies two CSR matrices through Leto-owned
+  row accumulation, exports the operation at crate root, and adds `CsrRow::nnz`
+  for sparse-pattern consumers. Driver: CFDrs AMG Galerkin products can move
+  off `nalgebra_sparse` instead of preserving a downstream sparse multiply.
+  Verification: provider fmt/check/clippy/doc and focused sparse nextest.
+- [x] [patch] Add CFDrs mesh-rotation provider support:
+  `FixedMatrix<T, 3, 3> * leto::geometry::Vector3<T>`. CFDrs uses this to move
+  `cfd-core::geometry::mesh` transforms from nalgebra `Matrix3`/`Vector3` to
+  Leto fixed geometry without a downstream helper. Verification: provider
+  fmt/check/clippy/full nextest (171/171), downstream cfd-core no-default
+  check/clippy/full nextest (201/201), and clean downstream mesh/staggered
+  provider scans.
+- [x] [patch] Add the CFDrs Domain-driven `Point1<T>` fixed geometry primitive,
+  conditional `Eq` derives for fixed geometry values, and serde feature
+  propagation for `std`/`alloc`. CFDrs uses this provider contract to migrate
+  `cfd-core::geometry::shapes::Domain` and boundary/domain geometry from
+  nalgebra point/vector/scalar contracts to Leto/Eunomia without a downstream
+  wrapper. Verification: provider fmt/check/clippy, full provider nextest
+  (170/170), downstream cfd-core no-default check/clippy, full downstream
+  cfd-core no-default nextest (201/201), and clean migrated-cone scans.
+- [x] [patch] Add the CFDrs state-driven owned-array serde provider surface.
+  `Array<T, S, N>`, `VecStorage<T>`, and `Layout<N>` now serialize and
+  deserialize without a downstream wrapper; array deserialization validates the
+  decoded layout against storage through `Array::new`. `Layout<N>` serde now
+  serializes shape/stride slices and validates decoded rank manually, so ranks
+  above serde's fixed-array impl limit compile without a downstream wrapper.
+  Verification: provider fmt, focused value-semantic serde nextest, provider
+  clippy, downstream `cfd-core` no-default check/clippy/state nextest, and the
+  Kwavers-driven rank-33 layout serde regression.
+- [x] [patch] Add the CFDrs FVM-driven `Vector2<T>` fixed geometry alias plus
+  generic fixed-vector norm and normalization methods so FVM face
+  centers/normals and velocity fields can use Leto geometry instead of
+  nalgebra `Vector2`. Verification: provider compile and focused
+  value-semantic nextest, downstream `cfd-2d` compile, and downstream focused
+  FVM nextest.
+- [x] [patch] Add CFDrs-driven Serde derives to fixed geometry value types
+  (`Point2`, `Point3`, `Vector3`, `UnitVector3`, and `Isometry3`) so serialized
+  consumer domain values can use Leto geometry directly instead of retaining
+  nalgebra or adding downstream wrapper types. Verification: provider
+  touched-file rustfmt, `cargo nextest run -p leto geometry`, and downstream
+  `cargo check -p cfd-core`.
+- [x] [patch] Add the Kwavers FWI-driven four-read-view mutable zip provider
+  surface (`leto_ops::zip3_mut_with`) so consumers can replace
+  `ndarray::Zip::from(out).and(a).and(b).and(c)` at the provider boundary.
+  Verification: dense fused second-difference and strided logical-order value
+  tests, no-default consumer-feature `cargo check`/clippy, and downstream
+  Kwavers FWI time-domain nextest.
+- [x] [patch] Add the Kwavers FWI-driven two-read-view reduction provider
+  surface (`leto_ops::zip_fold`) so consumers can replace two-array
+  `ndarray::Zip` reductions at the provider boundary instead of adding local
+  compatibility helpers. Verification: contiguous, strided logical-order, and
+  shape-mismatch value tests, no-default consumer-feature `cargo check`/clippy,
+  and downstream Kwavers FWI time-domain nextest.
+- [x] [patch] Add the Kwavers self-adjoint FWI-driven multi-read provider
+  surfaces (`leto_ops::zip5_mut_with` and `indexed_zip4_mut_with`) so consumers
+  can replace reconstructed/stored-history imaging-condition `ndarray::Zip`
+  paths at the provider boundary. Verification: contiguous, strided
+  logical-order, and logical-index value tests, no-default consumer-feature
+  `cargo check`/clippy, and downstream Kwavers FWI time-domain nextest.
+- [x] [patch] Add the Kwavers FWI-driven one-view indexed mutable provider
+  surface (`leto_ops::indexed_map_inplace`) so consumers can replace indexed
+  mutable test-helper traversals at the provider boundary. Verification:
+  logical-index value test, no-default consumer-feature `cargo check`/clippy,
+  and downstream Kwavers FWI time-domain nextest plus source audit.
+- [x] [patch] Add the Kwavers FWI-driven all-elements signed extrema provider
+  surface (`leto_ops::{min,max}`) so consumers can replace model-range
+  reductions at the provider boundary instead of adding downstream ndarray
+  helpers. Verification: contiguous, sliced logical-view, and empty-input error
+  value tests, no-default consumer-feature `cargo check`/clippy, and downstream
+  Kwavers FWI time-domain nextest.
+- [x] [patch] Add the Kwavers FWI-driven one-view indexed reduction provider
+  surface (`leto_ops::indexed_fold`) so consumers can replace
+  `indexed_iter().fold` reductions at the provider boundary instead of adding
+  downstream ndarray helpers. Verification: logical-index and strided
+  logical-order value tests, package `cargo check`, and downstream Kwavers FWI
+  time-domain nextest.
+- [x] [patch] Add the Kwavers MOFI-driven four-output indexed mutable provider
+  surface (`leto_ops::indexed_map4_inplace`) so consumers can fill related
+  model/Jacobian buffers in one provider-owned coordinate traversal instead of
+  adding downstream loops or helpers. Verification: logical-index multi-output
+  value test, package clippy, and downstream Kwavers MOFI nextest.
+- [x] [patch] Add the Kwavers FWI-driven Fortran-order indexed reduction
+  surface (`leto_ops::indexed_fold_fortran`) so consumers can preserve
+  recorder/source column-major row-order contracts at the provider boundary.
+  Verification: column-major logical-order value test, package clippy, and
+  downstream Kwavers FWI time-domain nextest.
+- [x] [patch] Add the Kwavers self-adjoint FWI-driven sparse coordinate mutable
+  provider surface (`leto_ops::coordinate_map_inplace`) plus the prevalidated
+  `CoordinateMapPlan` companion so consumers can inject source and residual
+  terms through provider-owned logical-coordinate traversal instead of
+  downstream coordinate loops. Verification: repeated-coordinate order,
+  out-of-bounds, and plan-layout-mismatch value tests, package check/clippy,
+  and downstream Kwavers self-adjoint/FWI time-domain nextest. Kwavers currently
+  consumes the direct sparse map path; planned consumption stays provider-ready
+  but unconsumed until its focused-test runtime is profiled below 30 s.
+- [x] [minor] Add the Gaia/Kwavers-driven fixed-vector, fixed-matrix, and small
+  geometry primitives (`Point3`, `Vector3`, `UnitVector3`, `Isometry3`) plus
+  the owned-array convenience methods required for Atlas consumers to replace
+  ndarray/nalgebra at the provider boundary. `FixedMatrix<T, 3, 3>::try_inverse`
+  now covers the tetrahedral-Jacobian inverse needed by Kwavers FEM geometry.
+  Verification: focused value tests for fixed/geometry primitives and array
+  indexing/fill/map/zip semantics; current inverse evidence is package
+  check/clippy plus `cargo nextest run -p leto fixed_matrix_inverse`.
+- [x] [patch] Add the Kwavers CPML-driven rank-1 `Array1` `usize` indexing and
+  owned-array `PartialEq`/`Eq` semantics so consumers can replace ndarray
+  `Array1` profile/factor storage at the provider boundary. Verification:
+  focused value tests for mutation, shape-sensitive equality, downstream
+  CPML/PSTD/PML nextest, and downstream boundary/GPU compile/lint gates.
 
 ### Stage A1 — nalgebra linalg completion (leto-ops `application/linalg/`)
 Each routine generic over `T: RealScalar`, native-precision accumulation (wider
@@ -196,7 +348,16 @@ no unmeasured "optimization" per performance_engineering.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
 - [x] [patch] `cargo test --all-features` is clean.
 - [x] [patch] `CowStorage` is available for Leto arrays that borrow read-only Apollo/Coeus inputs and clone only when mutable access is requested. Evidence tier: value-semantic tests assert pointer identity on read-only borrowed storage, source preservation after mutation, and owned-detach output values.
-- [ ] [patch] Full `cargo doc --no-deps` is blocked by a rustdoc internal compiler error in the `leto-python`/`numpy-0.23.0` documentation path. `cargo doc --no-deps -p leto -p leto-ops` passes.
+- [x] [patch] Full `cargo doc --workspace --all-features --no-deps` no longer
+  hits the `leto-python`/`numpy-0.23.0` rustdoc ICE. `leto-python` is a PyO3
+  extension boundary with no public Rust API, so its library target has
+  `doc = false`; Cargo still checks and tests the Rust crate, but rustdoc no
+  longer walks NumPy 0.23's broken intra-doc link path. Verification:
+  `cargo doc -p leto-python --all-features --no-deps`;
+  `cargo doc --workspace --all-features --no-deps`;
+  `cargo doc --no-deps`;
+  `cargo clippy -p leto-python --all-targets --all-features -- -D warnings`;
+  `cargo nextest run -p leto-python --all-features` (21 tests).
 
 ## Phase 1: Sound Core Layout and Storage [patch]
 - [x] Add ndarray-style slicing for full-axis selection, optional signed range bounds, negative indices, negative steps, integer axis removal, new-axis insertion, ellipsis expansion, and implicit trailing axes. Verification: three value-semantic tests over rank-preserving, rank-dropping, rank-adding, reverse, ellipsis, and implicit-tail cases.
@@ -245,11 +406,12 @@ no unmeasured "optimization" per performance_engineering.
 
 ## Phase 5: Python and Interop [minor]
 - [ ] Keep Python as a thin PyO3/NumPy boundary over Rust operations.
-- [ ] [patch] Resolve the reopened `numpy-0.23.0` rustdoc ICE in the Python FFI
-  documentation path. The prior NumPy 0.28/PyO3 0.28 update closed this gate,
-  but the current FFI alignment back to NumPy 0.23/PyO3 0.23 reopens it; full
-  workspace docs remain blocked while `cargo doc -p leto -p leto-ops
-  --all-features --no-deps` passes.
+- [x] [patch] Resolve the reopened `numpy-0.23.0` rustdoc ICE in the Python FFI
+  documentation path. `leto-python` is a PyO3 extension boundary, not a Rust
+  library API surface, so Cargo no longer invokes rustdoc for that target
+  (`doc = false`). Full workspace docs now complete without excluding
+  `leto-python`. Verification: package docs, full workspace docs, package
+  clippy, and package nextest all pass.
 - [x] Replace current Python result construction that clones through `Vec` after computation. Verification: `leto-python` now transfers owned `VecStorage` with `Array::into_vec()` and `PyArray1::from_vec`, then reshapes without the former `as_mut_slice().to_vec()` clone path.
 - [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 

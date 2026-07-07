@@ -1,40 +1,77 @@
 use crate::domain::strategy::{SimdOperations, SimdStrategy};
+use eunomia::NumericElement;
 use half::{bf16, f16};
 
-/// A trait representing scalar numeric types with native precision execution.
-pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
-    /// The zero value.
-    const ZERO: Self;
-    /// The one value.
-    const ONE: Self;
-
-    /// Scalar addition.
-    fn add(self, other: Self) -> Self;
-    /// Scalar subtraction.
-    fn sub(self, other: Self) -> Self;
-    /// Scalar multiplication.
-    fn mul(self, other: Self) -> Self;
-    /// Scalar division.
-    fn div(self, other: Self) -> Self;
+/// Leto operation scalar contract.
+///
+/// Eunomia owns the foundational numeric element contract: constants, primitive
+/// arithmetic traits, bit operations, finite/NaN predicates, and representation
+/// metadata. `Scalar` is the Leto operation extension over that SSOT. It keeps
+/// the slice-level CPU/SIMD hooks used by array kernels and the construction
+/// helper for dimension-derived scalar values.
+pub trait Scalar: NumericElement {
     /// Construct a scalar from a non-negative element count.
     fn from_usize(value: usize) -> Self;
 
     /// Element-wise slice addition: `out = a + b`.
-    fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]);
+    #[inline]
+    fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+            *o = x + y;
+        }
+    }
+
     /// Element-wise slice subtraction: `out = a - b`.
-    fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]);
+    #[inline]
+    fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+            *o = x - y;
+        }
+    }
+
     /// Element-wise slice multiplication: `out = a * b`.
-    fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]);
+    #[inline]
+    fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+            *o = x * y;
+        }
+    }
+
     /// Element-wise slice division: `out = a / b`.
-    fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]);
+    #[inline]
+    fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+            *o = x / y;
+        }
+    }
 
     /// Sum reduction over a slice.
-    fn sum_slice(s: &[Self]) -> Self;
+    #[inline]
+    fn sum_slice(s: &[Self]) -> Self {
+        s.iter()
+            .copied()
+            .fold(<Self as NumericElement>::ZERO, |acc, x| acc + x)
+    }
+
     /// Dot product reduction over two equal-length slices.
-    fn dot_slice(a: &[Self], b: &[Self]) -> Self;
+    #[inline]
+    fn dot_slice(a: &[Self], b: &[Self]) -> Self {
+        a.iter()
+            .copied()
+            .zip(b.iter().copied())
+            .fold(<Self as NumericElement>::ZERO, |acc, (x, y)| acc + x * y)
+    }
+
     /// Fused row update over equal-length slices: `out[i] += alpha * x[i]`.
-    fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]);
+    #[inline]
+    fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
+        for (o, &xv) in out.iter_mut().zip(x.iter()) {
+            *o += alpha * xv;
+        }
+    }
+
     /// Fused multi-row update: `out[row, i] += alphas[row] * x[i]`.
+    #[inline]
     fn axpy_rows(
         alphas: &[Self],
         x: &[Self],
@@ -45,8 +82,10 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     ) {
         scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
     }
+
     /// Fused batched multi-row update:
     /// `out[row, i] += sum_k alphas[k, row] * x_panel[k, i]`.
+    #[inline]
     fn axpy_rows_batch(
         alphas: &[Self],
         x_panel: &[Self],
@@ -58,9 +97,11 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     ) {
         scalar_axpy_rows_batch_fallback(alphas, x_panel, out, row_stride, rows, depth, cols);
     }
-    /// Register-blocked sub-matrix GEMV `y += A·x`: `A` row-major `nrows×ncols`
-    /// with row stride `lda ≥ ncols`. Accumulates into `y` (zero it first for
-    /// `y = A·x`). Default is the scalar fallback; SIMD types override it.
+
+    /// Register-blocked sub-matrix GEMV `y += A*x`.
+    ///
+    /// `A` is row-major `nrows x ncols` with row stride `lda >= ncols`.
+    /// Accumulates into `y`; zero it first for `y = A*x`.
     #[inline]
     fn gemv_strided(
         a: &[Self],
@@ -72,9 +113,10 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     ) {
         scalar_gemv_strided_fallback(a, x, y, nrows, ncols, lda);
     }
-    /// Register-blocked transposed sub-matrix GEMV `y += Aᵀ·x`: `A` row-major
-    /// `nrows×ncols` with row stride `lda ≥ ncols`. Accumulates into `y`.
-    /// Default is the scalar fallback; SIMD types override it.
+
+    /// Register-blocked transposed sub-matrix GEMV `y += A^T*x`.
+    ///
+    /// `A` is row-major `nrows x ncols` with row stride `lda >= ncols`.
     #[inline]
     fn gemv_transpose_strided(
         a: &[Self],
@@ -86,31 +128,47 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     ) {
         scalar_gemv_transpose_strided_fallback(a, x, y, nrows, ncols, lda);
     }
+
     /// Register-blocked tiled GEMM: `c += A * B`.
     #[inline]
     fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
         scalar_tiled_gemm_fallback(a, b, c, m, n, k);
     }
-    /// Min reduction over a slice.
-    fn min_slice(s: &[Self]) -> Self;
-    /// Max reduction over a slice.
-    fn max_slice(s: &[Self]) -> Self;
 
-    /// Bitwise AND.
-    fn bitand(self, other: Self) -> Self;
-    /// Bitwise OR.
-    fn bitor(self, other: Self) -> Self;
-    /// Bitwise XOR.
-    fn bitxor(self, other: Self) -> Self;
-    /// Population count.
-    fn count_ones(self) -> u32;
-    /// Convert self to f64.
-    fn to_f64(self) -> f64;
+    /// Min reduction over a slice.
+    #[inline]
+    fn min_slice(s: &[Self]) -> Self {
+        s.iter()
+            .copied()
+            .fold(<Self as NumericElement>::MAX_VALUE, |acc, x| {
+                if x < acc {
+                    x
+                } else {
+                    acc
+                }
+            })
+    }
+
+    /// Max reduction over a slice.
+    #[inline]
+    fn max_slice(s: &[Self]) -> Self {
+        s.iter()
+            .copied()
+            .fold(<Self as NumericElement>::MIN_VALUE, |acc, x| {
+                if x > acc {
+                    x
+                } else {
+                    acc
+                }
+            })
+    }
+
     /// Jaccard distance between two slices.
     #[inline]
     fn jaccard_distance(_a: &[Self], _b: &[Self]) -> Option<f64> {
         None
     }
+
     /// Hamming distance between two slices.
     #[inline]
     fn hamming_distance(_a: &[Self], _b: &[Self]) -> Option<u64> {
@@ -118,614 +176,257 @@ pub trait Scalar: Copy + Send + Sync + PartialEq + PartialOrd + 'static {
     }
 }
 
-// Helper macros for implementing Scalar for native and half types
-macro_rules! impl_scalar_native {
+macro_rules! impl_scalar_simd {
     ($t:ty) => {
         impl Scalar for $t {
-            const ZERO: Self = 0.0;
-            const ONE: Self = 1.0;
-
-            #[inline(always)]
-            fn add(self, other: Self) -> Self {
-                self + other
-            }
-            #[inline(always)]
-            fn sub(self, other: Self) -> Self {
-                self - other
-            }
-            #[inline(always)]
-            fn mul(self, other: Self) -> Self {
-                self * other
-            }
-            #[inline(always)]
-            fn div(self, other: Self) -> Self {
-                self / other
-            }
             #[inline(always)]
             fn from_usize(value: usize) -> Self {
                 value as $t
             }
 
-            #[inline(always)]
-            fn bitand(self, other: Self) -> Self {
-                Self::from_bits(self.to_bits() & other.to_bits())
+            #[inline]
+            fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::add_slice(a, b, out).is_ok() {
+                    return;
+                }
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x + y;
+                }
             }
-            #[inline(always)]
-            fn bitor(self, other: Self) -> Self {
-                Self::from_bits(self.to_bits() | other.to_bits())
+
+            #[inline]
+            fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::sub_slice(a, b, out).is_ok() {
+                    return;
+                }
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x - y;
+                }
             }
-            #[inline(always)]
-            fn bitxor(self, other: Self) -> Self {
-                Self::from_bits(self.to_bits() ^ other.to_bits())
+
+            #[inline]
+            fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::mul_slice(a, b, out).is_ok() {
+                    return;
+                }
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x * y;
+                }
             }
-            #[inline(always)]
-            fn count_ones(self) -> u32 {
-                self.to_bits().count_ones()
+
+            #[inline]
+            fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::div_slice(a, b, out).is_ok() {
+                    return;
+                }
+                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
+                    *o = x / y;
+                }
             }
-            #[inline(always)]
-            fn to_f64(self) -> f64 {
-                self as f64
+
+            #[inline]
+            fn sum_slice(s: &[Self]) -> Self {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::sum_slice(s) {
+                    res
+                } else {
+                    s.iter()
+                        .copied()
+                        .fold(<Self as NumericElement>::ZERO, |acc, x| acc + x)
+                }
             }
+
+            #[inline]
+            fn dot_slice(a: &[Self], b: &[Self]) -> Self {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::dot_slice(a, b) {
+                    res
+                } else {
+                    a.iter()
+                        .copied()
+                        .zip(b.iter().copied())
+                        .fold(<Self as NumericElement>::ZERO, |acc, (x, y)| acc + x * y)
+                }
+            }
+
+            #[inline]
+            fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_slice(alpha, x, out).is_ok() {
+                    return;
+                }
+                for (o, &xv) in out.iter_mut().zip(x.iter()) {
+                    *o += alpha * xv;
+                }
+            }
+
+            #[inline]
+            fn axpy_rows(
+                alphas: &[Self],
+                x: &[Self],
+                out: &mut [Self],
+                row_stride: usize,
+                rows: usize,
+                cols: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_rows(
+                    alphas, x, out, row_stride, rows, cols,
+                )
+                .is_ok()
+                {
+                    return;
+                }
+                scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
+            }
+
+            #[inline]
+            fn axpy_rows_batch(
+                alphas: &[Self],
+                x_panel: &[Self],
+                out: &mut [Self],
+                row_stride: usize,
+                rows: usize,
+                depth: usize,
+                cols: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::axpy_rows_batch(
+                    alphas, x_panel, out, row_stride, rows, depth, cols,
+                )
+                .is_ok()
+                {
+                    return;
+                }
+                scalar_axpy_rows_batch_fallback(
+                    alphas, x_panel, out, row_stride, rows, depth, cols,
+                );
+            }
+
+            #[inline]
+            fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
+                if <SimdStrategy as SimdOperations<Self>>::tiled_gemm(a, b, c, m, n, k).is_ok() {
+                    return;
+                }
+                scalar_tiled_gemm_fallback(a, b, c, m, n, k);
+            }
+
+            #[inline]
+            fn gemv_strided(
+                a: &[Self],
+                x: &[Self],
+                y: &mut [Self],
+                nrows: usize,
+                ncols: usize,
+                lda: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::gemv_strided(a, x, y, nrows, ncols, lda)
+                    .is_ok()
+                {
+                    return;
+                }
+                scalar_gemv_strided_fallback(a, x, y, nrows, ncols, lda);
+            }
+
+            #[inline]
+            fn gemv_transpose_strided(
+                a: &[Self],
+                x: &[Self],
+                y: &mut [Self],
+                nrows: usize,
+                ncols: usize,
+                lda: usize,
+            ) {
+                if <SimdStrategy as SimdOperations<Self>>::gemv_transpose_strided(
+                    a, x, y, nrows, ncols, lda,
+                )
+                .is_ok()
+                {
+                    return;
+                }
+                scalar_gemv_transpose_strided_fallback(a, x, y, nrows, ncols, lda);
+            }
+
+            #[inline]
+            fn min_slice(s: &[Self]) -> Self {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
+                    res
+                } else {
+                    s.iter()
+                        .copied()
+                        .fold(<Self as NumericElement>::MAX_VALUE, |acc, x| {
+                            if x < acc {
+                                x
+                            } else {
+                                acc
+                            }
+                        })
+                }
+            }
+
+            #[inline]
+            fn max_slice(s: &[Self]) -> Self {
+                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::max_slice(s) {
+                    res
+                } else {
+                    s.iter()
+                        .copied()
+                        .fold(<Self as NumericElement>::MIN_VALUE, |acc, x| {
+                            if x > acc {
+                                x
+                            } else {
+                                acc
+                            }
+                        })
+                }
+            }
+
             #[inline]
             fn jaccard_distance(a: &[Self], b: &[Self]) -> Option<f64> {
                 <SimdStrategy as SimdOperations<Self>>::jaccard_distance(a, b)
             }
+
             #[inline]
             fn hamming_distance(a: &[Self], b: &[Self]) -> Option<u64> {
                 <SimdStrategy as SimdOperations<Self>>::hamming_distance(a, b)
             }
-
-            #[inline]
-            fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::add_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x + y;
-                }
-            }
-
-            #[inline]
-            fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::sub_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x - y;
-                }
-            }
-
-            #[inline]
-            fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::mul_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x * y;
-                }
-            }
-
-            #[inline]
-            fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::div_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x / y;
-                }
-            }
-
-            #[inline]
-            fn sum_slice(s: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::sum_slice(s) {
-                    res
-                } else {
-                    s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
-                }
-            }
-
-            #[inline]
-            fn dot_slice(a: &[Self], b: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::dot_slice(a, b) {
-                    res
-                } else {
-                    a.iter()
-                        .copied()
-                        .zip(b.iter().copied())
-                        .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
-                }
-            }
-
-            #[inline]
-            fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::axpy_slice(alpha, x, out).is_ok() {
-                    return;
-                }
-                for (o, &xv) in out.iter_mut().zip(x.iter()) {
-                    *o += alpha * xv;
-                }
-            }
-
-            #[inline]
-            fn axpy_rows(
-                alphas: &[Self],
-                x: &[Self],
-                out: &mut [Self],
-                row_stride: usize,
-                rows: usize,
-                cols: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::axpy_rows(
-                    alphas, x, out, row_stride, rows, cols,
-                )
-                .is_ok()
-                {
-                    return;
-                }
-                scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
-            }
-
-            #[inline]
-            fn axpy_rows_batch(
-                alphas: &[Self],
-                x_panel: &[Self],
-                out: &mut [Self],
-                row_stride: usize,
-                rows: usize,
-                depth: usize,
-                cols: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::axpy_rows_batch(
-                    alphas, x_panel, out, row_stride, rows, depth, cols,
-                )
-                .is_ok()
-                {
-                    return;
-                }
-                scalar_axpy_rows_batch_fallback(
-                    alphas, x_panel, out, row_stride, rows, depth, cols,
-                );
-            }
-
-            #[inline]
-            fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
-                if <SimdStrategy as SimdOperations<Self>>::tiled_gemm(a, b, c, m, n, k).is_ok() {
-                    return;
-                }
-                scalar_tiled_gemm_fallback(a, b, c, m, n, k);
-            }
-            #[inline]
-            fn gemv_strided(
-                a: &[Self],
-                x: &[Self],
-                y: &mut [Self],
-                nrows: usize,
-                ncols: usize,
-                lda: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::gemv_strided(a, x, y, nrows, ncols, lda)
-                    .is_ok()
-                {
-                    return;
-                }
-                scalar_gemv_strided_fallback(a, x, y, nrows, ncols, lda);
-            }
-
-            #[inline]
-            fn gemv_transpose_strided(
-                a: &[Self],
-                x: &[Self],
-                y: &mut [Self],
-                nrows: usize,
-                ncols: usize,
-                lda: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::gemv_transpose_strided(
-                    a, x, y, nrows, ncols, lda,
-                )
-                .is_ok()
-                {
-                    return;
-                }
-                scalar_gemv_transpose_strided_fallback(a, x, y, nrows, ncols, lda);
-            }
-
-            #[inline]
-            fn min_slice(s: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
-                    res
-                } else {
-                    s.iter()
-                        .copied()
-                        .fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
-                }
-            }
-
-            #[inline]
-            fn max_slice(s: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::max_slice(s) {
-                    res
-                } else {
-                    s.iter()
-                        .copied()
-                        .fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
-                }
-            }
         }
     };
 }
 
-macro_rules! impl_scalar_half {
+macro_rules! impl_scalar_plain {
     ($t:ty) => {
         impl Scalar for $t {
-            const ZERO: Self = Self::ZERO;
-            const ONE: Self = Self::ONE;
-
-            #[inline(always)]
-            fn add(self, other: Self) -> Self {
-                self + other
-            }
-            #[inline(always)]
-            fn sub(self, other: Self) -> Self {
-                self - other
-            }
-            #[inline(always)]
-            fn mul(self, other: Self) -> Self {
-                self * other
-            }
-            #[inline(always)]
-            fn div(self, other: Self) -> Self {
-                self / other
-            }
-            #[inline(always)]
-            fn from_usize(value: usize) -> Self {
-                Self::from_f32(value as f32)
-            }
-
-            #[inline(always)]
-            fn bitand(self, other: Self) -> Self {
-                Self::from_bits(self.to_bits() & other.to_bits())
-            }
-            #[inline(always)]
-            fn bitor(self, other: Self) -> Self {
-                Self::from_bits(self.to_bits() | other.to_bits())
-            }
-            #[inline(always)]
-            fn bitxor(self, other: Self) -> Self {
-                Self::from_bits(self.to_bits() ^ other.to_bits())
-            }
-            #[inline(always)]
-            fn count_ones(self) -> u32 {
-                self.to_bits().count_ones()
-            }
-            #[inline(always)]
-            fn to_f64(self) -> f64 {
-                self.to_f64()
-            }
-
-            #[inline]
-            fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::add_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x + y;
-                }
-            }
-
-            #[inline]
-            fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::sub_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x - y;
-                }
-            }
-
-            #[inline]
-            fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::mul_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x * y;
-                }
-            }
-
-            #[inline]
-            fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::div_slice(a, b, out).is_ok() {
-                    return;
-                }
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x / y;
-                }
-            }
-
-            #[inline]
-            fn sum_slice(s: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::sum_slice(s) {
-                    res
-                } else {
-                    s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
-                }
-            }
-
-            #[inline]
-            fn dot_slice(a: &[Self], b: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::dot_slice(a, b) {
-                    res
-                } else {
-                    a.iter()
-                        .copied()
-                        .zip(b.iter().copied())
-                        .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
-                }
-            }
-
-            #[inline]
-            fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
-                if <SimdStrategy as SimdOperations<Self>>::axpy_slice(alpha, x, out).is_ok() {
-                    return;
-                }
-                for (o, &xv) in out.iter_mut().zip(x.iter()) {
-                    *o += alpha * xv;
-                }
-            }
-
-            #[inline]
-            fn axpy_rows(
-                alphas: &[Self],
-                x: &[Self],
-                out: &mut [Self],
-                row_stride: usize,
-                rows: usize,
-                cols: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::axpy_rows(
-                    alphas, x, out, row_stride, rows, cols,
-                )
-                .is_ok()
-                {
-                    return;
-                }
-                scalar_axpy_rows_fallback(alphas, x, out, row_stride, rows, cols);
-            }
-
-            #[inline]
-            fn axpy_rows_batch(
-                alphas: &[Self],
-                x_panel: &[Self],
-                out: &mut [Self],
-                row_stride: usize,
-                rows: usize,
-                depth: usize,
-                cols: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::axpy_rows_batch(
-                    alphas, x_panel, out, row_stride, rows, depth, cols,
-                )
-                .is_ok()
-                {
-                    return;
-                }
-                scalar_axpy_rows_batch_fallback(
-                    alphas, x_panel, out, row_stride, rows, depth, cols,
-                );
-            }
-
-            #[inline]
-            fn tiled_gemm(a: &[Self], b: &[Self], c: &mut [Self], m: usize, n: usize, k: usize) {
-                if <SimdStrategy as SimdOperations<Self>>::tiled_gemm(a, b, c, m, n, k).is_ok() {
-                    return;
-                }
-                scalar_tiled_gemm_fallback(a, b, c, m, n, k);
-            }
-            #[inline]
-            fn gemv_strided(
-                a: &[Self],
-                x: &[Self],
-                y: &mut [Self],
-                nrows: usize,
-                ncols: usize,
-                lda: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::gemv_strided(a, x, y, nrows, ncols, lda)
-                    .is_ok()
-                {
-                    return;
-                }
-                scalar_gemv_strided_fallback(a, x, y, nrows, ncols, lda);
-            }
-
-            #[inline]
-            fn gemv_transpose_strided(
-                a: &[Self],
-                x: &[Self],
-                y: &mut [Self],
-                nrows: usize,
-                ncols: usize,
-                lda: usize,
-            ) {
-                if <SimdStrategy as SimdOperations<Self>>::gemv_transpose_strided(
-                    a, x, y, nrows, ncols, lda,
-                )
-                .is_ok()
-                {
-                    return;
-                }
-                scalar_gemv_transpose_strided_fallback(a, x, y, nrows, ncols, lda);
-            }
-
-            #[inline]
-            fn min_slice(s: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
-                    res
-                } else {
-                    s.iter()
-                        .copied()
-                        .fold(Self::INFINITY, |acc, x| if x < acc { x } else { acc })
-                }
-            }
-
-            #[inline]
-            fn max_slice(s: &[Self]) -> Self {
-                if let Some(res) = <SimdStrategy as SimdOperations<Self>>::max_slice(s) {
-                    res
-                } else {
-                    s.iter()
-                        .copied()
-                        .fold(Self::NEG_INFINITY, |acc, x| if x > acc { x } else { acc })
-                }
-            }
-        }
-    };
-}
-
-impl_scalar_native!(f32);
-impl_scalar_native!(f64);
-impl_scalar_half!(f16);
-impl_scalar_half!(bf16);
-
-macro_rules! impl_scalar_int {
-    ($t:ty) => {
-        impl Scalar for $t {
-            const ZERO: Self = 0;
-            const ONE: Self = 1;
-
-            #[inline(always)]
-            fn add(self, other: Self) -> Self {
-                self + other
-            }
-            #[inline(always)]
-            fn sub(self, other: Self) -> Self {
-                self - other
-            }
-            #[inline(always)]
-            fn mul(self, other: Self) -> Self {
-                self * other
-            }
-            #[inline(always)]
-            fn div(self, other: Self) -> Self {
-                self / other
-            }
             #[inline(always)]
             fn from_usize(value: usize) -> Self {
                 value as $t
             }
-
-            #[inline(always)]
-            fn bitand(self, other: Self) -> Self {
-                self & other
-            }
-            #[inline(always)]
-            fn bitor(self, other: Self) -> Self {
-                self | other
-            }
-            #[inline(always)]
-            fn bitxor(self, other: Self) -> Self {
-                self ^ other
-            }
-            #[inline(always)]
-            fn count_ones(self) -> u32 {
-                (self).count_ones()
-            }
-            #[inline(always)]
-            fn to_f64(self) -> f64 {
-                self as f64
-            }
-
-            #[inline]
-            fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x + y;
-                }
-            }
-
-            #[inline]
-            fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x - y;
-                }
-            }
-
-            #[inline]
-            fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x * y;
-                }
-            }
-
-            #[inline]
-            fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
-                for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
-                    *o = x / y;
-                }
-            }
-
-            #[inline]
-            fn sum_slice(s: &[Self]) -> Self {
-                s.iter().copied().fold(Self::ZERO, |acc, x| acc + x)
-            }
-
-            #[inline]
-            fn dot_slice(a: &[Self], b: &[Self]) -> Self {
-                a.iter()
-                    .copied()
-                    .zip(b.iter().copied())
-                    .fold(Self::ZERO, |acc, (x, y)| acc + x * y)
-            }
-
-            #[inline]
-            fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
-                for (o, &xv) in out.iter_mut().zip(x.iter()) {
-                    *o += alpha * xv;
-                }
-            }
-
-            #[inline]
-            fn axpy_rows_batch(
-                alphas: &[Self],
-                x_panel: &[Self],
-                out: &mut [Self],
-                row_stride: usize,
-                rows: usize,
-                depth: usize,
-                cols: usize,
-            ) {
-                scalar_axpy_rows_batch_fallback(
-                    alphas, x_panel, out, row_stride, rows, depth, cols,
-                );
-            }
-
-            #[inline]
-            fn min_slice(s: &[Self]) -> Self {
-                s.iter()
-                    .copied()
-                    .fold(Self::MAX, |acc, x| if x < acc { x } else { acc })
-            }
-
-            #[inline]
-            fn max_slice(s: &[Self]) -> Self {
-                s.iter()
-                    .copied()
-                    .fold(Self::MIN, |acc, x| if x > acc { x } else { acc })
-            }
         }
     };
 }
 
-impl_scalar_int!(i8);
-impl_scalar_int!(u8);
-impl_scalar_int!(i16);
-impl_scalar_int!(u16);
-impl_scalar_int!(i32);
-impl_scalar_int!(u32);
-impl_scalar_int!(i64);
-impl_scalar_int!(u64);
-impl_scalar_int!(isize);
-impl_scalar_int!(usize);
+impl_scalar_simd!(f32);
+impl_scalar_simd!(f64);
+
+impl Scalar for f16 {
+    #[inline(always)]
+    fn from_usize(value: usize) -> Self {
+        Self::from_f32(value as f32)
+    }
+}
+
+impl Scalar for bf16 {
+    #[inline(always)]
+    fn from_usize(value: usize) -> Self {
+        Self::from_f32(value as f32)
+    }
+}
+
+impl_scalar_plain!(i8);
+impl_scalar_plain!(u8);
+impl_scalar_plain!(i16);
+impl_scalar_plain!(u16);
+impl_scalar_plain!(i32);
+impl_scalar_plain!(u32);
+impl_scalar_plain!(i64);
+impl_scalar_plain!(u64);
+impl_scalar_plain!(isize);
+impl_scalar_plain!(usize);
 
 #[inline]
 fn scalar_axpy_rows_fallback<T: Scalar>(
@@ -795,8 +496,8 @@ fn scalar_axpy_rows_batch_fallback<T: Scalar>(
     }
 }
 
-/// Scalar fallback for [`Scalar::gemv_strided`]: `y[r] += Σ_c a[r·lda + c]·x[c]`
-/// over the `nrows × ncols` row-major sub-matrix (`lda ≥ ncols`).
+/// Scalar fallback for [`Scalar::gemv_strided`]: `y[r] += sum_c a[r*lda + c]*x[c]`
+/// over the `nrows x ncols` row-major sub-matrix (`lda >= ncols`).
 #[inline]
 fn scalar_gemv_strided_fallback<T: Scalar>(
     a: &[T],
@@ -819,7 +520,7 @@ fn scalar_gemv_strided_fallback<T: Scalar>(
     }
     for (r, yr) in y.iter_mut().enumerate().take(nrows) {
         let row = &a[r * lda..r * lda + ncols];
-        let mut acc = T::ZERO;
+        let mut acc = <T as NumericElement>::ZERO;
         for (&av, &xv) in row.iter().zip(x.iter()) {
             acc = acc.add(av.mul(xv));
         }
@@ -828,8 +529,8 @@ fn scalar_gemv_strided_fallback<T: Scalar>(
 }
 
 /// Scalar fallback for [`Scalar::gemv_transpose_strided`]:
-/// `y[c] += Σ_r a[r·lda + c]·x[r]` over the `nrows × ncols` row-major
-/// sub-matrix (`lda ≥ ncols`) — i.e. `y += Aᵀ·x`.
+/// `y[c] += sum_r a[r*lda + c]*x[r]` over the `nrows x ncols` row-major
+/// sub-matrix (`lda >= ncols`).
 #[inline]
 fn scalar_gemv_transpose_strided_fallback<T: Scalar>(
     a: &[T],
@@ -876,7 +577,7 @@ fn scalar_tiled_gemm_fallback<T: Scalar>(
     for r in 0..m {
         for kk in 0..k {
             let a_val = a[r * k + kk];
-            if a_val == T::ZERO {
+            if a_val == <T as NumericElement>::ZERO {
                 continue;
             }
             for col in 0..n {

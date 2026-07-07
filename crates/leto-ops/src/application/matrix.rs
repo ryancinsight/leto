@@ -159,6 +159,7 @@ fn copy_back_to_out<T: Scalar>(
 /// sparse `spmm` kernel. Otherwise, it executes the optimized dense `matmul` logic,
 /// which uses an `i-k-j` loop order for locality, row-blocks dense rows to reuse
 /// RHS values, and dispatches parallel tasks when `parallel` is enabled.
+#[cfg(feature = "parallel")]
 #[inline]
 fn is_parallel_beneficial(layout: MatmulLayout) -> bool {
     layout.rows * layout.cols * layout.shared >= 262_144 && layout.rows >= 64
@@ -201,6 +202,7 @@ fn serial_dot_matmul<T: Scalar>(
 /// vs one-task-per-row, and ensures each task writes to a contiguous output
 /// region of at least `PARALLEL_ROW_BLOCK * n * size_of::<T>()` bytes — large
 /// enough to avoid false sharing for any practical `n`.
+#[cfg(feature = "parallel")]
 const PARALLEL_ROW_BLOCK: usize = 4;
 
 #[cfg(feature = "parallel")]
@@ -414,6 +416,8 @@ fn route_matmul<T: Scalar>(
     accumulate: bool,
 ) -> Result<()> {
     let layout = validate_matmul(lhs, rhs, out)?;
+    #[cfg(not(feature = "parallel"))]
+    let _ = layout;
 
     // Fast-path selection uses offset-independent dense predicates: the dot/cc/
     // outer kernels address every operand through its layout's own `offset`, so

@@ -6,24 +6,22 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
-### Fixed
-
-- `leto-ops` [patch]: fixed bidiagonalization factor accumulation for returned
-  `U`/`V` matrices. The panel scratch stores each reflector contiguously
-  (reflector-major), while the compact-WY right-apply path read it as a row-major
-  `dim × count` panel, producing non-orthogonal factors on the tall
-  bidiagonalization contract. Returned factors now apply those reflector-major
-  panel slices sequentially, restoring the documented `A = U B V^T` contract.
-
 ### Changed
 
-- `leto-ops` [patch]: rank-2 row-major axis-0 reductions now use a contiguous
-  CPU fast path for keep-dim row-major outputs. The fast path traverses input
-  rows in storage order and accumulates all output columns, avoiding generic
-  flat-index reconstruction, `offset_of` per output column, and per-column
-  strided walks while preserving the existing generic strided/transposed
-  fallback.
-
+- `leto-ops` [major]: rebased `Scalar` on `eunomia::NumericElement` and
+  `RealScalar` on `eunomia::FloatElement`. Eunomia now owns numeric constants,
+  primitive arithmetic/bit contracts, finite predicates, and real
+  transcendental functions; Leto keeps only its operation-local slice/SIMD
+  kernel hooks plus `Scalar::from_usize`. `isize` and `usize` scalar impls remain
+  available through Eunomia's platform-sized `NumericElement` impls, not through
+  Leto-local compatibility code. **Breaking**: downstream UFCS calls to
+  removed Leto-owned associated items such as `<T as leto_ops::Scalar>::ZERO`,
+  `<T as leto_ops::Scalar>::ONE`, or
+  `<T as leto_ops::RealScalar>::from_f64` must use
+  `eunomia::NumericElement` / `eunomia::FloatElement` directly. Leto does not
+  provide compatibility aliases or forwarding shims. Verified with
+  `leto-ops` check, fmt, clippy, and 271-test all-features nextest package
+  gates.
 - `leto-ops` [minor]: removed the `simd` cargo feature; `hermes-simd` is now an
   unconditional dependency. SIMD is not a build-time toggle — Hermes already
   runtime-dispatches AVX-512/AVX2/NEON with a scalar fallback (CPUID), so it is
@@ -34,16 +32,112 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   anyone selecting `--features simd` / `--no-default-features` expecting the flag;
   default builds are unaffected (it was a default feature).
 
+### Fixed
+
+- `leto-python` [patch]: marked the PyO3 extension library as not
+  rustdoc-documented (`doc = false`). The crate still builds as `cdylib`/`rlib`
+  and remains covered by clippy and nextest, while full workspace docs no
+  longer hit the `numpy 0.23.0` rustdoc ICE from NumPy's intra-doc links.
+- `leto` [patch]: replaced the const-rank `Layout<N>` Serde derive with a
+  manual implementation that serializes shape/stride slices and validates rank
+  on deserialization. This closes the Kwavers consumer build gap for ranks
+  above Serde's fixed-array implementations without adding a downstream
+  wrapper.
+
 ### Added
 
-- `leto` [patch]: added `FixedVector::iter`, `FixedMatrix::iter`, and 3-D
-  `FixedMatrix<f64, 3, 3>` row-major/column-major constructors and extractors.
-  The driver is RITK's `ritk-spatial` storage migration off nalgebra.
-- `leto` [minor]: added stack-backed `FixedVector<T, N>` and
-  `FixedMatrix<T, R, C>` primitives for small fixed-size math that should not use
-  heap-backed strided arrays. The initial consumer is RITK classical registration:
-  rigid/affine perturbation and Kabsch/FRE math can move off `nalgebra` while
-  keeping 3-D vectors and matrices stack-local.
+- `leto-ops` [patch]: added CSR utility methods on `CsrMatrix` for diagonal
+  extraction, scalar/value scaling, row scaling, column scaling, Frobenius
+  norm, strict diagonal dominance, and a diagonal-dominance condition estimate.
+  CFDrs consumes these to remove downstream sparse-extension CSR traversal
+  loops while its public sparse storage boundary migrates separately.
+- `leto-ops` [patch]: added `CsrMatrix::transpose()` for sorted CSR
+  transposition without dense materialization. CFDrs AMG uses this provider
+  contract to construct restriction operators (`R = P^T`) without
+  `nalgebra_sparse::transpose_as_csc`.
+- `leto-ops` [patch]: added `spgemm`, a CSR×CSR sparse matrix product with
+  sorted output rows and exact-zero cancellation removal, plus `CsrRow::nnz`.
+  CFDrs AMG can use this provider contract to replace `nalgebra_sparse`
+  Galerkin products without a downstream sparse multiply.
+- `leto` [patch]: added `FixedMatrix<T, 3, 3> * geometry::Vector3<T>` so
+  consumers can replace nalgebra fixed matrix/vector transforms with
+  Leto-owned fixed geometry. CFDrs uses this for
+  `cfd-core::geometry::mesh::MeshOperations::rotate`.
+- `leto` [patch]: added `geometry::Point1<T>` plus conditional `Eq` derives for
+  fixed geometry values, and wired Leto `std`/`alloc` features through to
+  serde. CFDrs uses this provider contract to migrate
+  `cfd-core::geometry::shapes::Domain` and the dependent boundary/domain
+  contract from nalgebra point/vector/scalar types to Leto/Eunomia.
+- `leto` [patch]: added serde support for owned arrays/storage
+  (`Array<T, S, N>`, `VecStorage<T>`, and `Layout<N>`). `Array`
+  deserialization validates decoded layout/storage bounds through `Array::new`.
+  CFDrs uses this provider contract to replace serialized nalgebra `DVector`
+  state with `leto::Array1` without adding a downstream wrapper.
+- `leto` [patch]: added `geometry::Vector2<T>` plus generic fixed-vector
+  `norm_squared`, `norm`, `try_normalize`, and `normalize` methods. CFDrs FVM
+  uses this provider contract to replace nalgebra `Vector2` face geometry and
+  velocity-field storage.
+- `leto` [patch]: added Serde derives for fixed geometry value types
+  (`Point2`, `Point3`, `Vector3`, `UnitVector3`, and `Isometry3`). CFDrs uses
+  this provider contract to replace serialized nalgebra `Vector3` velocity
+  storage without adding a downstream compatibility wrapper.
+- `leto-ops` [patch]: added named special-function unary markers
+  `ErfOp`, `ErfcOp`, and `LgammaOp` over the Eunomia-backed `RealScalar`
+  surface. These provide the provider-side elementwise lane consumed by Coeus
+  for exact GELU and `torch.special`-style parity surfaces.
+- `leto-ops` [patch]: added `zip3_mut_with`, a mutable zip traversal over one
+  output view and three read-only input views. The Kwavers FWI pressure
+  second-derivative stencil uses this provider API to replace
+  `ndarray::Zip::from(out).and(a).and(b).and(c)` without a downstream adapter.
+- `leto-ops` [patch]: added `zip_fold`, a two-read-view reduction traversal.
+  Kwavers FWI uses it for relative model-change accumulation instead of adding
+  a downstream ndarray-to-Leto helper.
+- `leto-ops` [patch]: added `zip5_mut_with` and `indexed_zip4_mut_with`.
+  Kwavers FWI uses these provider APIs for self-adjoint reconstructed and
+  stored-history imaging-condition zips instead of keeping local ndarray
+  traversal code.
+- `leto-ops` [patch]: added `indexed_map_inplace`, a one-view indexed mutable
+  traversal. Kwavers FWI uses it for the self-adjoint sponge builder, closing
+  the last FWI time-domain `ndarray::Zip` call site without a downstream helper.
+- `leto-ops` [patch]: added checked all-elements extrema reductions
+  `min`/`max` through the shared reduction marker path. Kwavers FWI uses them
+  for model-range reductions instead of adding a downstream ndarray-to-Leto
+  helper.
+- `leto-ops` [patch]: added `indexed_fold`, a one-view indexed reduction
+  traversal. Kwavers FWI uses it for adjoint-gradient peak logging instead of
+  keeping an `indexed_iter().fold` ndarray reduction after provider-owned
+  gradient construction.
+- `leto-ops` [patch]: added `indexed_map4_inplace`, a four-mutable-output
+  indexed traversal. Kwavers MOFI uses it to fill rigid transform model and
+  parameter-Jacobian buffers in one provider-owned pass instead of keeping a
+  downstream coordinate loop.
+- `leto-ops` [patch]: added `indexed_fold_fortran`, a one-view indexed
+  reduction in logical Fortran/column-major order. Kwavers FWI uses it for
+  recorder/source voxel-list construction where the row order is part of the
+  numerical contract.
+- `leto-ops` [patch]: added `coordinate_map_inplace`, a sparse logical
+  coordinate mutable traversal. Kwavers self-adjoint FWI uses it for source
+  injection instead of keeping downstream coordinate loops.
+- `leto-ops` [patch]: added `CoordinateMapPlan`, `coordinate_map_plan`, and
+  `coordinate_map_plan_inplace` for repeated sparse-coordinate mutation against
+  a prevalidated view layout. The provider surface is verified with
+  repeated-coordinate and layout-mismatch value tests; Kwavers remains on direct
+  `coordinate_map_inplace` until planned consumption profiles below the 30 s
+  focused-test budget.
+- `leto` [minor]: added the Gaia/Kwavers-driven fixed-vector, fixed-matrix, and
+  small geometry surface (`Point3`, `Vector3`, `UnitVector3`, `Isometry3`) so
+  Atlas consumers can replace local nalgebra geometry edges through the provider
+  crate instead of downstream helpers.
+- `leto` [patch]: added rank-1 `Array1` indexing by `usize` and owned-array
+  `PartialEq`/`Eq` value semantics. Kwavers CPML profile storage uses this
+  provider contract to replace ndarray `Array1` without a downstream helper.
+- `leto` [patch]: added `FixedMatrix<T, 3, 3>::try_inverse(min_abs_det)` for
+  Gaia/Kwavers FEM tetrahedral Jacobian inversion. The inverse rejects non-finite
+  or near-singular determinants and is covered by identity reconstruction and
+  singular-matrix value tests.
+- `leto` [minor]: added owned-array migration conveniences used by current Atlas
+  consumers: mutable contiguous slice access, memory-order mutable slice access,
+  `mapv`, `zip_map`, `fill`, `assign`, and `[usize; N]` indexing.
 - `leto` [minor]: offset-independent dense-stride predicates `Layout::is_f_dense`
   and `is_c_dense`/`is_f_dense` on `ArrayView`/`ArrayViewMut` (the offset-free
   halves of `is_c_contiguous`/`is_f_contiguous`). They let kernels that address
@@ -145,6 +239,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- `leto-ops` [patch]: synchronized the trace/rank/Kronecker public surface by
+  re-exporting the new kernels and fluent traits through `leto_ops::application`,
+  adding free-function doctests, and extending the properties differential tests
+  to cover `rank_with_tolerance`, exact non-square trace errors, and
+  crate-root-vs-application export parity.
 - `leto-ops` [patch]: eliminated an aliasing-UB hazard in `batched_matmul`'s
   parallel path. Each batch task materialized `from_raw_parts_mut(out_ptr,
   out_len)` over the **full** output buffer and wrote only its batch sub-region;
@@ -165,15 +264,24 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Validation
 
-- `cargo fmt -p leto-ops --check`
-- `cargo clippy -p leto-ops --all-targets -- -D warnings`
-- `cargo fmt --package leto-ops --check`
-- `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`
-- `cargo test -p leto-ops --test ops_tests sparse --all-features` (7 sparse tests)
-- `cargo test -p leto-ops --test ops_tests lu --all-features` (38 filtered tests)
-- `cargo nextest run -p leto-ops --all-features` (216 tests)
-- `cargo test -p leto-ops --doc --all-features` (5 doctests)
-- `RUSTDOCFLAGS="-D warnings" cargo doc -p leto-ops --no-deps --all-features`
+- `rustup run nightly cargo fmt --check`
+- `rustup run nightly cargo fmt -p leto --check`
+- `rustup run nightly cargo fmt -p leto-ops --check`
+- `rustup run nightly cargo nextest run -p leto-ops --test ops_tests sparse --status-level fail` (18 tests)
+- `rustup run nightly cargo nextest run -p leto-ops --test ops_tests structure --status-level fail` (36 tests)
+- `rustup run nightly cargo nextest run -p leto-ops --test ops_tests elementwise --status-level fail` (18 tests)
+- `rustup run nightly cargo nextest run -p leto-ops --test ops_tests properties --status-level fail` (11 tests)
+- `rustup run nightly cargo nextest run -p leto-ops --all-features --status-level fail` (271 tests)
+- `rustup run nightly cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`
+- `RUSTDOCFLAGS="-D warnings" rustup run nightly cargo doc -p leto-ops --all-features --no-deps`
+- `rustup run nightly cargo nextest run -p leto serde indexing array_api --status-level fail` (18 tests)
+- `rustup run nightly cargo nextest run -p leto geometry --status-level fail` (19 tests)
+- `rustup run nightly cargo nextest run -p leto --all-features --status-level fail` (199 tests)
+- `rustup run nightly cargo clippy -p leto --all-targets --all-features -- -D warnings`
+- `RUSTDOCFLAGS="-D warnings" rustup run nightly cargo doc -p leto --all-features --no-deps`
+- `rustup run nightly cargo clippy -p leto-python --all-targets --all-features -- -D warnings`
+- `rustup run nightly cargo nextest run -p leto-python --all-features --status-level fail` (21 tests)
+- `RUSTDOCFLAGS="-D warnings" rustup run nightly cargo doc --workspace --all-features --no-deps`
 - `cargo bench -p leto-ops --bench kernels reductions/sum_reverse_last_axis_256x256 -- --warm-up-time 1 --measurement-time 2 --sample-size 10`
   reported 5.3588 µs median, −11.742%.
 
@@ -1471,8 +1579,8 @@ RNG, and multi-operand zip. All const-rank per ADR 0002.
   type (`domain/rng.rs`). Validated against closed-form distribution statistics.
 - `leto-ops`: `zip2_mut_with`, the three-operand analogue of `zip_mut_with`
   (`ndarray`'s `Zip::from(out).and(a).and(b)`).
-- `leto-ops`: `RealScalar::from_f64` (construction-time conversion for sampling
-  and constants).
+- `leto-ops`: construction-time scalar conversion for sampling and constants
+  now resolves through Eunomia's `FloatElement::from_f64` SSOT.
 
 ### Notes
 
