@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// Core error types for the Leto N-dimensional strided array library.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Error, Clone, PartialEq)]
 pub enum LetoError {
     /// The index was out of bounds for the layout shape.
     #[error("Index out of bounds: index {index:?}, shape {shape:?}")]
@@ -51,6 +51,20 @@ pub enum LetoError {
     StorageError {
         /// The detail message.
         reason: String,
+    },
+
+    /// An iterative solver did not converge within the iteration limit.
+    #[error(
+        "Solver did not converge after {max_iters} iterations (residual {residual:e}, \
+         tolerance {tol:e})"
+    )]
+    ConvergenceError {
+        /// The maximum iteration count that was exceeded.
+        max_iters: usize,
+        /// The final relative residual norm.
+        residual: f64,
+        /// The convergence tolerance that was not met.
+        tol: f64,
     },
 }
 

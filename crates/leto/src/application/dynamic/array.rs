@@ -10,11 +10,12 @@
 //! still admitting runtime-rank data at the edges.
 
 use std::marker::PhantomData;
+use std::ops::{Index, IndexMut};
 
 use crate::domain::dynamic::LayoutDyn;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::kernels;
-use crate::infrastructure::storage::{Storage, VecStorage};
+use crate::infrastructure::storage::{Storage, StorageMut, VecStorage};
 
 /// A runtime-rank strided array: a [`LayoutDyn`] over a storage backing `S`.
 ///
@@ -94,6 +95,12 @@ where
         &self.storage
     }
 
+    /// A mutable reference to the underlying storage backing.
+    #[inline]
+    pub fn storage_mut(&mut self) -> &mut S {
+        &mut self.storage
+    }
+
     /// Reference to the element at `index` (length must equal [`ndim`](Self::ndim)).
     ///
     /// # Errors
@@ -147,6 +154,33 @@ impl<T> ArrayD<T, VecStorage<T>> {
         Self::new(layout, VecStorage::fill(size, T::default()))
     }
 
+    /// Construct a C-contiguous array filled with `value` (ndarray `from_elem` parity).
+    ///
+    /// # Errors
+    /// [`LetoError::Overflow`] if the shape's element count overflows.
+    pub fn from_elem(shape: &[usize], value: T) -> Result<Self>
+    where
+        T: Clone,
+    {
+        let layout = LayoutDyn::c_contiguous(shape)?;
+        let size = layout.size();
+        Self::new(layout, VecStorage::fill(size, value))
+    }
+
+    /// Iterator over the logical row-major elements (ndarray `iter` parity).
+    ///
+    /// The backing `VecStorage` is always contiguous, so this is a slice
+    /// iterator — O(1) construction and no extra allocation.
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.storage.as_slice().iter()
+    }
+
+    /// Mutable iterator over the logical row-major elements
+    /// (ndarray `iter_mut` parity, contiguous VecStorage only).
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+        self.storage.as_mut_slice().iter_mut()
+    }
+
     /// Materialize the elements in logical row-major order.
     ///
     /// Walks the (possibly strided) layout through the shared offset kernels —
@@ -197,5 +231,79 @@ impl<T> ArrayD<T, VecStorage<T>> {
             storage: self.storage,
             _marker: PhantomData,
         })
+    }
+}
+
+impl<T, S> ArrayD<T, S>
+where
+    S: StorageMut<T>,
+{
+    /// Mutable reference to the element at `index` (length must equal
+    /// [`ndim`](Self::ndim)).
+    ///
+    /// # Errors
+    /// [`LetoError::OutOfBounds`] on wrong arity or an out-of-range component.
+    /// [`LetoError::StorageError`] when the physical offset exceeds the backing slice.
+    #[inline]
+    pub fn get_mut(&mut self, index: &[usize]) -> Result<&mut T> {
+        let offset = self.layout.offset_of(index)?;
+        let len = self.storage.len();
+        self.storage
+            .as_mut_slice()
+            .get_mut(offset)
+            .ok_or(LetoError::StorageError {
+                reason: format!("physical offset {offset} exceeds backing slice length {len}"),
+            })
+    }
+
+    /// Set the element at `index` to `value`.
+    ///
+    /// Convenience wrapper over [`get_mut`](Self::get_mut).
+    ///
+    /// # Errors
+    /// Propagates errors from [`get_mut`](Self::get_mut).
+    #[inline]
+    pub fn set(&mut self, index: &[usize], value: T) -> Result<()> {
+        *self.get_mut(index)? = value;
+        Ok(())
+    }
+}
+
+impl<T> ArrayD<T, VecStorage<T>>
+where
+    T: Copy,
+{
+    /// Fill every element with `value` in logical row-major order.
+    pub fn fill(&mut self, value: T) {
+        for slot in self.storage.as_mut_slice() {
+            *slot = value;
+        }
+    }
+}
+
+// ── Index / IndexMut for dynamic multi-index slices ───────────────────────────
+
+/// Panic-on-error index accessor. `array[&idx[..]]` panics on bounds violations.
+///
+/// Use [`ArrayD::get`] for fallible access.
+impl<T, S: Storage<T>> Index<&[usize]> for ArrayD<T, S> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: &[usize]) -> &T {
+        self.get(index)
+            .expect("ArrayD index out of bounds or wrong rank")
+    }
+}
+
+/// Panic-on-error mutable index accessor. `array[&idx[..]] = v` panics on
+/// bounds violations.
+///
+/// Use [`ArrayD::get_mut`] for fallible access.
+impl<T, S: StorageMut<T>> IndexMut<&[usize]> for ArrayD<T, S> {
+    #[inline]
+    fn index_mut(&mut self, index: &[usize]) -> &mut T {
+        self.get_mut(index)
+            .expect("ArrayD index_mut out of bounds or wrong rank")
     }
 }

@@ -6,18 +6,25 @@
 //! work into `O(nnz)` and `O(nnz·…)`, where `nnz` is the nonzero count — a large
 //! win once density `nnz/(n·m)` is small.
 //!
-//! Two storage formats, by lifecycle phase (SoC):
+//! Three storage formats, by lifecycle phase (SoC):
 //! - [`CooMatrix`](crate::application::sparse::CooMatrix) —
 //!   **coordinate/triplet** list, the assembly target: each contribution is one
 //!   [`push`](crate::application::sparse::CooMatrix::push); duplicates
 //!   accumulate.
 //! - [`CsrMatrix`] — **compressed sparse row**, the solve/kernel target consumed
 //!   by [`spmv`] (matrix–vector) and [`spmm`] (sparse–dense product).
+//! - [`CscMatrix`](crate::application::sparse::CscMatrix) — **compressed
+//!   sparse column**, the column-major analogue of CSR. Accessed
+//!   column-by-column via
+//!   [`CscColumn`](crate::application::sparse::CscColumn) views; consumed by
+//!   [`csc_spmv`](crate::application::sparse::csc_spmv) (matrix–vector).
 //!
 //! The canonical pipeline is *assemble in COO →
-//! [`to_csr`](crate::application::sparse::CooMatrix::to_csr) → run kernels*.
-//! Both are generic over [`crate::domain::scalar::Scalar`] at native precision;
-//! the kernels are hermes-SIMD-backed.
+//! [`to_csr`](crate::application::sparse::CooMatrix::to_csr) → run CSR kernels*
+//! or *assemble in COO →
+//! [`to_csc`](crate::application::sparse::CooMatrix::to_csc) → run CSC
+//! kernels*.  Both formats are generic over [`crate::domain::scalar::Scalar`]
+//! at native precision; the kernels are hermes-SIMD-backed.
 //!
 //! # Theorem (CSR exactly represents the matrix; SpMV is `O(nnz)`)
 //! Let `A ∈ Tᵐˣⁿ` with `nnz` nonzeros. The CSR triple `(values, col_indices,
@@ -43,13 +50,19 @@
 //! assembly→CSR step. ∎
 
 mod coo;
+mod csc;
+mod csc_spmv;
 mod csr;
+mod solver;
 mod spgemm;
 mod spmm;
 mod spmv;
 
 pub use coo::CooMatrix;
+pub use csc::{CscColumn, CscMatrix};
+pub use csc_spmv::{csc_spmv, csc_spmv_into};
 pub use csr::{CsrMatrix, CsrRow};
+pub use solver::{cg, gmres, CgResult, GmresResult};
 pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into};
 pub use spmv::{spmv, spmv_into};

@@ -249,6 +249,19 @@ impl<T: Scalar> CsrMatrix<T> {
         }
     }
 
+    /// Return the value at `(row, col)`, or `None` if that entry is a structural zero.
+    ///
+    /// Binary-searches the column-index array of the given row: `O(log nnz_row)`.
+    #[must_use]
+    #[inline]
+    pub fn get(&self, row: usize, col: usize) -> Option<T> {
+        let r = self.row(row);
+        r.col_indices
+            .binary_search(&col)
+            .ok()
+            .map(|pos| r.values[pos])
+    }
+
     /// Extract the diagonal as a dense vector.
     #[must_use]
     pub fn diagonal(&self) -> Vec<T> {

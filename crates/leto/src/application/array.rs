@@ -646,6 +646,39 @@ where
         self.try_assign(rhs)
             .expect("invariant: assigned arrays have identical shape");
     }
+
+    /// Add `alpha * rhs` to `self` in place.
+    ///
+    /// # Panics
+    /// Panics when the shapes differ.
+    #[inline]
+    pub fn scaled_add<S2>(&mut self, alpha: T, rhs: &Array<T, S2, N>)
+    where
+        T: Copy + core::ops::Add<Output = T> + core::ops::Mul<Output = T>,
+        S2: Storage<T>,
+    {
+        let shape = self.shape();
+        assert_eq!(
+            shape,
+            rhs.shape(),
+            "scaled_add requires matching shapes: lhs {:?}, rhs {:?}",
+            shape,
+            rhs.shape()
+        );
+        for linear in 0..self.size() {
+            let index = linear_to_index(linear, shape);
+            let value = *self
+                .get(index)
+                .expect("invariant: logical index is in bounds")
+                + alpha
+                    * *rhs
+                        .get(index)
+                        .expect("invariant: rhs logical index is in bounds");
+            *self
+                .get_mut(index)
+                .expect("invariant: logical index is in bounds") = value;
+        }
+    }
 }
 
 fn linear_to_index<const N: usize>(mut linear: usize, shape: [usize; N]) -> [usize; N] {
@@ -712,6 +745,38 @@ where
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.get_mut([index])
             .expect("invariant: array index is within shape and storage bounds")
+    }
+}
+
+#[cfg(test)]
+mod scaled_add_tests {
+    use crate::application::array::Array;
+    use crate::infrastructure::storage::VecStorage;
+
+    fn array(data: Vec<f64>) -> Array<f64, VecStorage<f64>, 2> {
+        Array::<f64, VecStorage<f64>, 2>::from_shape_vec([2, 2], data).unwrap()
+    }
+
+    #[test]
+    fn scaled_add_accumulates_scaled_source() {
+        let mut dst = array(vec![1.0, 2.0, 3.0, 4.0]);
+        let src = array(vec![10.0, 20.0, 30.0, 40.0]);
+
+        dst.scaled_add(0.5, &src);
+
+        assert_eq!(
+            dst.iter().copied().collect::<Vec<_>>(),
+            vec![6.0, 12.0, 18.0, 24.0]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "matching shapes")]
+    fn scaled_add_shape_mismatch_panics() {
+        let mut dst = array(vec![0.0; 4]);
+        let src = Array::<f64, VecStorage<f64>, 2>::from_shape_vec([4, 1], vec![0.0; 4]).unwrap();
+
+        dst.scaled_add(1.0, &src);
     }
 }
 

@@ -25,6 +25,8 @@ pub mod hessenberg;
 pub(crate) mod householder;
 /// LU decomposition with partial pivoting, solve, determinant, inverse.
 pub mod lu;
+/// Batched LU decomposition over a stack of square matrices.
+pub mod lu_batch;
 /// Fluent rank-2 linear-algebra trait surface over `Array2`/`ArrayView2`.
 pub mod matrix;
 /// Matrix functions: integer power and exponential.
@@ -61,6 +63,7 @@ pub use eigenvalues::eigenvalues;
 pub use full_piv_lu::{full_piv_lu, FullPivLuDecomposition};
 pub use hessenberg::{hessenberg, HessenbergDecomposition};
 pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
+pub use lu_batch::lu_batch;
 pub use matrix::{
     AsMatrixView, MatrixDecompose, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties,
     MatrixSolve,

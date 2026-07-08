@@ -17,7 +17,7 @@
 //! indices per row — i.e. a valid CSR equal to `A`. Sorting is `O(nnz log nnz)`,
 //! the accumulation pass `O(nnz)`. ∎
 
-use super::CsrMatrix;
+use super::{CscMatrix, CsrMatrix};
 use crate::domain::scalar::Scalar;
 use leto::{Array2, LetoError, Result};
 
@@ -174,6 +174,48 @@ impl<T: Scalar> CooMatrix<T> {
             .expect("invariant: COO→CSR emits sorted, deduplicated, in-range entries")
     }
 
+    /// Compress to CSC, summing duplicate `(i, j)` entries and dropping exact
+    /// zeros (`O(nnz log nnz)`).
+    #[must_use = "to_csc returns the column-compressed matrix"]
+    pub fn to_csc(&self) -> CscMatrix<T> {
+        let nnz_in = self.values.len();
+        let mut order: Vec<usize> = (0..nnz_in).collect();
+        order.sort_unstable_by_key(|&p| (self.col_indices[p], self.row_indices[p]));
+
+        let mut values: Vec<T> = Vec::with_capacity(nnz_in);
+        let mut row_indices: Vec<usize> = Vec::with_capacity(nnz_in);
+        let mut col_ptr = vec![0usize; self.ncols + 1];
+
+        let mut k = 0;
+        while k < nnz_in {
+            let p = order[k];
+            let (i, j) = (self.row_indices[p], self.col_indices[p]);
+            let mut sum = self.values[p];
+            let mut k2 = k + 1;
+            while k2 < nnz_in {
+                let q = order[k2];
+                if self.row_indices[q] == i && self.col_indices[q] == j {
+                    sum = sum.add(self.values[q]);
+                    k2 += 1;
+                } else {
+                    break;
+                }
+            }
+            if sum != T::ZERO {
+                values.push(sum);
+                row_indices.push(i);
+                col_ptr[j + 1] += 1;
+            }
+            k = k2;
+        }
+        for j in 0..self.ncols {
+            col_ptr[j + 1] += col_ptr[j];
+        }
+
+        CscMatrix::from_parts(values, row_indices, col_ptr, self.nrows, self.ncols)
+            .expect("invariant: COO→CSC emits sorted, deduplicated, in-range entries")
+    }
+
     /// Reconstruct the dense matrix by accumulating triplets (`O(nnz + n·m)`;
     /// for testing/inspection).
     #[must_use]
@@ -190,6 +232,35 @@ impl<T: Scalar> CooMatrix<T> {
 #[cfg(test)]
 mod tests {
     use super::{CooMatrix, CsrMatrix};
+
+    #[test]
+    fn coo_to_csc_round_trips() {
+        let mut coo = CooMatrix::<f64>::new(3, 3);
+        coo.push(0, 0, 2.0);
+        coo.push(0, 0, 3.0); // accumulates to 5.0
+        coo.push(1, 2, -1.0);
+        coo.push(2, 1, 4.0);
+        let csc = coo.to_csc();
+        assert_eq!(csc.shape(), (3, 3));
+        assert_eq!(csc.nnz(), 3);
+        // CSC should match dense round-trip.
+        assert_eq!(csc.to_dense(), coo.to_dense());
+    }
+
+    #[test]
+    fn coo_to_csc_matches_csr_via_transpose() {
+        let mut coo = CooMatrix::<f64>::new(3, 4);
+        coo.push(0, 1, 2.0);
+        coo.push(1, 0, 3.0);
+        coo.push(2, 3, -1.0);
+        coo.push(0, 0, 1.0);
+        let csc = coo.to_csc();
+        assert_eq!(csc.to_dense(), coo.to_dense());
+        // CSC → CSR gives CSR(A^T); verify the round-trip is valid.
+        assert_eq!(csc.to_csr().nnz(), csc.nnz());
+        assert_eq!(csc.to_csr().nrows(), csc.ncols());
+        assert_eq!(csc.to_csr().ncols(), csc.nrows());
+    }
 
     #[test]
     fn to_dense_round_trips_through_csr() {
