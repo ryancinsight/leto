@@ -31,7 +31,10 @@ pub use arithmetic::ScalarOperand;
 pub use array::Array;
 pub use dynamic::ArrayD;
 pub use fixed::{FixedMatrix, FixedVector};
-pub use iter::{AxisIter, AxisIterMut, ElementIter, IndexedIter, Lanes, LanesMut, Windows};
+pub use iter::{
+    AxisChunks, AxisIter, AxisIterMut, ElementIter, ExactChunks, IndexedIter, IndexedIterMut,
+    Lanes, LanesMut, Windows,
+};
 pub use reduction::{
     argmax, argmax_all, argmin, argmin_all, max_all, max_axis, mean_all, mean_axis, median_all,
     median_axis, min_all, min_axis, quantile_all, quantile_axis, std_all, std_axis, sum_all,

@@ -19,12 +19,14 @@ This document catalogs the public API surface of `ndarray 0.16` and its key comp
 - `ArrayBase::from_shape_vec(shape, vec)`: Construct array from flat 1D vector (C-contiguous).
 - `ArrayBase::from_shape_vec_unchecked(shape, vec)`: Construct array without layout validation.
 - `ArrayBase::from_shape_fn(shape, f)`: Construct array by calling coordinate generator closure.
+- `ArrayBase::from_fn`-style matrix helper: Construct rank-2 array by calling `f(row, col)`.
 - `ArrayBase::from_vec(vec)`: Construct 1D array from vector.
 - `ArrayBase::linspace(start, end, n)`: Construct 1D array with linearly spaced values.
 - `ArrayBase::logspace(base, start, end, n)`: Construct 1D array with logarithmically spaced values.
 - `ArrayBase::range(start, end, step)`: Construct 1D array with stepped range.
 - `ArrayBase::eye(n)`: Construct 2D identity matrix.
-- `ArrayBase::from_iter(iter)`: Construct 1D array from iterator.
+- `FromIterator` / `ArrayBase::from_iter(iter)`: Construct 1D array from iterator.
+- Complex rank-2 `.adjoint()`: Hermitian adjoint convenience for conjugate transpose.
 
 ## 3. Properties and Accessors
 - `.ndim()`: Return number of dimensions.
@@ -46,6 +48,7 @@ This document catalogs the public API surface of `ndarray 0.16` and its key comp
 - `.slice_move(info)`: Consume array and return sliced view.
 - `.slice_inplace(info)`: Modify view boundaries in-place.
 - `.multi_slice_mut(...)`: Return multiple disjoint mutable views.
+- `.index_axis(axis, index)` / `.index_axis_mut(axis, index)`: Fix one axis and reduce rank.
 
 ## 5. View Conversions & Transformations
 - `.view()` / `.view_mut()`: Return shared / mutable view.
@@ -63,6 +66,8 @@ This document catalogs the public API surface of `ndarray 0.16` and its key comp
 - `.indexed_iter()` / `.indexed_iter_mut()`: Yield `(index, &element)` pairs.
 - `.axis_iter(axis)` / `.axis_iter_mut(axis)`: Iterate over sub-views along an axis.
 - `.lanes(axis)` / `.lanes_mut(axis)`: Iterate over 1D lane views along an axis.
+- `.exact_chunks(chunk_size)`: Iterate over non-overlapping full-size chunks, skipping remainders.
+- `.axis_chunks_iter(axis, size)`: Iterate over non-overlapping chunks along one axis, including the final remainder.
 - `.rows()` / `.rows_mut()`: Iterate over row views.
 - `.columns()` / `.columns_mut()`: Iterate over column views.
 - `IntoIterator` implementations for owned arrays and views.

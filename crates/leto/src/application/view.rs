@@ -1,5 +1,7 @@
 use crate::application::array::Array;
-use crate::application::iter::{ElementIter, IndexedIter, Windows};
+use crate::application::iter::{
+    AxisChunks, ElementIter, ExactChunks, IndexedIter, IndexedIterMut, Windows,
+};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 use crate::domain::slice::SliceArg;
@@ -16,6 +18,7 @@ fn dense_block_range<const N: usize>(layout: &Layout<N>) -> Option<core::ops::Ra
 }
 
 /// A read-only zero-copy view of an N-dimensional strided array.
+#[derive(Clone, Copy)]
 pub struct ArrayView<'a, T, const N: usize> {
     pub(crate) layout: Layout<N>,
     pub(crate) data: &'a [T],
@@ -84,6 +87,29 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     #[inline]
     pub fn indexed_iter(&self) -> IndexedIter<'a, T, N> {
         IndexedIter::new(self)
+    }
+
+    /// Zero-copy iterator over non-overlapping chunks of `chunk_shape`
+    /// (ndarray `exact_chunks` parity). Each yielded view shares this view's
+    /// strides and backing storage.
+    ///
+    /// # Errors
+    /// [`LetoError`] if any `chunk_shape[i]` is `0` or the chunk grid overflows
+    /// `usize`.
+    #[inline]
+    pub fn exact_chunks(&self, chunk_shape: [usize; N]) -> Result<ExactChunks<'a, T, N>> {
+        ExactChunks::new(self, chunk_shape)
+    }
+
+    /// Zero-copy iterator over chunks along `axis` (ndarray
+    /// `axis_chunks_iter` parity). The final yielded view carries the
+    /// remainder when present.
+    ///
+    /// # Errors
+    /// [`LetoError`] if `axis >= N` or `chunk_len == 0`.
+    #[inline]
+    pub fn axis_chunks_iter(&self, axis: usize, chunk_len: usize) -> Result<AxisChunks<'a, T, N>> {
+        AxisChunks::new(self, axis, chunk_len)
     }
 
     /// Zero-copy iterator over every sliding window of shape `window_shape`
@@ -401,6 +427,17 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     pub fn data_mut(&mut self) -> &mut [T] {
         // SAFETY: self.ptr is valid for self.len elements.
         unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+    }
+
+    /// Iterator over `(multi-index, &mut element)` pairs in logical row-major
+    /// order (ndarray `indexed_iter_mut` parity).
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] if the layout is out of bounds or cannot prove
+    /// that each logical index addresses a distinct physical element.
+    #[inline]
+    pub fn indexed_iter_mut(self) -> Result<IndexedIterMut<'a, T, N>> {
+        IndexedIterMut::new(self)
     }
 
     /// Consume the view and return the backing mutable slice with lifetime `'a`.
@@ -726,6 +763,118 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             axis,
             crate::domain::remove_axis::RankMarker::<N>,
         )
+    }
+
+    /// Copy elements from `rhs` into this mutable view (ndarray `assign` parity).
+    ///
+    /// Walks both views in logical row-major order, so it is correct for any
+    /// strides. Panics when shapes differ.
+    ///
+    /// # Panics
+    /// Panics when `rhs.shape() != self.shape()`.
+    pub fn assign<Rhs>(&mut self, rhs: &Rhs)
+    where
+        T: Copy,
+        Rhs: crate::application::array::AssignSource<T, N>,
+    {
+        let shape = self.shape();
+        assert_eq!(shape, rhs.assign_shape(), "assign: shape mismatch");
+        let size = shape.iter().product::<usize>();
+        let mut index = [0usize; N];
+        for _ in 0..size {
+            let src = rhs.assign_get(index).expect("rhs element in bounds");
+            *self.get_mut(index).expect("dst element in bounds") = *src;
+            // Row-major odometer increment.
+            for d in (0..N).rev() {
+                index[d] += 1;
+                if index[d] < shape[d] {
+                    break;
+                }
+                index[d] = 0;
+            }
+        }
+    }
+}
+
+// ── Index / IndexMut for ArrayView and ArrayViewMut ──────────────────────────
+
+/// Enable `view[[i, j, k]]` syntax, matching `ndarray::ArrayView` ergonomics.
+impl<'a, T, const N: usize> std::ops::Index<[usize; N]> for ArrayView<'a, T, N> {
+    type Output = T;
+    #[inline]
+    fn index(&self, index: [usize; N]) -> &T {
+        let offset = self
+            .layout
+            .offset_of(index)
+            .expect("ArrayView index out of bounds");
+        &self.data[offset]
+    }
+}
+
+/// Enable `view[[i, j, k]]` syntax on mutable views.
+impl<'a, T, const N: usize> std::ops::Index<[usize; N]> for ArrayViewMut<'a, T, N> {
+    type Output = T;
+    #[inline]
+    fn index(&self, index: [usize; N]) -> &T {
+        let offset = self
+            .layout
+            .offset_of(index)
+            .expect("ArrayViewMut index out of bounds");
+        // SAFETY: ptr is valid for len elements for the lifetime of the view.
+        unsafe { &*self.ptr.as_ptr().add(offset) }
+    }
+}
+
+/// Enable `view[[i, j, k]] = value` syntax on mutable views.
+impl<'a, T, const N: usize> std::ops::IndexMut<[usize; N]> for ArrayViewMut<'a, T, N> {
+    #[inline]
+    fn index_mut(&mut self, index: [usize; N]) -> &mut T {
+        let offset = self
+            .layout
+            .offset_of(index)
+            .expect("ArrayViewMut index_mut out of bounds");
+        // SAFETY: ptr is valid for len elements for the lifetime of the view.
+        unsafe { &mut *self.ptr.as_ptr().add(offset) }
+    }
+}
+
+/// Enable `view[i]` (usize) syntax for 1-D views (ndarray `ArrayView1` parity).
+impl<'a, T> std::ops::Index<usize> for ArrayView<'a, T, 1> {
+    type Output = T;
+    #[inline]
+    fn index(&self, index: usize) -> &T {
+        let offset = self
+            .layout
+            .offset_of([index])
+            .expect("ArrayView1 index out of bounds");
+        &self.data[offset]
+    }
+}
+
+/// Enable `view[i]` (usize) mutable syntax for 1-D views.
+impl<'a, T> std::ops::Index<usize> for ArrayViewMut<'a, T, 1> {
+    type Output = T;
+    #[inline]
+    fn index(&self, index: usize) -> &T {
+        let offset = self
+            .layout
+            .offset_of([index])
+            .expect("ArrayViewMut1 index out of bounds");
+        // SAFETY: ptr is valid for len elements.
+        unsafe { &*self.ptr.as_ptr().add(offset) }
+    }
+}
+
+/// Enable `view[i] = value` syntax for 1-D mutable views.
+impl<'a, T> std::ops::IndexMut<usize> for ArrayViewMut<'a, T, 1> {
+    #[inline]
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        let offset = self
+            .layout
+            .offset_of([index])
+            .expect("ArrayViewMut1 index_mut out of bounds");
+        // SAFETY: ptr is valid for len elements.
+        unsafe { &mut *self.ptr.as_ptr().add(offset) }
     }
 }
 

@@ -139,6 +139,59 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     }
 }
 
+impl<T> FromIterator<T> for Array<T, VecStorage<T>, 1> {
+    #[inline]
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+    {
+        let vec: Vec<T> = iter.into_iter().collect();
+        Self::from_vec([vec.len()], vec).expect("1-D iterator length must match collected storage")
+    }
+}
+
+impl<T> Array<T, VecStorage<T>, 2>
+where
+    T: eunomia::NumericElement,
+{
+    /// Create an `n × n` identity matrix.
+    pub fn eye(n: usize) -> Self {
+        let mut array = Self::zeros([n, n]);
+        for i in 0..n {
+            array[[i, i]] = T::ONE;
+        }
+        array
+    }
+
+    /// Create an `nrows × ncols` matrix by calling `f(i, j)` for each element.
+    pub fn from_fn<F>(nrows: usize, ncols: usize, mut f: F) -> Self
+    where
+        F: FnMut(usize, usize) -> T,
+    {
+        Self::from_shape_fn([nrows, ncols], |idx| f(idx[0], idx[1]))
+    }
+}
+
+impl<T> Array<eunomia::Complex<T>, VecStorage<eunomia::Complex<T>>, 2>
+where
+    T: eunomia::FloatElement + core::ops::Neg<Output = T>,
+{
+    /// Hermitian adjoint (conjugate transpose) of a complex matrix.
+    ///
+    /// Returns a new owned `cols × rows` matrix where element `[i,j]` equals
+    /// `conj(self[[j, i]])`.
+    pub fn adjoint(&self) -> Self {
+        let [rows, cols] = self.shape();
+        let mut data = Vec::with_capacity(rows * cols);
+        for j in 0..cols {
+            for i in 0..rows {
+                data.push(self[[i, j]].conj());
+            }
+        }
+        Self::from_shape_vec([cols, rows], data).expect("adjoint preserves element count")
+    }
+}
+
 #[cfg(feature = "mnemosyne-alloc")]
 impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
     /// Create a Mnemosyne-backed array of a given shape filled with `T::default()`.
@@ -250,5 +303,67 @@ mod from_vec_tests {
         let a: Array<f64, VecStorage<f64>, 1> = vec![1.0, 2.0, 3.0].into();
         assert_eq!(a.shape(), [3]);
         assert_eq!(a.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn array1_collects_from_iterator() {
+        let a: Array<i32, VecStorage<i32>, 1> = (2..5).collect();
+        assert_eq!(a.shape(), [3]);
+        assert_eq!(a.as_slice().unwrap(), &[2, 3, 4]);
+    }
+
+    #[test]
+    fn array2_eye_creates_identity_matrix() {
+        let eye = Array::<f64, VecStorage<f64>, 2>::eye(3);
+        assert_eq!(eye.shape(), [3, 3]);
+        assert_eq!(eye[[0, 0]], 1.0);
+        assert_eq!(eye[[0, 1]], 0.0);
+        assert_eq!(eye[[1, 0]], 0.0);
+        assert_eq!(eye[[1, 1]], 1.0);
+        assert_eq!(eye[[2, 2]], 1.0);
+    }
+
+    #[test]
+    fn array2_from_fn_creates_matrix_from_closure() {
+        let m = Array::<f64, VecStorage<f64>, 2>::from_fn(2, 3, |i, j| (i * 10 + j) as f64);
+        assert_eq!(m.shape(), [2, 3]);
+        assert_eq!(m[[0, 0]], 0.0);
+        assert_eq!(m[[0, 1]], 1.0);
+        assert_eq!(m[[1, 0]], 10.0);
+        assert_eq!(m[[1, 2]], 12.0);
+    }
+
+    #[test]
+    fn array2_adjoint_of_complex_matrix() {
+        use eunomia::Complex64;
+        let m = Array::<Complex64, VecStorage<Complex64>, 2>::from_fn(2, 3, |i, j| {
+            Complex64::new((i * 10 + j) as f64, (i * 10 + j + 1) as f64)
+        });
+        let adj = m.adjoint();
+        assert_eq!(adj.shape(), [3, 2]);
+        for i in 0..2 {
+            for j in 0..3 {
+                let expected = m[[i, j]].conj();
+                assert_eq!(adj[[j, i]].re, expected.re);
+                assert_eq!(adj[[j, i]].im, expected.im);
+            }
+        }
+    }
+
+    #[test]
+    fn array2_adjoint_twice_is_original() {
+        use eunomia::Complex64;
+        let m = Array::<Complex64, VecStorage<Complex64>, 2>::from_fn(3, 4, |i, j| {
+            Complex64::new((i * j) as f64, (i + j) as f64)
+        });
+        let adj = m.adjoint();
+        let adjadj = adj.adjoint();
+        assert_eq!(adjadj.shape(), [3, 4]);
+        for i in 0..3 {
+            for j in 0..4 {
+                assert_eq!(adjadj[[i, j]].re, m[[i, j]].re);
+                assert_eq!(adjadj[[i, j]].im, m[[i, j]].im);
+            }
+        }
     }
 }

@@ -482,7 +482,22 @@ leto-ops 156 ops_tests regression-free). Evidence tier: 12 dynamic tests
 warning-clean. This closes the last **Missing** §A array/ndarray parity row; the
 remaining §A Partial row is random-constructor distribution-oracle depth.
 Remaining cross-cutting: PyO3 `ArrayD` interop (consumer-driven follow-up).
-Delivered 0.28.0: zero-copy lane iteration
+Delivered 0.28.2: axis chunk streaming
+(`Array`/`ArrayView::axis_chunks_iter` -> `AxisChunks`) in
+`application/iter/chunks.rs` (ndarray `axis_chunks_iter` parity). Each yielded
+chunk is a non-overlapping zero-copy view along one axis; the final chunk keeps
+the remainder, and every other axis keeps the parent extent and strides.
+Evidence tier: coverage theorem, remainder values, transposed stride
+preservation, double-ended meet-once, invalid-axis rejection, and zero-length
+rejection in core/chunks. Delivered 0.28.1: exact chunk streaming
+(`Array`/`ArrayView::exact_chunks` -> `ExactChunks`) in
+`application/iter/chunks.rs` (ndarray `exact_chunks` parity). Each yielded chunk
+is a non-overlapping zero-copy block view of fixed shape; per-axis remainders
+are skipped, and transposed/sliced inputs preserve parent strides. Documents the
+`prod floor(s_i / c_i)` chunk-count theorem with proof. Evidence tier:
+count theorem, skipped remainder values, transposed stride preservation,
+double-ended meet-once, empty oversize stream, and zero-extent rejection in
+core/chunks. Delivered 0.28.0: zero-copy lane iteration
 (`Array`/`ArrayView::lanes`/`lanes_mut` -> `Lanes`/`LanesMut`) in
 `application/iter/lanes.rs` (ndarray `lanes`/`lanes_mut` parity). Each lane along
 axis `a` is a 1-D view parallel to `a`; mut iteration enforces non-aliasing
@@ -499,9 +514,15 @@ correctness, double-ended iteration, and mutable write disjointness (8 tests,
 proof. Evidence tier: count theorem across shapes, row-major content,
 full-window-equals-original, transposed/strided zero-copy correctness,
 double-ended meet-once, zero/oversize rejection (6 tests, 92 core_tests green).
-remaining §A: `IxDyn` (ADR 0002). Delivered 0.26.0:
-logical-order element iteration
-(`Array`/`ArrayView::iter`/`indexed_iter` → `ElementIter`/`IndexedIter`,
+remaining §A: `IxDyn` (ADR 0002). Delivered 0.26.1:
+`Array`/`ArrayViewMut::indexed_iter_mut` -> `IndexedIterMut` (ndarray
+`indexed_iter_mut` parity), yielding `([usize; N], &mut T)` in logical
+row-major order. The iterator is `DoubleEndedIterator`+`ExactSizeIterator` and
+rejects layouts whose logical offsets are not provably disjoint before yielding
+mutable references. Evidence tier: value-semantic mutation by index,
+transposed-view index parity, double-ended meet-once, and alias rejection in
+core/iteration. Delivered 0.26.0: logical-order element iteration
+(`Array`/`ArrayView::iter`/`indexed_iter` -> `ElementIter`/`IndexedIter`,
 `IntoIterator for &ArrayView`; ndarray `iter`/`indexed_iter` parity), both
 `DoubleEndedIterator`+`ExactSizeIterator`, strided/transposed logical order via
 the view strides; shared `elem_at` (SSOT). Refactored `application/iter.rs` into

@@ -8,6 +8,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- `leto` [patch]: replaced the ambiguous inherent
+  `Array::<T, VecStorage<T>, 1>::from_iter` constructor with a standard
+  `FromIterator<T>` implementation, so `(iter).collect::<Array1<_>>()` is the
+  single iterator-construction surface.
 - `leto-ops` [major]: rebased `Scalar` on `eunomia::NumericElement` and
   `RealScalar` on `eunomia::FloatElement`. Eunomia now owns numeric constants,
   primitive arithmetic/bit contracts, finite predicates, and real
@@ -46,6 +50,24 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- `leto` [patch]: added `Array::exact_chunks` and
+  `ArrayView::exact_chunks`, yielding non-overlapping zero-copy block views of
+  a fixed chunk shape while skipping per-axis remainders. The iterator is
+  double-ended, exact-size, preserves parent strides for transposed/sliced
+  inputs, and rejects zero chunk extents.
+- `leto` [patch]: added ndarray-style owned-array accessors and constructors:
+  `len`, `is_empty`, `as_ptr`, `iter_mut`, `index_axis`, `index_axis_mut`,
+  `Array2::eye`, `Array2::from_fn`, and complex `Array2::adjoint`, with
+  value-semantic constructor and doctest coverage.
+- `leto` [patch]: added `Array::axis_chunks_iter` and
+  `ArrayView::axis_chunks_iter`, yielding non-overlapping zero-copy chunks along
+  one axis, including the final remainder chunk. The iterator is double-ended,
+  exact-size, preserves parent strides, and rejects invalid axes or zero chunk
+  lengths.
+- `leto` [patch]: added `Array::indexed_iter_mut` and
+  `ArrayViewMut::indexed_iter_mut`, yielding logical row-major
+  `([usize; N], &mut T)` pairs with double-ended iteration and alias rejection
+  for layouts whose logical offsets are not provably disjoint.
 - `leto-ops` [patch]: added CSR utility methods on `CsrMatrix` for diagonal
   extraction, scalar/value scaling, row scaling, column scaling, Frobenius
   norm, strict diagonal dominance, and a diagonal-dominance condition estimate.

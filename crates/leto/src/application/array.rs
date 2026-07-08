@@ -1,4 +1,6 @@
-use crate::application::iter::{ElementIter, IndexedIter, Lanes, LanesMut, Windows};
+use crate::application::iter::{
+    AxisChunks, ElementIter, ExactChunks, IndexedIter, IndexedIterMut, Lanes, LanesMut, Windows,
+};
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -132,6 +134,24 @@ where
         self.layout.size()
     }
 
+    /// Returns the total logical element count.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.layout.size()
+    }
+
+    /// Returns `true` when any axis has zero length.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.layout.size() == 0
+    }
+
+    /// Returns a pointer to the first logical element.
+    #[inline]
+    pub fn as_ptr(&self) -> *const T {
+        self.storage.as_slice()[self.layout.offset..].as_ptr()
+    }
+
     /// Returns the layout of the array.
     #[inline]
     pub const fn layout(&self) -> Layout<N> {
@@ -189,6 +209,33 @@ where
         IndexedIter::new(&self.view())
     }
 
+    /// Zero-copy iterator over non-overlapping chunks of `chunk_shape`
+    /// (ndarray `exact_chunks` parity).
+    ///
+    /// Remainders along any axis are skipped. Each yielded view has shape
+    /// `chunk_shape` and shares this array's backing storage.
+    ///
+    /// # Errors
+    /// [`LetoError`] if any `chunk_shape[i]` is `0` or the chunk grid overflows
+    /// `usize`.
+    #[inline]
+    pub fn exact_chunks(&self, chunk_shape: [usize; N]) -> Result<ExactChunks<'_, T, N>> {
+        ExactChunks::new(&self.view(), chunk_shape)
+    }
+
+    /// Zero-copy iterator over chunks along `axis` (ndarray
+    /// `axis_chunks_iter` parity).
+    ///
+    /// The final yielded view carries the remainder when `shape[axis]` is not
+    /// divisible by `chunk_len`.
+    ///
+    /// # Errors
+    /// [`LetoError`] if `axis >= N` or `chunk_len == 0`.
+    #[inline]
+    pub fn axis_chunks_iter(&self, axis: usize, chunk_len: usize) -> Result<AxisChunks<'_, T, N>> {
+        AxisChunks::new(&self.view(), axis, chunk_len)
+    }
+
     /// Zero-copy iterator over every sliding window of shape `window_shape`
     /// (ndarray `windows` parity).
     ///
@@ -230,6 +277,35 @@ where
     pub fn slice_with<const M: usize>(&self, args: &[SliceArg]) -> Result<ArrayView<'_, T, M>> {
         let sliced_layout = self.layout.slice_with(args)?;
         Ok(ArrayView::new(sliced_layout, self.storage.as_slice()))
+    }
+
+    /// Fix one axis at `index`, reducing the rank by 1 (ndarray `index_axis` parity).
+    ///
+    /// `M` must equal `N - 1`; a mismatch returns `LetoError` from `slice_with`.
+    /// The caller expresses the output rank explicitly, for example:
+    ///
+    /// ```
+    /// # use leto::{Array4, VecStorage};
+    /// # let a = Array4::<f64>::zeros([2, 3, 4, 5]);
+    /// let view3 = a.index_axis::<3>(0, 1).unwrap(); // fix axis 0 at index 1
+    /// assert_eq!(view3.shape(), [3, 4, 5]);
+    /// ```
+    #[inline]
+    pub fn index_axis<const M: usize>(
+        &self,
+        axis: usize,
+        index: usize,
+    ) -> Result<ArrayView<'_, T, M>> {
+        let args: Vec<SliceArg> = (0..N)
+            .map(|i| {
+                if i == axis {
+                    SliceArg::Index(index as isize)
+                } else {
+                    SliceArg::All
+                }
+            })
+            .collect();
+        self.slice_with::<M>(&args)
     }
 
     /// Transpose the array, returning a read-only view.
@@ -369,6 +445,29 @@ where
         self.storage.as_mut_slice().fill(value);
     }
 
+    /// Iterator over the array's elements as mutable references, in logical
+    /// row-major order (`ndarray iter_mut` parity).
+    ///
+    /// # Panics
+    /// Panics if the layout is not C-contiguous.
+    #[inline]
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        self.as_slice_mut()
+            .expect("iter_mut: array must be C-contiguous")
+            .iter_mut()
+    }
+
+    /// Iterator over `(multi-index, &mut element)` pairs in logical row-major
+    /// order (ndarray `indexed_iter_mut` parity).
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] if the layout is out of bounds or cannot prove
+    /// that each logical index addresses a distinct physical element.
+    #[inline]
+    pub fn indexed_iter_mut(&mut self) -> Result<IndexedIterMut<'_, T, N>> {
+        self.view_mut().indexed_iter_mut()
+    }
+
     /// The elements as one mutable contiguous slice in logical row-major order,
     /// or `None` if the array is not C-contiguous (ndarray `as_slice_mut`
     /// parity). The safe basis for in-place element iteration: `if let Some(s) =
@@ -438,6 +537,27 @@ where
             sliced_layout,
             self.storage.as_mut_slice(),
         ))
+    }
+
+    /// Fix one axis at `index`, reducing the rank by 1 (ndarray `index_axis_mut` parity).
+    ///
+    /// `M` must equal `N - 1`; a mismatch returns `LetoError` from `slice_with_mut`.
+    #[inline]
+    pub fn index_axis_mut<const M: usize>(
+        &mut self,
+        axis: usize,
+        index: usize,
+    ) -> Result<ArrayViewMut<'_, T, M>> {
+        let args: Vec<SliceArg> = (0..N)
+            .map(|i| {
+                if i == axis {
+                    SliceArg::Index(index as isize)
+                } else {
+                    SliceArg::All
+                }
+            })
+            .collect();
+        self.slice_with_mut::<M>(&args)
     }
 
     /// Transpose the array, returning a mutable view.

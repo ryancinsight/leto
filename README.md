@@ -70,7 +70,8 @@ assert_eq!(view.shape(), [1, 2]);
 - Rank-readable aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`,
   `ArrayView2`, `ArrayView3`, and mutable view variants.
 - Owned-array constructors for `zeros`, `from_elem`, `from_vec`,
-  `from_shape_vec`, `from_shape_fn`, and `into_vec`.
+  `from_shape_vec`, `from_shape_fn`, `from_fn`, `eye`, iterator `collect`, and
+  `into_vec`.
 - `AxisIter` and `AxisIterMut` subview iteration over a selected axis.
 - Named rank-2 `rows`, `columns`, `rows_mut`, and `columns_mut` helpers over
   the same zero-copy axis iterator implementation.
@@ -149,6 +150,15 @@ caller-owned output shape, so `[N, 1]` and `[1, C]` views write directly into
   subviews at non-zero offsets, the access pattern Apollo's in-place FFT
   butterfly kernels require. `as_slice` / `as_mut_slice` expose C-order dense
   blocks independent of offset.
+- Exact chunk streaming (`exact_chunks`) yields non-overlapping zero-copy block
+  views of a fixed shape, skipping remainders along each axis and preserving the
+  parent strides for transposed or sliced inputs.
+- Axis chunk streaming (`axis_chunks_iter`) yields non-overlapping zero-copy
+  chunks along one axis, including the final remainder chunk while preserving
+  the full extent and strides of every other axis.
+- Logical mutable traversal is available through `iter_mut` for dense arrays
+  and `indexed_iter_mut` for provably disjoint strided layouts; `index_axis` and
+  `index_axis_mut` reduce rank without copying.
 - Matrix multiplication lives in a dedicated matrix module, writes into
   caller-owned output, rejects zero-stride mutable output aliasing, and supports
   contiguous plus strided/transposed inputs. `batched_matmul` contracts rank-3
