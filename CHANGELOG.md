@@ -6,6 +6,29 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Added
+
+- `leto-ops` [minor]: `matvec(a: &ArrayView<T,2>, x: &ArrayView<T,1>, out: &mut
+  ArrayViewMut<T,1>)` — dense matrix–vector product with a C-contiguous
+  `dot_slice` fast path and a stride-addressed fallback (so a transposed view
+  `a.transpose([1,0])` yields `Aᵀx` without materialisation). Native-precision
+  accumulation per the `Scalar` contract; verified by value-semantic tests in
+  `tests/ops/matmul.rs` (contiguous, transposed-strided, shape-mismatch).
+
+### Fixed
+
+- `leto` [patch]: `FixedMatrix<f64, 3, 3>::symmetric_eigen` computed the
+  depressed-cubic constant `q` with an inverted sign
+  (`(2I₁³ − 9I₁I₂ + 27I₃)/27` instead of the correct
+  `(−2I₁³ + 9I₁I₂ − 27I₃)/27` from substituting `λ = μ + I₁/3` into
+  `λ³ − I₁λ² + I₂λ − I₃`). This flipped `cos_arg` and produced wrong eigenvalues
+  for any matrix whose eigenvalues are not symmetric about their mean (`q ≠ 0`);
+  the prior tests only exercised `q = 0` cases (which mask the sign) and the
+  identity. Fixed and covered with a `q ≠ 0` regression test (distinct
+  eigenvalues + isotropic degenerate double root). Unblocks
+  `kwavers-medium::anisotropic::christoffel` isotropic phase/group-velocity and
+  polarization tests.
+
 ### Changed
 
 - `leto` [patch]: replaced the ambiguous inherent

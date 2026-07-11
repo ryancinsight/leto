@@ -102,3 +102,33 @@ fn test_ndarray_style_slice_ellipsis_and_implicit_trailing_axes() {
     assert_eq!(implicit.strides(), [0, 4, 1]);
     assert_eq!(*implicit.get([0, 2, 3]).unwrap(), 23);
 }
+
+#[test]
+fn test_slicearg_all_step_reverses_axis() {
+    // Regression: `SliceArg::All.step(-1)` — as produced by `s![.., ..;-1, ..]`
+    // — must convert the full-axis selection into a strided (reversed) range,
+    // not silently drop the stride (which previously left the axis forward and
+    // C-contiguous).
+    assert_eq!(
+        SliceArg::All.step(-1),
+        SliceArg::Range {
+            start: None,
+            end: None,
+            step: -1,
+        }
+    );
+
+    // End-to-end: a reversed full-axis slice yields a negative-stride,
+    // non-C-contiguous view whose logical order is reversed.
+    let layout = Layout::c_contiguous([3]).unwrap();
+    let storage = VecStorage::new(vec![10.0f64, 20.0, 30.0]);
+    let array = Array::new(layout, storage).unwrap();
+    let reversed = array.slice_with::<1>(&[SliceArg::All.step(-1)]).unwrap();
+    assert_eq!(reversed.shape(), [3]);
+    assert!(
+        reversed.as_slice().is_none(),
+        "reversed full-axis view must be non-contiguous"
+    );
+    let collected: Vec<f64> = reversed.iter().copied().collect();
+    assert_eq!(collected, vec![30.0, 20.0, 10.0]);
+}

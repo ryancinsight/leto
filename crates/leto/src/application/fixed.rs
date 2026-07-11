@@ -301,9 +301,10 @@ impl FixedMatrix<f64, 3, 3> {
         let i2 = a * e + a * i + e * i - b * b - c * c - f * f;
         let i3 = a * e * i + 2.0 * b * c * f - a * f * f - e * c * c - i * b * b;
 
-        // Depressed cubic: μ³ + pμ + q = 0,  λ = μ + I₁/3
+        // Depressed cubic: μ³ + pμ + q = 0,  λ = μ + I₁/3, obtained by
+        // substituting λ = μ + I₁/3 into λ³ − I₁λ² + I₂λ − I₃ = 0.
         let p = i2 - i1 * i1 / 3.0;
-        let q = (2.0 * i1 * i1 * i1 - 9.0 * i1 * i2 + 27.0 * i3) / 27.0;
+        let q = (-2.0 * i1 * i1 * i1 + 9.0 * i1 * i2 - 27.0 * i3) / 27.0;
         let shift = i1 / 3.0;
 
         if p.abs() < 1e-30 {
@@ -727,6 +728,30 @@ mod tests {
                 assert!((av[(row, col)] - vd[(row, col)]).abs() < 1e-12);
             }
         }
+    }
+
+    #[test]
+    fn fixed_3x3_symmetric_eigen_nonzero_depressed_constant() {
+        // Regression: the `matches_known_values` matrix has eigenvalues symmetric
+        // about their mean (q = 0 in the depressed cubic), which masks the sign of
+        // the cubic's constant term. These matrices have q ≠ 0 and expose it.
+
+        // Distinct eigenvalues (oracle from numpy eigh, descending).
+        let m = FixedMatrix::from_rows([[4.0, 1.0, 2.0], [1.0, 5.0, 3.0], [2.0, 3.0, 6.0]]);
+        let (vals, _) = m.symmetric_eigen();
+        assert!((vals[0] - 9.418_832_675_97).abs() < 1e-9);
+        assert!((vals[1] - 3.386_770_156_608).abs() < 1e-9);
+        assert!((vals[2] - 2.194_397_167_422).abs() < 1e-9);
+
+        // Degenerate double root (isotropic-like): eigenvalues {3, 1, 1}, q ≠ 0.
+        // At a double root the closed-form trig method is ill-conditioned:
+        // cos_arg → ±1, and acos(1 − ε) ≈ √(2ε), so a rounding error ε ≈ machine
+        // epsilon in cos_arg amplifies to O(√ε) ≈ 1e-8 in the repeated eigenvalue.
+        let iso = FixedMatrix::from_rows([[2.0, 1.0, 0.0], [1.0, 2.0, 0.0], [0.0, 0.0, 1.0]]);
+        let (vals, _) = iso.symmetric_eigen();
+        assert!((vals[0] - 3.0).abs() < 1e-9);
+        assert!((vals[1] - 1.0).abs() < 1e-7);
+        assert!((vals[2] - 1.0).abs() < 1e-7);
     }
 
     #[test]

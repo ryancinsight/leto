@@ -5,6 +5,10 @@ use crate::domain::layout::Layout;
 use crate::infrastructure::storage::VecStorage;
 use ndarray::{Dimension, IntoDimension, ShapeBuilder};
 
+/// Re-export of `ndarray` for consumer crates that need boundary I/O interop
+/// without declaring a direct `ndarray` dependency.
+pub use ndarray;
+
 fn ndarray_relative_span<const N: usize>(
     shape: &[usize],
     strides: &[isize],

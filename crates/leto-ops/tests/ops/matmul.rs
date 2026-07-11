@@ -1,5 +1,73 @@
 use leto::{Array, Layout, Storage, VecStorage};
-use leto_ops::matmul;
+use leto_ops::{matmul, matvec};
+
+#[test]
+fn test_matvec_contiguous() {
+    // A = [[1,2,3],[4,5,6]] (2x3), x = [7,8,9] → A·x = [50, 122].
+    let a = Array::new(
+        Layout::c_contiguous([2, 3]).unwrap(),
+        VecStorage::new(vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    )
+    .unwrap();
+    let x = Array::new(
+        Layout::c_contiguous([3]).unwrap(),
+        VecStorage::new(vec![7.0f64, 8.0, 9.0]),
+    )
+    .unwrap();
+    let mut out = Array::new(
+        Layout::c_contiguous([2]).unwrap(),
+        VecStorage::fill(2, 0.0f64),
+    )
+    .unwrap();
+
+    matvec(&a.view(), &x.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), &[50.0, 122.0]);
+}
+
+#[test]
+fn test_matvec_transposed_strided() {
+    // Aᵀ·x via a transposed (strided) view: A = [[1,2,3],[4,5,6]],
+    // Aᵀ = [[1,4],[2,5],[3,6]] (3x2), x = [1,1] → Aᵀ·x = [5, 7, 9].
+    let a = Array::new(
+        Layout::c_contiguous([2, 3]).unwrap(),
+        VecStorage::new(vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    )
+    .unwrap();
+    let a_t = a.transpose([1, 0]).unwrap(); // shape [3, 2], strides [1, 3]
+    let x = Array::new(
+        Layout::c_contiguous([2]).unwrap(),
+        VecStorage::new(vec![1.0f64, 1.0]),
+    )
+    .unwrap();
+    let mut out = Array::new(
+        Layout::c_contiguous([3]).unwrap(),
+        VecStorage::fill(3, 0.0f64),
+    )
+    .unwrap();
+
+    matvec(&a_t, &x.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), &[5.0, 7.0, 9.0]);
+}
+
+#[test]
+fn test_matvec_shape_mismatch() {
+    let a = Array::new(
+        Layout::c_contiguous([2, 3]).unwrap(),
+        VecStorage::fill(6, 1.0f64),
+    )
+    .unwrap();
+    let x = Array::new(
+        Layout::c_contiguous([2]).unwrap(),
+        VecStorage::fill(2, 1.0f64),
+    )
+    .unwrap();
+    let mut out = Array::new(
+        Layout::c_contiguous([2]).unwrap(),
+        VecStorage::fill(2, 0.0f64),
+    )
+    .unwrap();
+    assert!(matvec(&a.view(), &x.view(), &mut out.view_mut()).is_err());
+}
 
 #[test]
 fn test_matmul() {

@@ -1,4 +1,5 @@
 use crate::domain::error::{LetoError, Result};
+use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 /// One ndarray-style slicing element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +34,79 @@ impl SliceArg {
     #[inline]
     pub const fn index(index: isize) -> Self {
         Self::Index(index)
+    }
+
+    /// Multiply the step size of this slice argument.
+    #[inline]
+    pub const fn step(self, step: isize) -> Self {
+        match self {
+            Self::Range {
+                start,
+                end,
+                step: s,
+            } => Self::Range {
+                start,
+                end,
+                step: s * step,
+            },
+            // A full-axis selection carries an implicit step of 1; applying
+            // `.step()` must yield a strided full range so that, e.g.,
+            // `s![.., ..;-1, ..]` reverses the axis instead of silently
+            // dropping the stride.
+            Self::All => Self::Range {
+                start: None,
+                end: None,
+                step,
+            },
+            other => other,
+        }
+    }
+}
+
+impl From<RangeFull> for SliceArg {
+    #[inline]
+    fn from(_: RangeFull) -> Self {
+        Self::All
+    }
+}
+
+impl From<Range<usize>> for SliceArg {
+    #[inline]
+    fn from(r: Range<usize>) -> Self {
+        Self::Range {
+            start: Some(r.start as isize),
+            end: Some(r.end as isize),
+            step: 1,
+        }
+    }
+}
+
+impl From<RangeTo<usize>> for SliceArg {
+    #[inline]
+    fn from(r: RangeTo<usize>) -> Self {
+        Self::Range {
+            start: None,
+            end: Some(r.end as isize),
+            step: 1,
+        }
+    }
+}
+
+impl From<RangeFrom<usize>> for SliceArg {
+    #[inline]
+    fn from(r: RangeFrom<usize>) -> Self {
+        Self::Range {
+            start: Some(r.start as isize),
+            end: None,
+            step: 1,
+        }
+    }
+}
+
+impl From<usize> for SliceArg {
+    #[inline]
+    fn from(index: usize) -> Self {
+        Self::Index(index as isize)
     }
 }
 

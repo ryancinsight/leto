@@ -58,7 +58,7 @@ pub use application::unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ErfOp, ErfcOp,
     ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
 };
-pub use application::vector::{dot, hamming_distance, jaccard_distance};
+pub use application::vector::{dot, hamming_distance, jaccard_distance, matvec};
 pub use application::zip::{
     coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold,
     indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip2_mut_with,

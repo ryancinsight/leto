@@ -2,6 +2,52 @@ use crate::application::array::Array;
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
 
+pub trait IntoShape<const N: usize> {
+    fn into_shape(self) -> [usize; N];
+}
+
+impl<const N: usize> IntoShape<N> for [usize; N] {
+    #[inline]
+    fn into_shape(self) -> [usize; N] {
+        self
+    }
+}
+
+impl IntoShape<1> for usize {
+    #[inline]
+    fn into_shape(self) -> [usize; 1] {
+        [self]
+    }
+}
+
+impl IntoShape<2> for (usize, usize) {
+    #[inline]
+    fn into_shape(self) -> [usize; 2] {
+        [self.0, self.1]
+    }
+}
+
+impl IntoShape<3> for (usize, usize, usize) {
+    #[inline]
+    fn into_shape(self) -> [usize; 3] {
+        [self.0, self.1, self.2]
+    }
+}
+
+impl IntoShape<4> for (usize, usize, usize, usize) {
+    #[inline]
+    fn into_shape(self) -> [usize; 4] {
+        [self.0, self.1, self.2, self.3]
+    }
+}
+
+impl IntoShape<5> for (usize, usize, usize, usize, usize) {
+    #[inline]
+    fn into_shape(self) -> [usize; 5] {
+        [self.0, self.1, self.2, self.3, self.4]
+    }
+}
+
 #[inline]
 fn increment_index<const N: usize>(index: &mut [usize; N], shape: &[usize; N]) {
     for i in (0..N).rev() {
@@ -22,7 +68,8 @@ impl<T, const CAP: usize, const N: usize> Array<T, StackStorage<T, CAP>, N> {
     ///
     /// # Errors
     /// [`LetoError`] if the shape's element count does not equal `CAP`.
-    pub fn from_stack(shape: [usize; N], data: [T; CAP]) -> Result<Self> {
+    pub fn from_stack(shape: impl IntoShape<N>, data: [T; CAP]) -> Result<Self> {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape)?;
         if layout.size() != CAP {
             return Err(LetoError::StorageError {
@@ -39,7 +86,7 @@ impl<T, const CAP: usize, const N: usize> Array<T, StackStorage<T, CAP>, N> {
     ///
     /// # Errors
     /// [`LetoError`] if the shape's element count does not equal `CAP`.
-    pub fn from_stack_elem(shape: [usize; N], value: T) -> Result<Self>
+    pub fn from_stack_elem(shape: impl IntoShape<N>, value: T) -> Result<Self>
     where
         T: Copy,
     {
@@ -49,10 +96,11 @@ impl<T, const CAP: usize, const N: usize> Array<T, StackStorage<T, CAP>, N> {
 
 impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     /// Create a new Array of a given shape filled with the default value of T.
-    pub fn zeros(shape: [usize; N]) -> Self
+    pub fn zeros(shape: impl IntoShape<N>) -> Self
     where
         T: Default + Clone,
     {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
         let storage = VecStorage::fill(size, T::default());
@@ -60,10 +108,11 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     }
 
     /// Create a new Array of a given shape filled with a clone of `value`.
-    pub fn from_elem(shape: [usize; N], value: T) -> Self
+    pub fn from_elem(shape: impl IntoShape<N>, value: T) -> Self
     where
         T: Clone,
     {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
         let storage = VecStorage::fill(size, value);
@@ -71,10 +120,11 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     }
 
     /// Create a new Array of a given shape filled with one.
-    pub fn ones(shape: [usize; N]) -> Self
+    pub fn ones(shape: impl IntoShape<N>) -> Self
     where
         T: eunomia::NumericElement + Clone,
     {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
         let storage = VecStorage::fill(size, T::ONE);
@@ -82,7 +132,8 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     }
 
     /// Create a new Array from a vector of elements in C-contiguous order.
-    pub fn from_vec(shape: [usize; N], vec: Vec<T>) -> Result<Self> {
+    pub fn from_vec(shape: impl IntoShape<N>, vec: Vec<T>) -> Result<Self> {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape)?;
         let size = layout.size();
         if vec.len() != size {
@@ -99,15 +150,16 @@ impl<T, const N: usize> Array<T, VecStorage<T>, N> {
     }
 
     /// Create a new Array from a shape and a flat vector in C-contiguous order.
-    pub fn from_shape_vec(shape: [usize; N], vec: Vec<T>) -> Result<Self> {
+    pub fn from_shape_vec(shape: impl IntoShape<N>, vec: Vec<T>) -> Result<Self> {
         Self::from_vec(shape, vec)
     }
 
     /// Create an Array by calling a generator function for each coordinate.
-    pub fn from_shape_fn<F>(shape: [usize; N], mut f: F) -> Self
+    pub fn from_shape_fn<F>(shape: impl IntoShape<N>, mut f: F) -> Self
     where
         F: FnMut([usize; N]) -> T,
     {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
         let mut vec: Vec<T> = Vec::with_capacity(size);
@@ -195,17 +247,19 @@ where
 #[cfg(feature = "mnemosyne-alloc")]
 impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
     /// Create a Mnemosyne-backed array of a given shape filled with `T::default()`.
-    pub fn zeros_mnemosyne(shape: [usize; N]) -> Self
+    pub fn zeros_mnemosyne(shape: impl IntoShape<N>) -> Self
     where
         T: Default,
     {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let storage = MnemosyneStorage::new(layout.size());
         Self::new(layout, storage).expect("valid Mnemosyne storage bounds")
     }
 
     /// Create a Mnemosyne-backed array from a vector in C-contiguous order.
-    pub fn from_mnemosyne_vec(shape: [usize; N], vec: Vec<T>) -> Result<Self> {
+    pub fn from_mnemosyne_vec(shape: impl IntoShape<N>, vec: Vec<T>) -> Result<Self> {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape)?;
         let size = layout.size();
         if vec.len() != size {
@@ -222,15 +276,16 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
     }
 
     /// Create a Mnemosyne-backed array from a shape and flat vector.
-    pub fn from_mnemosyne_shape_vec(shape: [usize; N], vec: Vec<T>) -> Result<Self> {
+    pub fn from_mnemosyne_shape_vec(shape: impl IntoShape<N>, vec: Vec<T>) -> Result<Self> {
         Self::from_mnemosyne_vec(shape, vec)
     }
 
     /// Create a Mnemosyne-backed array by calling a generator for each coordinate.
-    pub fn from_mnemosyne_shape_fn<F>(shape: [usize; N], mut f: F) -> Self
+    pub fn from_mnemosyne_shape_fn<F>(shape: impl IntoShape<N>, mut f: F) -> Self
     where
         F: FnMut([usize; N]) -> T,
     {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
         let size = layout.size();
         let mut vec: Vec<T> = Vec::with_capacity(size);
@@ -244,10 +299,11 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
     }
 
     /// Create a Mnemosyne-backed array by copying a C-contiguous source slice.
-    pub fn from_mnemosyne_slice(shape: [usize; N], slice: &[T]) -> Result<Self>
+    pub fn from_mnemosyne_slice(shape: impl IntoShape<N>, slice: &[T]) -> Result<Self>
     where
         T: Copy,
     {
+        let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape)?;
         let size = layout.size();
         if slice.len() != size {
