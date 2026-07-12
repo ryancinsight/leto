@@ -28,6 +28,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   eigenvalues + isotropic degenerate double root). Unblocks
   `kwavers-medium::anisotropic::christoffel` isotropic phase/group-velocity and
   polarization tests.
+- `leto` [patch]: `Layout::has_zero_stride_aliasing` flagged empty C/F-contiguous
+  layouts (e.g. `shape=[8,0,8]`) as aliased, because `c_contiguous_strides`
+  defensively collapses the leading stride to 0 when an interior axis has size 0,
+  and the predicate only checked `dim > 1 && stride == 0` per axis without
+  considering total element count. An empty layout has no addressable elements,
+  so overlapping writes are impossible; the predicate now returns `false` when
+  `size() == 0`. Unblocks `kwavers-boundary::cpml::update` no-op kernels on
+  degenerate CPML slices where `per_dimension.y = 0` produces an empty `psi_p_y`
+  buffer. Covered with regression tests for the empty C/F-contiguous case plus
+  positive and negative broadcast controls.
 
 ### Changed
 

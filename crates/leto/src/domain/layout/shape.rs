@@ -48,7 +48,17 @@ impl<const N: usize> Layout<N> {
     }
 
     /// Returns true when multiple logical mutable indices can address one element.
+    ///
+    /// An empty layout (total element count zero) can never alias: there are no
+    /// addressable elements, so overlapping writes are impossible. This arises
+    /// naturally when a zero-sized axis collapses the row-major stride of a
+    /// leading dimension to 0 (e.g. `shape=[8,0,8] \rightarrow strides=[0,8,1]`).
+    /// Treating that as aliasing would reject no-op kernels on degenerate slices
+    /// that provably cannot conflict.
     pub fn has_zero_stride_aliasing(&self) -> bool {
+        if self.size() == 0 {
+            return false;
+        }
         self.shape
             .iter()
             .zip(self.strides.iter())
@@ -79,5 +89,62 @@ impl<const N: usize> Layout<N> {
             strides: target.strides,
             offset: self.offset,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Layout;
+
+    /// C-contiguous stride computation collapses the leading stride to 0 when an
+    /// interior axis has size 0 (see `kernels::c_contiguous_strides`). The
+    /// resulting layout is empty (size 0), so it can never alias regardless of
+    /// the zero stride on its leading dimension.
+    #[test]
+    fn empty_c_contiguous_layout_is_not_aliasing() {
+        let layout = Layout::<3>::c_contiguous([8, 0, 8]).expect("invariant: valid shape");
+        assert_eq!(layout.strides, [0, 8, 1]);
+        assert_eq!(layout.size(), 0);
+        assert!(!layout.has_zero_stride_aliasing());
+    }
+
+    /// F-contiguous layouts apply the same defensive collapse for zero dims.
+    #[test]
+    fn empty_f_contiguous_layout_is_not_aliasing() {
+        let layout = Layout::<3>::f_contiguous([8, 0, 8]).expect("invariant: valid shape");
+        assert_eq!(layout.size(), 0);
+        assert!(!layout.has_zero_stride_aliasing());
+    }
+
+    /// A genuine zero-stride axis with `dim > 1` readdresses the same physical
+    /// element from multiple logical indices, so it DOES alias. Positive
+    /// control: every other axis remains non-degenerate to keep size nonzero.
+    #[test]
+    fn zero_stride_axis_with_nonunit_size_does_alias() {
+        // shape [3, 4, 5], strides [5, 0, 1]: axis-1 has dim 4 and stride 0,
+        // so logical indices `[_, 0..4, _]` all map to the same row.
+        let layout = Layout::<3>::new([3, 4, 5], [5, 0, 1], 0);
+        assert_eq!(layout.size(), 60);
+        assert!(layout.has_zero_stride_aliasing());
+    }
+
+    /// A broadcast axis (`dim = 1, stride = 0`) does NOT by itself alias, because
+    /// a single-element axis has only one logical index. Anti-regression for
+    /// the (mistaken) notion that any zero stride triggers the predicate.
+    #[test]
+    fn broadcast_axis_alone_is_not_aliasing() {
+        let layout = Layout::<3>::new([3, 1, 5], [5, 0, 1], 0);
+        assert_eq!(layout.size(), 15);
+        assert!(!layout.has_zero_stride_aliasing());
+    }
+
+    /// A broadcast layout whose total size is zero (broadcast axis plus a
+    /// zero-dim axis) cannot alias: there are no writes to overlap.
+    #[test]
+    fn broadcast_layout_with_zero_dim_is_not_aliasing() {
+        // shape [3, 1, 0], strides [0, 0, 1]: size 0 so no aliasing.
+        let layout = Layout::<3>::new([3, 1, 0], [0, 0, 1], 0);
+        assert_eq!(layout.size(), 0);
+        assert!(!layout.has_zero_stride_aliasing());
     }
 }
