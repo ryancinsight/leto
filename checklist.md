@@ -1,5 +1,8 @@
 # Leto Development Checklist
 
+2026-07-13 [patch]: Moirai is advanced to `b2f3732`; workspace Clippy and
+canonical nextest verify the integrated provider graph.
+
 2026-07-13 [patch]: Themis provider identity is pinned to revision
 `6140468c79279ec8f112641ea7422cef4688c7f6`; manifest and lockfile resolution
 are verified under the workspace gates.
