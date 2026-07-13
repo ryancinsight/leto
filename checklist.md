@@ -4,6 +4,10 @@
 `6140468c79279ec8f112641ea7422cef4688c7f6`; manifest and lockfile resolution
 are verified under the workspace gates.
 
+2026-07-13 [patch]: Leto's Mnemosyne, Moirai, Hermes, and Eunomia requirements
+use exact current Git revisions; sibling path patches remain local-development
+overrides, making the Git source independently resolvable.
+
 2026-07-06 (provider worktree commit closeout). Split the dirty provider
 worktree into `11722c4` (`leto-ops` sparse/traversal/linalg export provider
 surface) and `3331eb1` (`leto` owned-array serde, assignment/indexing, aliases,

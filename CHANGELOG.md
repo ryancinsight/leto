@@ -10,6 +10,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 - Pin Themis to audited revision `6140468c79279ec8f112641ea7422cef4688c7f6`
   so stack integrators resolve one provider source identity.
+- Replace the path-only Hermes requirement and stale provider pins with exact
+  Git revisions so downstream Git-source consumers resolve Leto independently.
 
 ### Added
 

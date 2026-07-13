@@ -19,10 +19,10 @@ leto = { path = "crates/leto" }
 leto-ops = { path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "a6cbccf207c271af640c126ff27435f995c7cb6c" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "37ff12d584e1fb472f41b4e40c702d708aba1dac", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
-hermes-simd = { path = "../hermes/crates/hermes-simd" }
-eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "7435ea0b305210874d6f3faae7860f40de835426" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "5987a3bb35748b7077dc17bdd98d79dfd710a2ad", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "f9400170f438acd89b20723483de701304eeb187" }
+eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false }
 themis = { git = "https://github.com/ryancinsight/themis", rev = "6140468c79279ec8f112641ea7422cef4688c7f6", default-features = false }
 
 # ── Numeric Foundations ──
@@ -52,14 +52,8 @@ codegen-units = 1
 lto = "thin"
 opt-level = 3
 
-# LOCAL-DEV ONLY (uncommitted): restores standalone buildability after the
-# themis default-branch drifted to 0.9.x while leto's pinned hermes/mnemosyne
-# require themis ^0.8.0 (so pure-git `cargo generate-lockfile` no longer
-# resolves; Cargo.lock is gitignored). Mirrors the path-patch set apollo/coeus/
-# hermes already use for the local stack. NOTE: this builds leto against the
-# themis-0.9 hermes (`e6761ac`), which regresses dense matmul 43–61% at 64²/128²
-# vs the `efac0454` baseline — do NOT commit / adopt in CI until hermes restores
-# the dispatch/AXPY perf on its themis-0.9 line. See gap_audit.md §D.
+# Exact Git requirements define Leto's distribution graph. These root patches
+# replace them with sibling checkouts only for coordinated Atlas development.
 [patch."https://github.com/ryancinsight/Mnemosyne.git"]
 mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
 mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }

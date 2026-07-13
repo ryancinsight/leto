@@ -1,5 +1,13 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-13 Git-source dependency closure
+
+- **Resolved**: Leto's path-only Hermes edge and stale provider revisions made
+  its Git source non-resolvable outside the Atlas sibling layout. Exact Git
+  requirements now define the distribution graph; local patches do not leak.
+- **Evidence tier**: Cargo resolution plus warning-denied clippy and
+  value-semantic nextest gates.
+
 ## 2026-07-04 CFDrs Sparse Extension CSR Utility Provider Gap
 
 - **Resolved**: `CsrMatrix` now owns diagonal extraction, scalar/value
