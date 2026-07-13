@@ -6,6 +6,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Changed
+
+- Pin Themis to audited revision `6140468c79279ec8f112641ea7422cef4688c7f6`
+  so stack integrators resolve one provider source identity.
+
 ### Added
 
 - `leto-ops` [minor]: `matvec(a: &ArrayView<T,2>, x: &ArrayView<T,1>, out: &mut

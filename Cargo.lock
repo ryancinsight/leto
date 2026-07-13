@@ -723,12 +723,7 @@ dependencies = [
 
 [[package]]
 name = "melinoe"
-version = "0.7.0"
-source = "git+https://github.com/ryancinsight/melinoe.git#f0139dd77e2c175aeea51687669ef5d5fdafd078"
-
-[[package]]
-name = "melinoe"
-version = "0.8.0"
+version = "0.9.0"
 
 [[package]]
 name = "memchr"
@@ -756,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "mnemosyne-arena",
  "mnemosyne-backend",
@@ -779,7 +774,7 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-backend"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "mnemosyne-core",
 ]
@@ -812,7 +807,7 @@ dependencies = [
 name = "mnemosyne-heap"
 version = "0.1.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-core",
@@ -825,7 +820,7 @@ dependencies = [
 name = "mnemosyne-local"
 version = "0.1.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "mnemosyne-arena",
  "mnemosyne-backend",
  "mnemosyne-build-util",
@@ -848,7 +843,7 @@ dependencies = [
 name = "moirai"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "moirai-async",
  "moirai-core",
  "moirai-executor",
@@ -888,7 +883,7 @@ dependencies = [
 name = "moirai-executor"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "mnemosyne",
  "moirai-core",
  "moirai-pal",
@@ -917,7 +912,7 @@ version = "0.2.0"
 dependencies = [
  "js-sys",
  "libc",
- "melinoe 0.8.0",
+ "melinoe",
  "moirai-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -929,7 +924,7 @@ dependencies = [
 name = "moirai-parallel"
 version = "0.2.0"
 dependencies = [
- "melinoe 0.8.0",
+ "melinoe",
  "moirai-executor",
 ]
 
@@ -1690,9 +1685,9 @@ dependencies = [
 [[package]]
 name = "themis"
 version = "0.9.17"
-source = "git+https://github.com/ryancinsight/themis#e87618a241c69502302da296767a9e3c0acc4906"
+source = "git+https://github.com/ryancinsight/themis?rev=6140468c79279ec8f112641ea7422cef4688c7f6#6140468c79279ec8f112641ea7422cef4688c7f6"
 dependencies = [
- "melinoe 0.7.0",
+ "melinoe",
 ]
 
 [[package]]
