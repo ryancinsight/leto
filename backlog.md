@@ -5,6 +5,9 @@
 [patch] Exact Mnemosyne, Moirai, Hermes, Eunomia, and Themis revisions now form
 Leto's distributable dependency graph; root path patches are local-only.
 
+2026-07-14: Themis 0.10.0, Mnemosyne 0.4.0, and Moirai `8cd356c` are the
+published topology graph; Leto removes local Mnemosyne/Moirai overrides.
+
 ## CR-4 SSOT rebind: `leto_ops::Scalar` over `eunomia::NumericElement` (DONE 2026-07-05)
 
 [minor] Leto `leto_ops::Scalar` is now bound as `pub trait Scalar: NumericElement { fn from_usize(...) -> Self; /* default-bodied slice kernels */ }` per `atlas/docs/adr/0005-eunomia-scalar-ssot.md`. The local maintainer branch was rebased onto `origin/main` (PR #30 feat/array-to-vec, 47 commits ahead), resolving file-level merge conflicts at `crates/leto-ops/src/domain/scalar.rs`, `crates/leto/src/lib.rs`, `crates/leto/src/application/array.rs`, and `crates/leto-ops/src/application/sparse/mod.rs`. The old standalone `Scalar` trait methods (`ZERO/ONE/add/sub/mul/div/bitand/bitor/bitxor/count_ones/to_f64`) are inherited from `NumericElement`; `RealScalar` inherits from `FloatElement`. Leto keeps only `from_usize` and default-bodied slice kernels. No compatibility shims.

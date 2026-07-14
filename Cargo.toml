@@ -19,11 +19,11 @@ leto = { path = "crates/leto" }
 leto-ops = { path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "4a9d2a32423f7c3f1413171193765d6aba34ad8e" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "b2f373293686d54859dfc3a976e65b81c93f648d", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4a2ac71f909205b58d68c3b244caf99407b2d" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13" }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false }
-themis = { git = "https://github.com/ryancinsight/themis", rev = "6140468c79279ec8f112641ea7422cef4688c7f6", default-features = false }
+themis = { git = "https://github.com/ryancinsight/themis", rev = "18807bb5c43f4dc4cb6cedefeee2cc12375056c1", default-features = false }
 
 # ── Numeric Foundations ──
 num-complex = "0.4"
@@ -54,18 +54,6 @@ opt-level = 3
 
 # Exact Git requirements define Leto's distribution graph. These root patches
 # replace them with sibling checkouts only for coordinated Atlas development.
-[patch."https://github.com/ryancinsight/Mnemosyne.git"]
-mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
-mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
-mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
-mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
-
-[patch."https://github.com/ryancinsight/Moirai.git"]
-moirai = { path = "../moirai/moirai" }
-moirai-core = { path = "../moirai/moirai-core" }
-moirai-scheduler = { path = "../moirai/moirai-scheduler" }
-moirai-parallel = { path = "../moirai/moirai-parallel" }
-
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }
 
