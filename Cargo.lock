@@ -562,7 +562,7 @@ dependencies = [
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
  "hermes-simd-types",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -574,7 +574,7 @@ dependencies = [
  "half",
  "mnemosyne",
  "rkyv",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -677,7 +677,7 @@ dependencies = [
  "num-complex",
  "rand 0.8.7",
  "rand_chacha 0.3.1",
- "themis",
+ "themis 0.10.0",
  "thiserror 2.0.18",
 ]
 
@@ -765,11 +765,11 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-arena"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "mnemosyne-backend",
  "mnemosyne-core",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -813,7 +813,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-local",
  "mnemosyne-prof",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -827,7 +827,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
- "themis",
+ "themis 0.9.17",
 ]
 
 [[package]]
@@ -902,7 +902,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
- "themis",
+ "themis 0.10.0",
  "thiserror 1.0.69",
 ]
 
@@ -936,7 +936,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis",
+ "themis 0.10.0",
 ]
 
 [[package]]
@@ -1686,6 +1686,13 @@ dependencies = [
 name = "themis"
 version = "0.9.17"
 source = "git+https://github.com/ryancinsight/themis?rev=6140468c79279ec8f112641ea7422cef4688c7f6#6140468c79279ec8f112641ea7422cef4688c7f6"
+dependencies = [
+ "melinoe",
+]
+
+[[package]]
+name = "themis"
+version = "0.10.0"
 dependencies = [
  "melinoe",
 ]

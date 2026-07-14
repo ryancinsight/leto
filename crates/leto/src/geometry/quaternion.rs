@@ -1,7 +1,7 @@
 //! [`Quaternion`] and the rotation type [`UnitQuaternion`].
 
 use super::{Unit, Vector3};
-use core::ops::Mul;
+use core::ops::{Add, Div, Mul, Neg, Sub};
 use eunomia::{NumericElement, RealField};
 
 /// A quaternion `w + xi + yj + zk`.
@@ -75,6 +75,94 @@ impl<T: RealField> Mul for Quaternion<T> {
     }
 }
 
+impl<T: RealField> Add for Quaternion<T> {
+    type Output = Self;
+    #[inline]
+    fn add(self, r: Self) -> Self {
+        Self::new(self.w + r.w, self.x + r.x, self.y + r.y, self.z + r.z)
+    }
+}
+
+impl<T: RealField> Sub for Quaternion<T> {
+    type Output = Self;
+    #[inline]
+    fn sub(self, r: Self) -> Self {
+        Self::new(self.w - r.w, self.x - r.x, self.y - r.y, self.z - r.z)
+    }
+}
+
+impl<T: RealField> Neg for Quaternion<T> {
+    type Output = Self;
+    #[inline]
+    fn neg(self) -> Self {
+        Self::new(-self.w, -self.x, -self.y, -self.z)
+    }
+}
+
+impl<T: RealField> Mul<T> for Quaternion<T> {
+    type Output = Self;
+    #[inline]
+    fn mul(self, s: T) -> Self {
+        Self::new(self.w * s, self.x * s, self.y * s, self.z * s)
+    }
+}
+
+impl<T: RealField> Div<T> for Quaternion<T> {
+    type Output = Self;
+    #[inline]
+    fn div(self, s: T) -> Self {
+        Self::new(self.w / s, self.x / s, self.y / s, self.z / s)
+    }
+}
+
+impl<T: RealField> Quaternion<T> {
+    /// Inverse `q⁻¹ = conj(q) / |q|²`.
+    ///
+    /// Returns `None` when the quaternion is zero (cannot be inverted).
+    #[inline]
+    pub fn try_inverse(self) -> Option<Self> {
+        let n2 = self.norm_squared();
+        if n2 == T::ZERO {
+            return None;
+        }
+        Some(self.conjugate() / n2)
+    }
+
+    /// Convert to a 4×4 rotation matrix (column-major layout).
+    ///
+    /// The matrix is the rotation part of a 4×4 homogeneous transform,
+    /// suitable for use with column vectors: `v' = M·v`.
+    #[inline]
+    pub fn to_rotation_matrix(&self) -> crate::FixedMatrix<T, 4, 4> {
+        let (x2, y2, z2) = (self.x * self.x, self.y * self.y, self.z * self.z);
+        let (xy, xz, yz) = (self.x * self.y, self.x * self.z, self.y * self.z);
+        let (wx, wy, wz) = (self.w * self.x, self.w * self.y, self.w * self.z);
+        let one = T::ONE;
+        let two = one + one;
+        crate::FixedMatrix::from_rows([
+            [
+                one - two * (y2 + z2),
+                two * (xy - wz),
+                two * (xz + wy),
+                T::ZERO,
+            ],
+            [
+                two * (xy + wz),
+                one - two * (x2 + z2),
+                two * (yz - wx),
+                T::ZERO,
+            ],
+            [
+                two * (xz - wy),
+                two * (yz + wx),
+                one - two * (x2 + y2),
+                T::ZERO,
+            ],
+            [T::ZERO, T::ZERO, T::ZERO, T::ONE],
+        ])
+    }
+}
+
 /// A unit quaternion — a rotation in 3-space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -142,6 +230,12 @@ impl<T: RealField> UnitQuaternion<T> {
     #[inline]
     pub fn mul_unit(self, rhs: Self) -> Self {
         Self { q: self.q * rhs.q }
+    }
+
+    /// Convert to a 4×4 rotation matrix.
+    #[inline]
+    pub fn to_rotation_matrix(&self) -> crate::FixedMatrix<T, 4, 4> {
+        self.q.to_rotation_matrix()
     }
 }
 

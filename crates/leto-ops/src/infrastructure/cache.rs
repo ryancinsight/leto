@@ -69,7 +69,7 @@ fn detect_cache_geometry() -> CacheGeometry {
     let Some(topology) = themis::CpuTopology::detect() else {
         return CacheGeometry::fallback();
     };
-    geometry_from_cache_levels(topology.cache_levels())
+    geometry_from_cache_levels(topology.cache_levels().unwrap_or(&[]))
 }
 
 #[cfg(not(feature = "topology"))]
