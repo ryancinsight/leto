@@ -1,5 +1,17 @@
 # Leto Development Checklist
 
+2026-07-14 [patch]: Moirai is advanced to `8cd356c`; workspace-local Moirai
+and Mnemosyne overrides are removed so focused gates exercise the published
+provider graph.
+
+2026-07-14 [patch]: Themis provider identity is pinned to revision
+`18807bb5c43f4dc4cb6cedefeee2cc12375056c1`; `leto-ops` maps missing cache
+levels to the existing documented fallback geometry.
+
+2026-07-13 [patch]: Leto's Mnemosyne, Moirai, Hermes, and Eunomia requirements
+use exact current Git revisions; sibling path patches remain local-development
+overrides, making the Git source independently resolvable.
+
 2026-07-06 (provider worktree commit closeout). Split the dirty provider
 worktree into `11722c4` (`leto-ops` sparse/traversal/linalg export provider
 surface) and `3331eb1` (`leto` owned-array serde, assignment/indexing, aliases,

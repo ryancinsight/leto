@@ -1,5 +1,22 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-13 Git-source dependency closure
+
+- **Resolved**: Leto's path-only Hermes edge and stale provider revisions made
+  its Git source non-resolvable outside the Atlas sibling layout. Exact Git
+  requirements now define the distribution graph; local patches do not leak.
+- **Evidence tier**: Cargo resolution plus warning-denied clippy and
+  value-semantic nextest gates.
+
+## 2026-07-14 Topology provider identity
+
+- **Resolved**: Leto consumes Themis 0.10.0's optional cache-level contract
+  and uses its existing fallback geometry when a platform exposes no cache
+  topology. Mnemosyne and Moirai resolve from their published current commits;
+  no local override changes the tested provider identity.
+- **Evidence tier**: type-level `Option` handling plus package-scoped
+  compile, lint, and value-semantic nextest verification.
+
 ## 2026-07-04 CFDrs Sparse Extension CSR Utility Provider Gap
 
 - **Resolved**: `CsrMatrix` now owns diagonal extraction, scalar/value

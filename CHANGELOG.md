@@ -6,6 +6,17 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Changed
+
+- Update Mnemosyne to 0.4.0 after WGPU staging ownership moved out of the
+  general allocator contract.
+- Pin Themis to audited revision `18807bb5c43f4dc4cb6cedefeee2cc12375056c1`
+  so stack integrators resolve one provider source identity.
+- Replace the path-only Hermes requirement and stale provider pins with exact
+  Git revisions so downstream Git-source consumers resolve Leto independently.
+- Advance Moirai to its consolidated provider and indexed-lane release
+  revision without workspace-local source overrides.
+
 ### Added
 
 - `leto-ops` [minor]: `matvec(a: &ArrayView<T,2>, x: &ArrayView<T,1>, out: &mut
@@ -16,6 +27,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   `tests/ops/matmul.rs` (contiguous, transposed-strided, shape-mismatch).
 
 ### Fixed
+
+- `leto-ops` now consumes Themis's current optional `cache_levels` contract,
+  retaining its documented fallback geometry when cache discovery is absent.
 
 - `leto` [patch]: `FixedMatrix<f64, 3, 3>::symmetric_eigen` computed the
   depressed-cubic constant `q` with an inverted sign

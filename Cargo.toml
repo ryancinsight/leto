@@ -19,11 +19,11 @@ leto = { path = "crates/leto" }
 leto-ops = { path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "a6cbccf207c271af640c126ff27435f995c7cb6c" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "37ff12d584e1fb472f41b4e40c702d708aba1dac", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
-hermes-simd = { path = "../hermes/crates/hermes-simd" }
-eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
-themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4a2ac71f909205b58d68c3b244caf99407b2d" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13" }
+eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false }
+themis = { git = "https://github.com/ryancinsight/themis", rev = "18807bb5c43f4dc4cb6cedefeee2cc12375056c1", default-features = false }
 
 # ── Numeric Foundations ──
 num-complex = "0.4"
@@ -52,26 +52,8 @@ codegen-units = 1
 lto = "thin"
 opt-level = 3
 
-# LOCAL-DEV ONLY (uncommitted): restores standalone buildability after the
-# themis default-branch drifted to 0.9.x while leto's pinned hermes/mnemosyne
-# require themis ^0.8.0 (so pure-git `cargo generate-lockfile` no longer
-# resolves; Cargo.lock is gitignored). Mirrors the path-patch set apollo/coeus/
-# hermes already use for the local stack. NOTE: this builds leto against the
-# themis-0.9 hermes (`e6761ac`), which regresses dense matmul 43–61% at 64²/128²
-# vs the `efac0454` baseline — do NOT commit / adopt in CI until hermes restores
-# the dispatch/AXPY perf on its themis-0.9 line. See gap_audit.md §D.
-[patch."https://github.com/ryancinsight/Mnemosyne.git"]
-mnemosyne = { path = "../mnemosyne/crates/mnemosyne" }
-mnemosyne-core = { path = "../mnemosyne/crates/mnemosyne-core" }
-mnemosyne-arena = { path = "../mnemosyne/crates/mnemosyne-arena" }
-mnemosyne-local = { path = "../mnemosyne/crates/mnemosyne-local" }
-
-[patch."https://github.com/ryancinsight/Moirai.git"]
-moirai = { path = "../moirai/moirai" }
-moirai-core = { path = "../moirai/moirai-core" }
-moirai-scheduler = { path = "../moirai/moirai-scheduler" }
-moirai-parallel = { path = "../moirai/moirai-parallel" }
-
+# Exact Git requirements define Leto's distribution graph. These root patches
+# replace them with sibling checkouts only for coordinated Atlas development.
 [patch."https://github.com/ryancinsight/hermes.git"]
 hermes-simd = { path = "../hermes/crates/hermes-simd" }
 
@@ -80,3 +62,6 @@ eunomia = { path = "../eunomia/crates/eunomia" }
 
 [patch."https://github.com/ryancinsight/melinoe.git"]
 melinoe = { path = "../melinoe" }
+
+[patch."https://github.com/ryancinsight/themis"]
+themis = { path = "../themis" }
