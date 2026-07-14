@@ -751,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "mnemosyne-arena",
  "mnemosyne-backend",
@@ -765,7 +765,7 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-arena"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "mnemosyne-backend",
  "mnemosyne-core",
@@ -774,7 +774,7 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-backend"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "mnemosyne-core",
 ]
@@ -861,12 +861,22 @@ version = "0.2.0"
 dependencies = [
  "futures",
  "libc",
+ "moirai-async-macros",
  "moirai-core",
  "moirai-executor",
  "moirai-pal",
  "moirai-transport",
  "moirai-utils",
  "socket2",
+]
+
+[[package]]
+name = "moirai-async-macros"
+version = "0.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -1684,8 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "themis"
-version = "0.9.17"
-source = "git+https://github.com/ryancinsight/themis?rev=6140468c79279ec8f112641ea7422cef4688c7f6#6140468c79279ec8f112641ea7422cef4688c7f6"
+version = "0.10.0"
 dependencies = [
  "melinoe",
 ]
