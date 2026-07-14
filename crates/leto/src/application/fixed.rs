@@ -1118,4 +1118,31 @@ mod tests {
             matrix
         );
     }
+
+    #[test]
+    fn fixed_4x4_diagonal_inverse_preserves_value_contract() {
+        let matrix = FixedMatrix::<f64, 4, 4>::from_row_major([
+            1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ]);
+        assert_eq!(matrix.determinant(), 8.0);
+        assert_eq!(
+            matrix.into_column_major(),
+            [1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+        );
+
+        let inverse = matrix
+            .try_inverse()
+            .expect("diagonal matrix is nonsingular");
+        let expected = FixedMatrix::<f64, 4, 4>::from_row_major([
+            1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ]);
+        assert_eq!(inverse, expected);
+        assert_eq!(
+            FixedMatrix::<f64, 4, 4>::from_row_major([
+                1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ])
+            .try_inverse(),
+            None
+        );
+    }
 }

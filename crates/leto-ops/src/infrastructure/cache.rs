@@ -110,11 +110,13 @@ mod tests {
             themis::CacheLevel {
                 level: 1,
                 size_bytes: 48 * 1024,
+                line_bytes: Some(FALLBACK_CACHE_LINE_BYTES),
                 shared_processors: [0, 1].into(),
             },
             themis::CacheLevel {
                 level: 2,
                 size_bytes: 1024 * 1024,
+                line_bytes: Some(FALLBACK_CACHE_LINE_BYTES),
                 shared_processors: [0, 1].into(),
             },
         ];
@@ -133,11 +135,13 @@ mod tests {
             themis::CacheLevel {
                 level: 1,
                 size_bytes: 0,
+                line_bytes: None,
                 shared_processors: [0].into(),
             },
             themis::CacheLevel {
                 level: 3,
                 size_bytes: 8 * 1024 * 1024,
+                line_bytes: None,
                 shared_processors: [0].into(),
             },
         ];

@@ -562,7 +562,7 @@ dependencies = [
  "hermes-simd-intrinsics",
  "hermes-simd-macros",
  "hermes-simd-types",
- "themis 0.9.17",
+ "themis",
 ]
 
 [[package]]
@@ -574,7 +574,7 @@ dependencies = [
  "half",
  "mnemosyne",
  "rkyv",
- "themis 0.9.17",
+ "themis",
 ]
 
 [[package]]
@@ -677,7 +677,7 @@ dependencies = [
  "num-complex",
  "rand 0.8.7",
  "rand_chacha 0.3.1",
- "themis 0.10.0",
+ "themis",
  "thiserror 2.0.18",
 ]
 
@@ -769,7 +769,7 @@ version = "0.2.1"
 dependencies = [
  "mnemosyne-backend",
  "mnemosyne-core",
- "themis 0.9.17",
+ "themis",
 ]
 
 [[package]]
@@ -813,7 +813,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-local",
  "mnemosyne-prof",
- "themis 0.9.17",
+ "themis",
 ]
 
 [[package]]
@@ -827,7 +827,7 @@ dependencies = [
  "mnemosyne-core",
  "mnemosyne-decay",
  "mnemosyne-prof",
- "themis 0.9.17",
+ "themis",
 ]
 
 [[package]]
@@ -861,12 +861,22 @@ version = "0.2.0"
 dependencies = [
  "futures",
  "libc",
+ "moirai-async-macros",
  "moirai-core",
  "moirai-executor",
  "moirai-pal",
  "moirai-transport",
  "moirai-utils",
  "socket2",
+]
+
+[[package]]
+name = "moirai-async-macros"
+version = "0.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -902,7 +912,7 @@ dependencies = [
  "moirai-scheduler",
  "moirai-utils",
  "num_cpus",
- "themis 0.10.0",
+ "themis",
  "thiserror 1.0.69",
 ]
 
@@ -936,7 +946,7 @@ dependencies = [
  "moirai-core",
  "moirai-utils",
  "num_cpus",
- "themis 0.10.0",
+ "themis",
 ]
 
 [[package]]
@@ -1680,14 +1690,6 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "themis"
-version = "0.9.17"
-source = "git+https://github.com/ryancinsight/themis?rev=6140468c79279ec8f112641ea7422cef4688c7f6#6140468c79279ec8f112641ea7422cef4688c7f6"
-dependencies = [
- "melinoe",
 ]
 
 [[package]]
