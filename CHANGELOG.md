@@ -12,8 +12,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   general allocator contract.
 - Pin Themis to audited revision `18807bb5c43f4dc4cb6cedefeee2cc12375056c1`
   so stack integrators resolve one provider source identity.
-- Replace the path-only Hermes requirement and stale provider pins with exact
-  Git revisions so downstream Git-source consumers resolve Leto independently.
+- Replace the path-only Hermes requirement and stale Hermes revision with the
+  merged `1423e41d` Git revision so downstream Git-source consumers resolve
+  one provider graph.
 - Advance Moirai to its consolidated provider and indexed-lane release
   revision without workspace-local source overrides.
 

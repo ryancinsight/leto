@@ -1,5 +1,10 @@
 # Leto Development Checklist
 
+2026-07-15 [patch]: Align Hermes to merged revision `1423e41d`. The stale
+`51c530fa` manifest pin caused downstream RITK resolution to retain both old
+and current Hermes graphs; focused provider gates and RITK lockfile
+regeneration are pending.
+
 2026-07-14 [patch]: Moirai is advanced to `8cd356c`; workspace-local Moirai
 and Mnemosyne overrides are removed so focused gates exercise the published
 provider graph.
