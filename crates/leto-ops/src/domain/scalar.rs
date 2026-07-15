@@ -16,6 +16,8 @@ pub trait Scalar: NumericElement {
     /// Element-wise slice addition: `out = a + b`.
     #[inline]
     fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        assert_eq!(a.len(), b.len(), "add_slice: a.len() != b.len()");
+        assert_eq!(a.len(), out.len(), "add_slice: output length mismatch");
         for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
             *o = x + y;
         }
@@ -24,6 +26,8 @@ pub trait Scalar: NumericElement {
     /// Element-wise slice subtraction: `out = a - b`.
     #[inline]
     fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        assert_eq!(a.len(), b.len(), "sub_slice: a.len() != b.len()");
+        assert_eq!(a.len(), out.len(), "sub_slice: output length mismatch");
         for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
             *o = x - y;
         }
@@ -32,6 +36,8 @@ pub trait Scalar: NumericElement {
     /// Element-wise slice multiplication: `out = a * b`.
     #[inline]
     fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        assert_eq!(a.len(), b.len(), "mul_slice: a.len() != b.len()");
+        assert_eq!(a.len(), out.len(), "mul_slice: output length mismatch");
         for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
             *o = x * y;
         }
@@ -40,6 +46,8 @@ pub trait Scalar: NumericElement {
     /// Element-wise slice division: `out = a / b`.
     #[inline]
     fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+        assert_eq!(a.len(), b.len(), "div_slice: a.len() != b.len()");
+        assert_eq!(a.len(), out.len(), "div_slice: output length mismatch");
         for ((o, &x), &y) in out.iter_mut().zip(a.iter()).zip(b.iter()) {
             *o = x / y;
         }
@@ -56,6 +64,7 @@ pub trait Scalar: NumericElement {
     /// Dot product reduction over two equal-length slices.
     #[inline]
     fn dot_slice(a: &[Self], b: &[Self]) -> Self {
+        assert_eq!(a.len(), b.len(), "dot_slice: a.len() != b.len()");
         a.iter()
             .copied()
             .zip(b.iter().copied())
@@ -65,6 +74,7 @@ pub trait Scalar: NumericElement {
     /// Fused row update over equal-length slices: `out[i] += alpha * x[i]`.
     #[inline]
     fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
+        assert_eq!(x.len(), out.len(), "axpy_slice: x.len() != out.len()");
         for (o, &xv) in out.iter_mut().zip(x.iter()) {
             *o += alpha * xv;
         }
@@ -186,6 +196,8 @@ macro_rules! impl_scalar_simd {
 
             #[inline]
             fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                assert_eq!(a.len(), b.len(), "add_slice: a.len() != b.len()");
+                assert_eq!(a.len(), out.len(), "add_slice: output length mismatch");
                 if <SimdStrategy as SimdOperations<Self>>::add_slice(a, b, out).is_ok() {
                     return;
                 }
@@ -196,6 +208,8 @@ macro_rules! impl_scalar_simd {
 
             #[inline]
             fn sub_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                assert_eq!(a.len(), b.len(), "sub_slice: a.len() != b.len()");
+                assert_eq!(a.len(), out.len(), "sub_slice: output length mismatch");
                 if <SimdStrategy as SimdOperations<Self>>::sub_slice(a, b, out).is_ok() {
                     return;
                 }
@@ -206,6 +220,8 @@ macro_rules! impl_scalar_simd {
 
             #[inline]
             fn mul_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                assert_eq!(a.len(), b.len(), "mul_slice: a.len() != b.len()");
+                assert_eq!(a.len(), out.len(), "mul_slice: output length mismatch");
                 if <SimdStrategy as SimdOperations<Self>>::mul_slice(a, b, out).is_ok() {
                     return;
                 }
@@ -216,6 +232,8 @@ macro_rules! impl_scalar_simd {
 
             #[inline]
             fn div_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
+                assert_eq!(a.len(), b.len(), "div_slice: a.len() != b.len()");
+                assert_eq!(a.len(), out.len(), "div_slice: output length mismatch");
                 if <SimdStrategy as SimdOperations<Self>>::div_slice(a, b, out).is_ok() {
                     return;
                 }
@@ -237,6 +255,7 @@ macro_rules! impl_scalar_simd {
 
             #[inline]
             fn dot_slice(a: &[Self], b: &[Self]) -> Self {
+                assert_eq!(a.len(), b.len(), "dot_slice: a.len() != b.len()");
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::dot_slice(a, b) {
                     res
                 } else {
@@ -249,6 +268,7 @@ macro_rules! impl_scalar_simd {
 
             #[inline]
             fn axpy_slice(alpha: Self, x: &[Self], out: &mut [Self]) {
+                assert_eq!(x.len(), out.len(), "axpy_slice: x.len() != out.len()");
                 if <SimdStrategy as SimdOperations<Self>>::axpy_slice(alpha, x, out).is_ok() {
                     return;
                 }
