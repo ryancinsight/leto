@@ -23,7 +23,7 @@ mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "4a9d
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "b2f373293686d54859dfc3a976e65b81c93f648d", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "51c530fa4fe5f0df5947b78c2bb1eb5d229d5d13" }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false }
-themis = { git = "https://github.com/ryancinsight/themis", rev = "6140468c79279ec8f112641ea7422cef4688c7f6", default-features = false }
+themis = { git = "https://github.com/ryancinsight/themis", rev = "18807bb5c43f4dc4cb6cedefeee2cc12375056c1", default-features = false }
 
 # ── Numeric Foundations ──
 num-complex = "0.4"
