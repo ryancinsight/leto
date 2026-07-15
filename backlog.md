@@ -1,5 +1,12 @@
 # Leto Work Backlog
 
+## Hermes provider revision alignment (IN PROGRESS)
+
+[patch] Replace the stale Hermes Git revision in the distributable manifest
+with merged `1423e41d` so downstream consumers resolve one Atlas provider
+graph. Acceptance: warnings-denied Clippy, doctests, and nextest pass for the
+affected Leto packages; RITK no longer resolves the old Hermes source identity.
+
 ## Git-source dependency closure (DONE 2026-07-13)
 
 [patch] Exact Mnemosyne, Moirai, Hermes, Eunomia, and Themis revisions now form

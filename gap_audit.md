@@ -1,5 +1,15 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-15 Hermes provider revision alignment
+
+Leto's distributable manifest still named Hermes `51c530fa`, although the
+current Hermes provider is merged at `1423e41d`. This caused downstream RITK
+resolution to retain both old and current Hermes graphs. The manifest now
+targets `1423e41d`; the local path patch remains development-only.
+
+Evidence tier: manifest/source inspection. Focused Leto gates and downstream
+RITK lockfile regeneration are pending.
+
 ## 2026-07-13 Git-source dependency closure
 
 - **Resolved**: Leto's path-only Hermes edge and stale provider revisions made
