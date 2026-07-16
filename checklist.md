@@ -1,21 +1,11 @@
 # Leto Development Checklist
 
-2026-07-15 [patch]: Align Hermes to merged revision `1423e41d`. The stale
-`51c530fa` manifest pin caused downstream RITK resolution to retain both old
-and current Hermes graphs; focused provider gates and RITK lockfile
-regeneration are pending.
-
-2026-07-14 [patch]: Moirai is advanced to `8cd356c`; workspace-local Moirai
-and Mnemosyne overrides are removed so focused gates exercise the published
-provider graph.
-
-2026-07-14 [patch]: Themis provider identity is pinned to revision
-`18807bb5c43f4dc4cb6cedefeee2cc12375056c1`; `leto-ops` maps missing cache
-levels to the existing documented fallback geometry.
-
-2026-07-13 [patch]: Leto's Mnemosyne, Moirai, Hermes, and Eunomia requirements
-use exact current Git revisions; sibling path patches remain local-development
-overrides, making the Git source independently resolvable.
+2026-07-15 [patch]: Remove all first-party revision quarantines and root path
+patches. The published Leto graph now resolves Mnemosyne, Moirai, Hermes,
+Eunomia, and Themis through their provider default branches. Focused provider
+gates are verified: `cargo fmt --check`, warning-denied Clippy, locked nextest,
+and rustdoc for `leto`/`leto-ops` pass, and the locked provider-duplicate scan
+is empty. Hephaestus/Apollo consumer lock convergence remains downstream work.
 
 2026-07-06 (provider worktree commit closeout). Split the dirty provider
 worktree into `11722c4` (`leto-ops` sparse/traversal/linalg export provider

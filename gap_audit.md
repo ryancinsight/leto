@@ -1,31 +1,14 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-## 2026-07-15 Hermes provider revision alignment
+## 2026-07-15 provider default-branch convergence
 
-Leto's distributable manifest still named Hermes `51c530fa`, although the
-current Hermes provider is merged at `1423e41d`. This caused downstream RITK
-resolution to retain both old and current Hermes graphs. The manifest now
-targets `1423e41d`; the local path patch remains development-only.
-
-Evidence tier: manifest/source inspection. Focused Leto gates and downstream
-RITK lockfile regeneration are pending.
-
-## 2026-07-13 Git-source dependency closure
-
-- **Resolved**: Leto's path-only Hermes edge and stale provider revisions made
-  its Git source non-resolvable outside the Atlas sibling layout. Exact Git
-  requirements now define the distribution graph; local patches do not leak.
-- **Evidence tier**: Cargo resolution plus warning-denied clippy and
-  value-semantic nextest gates.
-
-## 2026-07-14 Topology provider identity
-
-- **Resolved**: Leto consumes Themis 0.10.0's optional cache-level contract
-  and uses its existing fallback geometry when a platform exposes no cache
-  topology. Mnemosyne and Moirai resolve from their published current commits;
-  no local override changes the tested provider identity.
-- **Evidence tier**: type-level `Option` handling plus package-scoped
-  compile, lint, and value-semantic nextest verification.
+Leto retained revision-qualified and path-patched first-party dependencies,
+which created duplicate source identities for downstream Hephaestus and Apollo
+graphs. The manifest now follows Mnemosyne, Moirai, Hermes, Eunomia, and Themis
+default branches. `leto`/`leto-ops` focused fmt, warning-denied Clippy, locked
+nextest, and rustdoc gates pass; the locked provider-duplicate scan is empty.
+Evidence tier: locked dependency-resolution plus value-semantic package tests.
+Residual downstream work: Hephaestus and Apollo lock convergence.
 
 ## 2026-07-04 CFDrs Sparse Extension CSR Utility Provider Gap
 

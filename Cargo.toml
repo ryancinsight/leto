@@ -19,11 +19,11 @@ leto = { path = "crates/leto" }
 leto-ops = { path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git", rev = "32b4a2ac71f909205b58d68c3b244caf99407b2d" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", rev = "8cd356c19c94fb5f49d048e1bf5a7289e2c51b01", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
-hermes-simd = { git = "https://github.com/ryancinsight/hermes.git", rev = "1423e41d01f4f7787472ddc91961f0771f9728fe" }
-eunomia = { git = "https://github.com/ryancinsight/eunomia", rev = "dd94f7b9d223668887302531006628818e2bd45b", default-features = false }
-themis = { git = "https://github.com/ryancinsight/themis", rev = "18807bb5c43f4dc4cb6cedefeee2cc12375056c1", default-features = false }
+mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
+moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+hermes-simd = { git = "https://github.com/ryancinsight/hermes.git" }
+eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
+themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
 num-complex = "0.4"
@@ -51,17 +51,3 @@ criterion = "0.8"
 codegen-units = 1
 lto = "thin"
 opt-level = 3
-
-# Exact Git requirements define Leto's distribution graph. These root patches
-# replace them with sibling checkouts only for coordinated Atlas development.
-[patch."https://github.com/ryancinsight/hermes.git"]
-hermes-simd = { path = "../hermes/crates/hermes-simd" }
-
-[patch."https://github.com/ryancinsight/eunomia"]
-eunomia = { path = "../eunomia/crates/eunomia" }
-
-[patch."https://github.com/ryancinsight/melinoe.git"]
-melinoe = { path = "../melinoe" }
-
-[patch."https://github.com/ryancinsight/themis"]
-themis = { path = "../themis" }
