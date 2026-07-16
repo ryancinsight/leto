@@ -1,21 +1,20 @@
 # Leto Work Backlog
 
-## Provider default-branch convergence (DELIVERED; consumer rollout in progress)
+## Provider source-identity convergence (DELIVERED; consumer rollout in progress)
 
-[patch] Remove first-party revision quarantines and root path patches so the
-distributable Leto manifest follows default-branch Mnemosyne, Moirai, Hermes,
-Eunomia, and Themis. Delivered 2026-07-15: the locked `leto-ops` graph has one
-identity for each provider; focused fmt, warning-denied Clippy, nextest, and
-rustdoc gates pass. Hephaestus and Apollo lock convergence remain downstream
-consumer work.
+[patch] Pin the distributable Leto manifest to Mnemosyne `32b4a2a`, Moirai
+`33d4211`, Hermes `1423e41`, Eunomia `dd94f7b`, and Themis `18807bb`.
+Delivered 2026-07-15: one locked identity per provider; formatter,
+warning-denied Clippy, 547/547 nextest, 9 doctests, and rustdoc pass.
+Hephaestus and Apollo converge on the merged source contract next.
 
 ## Git-source dependency closure (DONE 2026-07-13)
 
-[patch] Default-branch Mnemosyne, Moirai, Hermes, Eunomia, and Themis sources
-form Leto's distributable dependency graph; root path patches are absent.
+[patch] Exact Mnemosyne, Moirai, Hermes, Eunomia, and Themis sources form
+Leto's distributable dependency graph; root path patches are absent.
 
-2026-07-15: Themis 0.10.0, Mnemosyne 0.4.0, and Moirai 0.3.1 are the published
-topology graph; Leto resolves them from their provider default branches.
+2026-07-15: Themis 0.10.0, Mnemosyne 0.4.0, and Moirai 0.3.1 are the audited
+topology graph; Leto resolves them at the exact shared source identities.
 
 ## CR-4 SSOT rebind: `leto_ops::Scalar` over `eunomia::NumericElement` (DONE 2026-07-05)
 
