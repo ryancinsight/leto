@@ -8,15 +8,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
-- Update Mnemosyne to 0.4.0 after WGPU staging ownership moved out of the
-  general allocator contract.
-- Pin Themis to audited revision `18807bb5c43f4dc4cb6cedefeee2cc12375056c1`
-  so stack integrators resolve one provider source identity.
-- Replace the path-only Hermes requirement and stale Hermes revision with the
-  merged `1423e41d` Git revision so downstream Git-source consumers resolve
-  one provider graph.
-- Advance Moirai to its consolidated provider and indexed-lane release
-  revision without workspace-local source overrides.
+- Mnemosyne, Moirai, Hermes, Eunomia, and Themis now follow their provider
+  default branches. Removing their revision quarantines and root path patches
+  makes Leto's published graph match Atlas integration consumers.
 
 ### Added
 

@@ -1,19 +1,21 @@
 # Leto Work Backlog
 
-## Hermes provider revision alignment (IN PROGRESS)
+## Provider default-branch convergence (DELIVERED; consumer rollout in progress)
 
-[patch] Replace the stale Hermes Git revision in the distributable manifest
-with merged `1423e41d` so downstream consumers resolve one Atlas provider
-graph. Acceptance: warnings-denied Clippy, doctests, and nextest pass for the
-affected Leto packages; RITK no longer resolves the old Hermes source identity.
+[patch] Remove first-party revision quarantines and root path patches so the
+distributable Leto manifest follows default-branch Mnemosyne, Moirai, Hermes,
+Eunomia, and Themis. Delivered 2026-07-15: the locked `leto-ops` graph has one
+identity for each provider; focused fmt, warning-denied Clippy, nextest, and
+rustdoc gates pass. Hephaestus and Apollo lock convergence remain downstream
+consumer work.
 
 ## Git-source dependency closure (DONE 2026-07-13)
 
-[patch] Exact Mnemosyne, Moirai, Hermes, Eunomia, and Themis revisions now form
-Leto's distributable dependency graph; root path patches are local-only.
+[patch] Default-branch Mnemosyne, Moirai, Hermes, Eunomia, and Themis sources
+form Leto's distributable dependency graph; root path patches are absent.
 
-2026-07-14: Themis 0.10.0, Mnemosyne 0.4.0, and Moirai `8cd356c` are the
-published topology graph; Leto removes local Mnemosyne/Moirai overrides.
+2026-07-15: Themis 0.10.0, Mnemosyne 0.4.0, and Moirai 0.3.1 are the published
+topology graph; Leto resolves them from their provider default branches.
 
 ## CR-4 SSOT rebind: `leto_ops::Scalar` over `eunomia::NumericElement` (DONE 2026-07-05)
 
