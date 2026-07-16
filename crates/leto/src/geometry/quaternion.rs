@@ -272,7 +272,7 @@ impl<T: RealField> UnitQuaternion<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::Vector;
+    use crate::geometry::{RotationBasisError, Vector};
 
     #[test]
     fn quaternion_product_and_conjugate() {
@@ -340,6 +340,140 @@ mod tests {
             midpoint.transform_vector(Vector::from_array([1.0_f64, 0.0, 0.0])),
             Vector::from_array([1.0_f64, 0.0, 0.0])
         );
+    }
+
+    fn rotation_columns_map_local_axes<T: RealField>(tolerance: T) {
+        let zero = T::ZERO;
+        let one = T::ONE;
+        let rotation = UnitQuaternion::try_from_rotation_columns(
+            Vector3::new(zero, one, zero),
+            Vector3::new(-one, zero, zero),
+            Vector3::new(zero, zero, one),
+            tolerance,
+        )
+        .expect("a right-handed quarter-turn basis is a rotation");
+
+        let rotated_x = rotation.transform_vector(Vector3::new(one, zero, zero));
+        let rotated_y = rotation.transform_vector(Vector3::new(zero, one, zero));
+        let rotated_z = rotation.transform_vector(Vector3::new(zero, zero, one));
+        assert!((rotated_x.data[0] - zero).abs() <= tolerance);
+        assert!((rotated_x.data[1] - one).abs() <= tolerance);
+        assert!((rotated_x.data[2] - zero).abs() <= tolerance);
+        assert!((rotated_y.data[0] + one).abs() <= tolerance);
+        assert!((rotated_y.data[1] - zero).abs() <= tolerance);
+        assert!((rotated_y.data[2] - zero).abs() <= tolerance);
+        assert!((rotated_z.data[0] - zero).abs() <= tolerance);
+        assert!((rotated_z.data[1] - zero).abs() <= tolerance);
+        assert!((rotated_z.data[2] - one).abs() <= tolerance);
+    }
+
+    #[test]
+    fn rotation_columns_preserve_f32_basis_semantics() {
+        rotation_columns_map_local_axes(1.0e-5_f32);
+    }
+
+    #[test]
+    fn rotation_columns_preserve_f64_basis_semantics() {
+        rotation_columns_map_local_axes(1.0e-12_f64);
+    }
+
+    fn half_turn_rotation_columns_cover_negative_trace_branches<T: RealField>(tolerance: T) {
+        let zero = T::ZERO;
+        let one = T::ONE;
+        let cases = [
+            (
+                Vector3::new(one, zero, zero),
+                Vector3::new(zero, -one, zero),
+                Vector3::new(zero, zero, -one),
+                Vector3::new(zero, one, zero),
+                Vector3::new(zero, -one, zero),
+            ),
+            (
+                Vector3::new(-one, zero, zero),
+                Vector3::new(zero, one, zero),
+                Vector3::new(zero, zero, -one),
+                Vector3::new(one, zero, zero),
+                Vector3::new(-one, zero, zero),
+            ),
+            (
+                Vector3::new(-one, zero, zero),
+                Vector3::new(zero, -one, zero),
+                Vector3::new(zero, zero, one),
+                Vector3::new(one, zero, zero),
+                Vector3::new(-one, zero, zero),
+            ),
+        ];
+
+        for (x_axis, y_axis, z_axis, local, expected) in cases {
+            let rotation =
+                UnitQuaternion::try_from_rotation_columns(x_axis, y_axis, z_axis, tolerance)
+                    .expect("a right-handed half-turn basis is a rotation");
+            let actual = rotation.transform_vector(local);
+            for axis in 0..3 {
+                assert!((actual.data[axis] - expected.data[axis]).abs() <= tolerance);
+            }
+        }
+    }
+
+    #[test]
+    fn half_turn_rotation_columns_cover_f32_matrix_branches() {
+        half_turn_rotation_columns_cover_negative_trace_branches(1.0e-5_f32);
+    }
+
+    #[test]
+    fn half_turn_rotation_columns_cover_f64_matrix_branches() {
+        half_turn_rotation_columns_cover_negative_trace_branches(1.0e-12_f64);
+    }
+
+    #[test]
+    fn rotation_columns_reject_non_orthogonal_basis() {
+        let error = UnitQuaternion::try_from_rotation_columns(
+            Vector3::new(1.0_f64, 0.0, 0.0),
+            Vector3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            1.0e-12,
+        )
+        .expect_err("parallel columns cannot represent a rotation");
+        assert_eq!(
+            error,
+            RotationBasisError::NonOrthogonal {
+                first: "x",
+                second: "y",
+            }
+        );
+    }
+
+    #[test]
+    fn rotation_columns_reject_left_handed_basis() {
+        let error = UnitQuaternion::try_from_rotation_columns(
+            Vector3::new(1.0_f64, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            Vector3::new(0.0, 0.0, -1.0),
+            1.0e-12,
+        )
+        .expect_err("a reflection cannot represent a rotation");
+        assert_eq!(error, RotationBasisError::NotRightHanded);
+    }
+
+    #[test]
+    fn rotation_columns_reject_non_finite_axis_and_invalid_tolerance() {
+        let non_finite = UnitQuaternion::try_from_rotation_columns(
+            Vector3::new(f64::NAN, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            1.0e-12,
+        )
+        .expect_err("non-finite components cannot define a rotation");
+        assert_eq!(non_finite, RotationBasisError::NonFiniteAxis { axis: "x" });
+
+        let invalid_tolerance = UnitQuaternion::try_from_rotation_columns(
+            Vector3::new(1.0_f64, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            0.0,
+        )
+        .expect_err("zero tolerance is not an acceptance region");
+        assert_eq!(invalid_tolerance, RotationBasisError::InvalidTolerance);
     }
 
     #[test]

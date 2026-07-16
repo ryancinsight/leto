@@ -46,6 +46,15 @@ backends live in coeus/apollo and index leto-style host-side layout metadata.
 
 ### Stage A0 — consumer-driven geometry and array surface
 
+- [x] [minor] Add the Helios-driven checked rotation-column constructor:
+  `UnitQuaternion::try_from_rotation_columns` validates finite, right-handed,
+  orthonormal world-space axes without silently projecting an affine basis to a
+  rotation. Helios consumes it for `ImageOrientationPatient` grid poses.
+  Verification: generic `f32`/`f64` rotation tests plus invalid-basis tests,
+  package fmt/check/clippy/nextest/doc, and repository-baseline SemVer checks.
+  The downstream oblique DICOM-grid test remains Helios-owned and is sequenced
+  behind RITK's named `ImageOrientationPatient` attribute contract.
+
 - [x] [patch] Add the CFDrs sparse-extension CSR utility provider surface:
   `CsrMatrix::diagonal`, `scale_values`, `scale_rows`, `scale_columns`,
   `frobenius_norm`, `is_strictly_diagonally_dominant`, and

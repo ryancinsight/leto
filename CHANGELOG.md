@@ -18,6 +18,14 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- `leto` [minor]: `UnitQuaternion::try_from_rotation_columns` converts a
+  finite, right-handed orthonormal world-space basis into a rotation after
+  explicit caller-selected tolerance validation. `RotationBasisError` reports
+  invalid tolerances, non-finite or non-unit axes, non-orthogonal pairs, and
+  left-handed frames. This is the canonical Leto geometry boundary for Helios
+  DICOM `ImageOrientationPatient` poses; it never silently projects an affine
+  basis to a rotation.
+
 - `leto-ops` [minor]: `matvec(a: &ArrayView<T,2>, x: &ArrayView<T,1>, out: &mut
   ArrayViewMut<T,1>)` — dense matrix–vector product with a C-contiguous
   `dot_slice` fast path and a stride-addressed fallback (so a transposed view

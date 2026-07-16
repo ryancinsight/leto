@@ -1,5 +1,24 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-16 Helios Oriented-Grid Provider Gap
+
+- **Resolved in Leto**: `UnitQuaternion::try_from_rotation_columns` owns the
+  finite, orthonormal, right-handed basis validation and branch-stable
+  matrix-to-quaternion conversion. The generic `f32`/`f64` suite proves the
+  rotation maps the local axes to the supplied columns; exact failures cover
+  non-orthogonal, reflected, non-finite, and invalid-tolerance inputs.
+- **Evidence tier**: value-semantic tests plus locked check, warnings-denied
+  Clippy, 249/249 configured Nextest, doctest, warning-clean Leto rustdoc, and
+  repository-baseline SemVer checks for `leto`/`leto-ops`.
+- **Residual external limitation**: `cargo semver-checks -p leto-python
+  --baseline-rev origin/main` cannot build rustdoc on Rust 1.95 because
+  NumPy 0.23 triggers `collect_intra_doc_links` ICE. `leto-python` is already
+  `doc = false`; no source workaround is introduced for a compiler defect.
+- **Downstream sequencing**: Helios consumes this contract after RITK exposes
+  the named `ImageOrientationPatient` DICOM tag from its currently occupied
+  provider lane; Helios owns the DICOM-specific tolerance and oblique-series
+  regression.
+
 ## 2026-07-15 provider default-branch convergence
 
 Leto retained revision-qualified and path-patched first-party dependencies,
