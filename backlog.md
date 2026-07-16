@@ -1,20 +1,14 @@
 # Leto Work Backlog
 
-## Provider source-identity convergence (DELIVERED; consumer rollout in progress)
+## Provider default-source convergence (DELIVERED 2026-07-16)
 
-[patch] Pin the distributable Leto manifest to Mnemosyne `32b4a2a`, Moirai
-`33d4211`, Hermes `1423e41`, Eunomia `dd94f7b`, and Themis `18807bb`.
-Delivered 2026-07-15: one locked identity per provider; formatter,
-warning-denied Clippy, 547/547 nextest, 9 doctests, and rustdoc pass.
-Hephaestus and Apollo converge on the merged source contract next.
-
-## Git-source dependency closure (DONE 2026-07-13)
-
-[patch] Exact Mnemosyne, Moirai, Hermes, Eunomia, and Themis sources form
-Leto's distributable dependency graph; root path patches are absent.
-
-2026-07-15: Themis 0.10.0, Mnemosyne 0.4.0, and Moirai 0.3.1 are the audited
-topology graph; Leto resolves them at the exact shared source identities.
+[minor] Leto 0.37.0 follows merged provider default branches for Mnemosyne,
+Moirai, Hermes, Eunomia, and Themis. The lockfile remains the reproducibility
+pin. Mnemosyne 0.5/Core 0.2 requires the declared Rust 1.95 MSRV across every
+published workspace package. Formatter, explicit-nightly warning-denied release
+Clippy, 568/568 release Nextest, 9/9 doctests, rustdoc, source-identity scan,
+and offline rustdoc SemVer checks for `leto` and `leto-ops` pass. Hephaestus and
+Apollo now refresh their locks against the merged Leto source contract.
 
 ## CR-4 SSOT rebind: `leto_ops::Scalar` over `eunomia::NumericElement` (DONE 2026-07-05)
 

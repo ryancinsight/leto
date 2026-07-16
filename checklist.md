@@ -1,11 +1,14 @@
 # Leto Development Checklist
 
-2026-07-15 [patch]: Pin Mnemosyne, Moirai, Hermes, Eunomia, and Themis to the
-audited Atlas source revisions. The published Leto graph resolves one source
-identity for each provider without a root path override. Evidence: formatter;
-warning-denied `leto`/`leto-ops` Clippy; 547/547 locked nextest; 9 doctests;
-rustdoc; and a locked provider-identity scan. Hephaestus/Apollo consumer
-convergence follows the Leto merge.
+2026-07-16 [minor, complete]: Removed direct revision quarantine for
+Mnemosyne, Moirai, Hermes, Eunomia, and Themis. Leto 0.37.0 records Rust 1.95
+in every published package because merged Mnemosyne 0.5/Core 0.2 require it.
+Evidence: one locked source identity for each provider; Rust 1.95 accepts
+`leto-ops` and Rust 1.94 rejects the graph; formatter; explicit-nightly
+warning-denied release Clippy; configured release Nextest passes 568/568;
+doctests pass 9/9; rustdoc is warning-clean; and offline rustdoc SemVer
+comparisons pass all 196 applicable checks for each published Rust API crate
+(`leto` and `leto-ops`).
 
 2026-07-06 (provider worktree commit closeout). Split the dirty provider
 worktree into `11722c4` (`leto-ops` sparse/traversal/linalg export provider
