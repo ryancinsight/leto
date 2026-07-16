@@ -10,6 +10,17 @@ doctests pass 9/9; rustdoc is warning-clean; and offline rustdoc SemVer
 comparisons pass all 196 applicable checks for each published Rust API crate
 (`leto` and `leto-ops`).
 
+2026-07-16 [minor, complete]: Added the Helios-driven checked
+rotation-column-to-unit-quaternion provider contract in the dedicated
+`geometry::rotation` leaf. Evidence: generic `f32`/`f64` value semantics;
+exact non-orthogonal, left-handed, non-finite, and tolerance-rejection tests;
+formatter; locked package check; warnings-denied all-target/all-feature Clippy;
+249/249 configured Nextest; 1/1 doctest; warning-clean Leto rustdoc; and
+repository-baseline SemVer comparisons for `leto` and `leto-ops` (no required
+update). `leto-python` SemVer rustdoc remains toolchain-blocked by the existing
+NumPy 0.23 intra-doc-link ICE; the package is already `doc = false`, and the
+provider package documentation gate is clean.
+
 2026-07-06 (provider worktree commit closeout). Split the dirty provider
 worktree into `11722c4` (`leto-ops` sparse/traversal/linalg export provider
 surface) and `3331eb1` (`leto` owned-array serde, assignment/indexing, aliases,
