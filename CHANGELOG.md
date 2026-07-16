@@ -8,9 +8,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
-- Mnemosyne, Moirai, Hermes, Eunomia, and Themis now use the audited Atlas
-  source revisions. The published graph resolves one identity for each provider
-  without a root path override.
+- Leto 0.37.0 follows merged default branches for Mnemosyne, Moirai, Hermes,
+  Eunomia, and Themis. The lockfile is the sole reproducibility pin.
+
+### Breaking
+
+- Leto 0.37.0 requires Rust 1.95 because Mnemosyne 0.5/Core 0.2 require it.
+  Consumers must update their toolchain before resolving the provider graph.
 
 ### Added
 
