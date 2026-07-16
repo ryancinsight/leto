@@ -1,11 +1,11 @@
 # Leto Development Checklist
 
-2026-07-15 [patch]: Remove all first-party revision quarantines and root path
-patches. The published Leto graph now resolves Mnemosyne, Moirai, Hermes,
-Eunomia, and Themis through their provider default branches. Focused provider
-gates are verified: `cargo fmt --check`, warning-denied Clippy, locked nextest,
-and rustdoc for `leto`/`leto-ops` pass, and the locked provider-duplicate scan
-is empty. Hephaestus/Apollo consumer lock convergence remains downstream work.
+2026-07-15 [patch]: Pin Mnemosyne, Moirai, Hermes, Eunomia, and Themis to the
+audited Atlas source revisions. The published Leto graph resolves one source
+identity for each provider without a root path override. Evidence: formatter;
+warning-denied `leto`/`leto-ops` Clippy; 547/547 locked nextest; 9 doctests;
+rustdoc; and a locked provider-identity scan. Hephaestus/Apollo consumer
+convergence follows the Leto merge.
 
 2026-07-06 (provider worktree commit closeout). Split the dirty provider
 worktree into `11722c4` (`leto-ops` sparse/traversal/linalg export provider

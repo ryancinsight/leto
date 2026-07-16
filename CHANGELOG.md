@@ -8,9 +8,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
-- Mnemosyne, Moirai, Hermes, Eunomia, and Themis now follow their provider
-  default branches. Removing their revision quarantines and root path patches
-  makes Leto's published graph match Atlas integration consumers.
+- Mnemosyne, Moirai, Hermes, Eunomia, and Themis now use the audited Atlas
+  source revisions. The published graph resolves one identity for each provider
+  without a root path override.
 
 ### Added
 
