@@ -340,16 +340,6 @@ dependencies = [
 [[package]]
 name = "eunomia"
 version = "0.1.0"
-dependencies = [
- "bytemuck",
- "half",
- "libm",
- "num-traits",
-]
-
-[[package]]
-name = "eunomia"
-version = "0.1.0"
 source = "git+https://github.com/ryancinsight/eunomia#dd94f7b9d223668887302531006628818e2bd45b"
 dependencies = [
  "bytemuck",
@@ -568,7 +558,7 @@ name = "hermes-simd"
 version = "0.3.0"
 source = "git+https://github.com/ryancinsight/hermes.git#2d84bbf848728481e6aa2f52d9c0d930dc707582"
 dependencies = [
- "eunomia 0.1.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "half",
  "hermes-simd-core",
  "hermes-simd-intrinsics",
@@ -583,7 +573,7 @@ version = "0.3.0"
 source = "git+https://github.com/ryancinsight/hermes.git#2d84bbf848728481e6aa2f52d9c0d930dc707582"
 dependencies = [
  "bytemuck",
- "eunomia 0.1.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "half",
  "mnemosyne",
  "rkyv",
@@ -595,7 +585,7 @@ name = "hermes-simd-intrinsics"
 version = "0.3.0"
 source = "git+https://github.com/ryancinsight/hermes.git#2d84bbf848728481e6aa2f52d9c0d930dc707582"
 dependencies = [
- "eunomia 0.1.0 (git+https://github.com/ryancinsight/eunomia)",
+ "eunomia",
  "half",
  "hermes-simd-core",
 ]
@@ -666,7 +656,7 @@ name = "leto"
 version = "0.38.0"
 dependencies = [
  "bytemuck",
- "eunomia 0.1.0",
+ "eunomia",
  "half",
  "mnemosyne",
  "ndarray",
@@ -682,7 +672,7 @@ version = "0.38.0"
 dependencies = [
  "bytemuck",
  "criterion",
- "eunomia 0.1.0",
+ "eunomia",
  "half",
  "hermes-simd",
  "leto",
