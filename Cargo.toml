@@ -23,7 +23,7 @@ leto-ops = { path = "crates/leto-ops" }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git" }
-eunomia = { path = "../eunomia/crates/eunomia", default-features = false }
+eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
