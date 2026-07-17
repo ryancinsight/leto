@@ -1,5 +1,37 @@
 # Leto Work Backlog
 
+## LETO-SPARSE-DIRECT-1 — Sparse direct factorization [minor, todo]
+
+**Owner:** unclaimed
+
+**Consumer:** CFDrs `DirectSparseSolver`
+
+**Scope:** `leto-ops` CSR factorization, solve, errors, tests, Rustdoc, and
+consumer contract verification.
+
+Add a generic sparse direct factorization over Leto-owned `CsrMatrix<T>`.
+The implementation must preserve a failure mode independent from iterative
+Krylov solvers: it may not call CG/GMRES, materialize the full coefficient
+matrix as dense storage, or silently fall back to another solver. Before code
+lands, a co-located design note must ground the ordering, pivoting, symbolic
+analysis, and numeric-factorization contracts in an authoritative reference.
+
+Acceptance:
+
+- One native-precision entry point generic over every supported real scalar,
+  with typed structural, non-finite, singular, and solve-dimension failures.
+- Symbolic analysis and reusable numeric factors have explicit ownership and
+  allocation contracts; repeated right-hand sides reuse the factorization.
+- Generic `f32`/`f64` value tests cover nonsymmetric pivoting, singular input,
+  repeated solves, and residual bounds derived from scalar epsilon and matrix
+  conditioning.
+- Differential conformance covers the independent retained CFDrs sparse-LU
+  provider and Leto's dense partial-pivot LU on small matrices; the CFDrs
+  direct-after-GMRES consumer regression passes before `rsparse` is removed.
+- Provider fmt, warning-denied Clippy, configured Nextest, doctest, rustdoc,
+  and SemVer gates pass; CFDrs removes `rsparse` and all old call sites in the
+  same consumer increment, without an adapter or iterative fallback.
+
 ## Provider default-source convergence (DELIVERED 2026-07-16)
 
 [minor] Leto 0.37.0 follows merged provider default branches for Mnemosyne,

@@ -1,5 +1,14 @@
 # Leto Development Checklist
 
+2026-07-17 [patch, complete]: Registered `LETO-SPARSE-DIRECT-1` as the
+upstream-owned replacement boundary for CFDrs sparse LU. Source inspection
+confirms Leto 0.38 provides CSR CG/GMRES but no sparse direct factorization,
+while CFDrs invokes its direct solver after GMRES stagnation or breakdown.
+The backlog item pins native-precision genericity, independent direct-solver
+semantics, reusable factors, typed failures, authoritative algorithm grounding,
+value-semantic and differential verification, and same-increment consumer
+removal of `rsparse`. This tracking increment changes no code or API.
+
 2026-07-16 [minor, complete]: Removed direct revision quarantine for
 Mnemosyne, Moirai, Hermes, Eunomia, and Themis. Leto 0.37.0 records Rust 1.95
 in every published package because merged Mnemosyne 0.5/Core 0.2 require it.
