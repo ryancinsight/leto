@@ -1,5 +1,24 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-17 CFDrs Sparse Direct Factorization Gap
+
+- **Open upstream item**: `LETO-SPARSE-DIRECT-1`.
+- **Observed provider surface**: Leto 0.38 owns CSR storage, sparse products,
+  CG, and GMRES, but exposes no sparse direct factorization or reusable sparse
+  LU factors.
+- **Consumer requirement**: CFDrs calls `DirectSparseSolver` only after its
+  GMRES tiers stagnate, break down, or exhaust their iteration budget. Replacing
+  that tier with another GMRES invocation removes failure-mode independence;
+  retaining `rsparse` is therefore the correct boundary until Leto supplies a
+  real direct implementation and CFDrs passes differential conformance.
+- **Ownership decision**: sparse factorization belongs with Leto's CSR
+  representation. A CFDrs-local wrapper, dense materialization, or iterative
+  fallback would preserve the dependency/API gap instead of closing it.
+- **Required evidence tier**: authoritative algorithm specification plus
+  native-precision generic implementation, value-semantic and differential
+  tests, and the downstream direct-after-GMRES contract regression. This audit
+  records the gap; it does not claim the algorithm is implemented.
+
 ## 2026-07-16 Helios Oriented-Grid Provider Gap
 
 - **Resolved in Leto**: `UnitQuaternion::try_from_rotation_columns` owns the
