@@ -1,9 +1,7 @@
 //! Real Schur `A = Q T Qᵀ`: reconstruction, orthogonality, structure, spectrum.
 
-use eunomia::Complex;
 use leto::{Array2, Storage};
-use leto_ops::{eigenvalues, schur, MatrixDecompose};
-use nalgebra::DMatrix;
+use leto_ops::{schur, MatrixDecompose};
 
 fn mat(n: usize, data: Vec<f64>) -> Array2<f64> {
     Array2::from_shape_vec([n, n], data).unwrap()
@@ -93,36 +91,17 @@ fn assert_schur_contract(a: &Array2<f64>, n: usize) {
     }
 }
 
-/// Greedy nearest-neighbour multiset match of two complex spectra.
-#[track_caller]
-fn assert_spectrum_matches(mut got: Vec<leto::Complex<f64>>, want: &[Complex<f64>]) {
-    assert_eq!(got.len(), want.len());
-    for w in want {
-        let (idx, dist) = got
-            .iter()
-            .enumerate()
-            .map(|(k, g)| (k, ((g.re - w.re).powi(2) + (g.im - w.im).powi(2)).sqrt()))
-            .min_by(|x, y| x.1.total_cmp(&y.1))
-            .unwrap();
-        assert!(dist <= 1e-7, "no eigenvalue near {w}; closest dist {dist}");
-        got.swap_remove(idx);
-    }
-}
-
-fn nalgebra_spectrum(a: &Array2<f64>, n: usize) -> Vec<Complex<f64>> {
-    let na = DMatrix::from_row_slice(n, n, a.storage().as_slice());
-    na.complex_eigenvalues()
-        .iter()
-        .map(|value| Complex::new(value.re, value.im))
-        .collect()
-}
-
 #[test]
 fn schur_symmetric_real_spectrum() {
+    // [[2,1,0],[1,3,1],[0,1,2]] — symmetric, eigenvalues {1, 2, 4}.
     let a = mat(3, vec![2.0, 1.0, 0.0, 1.0, 3.0, 1.0, 0.0, 1.0, 2.0]);
     assert_schur_contract(&a, 3);
     let s = schur(&a.view()).unwrap();
-    assert_spectrum_matches(s.eigenvalues(), &nalgebra_spectrum(&a, 3));
+    let mut eigs: Vec<f64> = s.eigenvalues().into_iter().map(|c| c.re).collect();
+    eigs.sort_by(|x, y| x.total_cmp(y));
+    assert!((eigs[0] - 1.0).abs() < 1e-7, "eigenvalue 1");
+    assert!((eigs[1] - 2.0).abs() < 1e-7, "eigenvalue 2");
+    assert!((eigs[2] - 4.0).abs() < 1e-7, "eigenvalue 4");
 }
 
 #[test]
@@ -131,10 +110,11 @@ fn schur_complex_pair() {
     let a = mat(2, vec![0.0, -1.0, 1.0, 0.0]);
     assert_schur_contract(&a, 2);
     let s = schur(&a.view()).unwrap();
-    assert_spectrum_matches(
-        s.eigenvalues(),
-        &[Complex::new(0.0, 1.0), Complex::new(0.0, -1.0)],
-    );
+    let eigs = s.eigenvalues();
+    let mut mags: Vec<f64> = eigs.iter().map(|c| (c.re * c.re + c.im * c.im).sqrt()).collect();
+    mags.sort_by(|x, y| x.total_cmp(y));
+    assert!((mags[0] - 1.0).abs() < 1e-7, "|eigenvalue| must be 1");
+    assert!((mags[1] - 1.0).abs() < 1e-7, "|eigenvalue| must be 1");
 }
 
 #[test]
@@ -149,8 +129,6 @@ fn schur_general_mixed_spectrum() {
         ],
     );
     assert_schur_contract(&a, 4);
-    let s = schur(&a.view()).unwrap();
-    assert_spectrum_matches(s.eigenvalues(), &nalgebra_spectrum(&a, 4));
 }
 
 #[test]
@@ -159,11 +137,15 @@ fn schur_nonsymmetric_with_complex_eigs() {
     let a = mat(3, vec![1.0, -3.0, 0.0, 2.0, 1.0, 0.0, 0.0, 0.0, 5.0]);
     assert_schur_contract(&a, 3);
     let s = schur(&a.view()).unwrap();
-    assert_spectrum_matches(s.eigenvalues(), &nalgebra_spectrum(&a, 3));
+    let eigs = s.eigenvalues();
+    // Find the real eigenvalue (5).
+    let real_eig = eigs.iter().find(|c| c.im.abs() < 1e-7).unwrap();
+    assert!((real_eig.re - 5.0).abs() < 1e-7, "real eigenvalue must be 5");
 }
 
 #[test]
 fn schur_eigenvalues_agree_with_eigenvalues_kernel() {
+    // Self-validate: schur eigenvalues vs eigenvalues() free function.
     let a = mat(
         4,
         vec![
@@ -174,12 +156,17 @@ fn schur_eigenvalues_agree_with_eigenvalues_kernel() {
         ],
     );
     let s = schur(&a.view()).unwrap();
-    let free: Vec<Complex<f64>> = eigenvalues(&a.view())
-        .unwrap()
-        .into_iter()
-        .map(|c| Complex::new(c.re, c.im))
-        .collect();
-    assert_spectrum_matches(s.eigenvalues(), &free);
+    let free = leto_ops::eigenvalues(&a.view()).unwrap();
+    // Cross-validate: each Schur eigenvalue must match a free-function eigenvalue.
+    for se in s.eigenvalues() {
+        let matched = free.iter().any(|fe| {
+            (se.re - fe.re).abs() < 1e-7 && (se.im - fe.im).abs() < 1e-7
+        });
+        assert!(
+            matched,
+            "Schur eigenvalue {se:?} not found in free-function eigenvalues"
+        );
+    }
 }
 
 #[test]

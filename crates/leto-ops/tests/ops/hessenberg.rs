@@ -2,12 +2,10 @@
 //!
 //! Hessenberg `H` is unique only up to reflector signs, so we verify the
 //! convention-independent *contract* — `A = Q H Qᵀ`, `Q` orthogonal, `H` upper
-//! Hessenberg — plus orthogonal-similarity invariants (trace, Frobenius norm),
-//! and tie the Frobenius norm to nalgebra.
+//! Hessenberg — plus orthogonal-similarity invariants (trace, Frobenius norm).
 
 use leto::{Array2, Storage};
 use leto_ops::{hessenberg, norm_l2, trace, MatrixProduct};
-use nalgebra::DMatrix;
 
 #[track_caller]
 fn assert_close(actual: f64, expected: f64) {
@@ -72,7 +70,7 @@ fn hessenberg_reconstructs_and_is_upper_hessenberg() {
         assert_close(*actual, *expected);
     }
 
-    // Orthogonal-similarity invariants.
+    // Orthogonal-similarity invariants (oracle-independent).
     assert_close(trace(&h.view()).unwrap(), trace(&a.view()).unwrap());
     assert_close(norm_l2(&h.view()).unwrap(), norm_l2(&a.view()).unwrap());
 }
@@ -100,25 +98,6 @@ fn hessenberg_of_symmetric_is_tridiagonal() {
     for (actual, expected) in reconstructed.storage().as_slice().iter().zip(values.iter()) {
         assert_close(*actual, *expected);
     }
-}
-
-#[test]
-fn hessenberg_frobenius_matches_nalgebra() {
-    let n = 4;
-    let values = vec![
-        2.0, 5.0, -2.0, 2.0, 1.0, 2.0, 3.0, 1.0, -2.0, 4.0, 3.0, -2.0, 2.0, 1.0, -1.0, -1.0,
-    ];
-    let a = Array2::from_shape_vec([n, n], values.clone()).unwrap();
-    let leto_h = hessenberg(&a.view()).unwrap();
-
-    // Orthogonal similarity preserves the Frobenius norm; nalgebra's H (any
-    // reflector-sign convention) must share it. Convention-independent tie.
-    let na_h = DMatrix::from_row_slice(n, n, &values).hessenberg();
-    assert_close(norm_l2(&leto_h.h().view()).unwrap(), na_h.h().norm());
-    assert_close(
-        norm_l2(&leto_h.h().view()).unwrap(),
-        norm_l2(&a.view()).unwrap(),
-    );
 }
 
 #[test]

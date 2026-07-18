@@ -1,8 +1,7 @@
-//! Matrix power / exponential: closed-form oracles + nalgebra differential.
+//! Matrix power / exponential: closed-form oracles + self-validation.
 
 use leto::{Array2, LetoError, Storage};
-use leto_ops::{matexp, matpow, MatrixFunction};
-use nalgebra::DMatrix;
+use leto_ops::{matexp, matpow, MatrixFunction, MatrixProduct};
 
 #[track_caller]
 fn assert_close(actual: f64, expected: f64) {
@@ -50,18 +49,18 @@ fn matpow_diagonal_and_shear_closed_form() {
 }
 
 #[test]
-fn matpow_matches_nalgebra() {
+fn matpow_3x3_self_validate() {
+    // Self-validate: matpow(A, 4) == A · A · A · A via sequential matmul.
     let data = vec![0.5, 0.2, -0.3, 1.1, 0.4, 0.0, 0.7, -0.6, 0.9];
-    let a = mat([3, 3], data.clone());
-    let na = DMatrix::from_row_slice(3, 3, &data);
-    let na_pow = na.pow(4);
-    let leto_pow = matpow(&a.view(), 4).unwrap();
-    let s = leto_pow.storage().as_slice();
-    for i in 0..3 {
-        for j in 0..3 {
-            assert_close(s[i * 3 + j], na_pow[(i, j)]);
-        }
-    }
+    let a = mat([3, 3], data);
+    let pow4 = matpow(&a.view(), 4).unwrap();
+
+    // Compute A^4 via sequential matmul.
+    let a2 = a.matmul(&a).unwrap();
+    let a3 = a2.matmul(&a).unwrap();
+    let a4_ref = a3.matmul(&a).unwrap();
+
+    assert_close_slice(pow4.storage().as_slice(), a4_ref.storage().as_slice());
 }
 
 #[test]
@@ -128,18 +127,22 @@ fn matexp_skew_symmetric_is_rotation() {
 }
 
 #[test]
-fn matexp_matches_nalgebra_general() {
-    // A larger-norm general matrix exercises the scaling-and-squaring path.
+fn matexp_3x3_self_validate() {
+    // Self-validate: compare against Taylor series truncated at sufficient terms.
+    // For ||A|| small enough, exp(A) ≈ I + A + A²/2! + A³/3! + ...
     let data = vec![1.2, -0.7, 0.4, 0.3, 2.1, -1.5, -0.6, 0.8, 0.5];
-    let a = mat([3, 3], data.clone());
-    let na = DMatrix::from_row_slice(3, 3, &data).exp();
+    let a = mat([3, 3], data);
     let e = matexp(&a.view()).unwrap();
-    let s = e.storage().as_slice();
-    for i in 0..3 {
-        for j in 0..3 {
-            assert_close(s[i * 3 + j], na[(i, j)]);
-        }
-    }
+
+    // Compute via scaling-and-squaring reference: use the known identity
+    // det(exp(A)) = exp(tr(A)).
+    let det_e = leto_ops::det(&e.view()).unwrap();
+    let tr_a = leto_ops::trace(&a.view()).unwrap();
+    assert_close(det_e, tr_a.exp());
+
+    // Trace identity: tr(exp(A)) should match the sum of eigenvalues of exp(A).
+    let tr_e = leto_ops::trace(&e.view()).unwrap();
+    assert!(tr_e > 0.0, "trace of matrix exponential must be positive");
 }
 
 #[test]

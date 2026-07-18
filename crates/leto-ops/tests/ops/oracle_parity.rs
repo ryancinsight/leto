@@ -3,7 +3,6 @@ use leto_ops::{
     cholesky_decompose, det, inv, norm_l1, norm_l2, norm_max, singular_values, solve,
     symmetric_eigenvalues_jacobi,
 };
-use nalgebra::{Cholesky, DMatrix, DVector, SymmetricEigen};
 use ndarray::{s, Array2 as NdArray2};
 
 const EPS: f64 = 1.0e-9;
@@ -22,80 +21,100 @@ fn assert_close_slice(actual: &[f64], expected: &[f64]) {
     }
 }
 
-fn dmatrix_from_row_major(rows: usize, cols: usize, values: &[f64]) -> DMatrix<f64> {
-    DMatrix::from_row_slice(rows, cols, values)
-}
-
 #[test]
-fn dense_lu_contract_matches_nalgebra() {
+fn dense_lu_contract_analytical() {
+    // Tridiagonal Toeplitz: det = 36, solution x = [1, -2, 3], inverse known.
     let values = vec![4.0, -2.0, 1.0, -2.0, 4.0, -2.0, 1.0, -2.0, 4.0];
     let rhs_values = vec![11.0, -16.0, 17.0];
-    let a = Array2::from_shape_vec([3, 3], values.clone()).unwrap();
-    let rhs = Array::from_shape_vec([3], rhs_values.clone()).unwrap();
+    let a = Array2::from_shape_vec([3, 3], values).unwrap();
+    let rhs = Array::from_shape_vec([3], rhs_values).unwrap();
 
     let leto_solution = solve(&a.view(), &rhs.view()).unwrap();
     let leto_det = det(&a.view()).unwrap();
     let leto_inv = inv(&a.view()).unwrap();
 
-    let nalgebra_matrix = dmatrix_from_row_major(3, 3, &values);
-    let nalgebra_rhs = DVector::from_vec(rhs_values);
-    let nalgebra_lu = nalgebra_matrix.clone().lu();
-    let nalgebra_solution = nalgebra_lu.solve(&nalgebra_rhs).unwrap();
-    let nalgebra_det = nalgebra_lu.determinant();
-    let nalgebra_inv = nalgebra_matrix.try_inverse().unwrap();
+    // Analytical solution: x = [1, -2, 3] (verified: A·x = b).
+    let expected_x = vec![1.0, -2.0, 3.0];
+    assert_close_slice(leto_solution.storage().as_slice(), &expected_x);
 
-    assert_close_slice(
-        leto_solution.storage().as_slice(),
-        nalgebra_solution.as_slice(),
-    );
-    assert_close(leto_det, nalgebra_det);
-    let mut expected_inverse = Vec::with_capacity(9);
-    for row in 0..3 {
-        for col in 0..3 {
-            expected_inverse.push(nalgebra_inv[(row, col)]);
-        }
-    }
-    assert_close_slice(leto_inv.storage().as_slice(), &expected_inverse);
+    // Analytical determinant: 36 (det via cofactor expansion).
+    assert_close(leto_det, 36.0);
+
+    // Analytical inverse of [[4,-2,1],[-2,4,-2],[1,-2,4]]:
+    // cofactor matrix = [[12,6,0],[6,15,6],[0,6,12]], det=36
+    // A^{-1} = (1/36) * cofactor^T (symmetric, so cofactor^T == cofactor).
+    let expected_inv = vec![
+        12.0 / 36.0,
+        6.0 / 36.0,
+        0.0,
+        6.0 / 36.0,
+        15.0 / 36.0,
+        6.0 / 36.0,
+        0.0,
+        6.0 / 36.0,
+        12.0 / 36.0,
+    ];
+    assert_close_slice(leto_inv.storage().as_slice(), &expected_inv);
 }
 
 #[test]
-fn symmetric_linalg_contract_matches_nalgebra() {
+fn symmetric_linalg_contract_analytical() {
+    // SPD matrix [[6,2,1],[2,5,2],[1,2,4]] with characteristic polynomial
+    // λ³ − 15λ² + 65λ − 83 = 0.
     let values = vec![6.0, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
-    let a = Array2::from_shape_vec([3, 3], values.clone()).unwrap();
-    let nalgebra_matrix = dmatrix_from_row_major(3, 3, &values);
+    let a = Array2::from_shape_vec([3, 3], values).unwrap();
 
     let mut leto_eigenvalues = symmetric_eigenvalues_jacobi(&a.view()).unwrap();
-    let nalgebra_eigen = SymmetricEigen::new(nalgebra_matrix.clone());
-    let mut nalgebra_eigenvalues = nalgebra_eigen.eigenvalues.as_slice().to_vec();
-    leto_eigenvalues.sort_by(|lhs, rhs| lhs.total_cmp(rhs));
-    nalgebra_eigenvalues.sort_by(|lhs, rhs| lhs.total_cmp(rhs));
-    assert_close_slice(&leto_eigenvalues, &nalgebra_eigenvalues);
+    leto_eigenvalues.sort_by(|lhs: &f64, rhs: &f64| lhs.total_cmp(rhs));
 
+    // Characteristic polynomial: λ³ − 15λ² + 65λ − 83 = 0
+    // Self-consistency: verify the three Newton identities without hard-coding individual roots.
+    //   trace(A) = λ₁+λ₂+λ₃ = 15
+    //   sum of principal minors = λ₁λ₂+λ₁λ₃+λ₂λ₃ = 65
+    //   det(A) = λ₁λ₂λ₃ = 83
+    let trace: f64 = leto_eigenvalues.iter().sum();
+    assert_close(trace, 15.0);
+
+    let pairwise_sum: f64 = leto_eigenvalues.iter().enumerate().map(|(i, &li)|
+        leto_eigenvalues.iter().skip(i + 1).map(|&lj| li * lj).sum::<f64>()
+    ).sum();
+    assert_close(pairwise_sum, 65.0);
+
+    let product: f64 = leto_eigenvalues.iter().product();
+    assert_close(product, 83.0);
+
+    // Cholesky L of the same SPD matrix (analytical):
+    // L = [[√6, 0, 0], [2/√6, √(13/3), 0], [1/√6, 5/√39, √(83/26)]]
     let leto_cholesky = cholesky_decompose(&a.view()).unwrap();
-    let nalgebra_cholesky = Cholesky::new(nalgebra_matrix).unwrap();
-    let lower = nalgebra_cholesky.l();
-    let mut expected_lower = Vec::with_capacity(9);
-    for row in 0..3 {
-        for col in 0..3 {
-            expected_lower.push(lower[(row, col)]);
-        }
-    }
-    assert_close_slice(leto_cholesky.lower().storage().as_slice(), &expected_lower);
+    let ls = leto_cholesky.lower().storage().as_slice();
+    let sqrt6 = 6.0_f64.sqrt();
+    let expected_lower = vec![
+        sqrt6,
+        0.0,
+        0.0,
+        2.0 / sqrt6,
+        (13.0_f64 / 3.0).sqrt(),
+        0.0,
+        1.0 / sqrt6,
+        5.0 / 39.0_f64.sqrt(),
+        (83.0_f64 / 26.0).sqrt(),
+    ];
+    assert_close_slice(ls, &expected_lower);
 }
 
 #[test]
-fn singular_values_match_nalgebra_svd() {
-    let values = vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0];
-    let a = Array2::from_shape_vec([4, 2], values.clone()).unwrap();
+fn singular_values_analytical() {
+    // [[1,0,0],[2,2,0],[0,1,0],[0,0,1]] — compact, known singular values.
+    // σ₁ = √(10) ≈ 3.162277, σ₂ = √(4) = 2.0, σ₃ = 0 (rank-deficient).
+    let values = vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    let a = Array2::from_shape_vec([4, 3], values).unwrap();
     let mut leto_values = singular_values(&a.view()).unwrap();
+    leto_values.sort_by(|lhs: &f64, rhs: &f64| rhs.total_cmp(lhs));
 
-    let nalgebra_matrix = dmatrix_from_row_major(4, 2, &values);
-    let nalgebra_svd = nalgebra_matrix.svd(false, false);
-    let mut nalgebra_values = nalgebra_svd.singular_values.as_slice().to_vec();
-    leto_values.sort_by(|lhs, rhs| rhs.total_cmp(lhs));
-    nalgebra_values.sort_by(|lhs, rhs| rhs.total_cmp(lhs));
-
-    assert_close_slice(&leto_values, &nalgebra_values);
+    // AᵀA = [[5,4,0],[4,5,0],[0,0,1]]; eigenvalues of AᵀA = [9,1,1]
+    // σ = √eigenvalues = [3, 1, 1]
+    let expected_sv = vec![3.0, 1.0, 1.0];
+    assert_close_slice(&leto_values, &expected_sv);
 }
 
 #[test]

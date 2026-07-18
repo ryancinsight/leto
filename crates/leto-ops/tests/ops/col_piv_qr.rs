@@ -2,7 +2,6 @@
 
 use leto::{Array, Array2, Storage};
 use leto_ops::{col_piv_qr, solve_least_squares, MatrixProduct};
-use nalgebra::{DMatrix, DVector};
 
 #[track_caller]
 fn assert_close(actual: f64, expected: f64) {
@@ -75,8 +74,8 @@ fn col_piv_qr_least_squares_matches_qr_and_normal_equations() {
     let (m, n) = (4, 2);
     let a_vals = vec![1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0];
     let b_vals = vec![6.0, 5.0, 7.0, 10.0];
-    let a = Array2::from_shape_vec([m, n], a_vals.clone()).unwrap();
-    let b = Array::from_shape_vec([m], b_vals.clone()).unwrap();
+    let a = Array2::from_shape_vec([m, n], a_vals).unwrap();
+    let b = Array::from_shape_vec([m], b_vals).unwrap();
 
     let x = col_piv_qr(&a.view())
         .unwrap()
@@ -87,14 +86,13 @@ fn col_piv_qr_least_squares_matches_qr_and_normal_equations() {
     let x_qr = solve_least_squares(&a.view(), &b.view()).unwrap();
     assert_close_slice(x.storage().as_slice(), x_qr.storage().as_slice());
 
-    // And the normal-equations solution via nalgebra.
-    let na = DMatrix::from_row_slice(m, n, &a_vals);
-    let na_b = DVector::from_vec(b_vals);
-    let normal = (na.transpose() * &na)
-        .lu()
-        .solve(&(na.transpose() * &na_b))
-        .unwrap();
-    assert_close_slice(x.storage().as_slice(), normal.as_slice());
+    // Hand-computed normal-equations solution:
+    // AᵀA = [[4,10],[10,30]], Aᵀb = [28,77]
+    // det(AᵀA) = 120-100 = 20
+    // (AᵀA)⁻¹ = (1/20)[[30,-10],[-10,4]]
+    // x = (AᵀA)⁻¹Aᵀb = (1/20)[30*28-10*77, -10*28+4*77] = (1/20)[840-770, -280+308]
+    //   = (1/20)[70, 28] = [3.5, 1.4]
+    assert_close_slice(x.storage().as_slice(), &[3.5, 1.4]);
 }
 
 #[test]

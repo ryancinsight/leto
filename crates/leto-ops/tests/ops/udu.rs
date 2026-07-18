@@ -2,7 +2,6 @@
 
 use leto::{Array, Array2, Storage};
 use leto_ops::{udu_decompose, MatrixDecompose, MatrixProduct};
-use nalgebra::{DMatrix, DVector};
 
 #[track_caller]
 fn assert_close(actual: f64, expected: f64) {
@@ -42,12 +41,13 @@ fn udu_reconstructs_symmetric_indefinite_matrix() {
     let reconstructed = u.matmul(&d).unwrap().matmul(&u_transposed).unwrap();
     assert_close_slice(reconstructed.storage().as_slice(), &values);
 
-    let na_det = DMatrix::from_row_slice(n, n, &values).determinant();
-    assert_close(f.det(), na_det);
+    // Self-validate det via product of diagonal entries (U is unit-triangular, det(U)=1).
+    let det_from_diag: f64 = f.diagonal().iter().product();
+    assert_close(f.det(), det_from_diag);
 }
 
 #[test]
-fn udu_solve_and_inverse_match_nalgebra_oracles() {
+fn udu_solve_and_inverse_self_consistent() {
     let n = 3;
     let values = vec![4.0, 2.0, -2.0, 2.0, -3.0, 1.0, -2.0, 1.0, 2.0];
     let rhs_values = vec![3.0, -1.0, 2.0];
@@ -56,23 +56,35 @@ fn udu_solve_and_inverse_match_nalgebra_oracles() {
     let f = a.udu().unwrap();
 
     let x = f.solve(&rhs.view()).unwrap();
-    let na = DMatrix::from_row_slice(n, n, &values);
-    let na_x = na
-        .clone()
-        .lu()
-        .solve(&DVector::from_vec(rhs_values))
-        .unwrap();
-    assert_close_slice(x.storage().as_slice(), na_x.as_slice());
+
+    // Self-validate: A · x = b (element-wise since x is rank-1).
+    for i in 0..n {
+        let mut sum = 0.0;
+        for j in 0..n {
+            sum += a.get([i, j]).unwrap() * x.get([j]).unwrap();
+        }
+        assert_close(sum, rhs_values[i]);
+    }
 
     let inv = f.inv().unwrap();
-    let na_inv = na.try_inverse().unwrap();
-    let mut expected = Vec::with_capacity(n * n);
+
+    // Self-validate: A · A⁻¹ = I.
+    let product = a.matmul(&inv).unwrap();
     for r in 0..n {
         for c in 0..n {
-            expected.push(na_inv[(r, c)]);
+            let expected = if r == c { 1.0 } else { 0.0 };
+            assert_close(*product.get([r, c]).unwrap(), expected);
         }
     }
-    assert_close_slice(inv.storage().as_slice(), &expected);
+
+    // Self-validate: A⁻¹ · A = I.
+    let product_rev = inv.matmul(&a).unwrap();
+    for r in 0..n {
+        for c in 0..n {
+            let expected = if r == c { 1.0 } else { 0.0 };
+            assert_close(*product_rev.get([r, c]).unwrap(), expected);
+        }
+    }
 }
 
 #[test]

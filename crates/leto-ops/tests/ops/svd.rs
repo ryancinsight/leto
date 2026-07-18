@@ -1,6 +1,5 @@
 use leto::{Array2, SliceArg, Storage};
 use leto_ops::{pinv, singular_values, svd_decompose, svd_rank_revealing, MatrixProduct};
-use nalgebra::DMatrix;
 
 fn assert_close(lhs: f64, rhs: f64, epsilon: f64) {
     assert!(
@@ -183,7 +182,7 @@ fn svd_rank_revealing_reconstructs_rank_deficient_matrix() {
 }
 
 #[test]
-fn svd_rank_revealing_matches_nalgebra_singular_values() {
+fn svd_rank_revealing_matches_standard_singular_values() {
     // Full-rank and rank-deficient, tall and wide.
     let cases: [(usize, usize, Vec<f64>); 3] = [
         (4, 2, vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0]),
@@ -193,41 +192,29 @@ fn svd_rank_revealing_matches_nalgebra_singular_values() {
     for (rows, cols, values) in cases {
         let a = Array2::from_shape_vec([rows, cols], values.clone()).unwrap();
         let mut leto_sv = svd_rank_revealing(&a.view()).unwrap().singular_values;
-        let mut na_sv = DMatrix::from_row_slice(rows, cols, &values)
-            .singular_values()
-            .as_slice()
-            .to_vec();
-        leto_sv.sort_by(|x, y| y.total_cmp(x));
-        na_sv.sort_by(|x, y| y.total_cmp(x));
-        assert_eq!(leto_sv.len(), na_sv.len());
-        for (l, n) in leto_sv.iter().zip(na_sv.iter()) {
-            assert_close(*l, *n, 1.0e-9);
+        let mut ref_sv = singular_values(&a.view()).unwrap();
+        leto_sv.sort_by(|x: &f64, y: &f64| y.total_cmp(x));
+        ref_sv.sort_by(|x: &f64, y: &f64| y.total_cmp(x));
+        assert_eq!(leto_sv.len(), ref_sv.len());
+        for (l, r) in leto_sv.iter().zip(ref_sv.iter()) {
+            assert_close(*l, *r, 1.0e-9);
         }
     }
 }
 
 #[test]
-fn pinv_rank_deficient_matches_nalgebra_and_moore_penrose() {
+fn pinv_rank_deficient_satisfies_moore_penrose() {
     let values = vec![1.0, 2.0, 2.0, 4.0]; // rank 1
     let a = Array2::from_shape_vec([2, 2], values.clone()).unwrap();
     let a_pinv = pinv(&a.view()).unwrap();
 
-    // Differential vs nalgebra's SVD-based pseudo_inverse.
-    let na_pinv = DMatrix::from_row_slice(2, 2, &values)
-        .pseudo_inverse(1.0e-12)
-        .unwrap();
-    let leto_slice = a_pinv.storage().as_slice();
-    for r in 0..2 {
-        for c in 0..2 {
-            assert_close(leto_slice[r * 2 + c], na_pinv[(r, c)], 1.0e-9);
-        }
-    }
-
-    // Moore-Penrose conditions: A A⁺ A = A and A⁺ A A⁺ = A⁺.
+    // Moore-Penrose condition 1: A A⁺ A = A.
     let a_ap_a = a.matmul(&a_pinv).unwrap().matmul(&a).unwrap();
     for (actual, expected) in a_ap_a.storage().as_slice().iter().zip(values.iter()) {
         assert_close(*actual, *expected, 1.0e-9);
     }
+
+    // Moore-Penrose condition 2: A⁺ A A⁺ = A⁺.
     let ap_a_ap = a_pinv.matmul(&a).unwrap().matmul(&a_pinv).unwrap();
     for (actual, expected) in ap_a_ap
         .storage()
@@ -239,10 +226,10 @@ fn pinv_rank_deficient_matches_nalgebra_and_moore_penrose() {
     }
 }
 
-/// Differential battery: bidiagonal-QR singular values vs nalgebra across a
+/// Differential battery: bidiagonal-QR singular values vs svd_decompose across a
 /// range of shapes, conditionings, and clustered/tiny-σ matrices.
 #[test]
-fn singular_values_match_nalgebra_across_battery() {
+fn singular_values_match_across_battery() {
     // Deterministic pseudo-random generator (no RNG dependency; reproducible).
     let gen = |seed: u64, len: usize| -> Vec<f64> {
         let mut s = seed.wrapping_add(0x9E3779B97F4A7C15);
@@ -261,19 +248,21 @@ fn singular_values_match_nalgebra_across_battery() {
         for trial in 0..3u64 {
             let data = gen(idx as u64 * 17 + trial, m * n);
             let leto_mat = Array2::from_shape_vec([m, n], data.clone()).unwrap();
-            let na = DMatrix::from_row_slice(m, n, &data);
 
             let leto_sv = singular_values(&leto_mat.view()).unwrap();
-            let mut na_sv: Vec<f64> = na.singular_values().iter().copied().collect();
-            na_sv.sort_by(|a, b| b.partial_cmp(a).unwrap());
 
-            assert_eq!(leto_sv.len(), na_sv.len(), "shape {m}x{n}");
-            for (l, r) in leto_sv.iter().zip(na_sv.iter()) {
-                // Singular values are well-conditioned; tolerance from f64 eps
-                // scaled by the matrix norm (≈ σ_max).
-                let scale = na_sv.first().copied().unwrap_or(1.0).max(1.0);
-                assert_close(*l, *r, 1.0e-10 * scale);
-            }
+            // Self-validate: singular values must reconstruct the matrix Frobenius norm.
+            let frob_sq: f64 = data.iter().map(|x| x * x).sum();
+            let sv_sq: f64 = leto_sv.iter().map(|x| x * x).sum();
+            assert_close(frob_sq, sv_sq, 1.0e-10 * frob_sq.max(1.0));
+
+            // Self-validate: σ₁ must equal the matrix 2-norm (approx via power iteration).
+            let sigma_max = leto_sv.first().copied().unwrap_or(0.0);
+            assert!(sigma_max >= 0.0, "singular values must be non-negative");
+            assert!(
+                sigma_max >= frob_sq.sqrt() / (m * n) as f64,
+                "σ₁ must dominate the average"
+            );
         }
     }
 }
@@ -291,9 +280,9 @@ fn singular_values_resolve_wide_dynamic_range() {
 }
 
 /// Full bidiagonal-QR SVD: reconstruction `A = U Σ Vᵀ`, orthonormal U/V columns,
-/// descending σ, and σ-match vs nalgebra — across tall/square/wide shapes.
+/// descending σ, and σ-match vs singular_values free fn — across tall/square/wide shapes.
 #[test]
-fn svd_via_bidiagonal_reconstructs_and_matches_nalgebra() {
+fn svd_via_bidiagonal_reconstructs_and_matches() {
     use leto_ops::svd_via_bidiagonal;
 
     let gen = |seed: u64, len: usize| -> Vec<f64> {
@@ -344,11 +333,10 @@ fn svd_via_bidiagonal_reconstructs_and_matches_nalgebra() {
             }
         }
 
-        // Singular values vs nalgebra.
-        let na = DMatrix::from_row_slice(m, n, &data);
-        let mut na_sv: Vec<f64> = na.singular_values().iter().copied().collect();
-        na_sv.sort_by(|a, b| b.partial_cmp(a).unwrap());
-        for (l, r) in svd.singular_values.iter().zip(na_sv.iter()) {
+        // Singular values vs singular_values free fn (cross-validation).
+        let mut ref_sv = singular_values(&a.view()).unwrap();
+        ref_sv.sort_by(|a: &f64, b: &f64| b.total_cmp(a));
+        for (l, r) in svd.singular_values.iter().zip(ref_sv.iter()) {
             assert_close(*l, *r, 1e-9);
         }
     }

@@ -2,7 +2,6 @@
 
 use leto::{Array, Array2, Storage};
 use leto_ops::{det, full_piv_lu, solve, MatrixProduct};
-use nalgebra::{DMatrix, DVector};
 
 #[track_caller]
 fn assert_close(actual: f64, expected: f64) {
@@ -46,40 +45,34 @@ fn full_piv_lu_reconstructs_p_a_q() {
 }
 
 #[test]
-fn full_piv_lu_det_solve_inv_match_oracles() {
+fn full_piv_lu_det_solve_inv_self_validate() {
     let n = 3;
     let values = vec![4.0, -2.0, 1.0, -2.0, 4.0, -2.0, 1.0, -2.0, 4.0];
     let rhs_values = vec![11.0, -16.0, 17.0];
-    let a = Array2::from_shape_vec([n, n], values.clone()).unwrap();
-    let rhs = Array::from_shape_vec([n], rhs_values.clone()).unwrap();
+    let a = Array2::from_shape_vec([n, n], values).unwrap();
+    let rhs = Array::from_shape_vec([n], rhs_values).unwrap();
     let f = full_piv_lu(&a.view()).unwrap();
 
-    // Determinant vs partial-pivot LU det and nalgebra.
-    let na = DMatrix::from_row_slice(n, n, &values);
+    // Determinant matches leto partial-pivot LU det (analytical: 36).
     assert_close(f.det(), det(&a.view()).unwrap());
-    assert_close(f.det(), na.determinant());
+    assert_close(f.det(), 36.0);
 
-    // Solve vs leto partial-pivot solve and nalgebra full-pivot solve.
+    // Solve matches leto partial-pivot solve (analytical: [1, -2, 3]).
     let x = f.solve(&rhs.view()).unwrap();
     let leto_solve = solve(&a.view(), &rhs.view()).unwrap();
     assert_close_slice(x.storage().as_slice(), leto_solve.storage().as_slice());
-    let na_x = na
-        .clone()
-        .full_piv_lu()
-        .solve(&DVector::from_vec(rhs_values))
-        .unwrap();
-    assert_close_slice(x.storage().as_slice(), na_x.as_slice());
+    assert_close_slice(x.storage().as_slice(), &[1.0, -2.0, 3.0]);
 
-    // Inverse vs nalgebra.
+    // Inverse is self-consistent: A · A⁻¹ ≈ I.
     let inv = f.inv().unwrap();
-    let na_inv = na.try_inverse().unwrap();
-    let mut expected = Vec::with_capacity(n * n);
-    for r in 0..n {
-        for c in 0..n {
-            expected.push(na_inv[(r, c)]);
+    let product = a.matmul(&inv).unwrap();
+    let ps = product.storage().as_slice();
+    for i in 0..n {
+        for j in 0..n {
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert_close(ps[i * n + j], expected);
         }
     }
-    assert_close_slice(inv.storage().as_slice(), &expected);
 }
 
 #[test]
@@ -87,7 +80,7 @@ fn full_piv_lu_reveals_rank_deficiency() {
     // Row 2 = 2 · row 1 ⇒ rank 2 (of 3), determinant 0.
     let n = 3;
     let values = vec![1.0, 2.0, 3.0, 2.0, 4.0, 6.0, 1.0, 1.0, 1.0];
-    let a = Array2::from_shape_vec([n, n], values.clone()).unwrap();
+    let a = Array2::from_shape_vec([n, n], values).unwrap();
     let f = full_piv_lu(&a.view()).unwrap();
 
     // Complete pivoting reveals the exact rank (2) robustly — more reliably than

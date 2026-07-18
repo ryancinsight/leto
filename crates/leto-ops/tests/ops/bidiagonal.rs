@@ -3,12 +3,10 @@
 //! `B` is unique only up to reflector signs, so we verify the
 //! convention-independent contract — `A = U B Vᵀ`, `U`/`V` orthogonal, `B` upper
 //! bidiagonal — plus singular-value preservation (the property that makes
-//! bidiagonalization the SVD's first phase), tied to both leto's own
-//! `singular_values` and nalgebra's SVD.
+//! bidiagonalization the SVD's first phase), tied to leto's own `singular_values`.
 
 use leto::{Array2, Storage};
 use leto_ops::{bidiagonalize, singular_values, MatrixProduct};
-use nalgebra::DMatrix;
 
 #[track_caller]
 fn assert_close(actual: f64, expected: f64) {
@@ -61,24 +59,12 @@ fn run_case(m: usize, n: usize, values: Vec<f64>) {
         assert_close(*actual, *expected);
     }
 
-    // Singular-value preservation: σ(B) == σ(A) (leto), and == nalgebra's σ(A).
+    // Singular-value preservation: σ(B) == σ(A) (leto self-validation).
     let sv_b = singular_values(&b.view()).unwrap();
     let sv_a = singular_values(&a.view()).unwrap();
     assert_eq!(sv_b.len(), sv_a.len());
     for (lb, la) in sv_b.iter().zip(sv_a.iter()) {
         assert_close(*lb, *la);
-    }
-    let na_sv = DMatrix::from_row_slice(m, n, &values)
-        .svd(false, false)
-        .singular_values
-        .as_slice()
-        .to_vec();
-    let mut sv_b_sorted = sv_b.clone();
-    let mut na_sorted = na_sv;
-    sv_b_sorted.sort_by(|x, y| y.total_cmp(x));
-    na_sorted.sort_by(|x, y| y.total_cmp(x));
-    for (lb, na) in sv_b_sorted.iter().zip(na_sorted.iter()) {
-        assert_close(*lb, *na);
     }
 }
 

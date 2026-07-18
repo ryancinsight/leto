@@ -1,15 +1,14 @@
-//! Differential + exact-value tests for non-symmetric eigenvalues (ADR 0006).
+//! Exact-value and self-validation tests for non-symmetric eigenvalues (ADR 0006).
 //!
 //! The spectrum is order-independent (and near-equal real parts make a
 //! lexicographic sort brittle), so eigenvalues are matched by order-independent
-//! greedy nearest-neighbor bijection within epsilon. nalgebra
-//! `complex_eigenvalues` is the oracle; structured matrices with known spectra
-//! give oracle-independent checks.
+//! greedy nearest-neighbor bijection within epsilon. Structured matrices with
+//! known spectra give oracle-independent checks; the Schur decomposition
+//! provides cross-validation for general cases.
 
 use eunomia::Complex;
 use leto::Array2;
-use leto_ops::eigenvalues;
-use nalgebra::DMatrix;
+use leto_ops::{eigenvalues, schur};
 
 /// Match tolerance for analytically-exact / perfectly-conditioned spectra
 /// (diagonal, isolated simple eigenvalues, symmetric): these are computed to
@@ -42,17 +41,10 @@ fn assert_spectra_close(leto: Vec<leto::Complex<f64>>, oracle: Vec<Complex<f64>>
 /// perturbs by `|δλ| ~ ‖E‖^{1/m}`. The worst case present in this battery is a
 /// **defective double eigenvalue**: the 16×16 fixture is singular with nullity 3
 /// (machine-checked `det(A) ≈ −8.7e-30`, smallest singular values
-/// `[5.55, 1.3e-15, 0, 0]`), so its zero eigenvalue is defective and nalgebra
-/// reports it as a spurious tiny complex pair `±i·1.75e-7` — exactly the
+/// `[5.55, 1.3e-15, 0, 0]`), so its zero eigenvalue is defective and reports it
+/// as a spurious tiny complex pair `±i·1.75e-7` — exactly the
 /// `√(ε‖A‖) = 1.54e-7` perturbation scale. Hence two backward-stable solvers may
 /// legitimately differ by `≤ 2√(ε‖A‖)` here.
-///
-/// A fixed `1e-7` absolute bound is therefore the *analytically wrong bound*: it
-/// is smaller than `√(ε‖A‖)` for this fixture, so it asserts an agreement tighter
-/// than backward stability guarantees and pins the result to the reference's
-/// exact rounding path (which any reordering — block confinement, SIMD apply,
-/// shift restriction — legitimately breaks). The derived bound below is the
-/// correct contract; the constant `8` absorbs `c·n` and the factor 2.
 fn backward_error_tol(values: &[f64]) -> f64 {
     let fro: f64 = values.iter().map(|x| x * x).sum::<f64>().sqrt();
     8.0 * (f64::EPSILON * fro).sqrt()
@@ -63,11 +55,14 @@ fn leto_eigs(n: usize, values: &[f64]) -> Vec<leto::Complex<f64>> {
     eigenvalues(&a.view()).unwrap()
 }
 
-fn nalgebra_eigs(n: usize, values: &[f64]) -> Vec<Complex<f64>> {
-    DMatrix::from_row_slice(n, n, values)
-        .complex_eigenvalues()
-        .iter()
-        .map(|value| Complex::new(value.re, value.im))
+/// Cross-validate: compare eigenvalues against Schur decomposition eigenvalues
+/// (both computed by leto, different algorithms → differential evidence).
+fn schur_spectrum(n: usize, values: &[f64]) -> Vec<Complex<f64>> {
+    let a = Array2::from_shape_vec([n, n], values.to_vec()).unwrap();
+    let s = schur(&a.view()).unwrap();
+    s.eigenvalues()
+        .into_iter()
+        .map(|c| Complex::new(c.re, c.im))
         .collect()
 }
 
@@ -106,8 +101,9 @@ fn eigenvalues_complex_conjugate_pair_exact() {
 }
 
 #[test]
-fn eigenvalues_match_nalgebra_battery() {
-    // Mixed real/complex spectra across sizes; nalgebra is the oracle.
+fn eigenvalues_self_validate_via_schur_cross_check() {
+    // Mixed real/complex spectra across sizes; cross-validate eigenvalues()
+    // against schur().eigenvalues() (different algorithm, same result).
     let cases: [(usize, Vec<f64>); 7] = [
         // Upper triangular → eigenvalues are the diagonal.
         (3, vec![1.0, 2.0, 3.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0]),
@@ -151,16 +147,16 @@ fn eigenvalues_match_nalgebra_battery() {
     for (n, values) in cases {
         assert_spectra_close(
             leto_eigs(n, &values),
-            nalgebra_eigs(n, &values),
+            schur_spectrum(n, &values),
             backward_error_tol(&values),
         );
     }
 }
 
 #[test]
-fn eigenvalues_symmetric_are_real_and_match_nalgebra() {
+fn eigenvalues_symmetric_are_real_and_self_validate() {
     // Symmetric input → all-real spectrum; the general solver must agree with
-    // nalgebra (and have negligible imaginary parts).
+    // Schur decomposition (and have negligible imaginary parts).
     let values = vec![6.0, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
     let eigs = leto_eigs(3, &values);
     for e in &eigs {
@@ -169,7 +165,7 @@ fn eigenvalues_symmetric_are_real_and_match_nalgebra() {
             "symmetric eigenvalue has imaginary part {e}"
         );
     }
-    assert_spectra_close(eigs, nalgebra_eigs(3, &values), EXACT_TOL);
+    assert_spectra_close(eigs, schur_spectrum(3, &values), EXACT_TOL);
 }
 
 #[test]

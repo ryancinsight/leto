@@ -27,7 +27,6 @@ thiserror = { workspace = true }
 leto = { workspace = true, features = ["ndarray-compat"] }
 ndarray = { workspace = true }
 ndarray-rand = { workspace = true }
-nalgebra = { workspace = true }
 criterion = { workspace = true }
 rand = "0.8"
 rand_chacha = "0.3"

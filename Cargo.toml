@@ -33,7 +33,6 @@ half = { version = "2.7", features = ["bytemuck"] }
 # ── Optional Compatibility ──
 ndarray = "0.16"
 ndarray-rand = "0.15"
-nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
 # ── Error and Utility ──
 thiserror = "2"

@@ -1,13 +1,13 @@
 //! Differential tests for the fluent rank-2 LA trait layer (ADR 0003).
 //!
 //! Each test asserts the trait-method surface is identical to (a) the
-//! authoritative free-function kernel it delegates to and (b) the nalgebra /
-//! ndarray oracle. A transposed-receiver case proves arbitrary-layout support
-//! flows through the `AsMatrixView` bridge unchanged.
+//! authoritative free-function kernel it delegates to and (b) oracle-independent
+//! identities (Moore-Penrose conditions, normal-equations solution, analytical
+//! values). A transposed-receiver case proves arbitrary-layout support flows
+//! through the `AsMatrixView` bridge unchanged.
 
 use leto::{Array, Array2, Storage};
 use leto_ops::{det, matmul, norm_l2, MatrixDecompose, MatrixNorm, MatrixProduct, MatrixSolve};
-use nalgebra::{Cholesky, DMatrix, DVector, SymmetricEigen};
 use ndarray::Array2 as NdArray2;
 
 const EPS: f64 = 1.0e-9;
@@ -28,23 +28,8 @@ fn assert_close_slice(actual: &[f64], expected: &[f64]) {
     }
 }
 
-fn dmatrix(rows: usize, cols: usize, values: &[f64]) -> DMatrix<f64> {
-    DMatrix::from_row_slice(rows, cols, values)
-}
-
-/// Flatten a nalgebra (column-major) matrix to row-major for slice comparison.
-fn dmatrix_row_major(m: &DMatrix<f64>) -> Vec<f64> {
-    let mut out = Vec::with_capacity(m.nrows() * m.ncols());
-    for r in 0..m.nrows() {
-        for c in 0..m.ncols() {
-            out.push(m[(r, c)]);
-        }
-    }
-    out
-}
-
 #[test]
-fn pinv_method_matches_nalgebra_and_moore_penrose() {
+fn pinv_method_matches_moore_penrose_conditions() {
     // Tall (full column rank), wide (full row rank), and square invertible.
     let cases: [(usize, usize, Vec<f64>); 3] = [
         (4, 2, vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0]),
@@ -57,19 +42,25 @@ fn pinv_method_matches_nalgebra_and_moore_penrose() {
         let leto_pinv = a.pinv().unwrap();
         assert_eq!(leto_pinv.shape(), [cols, rows]);
 
-        // Differential vs nalgebra's SVD-based pseudo_inverse.
-        let na = dmatrix(rows, cols, &values);
-        let na_pinv = na.clone().pseudo_inverse(1.0e-12).unwrap();
-        assert_close_slice(leto_pinv.storage().as_slice(), &dmatrix_row_major(&na_pinv));
-
         // Moore-Penrose condition 1: A A⁺ A == A (oracle-independent).
-        let mut a_pinv = Array2::zeros([rows, cols]);
+        let mut a_pinv_a = Array2::zeros([rows, cols]);
         {
             let mut tmp = Array2::zeros([rows, rows]);
             matmul(&a.view(), &leto_pinv.view(), &mut tmp.view_mut()).unwrap();
-            matmul(&tmp.view(), &a.view(), &mut a_pinv.view_mut()).unwrap();
+            matmul(&tmp.view(), &a.view(), &mut a_pinv_a.view_mut()).unwrap();
         }
-        assert_close_slice(a_pinv.storage().as_slice(), &values);
+        assert_close_slice(a_pinv_a.storage().as_slice(), &values);
+
+        // Moore-Penrose condition 2: (A A⁺)ᵀ == A A⁺ (symmetry).
+        let mut aap = Array2::zeros([rows, rows]);
+        matmul(&a.view(), &leto_pinv.view(), &mut aap.view_mut()).unwrap();
+        let aap_t = aap.transpose([1, 0]).unwrap();
+        // aap_t is strided (non-contiguous); to_contiguous materializes the copy.
+        let aap_t_contig = aap_t.to_contiguous();
+        assert_close_slice(
+            aap.as_slice().unwrap(),
+            aap_t_contig.as_slice().unwrap(),
+        );
     }
 }
 
@@ -98,100 +89,109 @@ fn matmul_method_matches_kernel_and_ndarray() {
 }
 
 #[test]
-fn solve_det_inv_methods_match_nalgebra() {
+fn solve_det_inv_methods_match_analytical() {
+    // Tridiagonal Toeplitz: det=36, x=[1,-2,3], inverse known.
     let values = vec![4.0, -2.0, 1.0, -2.0, 4.0, -2.0, 1.0, -2.0, 4.0];
     let rhs_values = vec![11.0, -16.0, 17.0];
-    let a = Array2::from_shape_vec([3, 3], values.clone()).unwrap();
-    let rhs = Array::from_shape_vec([3], rhs_values.clone()).unwrap();
+    let a = Array2::from_shape_vec([3, 3], values).unwrap();
+    let rhs = Array::from_shape_vec([3], rhs_values).unwrap();
 
     let x = a.solve(&rhs.view()).unwrap();
     let d = a.det().unwrap();
     let inverse = a.inv().unwrap();
 
-    let na = dmatrix(3, 3, &values);
-    let na_rhs = DVector::from_vec(rhs_values);
-    let na_lu = na.clone().lu();
-    let expected_x = na_lu.solve(&na_rhs).unwrap();
-    let expected_det = na_lu.determinant();
-    let expected_inv = na.try_inverse().unwrap();
-
-    assert_close_slice(x.storage().as_slice(), expected_x.as_slice());
-    assert_close(d, expected_det);
-    let mut expected_inv_rows = Vec::with_capacity(9);
-    for r in 0..3 {
-        for c in 0..3 {
-            expected_inv_rows.push(expected_inv[(r, c)]);
-        }
-    }
-    assert_close_slice(inverse.storage().as_slice(), &expected_inv_rows);
+    assert_close_slice(x.storage().as_slice(), &[1.0, -2.0, 3.0]);
+    assert_close(d, 36.0);
+    let expected_inv = vec![
+        12.0 / 36.0,
+        6.0 / 36.0,
+        0.0,
+        6.0 / 36.0,
+        15.0 / 36.0,
+        6.0 / 36.0,
+        0.0,
+        6.0 / 36.0,
+        12.0 / 36.0,
+    ];
+    assert_close_slice(inverse.storage().as_slice(), &expected_inv);
 }
 
 #[test]
-fn cholesky_and_eigen_methods_match_nalgebra() {
+fn cholesky_and_eigen_methods_match_analytical() {
     let values = vec![6.0, 2.0, 1.0, 2.0, 5.0, 2.0, 1.0, 2.0, 4.0];
-    let a = Array2::from_shape_vec([3, 3], values.clone()).unwrap();
-    let na = dmatrix(3, 3, &values);
+    let a = Array2::from_shape_vec([3, 3], values).unwrap();
 
+    // Analytical eigenvalues via Newton identities (self-consistency, no hard-coded roots).
+    //   λ₁+λ₂+λ₃ = trace(A) = 15
+    //   λ₁λ₂+λ₁λ₃+λ₂λ₃ = sum of principal minors = 65
+    //   λ₁λ₂λ₃ = det(A) = 83
     let mut eig = a.symmetric_eigenvalues().unwrap();
-    let mut expected_eig = SymmetricEigen::new(na.clone())
-        .eigenvalues
-        .as_slice()
-        .to_vec();
-    eig.sort_by(|x, y| x.total_cmp(y));
-    expected_eig.sort_by(|x, y| x.total_cmp(y));
-    assert_close_slice(&eig, &expected_eig);
+    eig.sort_by(|x: &f64, y: &f64| x.total_cmp(y));
+    let trace: f64 = eig.iter().sum();
+    assert_close(trace, 15.0);
+    let pairwise_sum: f64 = eig.iter().enumerate().map(|(i, &li)|
+        eig.iter().skip(i + 1).map(|&lj| li * lj).sum::<f64>()
+    ).sum();
+    assert_close(pairwise_sum, 65.0);
+    let product: f64 = eig.iter().product();
+    assert_close(product, 83.0);
 
+    // Analytical Cholesky L (lower-triangular):
+    // L = [[√6, 0, 0], [2/√6, √(13/3), 0], [1/√6, 5/√39, √(83/26)]]
     let chol = a.cholesky().unwrap();
-    let lower = Cholesky::new(na).unwrap().l();
-    let mut expected_lower = Vec::with_capacity(9);
-    for r in 0..3 {
-        for c in 0..3 {
-            expected_lower.push(lower[(r, c)]);
-        }
-    }
+    let sqrt6 = 6.0_f64.sqrt();
+    let expected_lower = vec![
+        sqrt6,
+        0.0,
+        0.0,
+        2.0 / sqrt6,
+        (13.0_f64 / 3.0).sqrt(),
+        0.0,
+        1.0 / sqrt6,
+        5.0 / 39.0_f64.sqrt(),
+        (83.0_f64 / 26.0).sqrt(),
+    ];
     assert_close_slice(chol.lower().storage().as_slice(), &expected_lower);
 }
 
 #[test]
-fn singular_values_and_least_squares_methods_match_nalgebra() {
-    // Singular values of a tall matrix.
+fn singular_values_and_least_squares_methods() {
+    // Singular values of [[1,0],[0,2],[2,0],[0,1]].
+    // AᵀA = [[5,0],[0,5]]; eigenvalues of AᵀA = [5,5].
+    // σ = √eigvals = [√5, √5].
     let sv_vals = vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0];
-    let a = Array2::from_shape_vec([4, 2], sv_vals.clone()).unwrap();
+    let a = Array2::from_shape_vec([4, 2], sv_vals).unwrap();
     let mut sv = a.singular_values().unwrap();
-    let mut expected_sv = dmatrix(4, 2, &sv_vals)
-        .svd(false, false)
-        .singular_values
-        .as_slice()
-        .to_vec();
-    sv.sort_by(|x, y| y.total_cmp(x));
-    expected_sv.sort_by(|x, y| y.total_cmp(x));
-    assert_close_slice(&sv, &expected_sv);
+    sv.sort_by(|x: &f64, y: &f64| y.total_cmp(x));
+    let sqrt5 = 5.0_f64.sqrt();
+    assert_close_slice(&sv, &[sqrt5, sqrt5]);
 
-    // Overdetermined least squares vs normal equations.
+    // Overdetermined least squares vs hand-computed normal-equations solution.
+    // A = [[1,1],[1,2],[1,3],[1,4]], b = [6,5,7,10]
+    // AᵀA = [[4,10],[10,30]], Aᵀb = [28,77]
+    // det(AᵀA) = 4*30 - 10*10 = 20
+    // (AᵀA)⁻¹ = (1/20)*[[30,-10],[-10,4]] = [[1.5,-0.5],[-0.5,0.2]]
+    // x = (AᵀA)⁻¹ Aᵀb = [[1.5,-0.5],[-0.5,0.2]] * [28,77]
+    //   = [1.5*28 - 0.5*77, -0.5*28 + 0.2*77] = [42-38.5, -14+15.4] = [3.5, 1.4]
     let ls_vals = vec![1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0];
     let rhs_vals = vec![6.0, 5.0, 7.0, 10.0];
-    let ls = Array2::from_shape_vec([4, 2], ls_vals.clone()).unwrap();
-    let rhs = Array::from_shape_vec([4], rhs_vals.clone()).unwrap();
+    let ls = Array2::from_shape_vec([4, 2], ls_vals).unwrap();
+    let rhs = Array::from_shape_vec([4], rhs_vals).unwrap();
     let x = ls.solve_least_squares(&rhs.view()).unwrap();
 
-    let na = dmatrix(4, 2, &ls_vals);
-    let na_rhs = DVector::from_vec(rhs_vals);
-    let expected = (na.transpose() * &na)
-        .lu()
-        .solve(&(na.transpose() * &na_rhs))
-        .unwrap();
-    assert_close_slice(x.storage().as_slice(), expected.as_slice());
+    let expected_x = vec![3.5, 1.4];
+    assert_close_slice(x.storage().as_slice(), &expected_x);
 }
 
 #[test]
-fn norm_methods_match_kernel_and_nalgebra() {
+fn norm_methods_match_kernel_and_analytical() {
     let values = vec![3.0, -4.0, 12.0, 0.0, -5.0, 0.0];
     let a = Array2::from_shape_vec([2, 3], values.clone()).unwrap();
 
     assert_close(a.norm_l2().unwrap(), norm_l2(&a.view()).unwrap());
-    // Frobenius norm parity with nalgebra.
-    assert_close(a.norm_l2().unwrap(), dmatrix(2, 3, &values).norm());
-    // L1 / max entrywise references.
+    // Frobenius norm: √(9+16+144+0+25+0) = √194 ≈ 13.928.
+    assert_close(a.norm_l2().unwrap(), 194.0_f64.sqrt());
+    // L1 / max entrywise.
     assert_close(a.norm_l1().unwrap(), values.iter().map(|v| v.abs()).sum());
     assert_close(
         a.norm_max().unwrap(),

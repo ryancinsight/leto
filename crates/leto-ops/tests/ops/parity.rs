@@ -1,5 +1,5 @@
 //! Completeness parity harness: differential value comparison of Leto against
-//! `ndarray` 0.16 and `nalgebra` 0.35.
+//! `ndarray` 0.16 and hand-computed analytical values.
 //!
 //! This module is the executable form of the completeness matrix in
 //! `docs/completeness/parity_matrix.md`. Each test maps to one matrix row and
@@ -18,7 +18,6 @@ use leto_ops::{
     add, batched_matmul, cumsum, div, dot, matmul, mean_axis, mul, scalar_map, solve_least_squares,
     sub, sum, sum_axis, unary_map, AddOp, ExpOp, MulOp, SqrtOp,
 };
-use nalgebra::{DMatrix, DVector};
 use ndarray::{concatenate, stack as nd_stack, Array1 as NdArray1, Array2 as NdArray2, Axis};
 
 const EPS: f64 = 1.0e-9;
@@ -288,27 +287,24 @@ fn stack_matches_ndarray_stack() {
     );
 }
 
-// ── Linear algebra parity not covered by oracle_parity.rs (nalgebra oracle) ──
+// ── Linear algebra parity (hand-computed normal-equations) ──────────────────
 
 #[test]
-fn least_squares_matches_nalgebra_qr() {
+fn least_squares_matches_normal_equations() {
     // Overdetermined system: 4 equations, 2 unknowns, full column rank.
+    // A = [[1,1],[1,2],[1,3],[1,4]], b = [6,5,7,10]
+    // AᵀA = [[4,10],[10,30]], Aᵀb = [28,77]
+    // det(AᵀA) = 20, (AᵀA)⁻¹ = (1/20)[[30,-10],[-10,4]]
+    // x = (1/20)[30*28-10*77, -10*28+4*77] = (1/20)[70, 28] = [3.5, 1.4]
     let rows = 4usize;
     let cols = 2usize;
     let a_vals = vec![1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0];
     let rhs_vals = vec![6.0, 5.0, 7.0, 10.0];
-    let a = Array2::from_shape_vec([rows, cols], a_vals.clone()).unwrap();
-    let rhs = Array::from_shape_vec([rows], rhs_vals.clone()).unwrap();
+    let a = Array2::from_shape_vec([rows, cols], a_vals).unwrap();
+    let rhs = Array::from_shape_vec([rows], rhs_vals).unwrap();
     let leto_x = solve_least_squares(&a.view(), &rhs.view()).unwrap();
 
-    // nalgebra `QR::solve` rejects non-square systems; the least-squares oracle
-    // is the normal-equations solution (A^T A) x = A^T b for full-column-rank A.
-    let nd_a = DMatrix::from_row_slice(rows, cols, &a_vals);
-    let nd_rhs = DVector::from_vec(rhs_vals);
-    let ata = nd_a.transpose() * &nd_a;
-    let atb = nd_a.transpose() * &nd_rhs;
-    let expected = ata.lu().solve(&atb).unwrap();
-    assert_close_slice(leto_x.storage().as_slice(), expected.as_slice());
+    assert_close_slice(leto_x.storage().as_slice(), &[3.5, 1.4]);
 }
 
 // ── Reverse-strided cross-check (ndarray oracle) ────────────────────────────
