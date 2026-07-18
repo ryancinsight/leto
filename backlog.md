@@ -1,6 +1,35 @@
 # Leto Work Backlog
 
-## LETO-SPARSE-DUPLICATE-1 — Sparse conversion contract [patch, review]
+## LETO-EUNOMIA-COMPLEX-1 — Complex oracle ownership [patch, review]
+
+**Owner:** Codex `/root`
+
+**Scope:** workspace numeric dependency ownership, `leto-ops` migration and
+decomposition oracles, dependency lock, and synchronized PM artifacts.
+
+**Acceptance:** no Leto manifest or Rust source directly references
+`num-complex`/`num_complex`; tests use Eunomia's complex representation
+natively; full affected package gates pass.
+
+**Evidence:** direct manifest/source and production graph residue are zero;
+warning-denied all-target/all-feature Clippy; Nextest 305/305; doctest 8/8;
+warning-denied rustdoc; 196/196 applicable SemVer checks.
+
+## LETO-EXTERNAL-ORACLE-1 — Retire legacy oracle crates [arch, todo]
+
+**Owner:** unclaimed
+
+**Scope:** `leto-ops` test and benchmark dependencies only. Production graph
+ownership is already clean.
+
+**Acceptance:** remove nalgebra from 14 test/benchmark files and ndarray from
+six without weakening differential evidence. Each decomposition oracle must be
+replaced by an independent analytical identity, published reference case, or
+property/finite-residual contract before deleting the external comparison.
+Remove obsolete nalgebra/ndarray benchmark rows while retaining Leto-native
+measurements and stored baselines.
+
+## LETO-SPARSE-DUPLICATE-1 — Sparse conversion contract [patch, done]
 
 **Owner:** Codex `/root`
 
@@ -15,7 +44,7 @@ configured tests pass without warnings.
 **Evidence:** sparse Nextest 18/18; full Leto Nextest 267/267; warning-denied
 all-target/all-feature Clippy; doctest 1/1; warning-denied rustdoc; 196/196
 applicable SemVer checks; value-semantic unordered duplicate, CSC column,
-lookup, and transpose regressions.
+lookup, and transpose regressions. Merged as PR #41 (`9b22301`).
 
 ## LETO-SPARSE-DIRECT-1 — Sparse direct factorization [minor, todo]
 

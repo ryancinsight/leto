@@ -1,7 +1,7 @@
+use eunomia::{Complex32, Complex64};
 use half::f16;
 use leto::{Array1, Array2, Array3, SliceArg, Storage};
 use leto_ops::{add, mapv, matmul, mul, sum_axis_into};
-use num_complex::{Complex32, Complex64};
 
 fn assert_close(lhs: f32, rhs: f32) {
     assert!(
@@ -211,7 +211,6 @@ fn coeus_tensor_matmul_fixture_matches_dense_layer_shape() {
     );
 }
 
-#[cfg(feature = "ndarray-compat")]
 #[test]
 fn test_ndarray_compatibility_conversions() {
     use leto::{Array2, ArrayView2, ArrayViewMut2};

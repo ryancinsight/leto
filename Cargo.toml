@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.38.1"
+version = "0.38.2"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -27,12 +27,12 @@ eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = 
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
-num-complex = "0.4"
 bytemuck = { version = "1.25", features = ["derive"] }
 half = { version = "2.7", features = ["bytemuck"] }
 
 # ── Optional Compatibility ──
 ndarray = "0.16"
+ndarray-rand = "0.15"
 nalgebra = { version = "0.35", default-features = false, features = ["std"] }
 
 # ── Error and Utility ──
