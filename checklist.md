@@ -11,12 +11,12 @@ Nextest passes 18/18 and the full Leto package passes 267/267; doctest passes
 also advances to Eunomia 0.2.0 `6f431f2d`, deleting its former `num-traits`
 edge. Merged as PR #41 (`9b22301`).
 
-2026-07-18 [patch, review]: Removed Leto's restored direct `num-complex`
+2026-07-18 [patch, complete]: Removed Leto's restored direct `num-complex`
 workspace dependency and bind every complex migration/eigenvalue/Schur oracle
 to Eunomia's canonical representation. Direct manifest/source and production
 graph residue are zero; warning-denied all-target/all-feature Clippy passes;
 Nextest passes 305/305; doctests pass 8/8; warning-denied rustdoc and 196/196
-applicable SemVer checks pass.
+applicable SemVer checks pass. Merged as PR #42 (`cf47686`).
 
 2026-07-17 [patch, complete]: Registered `LETO-SPARSE-DIRECT-1` as the
 upstream-owned replacement boundary for CFDrs sparse LU. Source inspection
