@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## LETO-EUNOMIA-COMPLEX-1 — Complex oracle ownership [patch, review]
+## LETO-EUNOMIA-COMPLEX-1 — Complex oracle ownership [patch, done]
 
 **Owner:** Codex `/root`
 
@@ -13,7 +13,8 @@ natively; full affected package gates pass.
 
 **Evidence:** direct manifest/source and production graph residue are zero;
 warning-denied all-target/all-feature Clippy; Nextest 305/305; doctest 8/8;
-warning-denied rustdoc; 196/196 applicable SemVer checks.
+warning-denied rustdoc; 196/196 applicable SemVer checks. Merged as PR #42
+(`cf47686`).
 
 ## LETO-EXTERNAL-ORACLE-1 — Retire legacy oracle crates [arch, todo]
 
