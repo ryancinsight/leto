@@ -1,5 +1,22 @@
 # Leto Work Backlog
 
+## LETO-SPARSE-DUPLICATE-1 — Sparse conversion contract [patch, review]
+
+**Owner:** Codex `/root`
+
+**Scope:** stale shared-tree sparse conversion/test changes, package formatting,
+dependency lock refresh, and synchronized PM artifacts.
+
+**Acceptance:** duplicate COO coordinates sum or keep the last value exactly;
+zero sums are removed; CSC construction normalizes arbitrary COO order;
+transpose and column access preserve exact values; package diagnostics and
+configured tests pass without warnings.
+
+**Evidence:** sparse Nextest 18/18; full Leto Nextest 267/267; warning-denied
+all-target/all-feature Clippy; doctest 1/1; warning-denied rustdoc; 196/196
+applicable SemVer checks; value-semantic unordered duplicate, CSC column,
+lookup, and transpose regressions.
+
 ## LETO-SPARSE-DIRECT-1 — Sparse direct factorization [minor, todo]
 
 **Owner:** unclaimed

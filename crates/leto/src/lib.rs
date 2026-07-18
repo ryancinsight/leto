@@ -33,7 +33,9 @@ pub use infrastructure::storage::{
 pub use infrastructure::storage::MnemosyneStorage;
 
 /// Sparse array storage formats (CSR, CSC, COO) for efficient sparse matrix operations.
-pub use infrastructure::sparse::{CooArray, CscArray, CsrArray, SparseFormat, SparseStorage, SparseStorageMut};
+pub use infrastructure::sparse::{
+    CooArray, CscArray, CsrArray, SparseFormat, SparseStorage, SparseStorageMut,
+};
 
 pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};

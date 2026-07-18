@@ -1,5 +1,16 @@
 # Leto Development Checklist
 
+2026-07-18 [patch, review]: Took over the stale sparse duplicate-conversion
+scope from the shared tree. Replaced HashMap and multi-vector duplicate
+handling with one sorted streaming compaction; normalized arbitrary COO order
+inside the CSC construction boundary; removed redundant caller sorting; and
+replaced tautological sparse tests with exact column/value assertions.
+Formatter and warning-denied all-target/all-feature Clippy pass; focused sparse
+Nextest passes 18/18 and the full Leto package passes 267/267; doctest passes
+1/1; warning-denied rustdoc and 196/196 applicable SemVer checks pass. The lock
+also advances to Eunomia 0.2.0 `6f431f2d`, deleting its former `num-traits`
+edge.
+
 2026-07-17 [patch, complete]: Registered `LETO-SPARSE-DIRECT-1` as the
 upstream-owned replacement boundary for CFDrs sparse LU. Source inspection
 confirms Leto 0.38 provides CSR CG/GMRES but no sparse direct factorization,

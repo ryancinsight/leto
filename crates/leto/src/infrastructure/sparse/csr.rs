@@ -3,8 +3,8 @@
 //! CSR format stores non-zero entries compressed by row.
 //! This format is efficient for row-wise operations and sparse matrix-vector multiplication.
 
-use crate::infrastructure::sparse::traits::{SparseFormat, SparseStorage, SparseStorageMut};
 use crate::infrastructure::sparse::coo::CooArray;
+use crate::infrastructure::sparse::traits::{SparseFormat, SparseStorage, SparseStorageMut};
 use eunomia::NumericElement;
 
 // Forward declarations
@@ -114,7 +114,6 @@ impl<T: NumericElement> CsrArray<T> {
                 coo.add(col, row, *value);
             }
         }
-        coo.sort_by_row_column();
         CscArray::from_coo(coo)
     }
 
@@ -208,7 +207,7 @@ mod tests {
         let triplets = vec![(0, 0, 1.0), (0, 1, 2.0), (1, 1, 3.0)];
         let mut coo = CooArray::from_triplets(2, 2, triplets);
         coo.sort_by_row_column();
-        
+
         let csr = CsrArray::from_coo(coo);
         assert_eq!(csr.nrows(), 2);
         assert_eq!(csr.ncols(), 2);
@@ -220,12 +219,12 @@ mod tests {
         let triplets = vec![(0, 0, 1.0), (0, 1, 2.0), (1, 1, 3.0)];
         let mut coo = CooArray::from_triplets(2, 2, triplets);
         coo.sort_by_row_column();
-        
+
         let csr = CsrArray::from_coo(coo);
-        
+
         let row0: Vec<_> = csr.row_entries(0).collect();
         assert_eq!(row0.len(), 2);
-        
+
         let row1: Vec<_> = csr.row_entries(1).collect();
         assert_eq!(row1.len(), 1);
     }
@@ -235,7 +234,7 @@ mod tests {
         let triplets = vec![(0, 0, 1.0), (0, 1, 2.0), (1, 1, 3.0)];
         let mut coo = CooArray::from_triplets(2, 2, triplets);
         coo.sort_by_row_column();
-        
+
         let csr = CsrArray::from_coo(coo);
         assert_eq!(csr.get(0, 0), Some(1.0));
         assert_eq!(csr.get(0, 1), Some(2.0));

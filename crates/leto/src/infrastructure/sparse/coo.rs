@@ -72,7 +72,7 @@ impl<T: NumericElement> CooArray<T> {
     {
         let triplets: Vec<_> = triplets.into_iter().collect();
         let capacity = triplets.len();
-        
+
         let mut row_indices = Vec::with_capacity(capacity);
         let mut col_indices = Vec::with_capacity(capacity);
         let mut data = Vec::with_capacity(capacity);
@@ -155,7 +155,12 @@ impl<T: NumericElement> SparseStorage<T> for CooArray<T> {
     }
 
     fn get(&self, row: usize, col: usize) -> Option<T> {
-        for (i, (&r, &c)) in self.row_indices.iter().zip(self.col_indices.iter()).enumerate() {
+        for (i, (&r, &c)) in self
+            .row_indices
+            .iter()
+            .zip(self.col_indices.iter())
+            .enumerate()
+        {
             if r == row && c == col {
                 return Some(self.data[i]);
             }
@@ -192,7 +197,7 @@ impl<T: NumericElement> SparseStorageMut<T> for CooArray<T> {
     fn add(&mut self, row: usize, col: usize, delta: T) {
         for i in 0..self.row_indices.len() {
             if self.row_indices[i] == row && self.col_indices[i] == col {
-                self.data[i] = self.data[i] + delta;
+                self.data[i] += delta;
                 if self.data[i] == T::ZERO {
                     self.row_indices.remove(i);
                     self.col_indices.remove(i);
