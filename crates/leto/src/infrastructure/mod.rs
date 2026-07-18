@@ -1,5 +1,7 @@
 /// Storage traits and backing implementations.
 pub mod storage;
+/// Sparse array storage formats (CSR, CSC, COO, block-sparse).
+pub mod sparse;
 
 pub use storage::{CowStorage, SliceStorage, SliceStorageMut, Storage, StorageMut, VecStorage};
 
@@ -7,5 +9,4 @@ pub use storage::{CowStorage, SliceStorage, SliceStorageMut, Storage, StorageMut
 pub use storage::MnemosyneStorage;
 
 #[cfg(feature = "ndarray-compat")]
-/// ndarray compatibility conversions.
 pub mod ndarray_compat;

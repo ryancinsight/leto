@@ -24,11 +24,8 @@ eunomia = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-ndarray = { workspace = true }
-nalgebra = { workspace = true }
-num-complex = { workspace = true }
+# REMOVED: ndarray, nalgebra, num-complex replaced by native leto/eunomia implementations
 criterion = { workspace = true }
-ndarray-rand = "0.15"
 rand = "0.8"
 rand_chacha = "0.3"
 
@@ -41,5 +38,5 @@ default = ["std", "parallel", "mnemosyne-memory", "topology"]
 std = ["leto/std"]
 parallel = ["dep:moirai"]
 mnemosyne-memory = ["leto/mnemosyne-memory"]
-ndarray-compat = ["leto/ndarray-compat"]
+# REMOVED: ndarray-compat feature removed with ndarray dependency
 topology = ["std", "dep:themis", "themis/std"]

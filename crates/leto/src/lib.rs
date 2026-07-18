@@ -32,6 +32,9 @@ pub use infrastructure::storage::{
 #[cfg(feature = "mnemosyne-alloc")]
 pub use infrastructure::storage::MnemosyneStorage;
 
+/// Sparse array storage formats (CSR, CSC, COO) for efficient sparse matrix operations.
+pub use infrastructure::sparse::{CooArray, CscArray, CsrArray, SparseFormat, SparseStorage, SparseStorageMut};
+
 pub use application::array::Array;
 pub use application::view::{ArrayView, ArrayViewMut};
 pub use application::{
@@ -44,5 +47,4 @@ pub use application::{
 };
 
 #[cfg(feature = "ndarray-compat")]
-/// ndarray compatibility conversions.
 pub use infrastructure::ndarray_compat;

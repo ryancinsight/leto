@@ -29,7 +29,7 @@ themis = { git = "https://github.com/ryancinsight/themis", default-features = fa
 # ── Numeric Foundations ──
 num-complex = "0.4"
 bytemuck = { version = "1.25", features = ["derive"] }
-half = { version = "2.7", features = ["num-traits", "bytemuck"] }
+half = { version = "2.7", features = ["bytemuck"] }
 
 # ── Optional Compatibility ──
 ndarray = "0.16"
