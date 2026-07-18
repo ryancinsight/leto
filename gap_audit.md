@@ -1,5 +1,25 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-18 Sparse COO/CSC Conversion Defects
+
+- **Resolved:** the stale duplicate-conversion work no longer builds a
+  coordinate HashMap plus multiple temporary vectors. One stable row/column
+  ordering and streaming compaction implements both sum and keep-last policies;
+  zero sums do not enter CSR storage.
+- **Resolved:** `CscArray::from_coo` now owns column-major normalization.
+  CSR-to-CSC transpose no longer supplies row-major coordinates to a
+  column-major-only constructor, and callers no longer pre-sort redundantly.
+- **Evidence tier:** exact unordered-duplicate, zero-sum, CSC column/lookup,
+  and transpose regressions; sparse Nextest 18/18; full Leto Nextest 267/267;
+  warning-denied all-target/all-feature Clippy; doctest 1/1; warning-denied
+  rustdoc; and 196/196 applicable SemVer checks.
+- **Provider refresh:** the committed lock now resolves Eunomia 0.2.0
+  `6f431f2d`; the former Eunomia-owned `num-traits` graph edge is absent.
+- **Open toolchain conformance:** the workspace still declares edition 2021
+  and resolver 2. Move to edition 2024/resolver 3 in a dedicated coordinated
+  change after every published crate and consumer passes the edition lint and
+  SemVer gates.
+
 ## 2026-07-17 CFDrs Sparse Direct Factorization Gap
 
 - **Open upstream item**: `LETO-SPARSE-DIRECT-1`.

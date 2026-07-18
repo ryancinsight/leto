@@ -330,13 +330,12 @@ dependencies = [
 
 [[package]]
 name = "eunomia"
-version = "0.1.0"
-source = "git+https://github.com/ryancinsight/eunomia#dd94f7b9d223668887302531006628818e2bd45b"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/eunomia#6f431f2d5f6bcf6d39091ed95502628dc0ebe835"
 dependencies = [
  "bytemuck",
  "half",
  "libm",
- "num-traits",
  "rkyv",
 ]
 
@@ -619,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "leto"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "bytemuck",
  "eunomia",
@@ -634,7 +633,7 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "bytemuck",
  "criterion",
@@ -651,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "leto-python"
-version = "0.38.0"
+version = "0.38.1"
 dependencies = [
  "anyhow",
  "leto",

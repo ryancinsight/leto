@@ -6,6 +6,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Fixed
+
+- `leto` 0.38.1 compacts duplicate COO coordinates with exact sum or keep-last
+  semantics, removes zero sums, and normalizes arbitrary COO order when
+  constructing CSC storage. CSR-to-CSC transpose and column access now preserve
+  exact coordinates and values.
+- The newly added sparse modules are formatter- and warning-clean, and their
+  former tautological CSC assertion is replaced by exact lookup and column
+  contracts.
+
 ### Changed
 
 - Leto 0.37.0 follows merged default branches for Mnemosyne, Moirai, Hermes,

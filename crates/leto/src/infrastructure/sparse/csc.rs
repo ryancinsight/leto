@@ -3,8 +3,8 @@
 //! CSC format stores non-zero entries compressed by column.
 //! This format is efficient for column-wise operations and transpose operations.
 
-use crate::infrastructure::sparse::traits::{SparseFormat, SparseStorage, SparseStorageMut};
 use crate::infrastructure::sparse::coo::CooArray;
+use crate::infrastructure::sparse::traits::{SparseFormat, SparseStorage, SparseStorageMut};
 use eunomia::NumericElement;
 
 // Forward declarations
@@ -49,27 +49,32 @@ impl<T: NumericElement> CscArray<T> {
         }
     }
 
-    /// Creates a CSC matrix from a sorted COO matrix (sorted by column, then row).
+    /// Creates a CSC matrix from COO entries.
     ///
-    /// The COO matrix must be sorted by column, then row.
+    /// Entries are normalized to column-major order at this boundary.
     pub fn from_coo(coo: CooArray<T>) -> Self {
         let nrows = coo.nrows();
         let ncols = coo.ncols();
         let nnz = coo.nnz();
+        let mut entries: Vec<_> = coo
+            .entries()
+            .map(|(row, col, value)| (row, col, *value))
+            .collect();
+        entries.sort_by_key(|&(row, col, _)| (col, row));
 
         let mut data = Vec::with_capacity(nnz);
         let mut row_indices = Vec::with_capacity(nnz);
         let mut col_ptr = vec![0usize; ncols + 1];
 
         let mut current_col = 0;
-        for (row, col, value) in coo.entries() {
+        for (row, col, value) in entries {
             // Update column pointers for skipped columns
             while current_col < col {
                 current_col += 1;
                 col_ptr[current_col] = data.len();
             }
 
-            data.push(*value);
+            data.push(value);
             row_indices.push(row);
         }
 
@@ -205,40 +210,43 @@ mod tests {
 
     #[test]
     fn test_csc_from_coo() {
-        let triplets = vec![(0, 0, 1.0), (1, 0, 2.0), (1, 1, 3.0)];
-        let mut coo = CooArray::from_triplets(2, 2, triplets);
-        // Sort by column for CSC conversion
-        coo.sort_by_row_column(); // Note: in production, we'd sort by column
-        
+        let triplets = vec![(1, 1, 3.0), (1, 0, 2.0), (0, 0, 1.0)];
+        let coo = CooArray::from_triplets(2, 2, triplets);
         let csc = CscArray::from_coo(coo);
         assert_eq!(csc.nrows(), 2);
         assert_eq!(csc.ncols(), 2);
         assert_eq!(csc.nnz(), 3);
+        assert_eq!(csc.get(0, 0), Some(1.0));
+        assert_eq!(csc.get(1, 0), Some(2.0));
+        assert_eq!(csc.get(1, 1), Some(3.0));
     }
 
     #[test]
     fn test_csc_col_entries() {
         let triplets = vec![(0, 0, 1.0), (1, 0, 2.0), (1, 1, 3.0)];
-        let mut coo = CooArray::from_triplets(2, 2, triplets);
-        coo.sort_by_row_column();
-        
+        let coo = CooArray::from_triplets(2, 2, triplets);
         let csc = CscArray::from_coo(coo);
-        
-        let col0: Vec<_> = csc.col_entries(0).collect();
-        // Column 0 should have entries (depends on sorting)
-        
-        let col1: Vec<_> = csc.col_entries(1).collect();
-        // Column 1 should have entries
+
+        let col0: Vec<_> = csc
+            .col_entries(0)
+            .map(|(row, value)| (row, *value))
+            .collect();
+        let col1: Vec<_> = csc
+            .col_entries(1)
+            .map(|(row, value)| (row, *value))
+            .collect();
+        assert_eq!(col0, [(0, 1.0), (1, 2.0)]);
+        assert_eq!(col1, [(1, 3.0)]);
     }
 
     #[test]
     fn test_csc_get() {
         let triplets = vec![(0, 0, 1.0), (1, 0, 2.0), (1, 1, 3.0)];
-        let mut coo = CooArray::from_triplets(2, 2, triplets);
-        coo.sort_by_row_column();
-        
+        let coo = CooArray::from_triplets(2, 2, triplets);
         let csc = CscArray::from_coo(coo);
-        // Test get operations
-        assert!(csc.get(0, 0).is_some() || csc.get(0, 0).is_none()); // Depends on sorting
+        assert_eq!(csc.get(0, 0), Some(1.0));
+        assert_eq!(csc.get(1, 0), Some(2.0));
+        assert_eq!(csc.get(1, 1), Some(3.0));
+        assert_eq!(csc.get(0, 1), None);
     }
 }

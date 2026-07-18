@@ -4,8 +4,8 @@
 //! minimizing data copying where possible.
 
 use crate::infrastructure::sparse::coo::CooArray;
-use crate::infrastructure::sparse::csr::CsrArray;
 use crate::infrastructure::sparse::csc::CscArray;
+use crate::infrastructure::sparse::csr::CsrArray;
 use crate::infrastructure::sparse::traits::{SparseStorage, SparseStorageMut};
 use eunomia::NumericElement;
 
@@ -14,14 +14,13 @@ use eunomia::NumericElement;
 /// This is a true transpose operation, not just a format conversion.
 pub fn csr_to_csc_transpose<T: NumericElement>(csr: &CsrArray<T>) -> CscArray<T> {
     let mut coo = CooArray::with_capacity(csr.ncols(), csr.nrows(), csr.nnz());
-    
+
     for row in 0..csr.nrows() {
         for (col, value) in csr.row_entries(row) {
             coo.add(col, row, *value);
         }
     }
-    
-    coo.sort_by_row_column();
+
     CscArray::from_coo(coo)
 }
 
@@ -30,13 +29,13 @@ pub fn csr_to_csc_transpose<T: NumericElement>(csr: &CsrArray<T>) -> CscArray<T>
 /// This is a true transpose operation, not just a format conversion.
 pub fn csc_to_csr_transpose<T: NumericElement>(csc: &CscArray<T>) -> CsrArray<T> {
     let mut coo = CooArray::with_capacity(csc.ncols(), csc.nrows(), csc.nnz());
-    
+
     for col in 0..csc.ncols() {
         for (row, value) in csc.col_entries(col) {
             coo.add(col, row, *value);
         }
     }
-    
+
     coo.sort_by_row_column();
     CsrArray::from_coo(coo)
 }
@@ -44,41 +43,67 @@ pub fn csc_to_csr_transpose<T: NumericElement>(csc: &CscArray<T>) -> CsrArray<T>
 /// Converts COO to CSR with duplicate handling.
 ///
 /// # Arguments
-/// * `coo` - COO matrix (should be sorted by row, then column)
+/// * `coo` - COO matrix
 /// * `sum_duplicates` - If true, duplicate entries are summed; if false, the last value is kept
 pub fn coo_to_csr_with_duplicates<T: NumericElement>(
-    coo: CooArray<T>,
+    mut coo: CooArray<T>,
     sum_duplicates: bool,
 ) -> CsrArray<T> {
-    // For now, use the standard from_coo which handles duplicates by keeping the last value
-    // TODO: Implement proper duplicate handling with sum_duplicates flag
-    if sum_duplicates {
-        // Convert to COO with summed duplicates, then to CSR
-        let mut summed = CooArray::with_capacity(coo.nrows(), coo.ncols(), coo.nnz());
-        let mut entries: std::collections::HashMap<(usize, usize), T> = std::collections::HashMap::new();
-        
-        for (row, col, value) in coo.entries() {
-            let key = (row, col);
-            if let Some(existing) = entries.get(&key) {
-                entries.insert(key, *existing + *value);
-            } else {
-                entries.insert(key, *value);
+    coo.sort_by_row_column();
+
+    let mut compact = CooArray::with_capacity(coo.nrows(), coo.ncols(), coo.nnz());
+    let mut pending: Option<(usize, usize, T)> = None;
+
+    for (row, col, value) in coo.entries() {
+        match pending.as_mut() {
+            Some((pending_row, pending_col, pending_value))
+                if *pending_row == row && *pending_col == col =>
+            {
+                *pending_value = if sum_duplicates {
+                    *pending_value + *value
+                } else {
+                    *value
+                };
             }
-        }
-        
-        for ((row, col), value) in entries {
-            if value != T::ZERO {
-                summed.add(row, col, value);
+            Some(_) => {
+                let (pending_row, pending_col, pending_value) = pending
+                    .replace((row, col, *value))
+                    .expect("invariant: match arm proves the pending entry exists");
+                if !sum_duplicates || pending_value != T::ZERO {
+                    compact.add(pending_row, pending_col, pending_value);
+                }
             }
+            None => pending = Some((row, col, *value)),
         }
-        
-        summed.sort_by_row_column();
-        CsrArray::from_coo(summed)
-    } else {
-        // Keep last value (default behavior)
-        let mut sorted = coo.clone();
-        sorted.sort_by_row_column();
-        CsrArray::from_coo(sorted)
+    }
+
+    if let Some((row, col, value)) = pending {
+        if !sum_duplicates || value != T::ZERO {
+            compact.add(row, col, value);
+        }
+    }
+
+    CsrArray::from_coo(compact)
+}
+
+#[cfg(test)]
+mod duplicate_contract {
+    use super::*;
+
+    #[test]
+    fn duplicate_policy_is_order_independent_between_coordinates() {
+        let coo =
+            CooArray::from_triplets(2, 2, [(1, 1, 3.0), (0, 0, 1.0), (0, 0, 2.0), (1, 1, -3.0)]);
+
+        let summed = coo_to_csr_with_duplicates(coo.clone(), true);
+        assert_eq!(summed.nnz(), 1);
+        assert_eq!(summed.get(0, 0), Some(3.0));
+        assert_eq!(summed.get(1, 1), None);
+
+        let kept = coo_to_csr_with_duplicates(coo, false);
+        assert_eq!(kept.nnz(), 2);
+        assert_eq!(kept.get(0, 0), Some(2.0));
+        assert_eq!(kept.get(1, 1), Some(-3.0));
     }
 }
 
@@ -123,10 +148,10 @@ mod tests {
         let triplets = vec![(0, 1, 1.0), (1, 0, 2.0)];
         let mut coo = CooArray::from_triplets(2, 2, triplets);
         coo.sort_by_row_column();
-        
+
         let csr = CsrArray::from_coo(coo);
         let csc = csr_to_csc_transpose(&csr);
-        
+
         // After transpose, (0,1) becomes (1,0) and (1,0) becomes (0,1)
         assert_eq!(csc.get(1, 0), Some(1.0));
         assert_eq!(csc.get(0, 1), Some(2.0));
@@ -137,7 +162,7 @@ mod tests {
         let triplets = vec![(0, 0, 1.0), (0, 0, 2.0), (1, 1, 3.0)];
         let mut coo = CooArray::from_triplets(2, 2, triplets);
         coo.sort_by_row_column();
-        
+
         let csr = coo_to_csr_with_duplicates(coo, true);
         assert_eq!(csr.get(0, 0), Some(3.0)); // 1.0 + 2.0
         assert_eq!(csr.get(1, 1), Some(3.0));
@@ -148,7 +173,7 @@ mod tests {
         let triplets = vec![(0, 0, 1.0), (0, 0, 2.0), (1, 1, 3.0)];
         let mut coo = CooArray::from_triplets(2, 2, triplets);
         coo.sort_by_row_column();
-        
+
         let csr = coo_to_csr_with_duplicates(coo, false);
         assert_eq!(csr.get(0, 0), Some(2.0)); // Keep last value
         assert_eq!(csr.get(1, 1), Some(3.0));

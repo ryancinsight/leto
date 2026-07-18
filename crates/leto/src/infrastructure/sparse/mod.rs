@@ -12,7 +12,7 @@ pub mod ops;
 pub mod traits;
 
 // Re-export common types
-pub use traits::{SparseFormat, SparseStorage, SparseStorageMut};
 pub use coo::CooArray;
-pub use csr::CsrArray;
 pub use csc::CscArray;
+pub use csr::CsrArray;
+pub use traits::{SparseFormat, SparseStorage, SparseStorageMut};

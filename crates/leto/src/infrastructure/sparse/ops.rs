@@ -3,8 +3,8 @@
 //! This module provides arithmetic operations between sparse and dense arrays,
 //! following the principle that sparse APIs mirror dense APIs.
 
-use crate::infrastructure::sparse::csr::CsrArray;
 use crate::infrastructure::sparse::csc::CscArray;
+use crate::infrastructure::sparse::csr::CsrArray;
 use crate::infrastructure::sparse::traits::{SparseStorage, SparseStorageMut};
 use eunomia::NumericElement;
 
@@ -12,16 +12,20 @@ use eunomia::NumericElement;
 ///
 /// Computes y = A * x where A is sparse (CSR) and x is a dense slice.
 pub fn csr_dense_matvec<T: NumericElement>(csr: &CsrArray<T>, x: &[T]) -> Vec<T> {
-    assert_eq!(csr.ncols(), x.len(), "Matrix columns must match vector length");
+    assert_eq!(
+        csr.ncols(),
+        x.len(),
+        "Matrix columns must match vector length"
+    );
 
     let mut y = vec![T::ZERO; csr.nrows()];
 
-    for row in 0..csr.nrows() {
+    for (row, output) in y.iter_mut().enumerate() {
         let mut sum = T::ZERO;
         for (col, value) in csr.row_entries(row) {
-            sum = sum + (*value * x[col]);
+            sum += *value * x[col];
         }
-        y[row] = sum;
+        *output = sum;
     }
 
     y
@@ -31,14 +35,17 @@ pub fn csr_dense_matvec<T: NumericElement>(csr: &CsrArray<T>, x: &[T]) -> Vec<T>
 ///
 /// Computes y = A * x where A is sparse (CSC) and x is a dense slice.
 pub fn csc_dense_matvec<T: NumericElement>(csc: &CscArray<T>, x: &[T]) -> Vec<T> {
-    assert_eq!(csc.ncols(), x.len(), "Matrix columns must match vector length");
+    assert_eq!(
+        csc.ncols(),
+        x.len(),
+        "Matrix columns must match vector length"
+    );
 
     let mut y = vec![T::ZERO; csc.nrows()];
 
-    for col in 0..csc.ncols() {
-        let x_col = x[col];
+    for (col, &x_col) in x.iter().enumerate() {
         for (row, value) in csc.col_entries(col) {
-            y[row] = y[row] + (*value * x_col);
+            y[row] += *value * x_col;
         }
     }
 
@@ -53,10 +60,9 @@ pub fn dense_csr_matvec<T: NumericElement>(x: &[T], csr: &CsrArray<T>) -> Vec<T>
 
     let mut y = vec![T::ZERO; csr.ncols()];
 
-    for row in 0..csr.nrows() {
-        let x_row = x[row];
+    for (row, &x_row) in x.iter().enumerate() {
         for (col, value) in csr.row_entries(row) {
-            y[col] = y[col] + (x_row * *value);
+            y[col] += x_row * *value;
         }
     }
 
@@ -71,12 +77,12 @@ pub fn dense_csc_matvec<T: NumericElement>(x: &[T], csc: &CscArray<T>) -> Vec<T>
 
     let mut y = vec![T::ZERO; csc.ncols()];
 
-    for col in 0..csc.ncols() {
+    for (col, output) in y.iter_mut().enumerate() {
         let mut sum = T::ZERO;
         for (row, value) in csc.col_entries(col) {
-            sum = sum + (x[row] * *value);
+            sum += x[row] * *value;
         }
-        y[col] = sum;
+        *output = sum;
     }
 
     y
@@ -111,7 +117,11 @@ pub fn csr_mul_csr<T: NumericElement>(a: &CsrArray<T>, b: &CsrArray<T>) -> CsrAr
 
     let nrows = a.nrows();
     let ncols = b.ncols();
-    let mut coo = crate::infrastructure::sparse::coo::CooArray::with_capacity(nrows, ncols, a.nnz() + b.nnz());
+    let mut coo = crate::infrastructure::sparse::coo::CooArray::with_capacity(
+        nrows,
+        ncols,
+        a.nnz() + b.nnz(),
+    );
 
     // Standard sparse matrix multiplication
     for i in 0..nrows {
@@ -131,7 +141,11 @@ pub fn csr_mul_csr<T: NumericElement>(a: &CsrArray<T>, b: &CsrArray<T>) -> CsrAr
 /// Computes C = A * scalar where A is sparse (CSR).
 pub fn csr_mul_scalar<T: NumericElement>(csr: &CsrArray<T>, scalar: T) -> CsrArray<T> {
     let coo = csr.to_coo();
-    let mut scaled = crate::infrastructure::sparse::coo::CooArray::with_capacity(csr.nrows(), csr.ncols(), csr.nnz());
+    let mut scaled = crate::infrastructure::sparse::coo::CooArray::with_capacity(
+        csr.nrows(),
+        csr.ncols(),
+        csr.nnz(),
+    );
 
     for (row, col, value) in coo.entries() {
         scaled.add(row, col, *value * scalar);
@@ -146,7 +160,11 @@ pub fn csr_mul_scalar<T: NumericElement>(csr: &CsrArray<T>, scalar: T) -> CsrArr
 /// This adds the scalar to all non-zero entries only.
 pub fn csr_add_scalar<T: NumericElement>(csr: &CsrArray<T>, scalar: T) -> CsrArray<T> {
     let coo = csr.to_coo();
-    let mut result = crate::infrastructure::sparse::coo::CooArray::with_capacity(csr.nrows(), csr.ncols(), csr.nnz());
+    let mut result = crate::infrastructure::sparse::coo::CooArray::with_capacity(
+        csr.nrows(),
+        csr.ncols(),
+        csr.nnz(),
+    );
 
     for (row, col, value) in coo.entries() {
         result.add(row, col, *value + scalar);
@@ -158,6 +176,7 @@ pub fn csr_add_scalar<T: NumericElement>(csr: &CsrArray<T>, scalar: T) -> CsrArr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::sparse::coo::CooArray;
 
     #[test]
     fn test_csr_dense_matvec() {
