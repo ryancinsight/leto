@@ -1,5 +1,18 @@
 # Leto Work Backlog
 
+## LETO-EUNOMIA-0.4-REFRESH — Provider lock [patch, done]
+
+**Owner:** Codex `/root`
+
+**Scope:** Eunomia reproducibility pin and synchronized provider evidence.
+
+**Acceptance:** the lock resolves Eunomia 0.4.0 from its merged default commit;
+Leto's full warning-denied compile, test, doctest, and rustdoc gates pass.
+
+**Evidence:** `Cargo.lock` resolves `49dc115`; formatter, warning-denied
+all-target/all-feature Clippy, configured Nextest 593/593, doctests 9/9, and
+warning-denied rustdoc pass.
+
 ## LETO-EUNOMIA-COMPLEX-1 — Complex oracle ownership [patch, done]
 
 **Owner:** Codex `/root`

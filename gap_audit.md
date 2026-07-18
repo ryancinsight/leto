@@ -1,5 +1,17 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-18 Eunomia 0.4 Provider Refresh
+
+- **Resolution:** the lock advances from Eunomia 0.2.0 `6f431f2d` to 0.4.0
+  `49dc115`, so Leto consumes the canonical sub-byte conversion kernel and
+  corrected reduced-format constants from Eunomia's default branch.
+- **Evidence tier:** dependency-resolution identity plus warning-denied
+  all-target/all-feature Clippy, configured Nextest 593/593, doctests 9/9,
+  and warning-denied rustdoc.
+- **Residual:** this refresh changes no Leto source or public API. External
+  nalgebra/ndarray test and benchmark oracles remain tracked by
+  `LETO-EXTERNAL-ORACLE-1`.
+
 ## 2026-07-18 Eunomia Complex Oracle Ownership
 
 - **Finding:** commit `0178665` restored a workspace-level `num-complex`
