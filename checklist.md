@@ -1,6 +1,6 @@
 # Leto Development Checklist
 
-2026-07-18 [patch, review]: Took over the stale sparse duplicate-conversion
+2026-07-18 [patch, complete]: Took over the stale sparse duplicate-conversion
 scope from the shared tree. Replaced HashMap and multi-vector duplicate
 handling with one sorted streaming compaction; normalized arbitrary COO order
 inside the CSC construction boundary; removed redundant caller sorting; and
@@ -9,7 +9,14 @@ Formatter and warning-denied all-target/all-feature Clippy pass; focused sparse
 Nextest passes 18/18 and the full Leto package passes 267/267; doctest passes
 1/1; warning-denied rustdoc and 196/196 applicable SemVer checks pass. The lock
 also advances to Eunomia 0.2.0 `6f431f2d`, deleting its former `num-traits`
-edge.
+edge. Merged as PR #41 (`9b22301`).
+
+2026-07-18 [patch, review]: Removed Leto's restored direct `num-complex`
+workspace dependency and bind every complex migration/eigenvalue/Schur oracle
+to Eunomia's canonical representation. Direct manifest/source and production
+graph residue are zero; warning-denied all-target/all-feature Clippy passes;
+Nextest passes 305/305; doctests pass 8/8; warning-denied rustdoc and 196/196
+applicable SemVer checks pass.
 
 2026-07-17 [patch, complete]: Registered `LETO-SPARSE-DIRECT-1` as the
 upstream-owned replacement boundary for CFDrs sparse LU. Source inspection

@@ -1,5 +1,21 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-18 Eunomia Complex Oracle Ownership
+
+- **Finding:** commit `0178665` restored a workspace-level `num-complex`
+  dependency while `leto-ops` test oracles still imported that representation
+  directly, recreating a second complex vocabulary beside Eunomia.
+- **Resolution:** bind migration, eigenvalue, and Schur test values
+  to `eunomia::{Complex, Complex32, Complex64}` and delete the restored direct
+  dependency. Direct manifest/source and production graph residue are zero.
+- **Evidence tier:** compile-time type ownership; warning-denied
+  all-target/all-feature Clippy; Nextest 305/305; doctest 8/8;
+  warning-denied rustdoc; and 196/196 applicable SemVer checks.
+- **Tracked residual:** external nalgebra/ndarray test and benchmark oracles
+  remain in 14 and six files respectively. They do not enter the production
+  graph. `LETO-EXTERNAL-ORACLE-1` requires equivalent independent evidence
+  before their removal and deletes obsolete comparison benchmark rows.
+
 ## 2026-07-18 Sparse COO/CSC Conversion Defects
 
 - **Resolved:** the stale duplicate-conversion work no longer builds a

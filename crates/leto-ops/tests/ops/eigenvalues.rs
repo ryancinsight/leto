@@ -6,10 +6,10 @@
 //! `complex_eigenvalues` is the oracle; structured matrices with known spectra
 //! give oracle-independent checks.
 
+use eunomia::Complex;
 use leto::Array2;
 use leto_ops::eigenvalues;
 use nalgebra::DMatrix;
-use num_complex::Complex;
 
 /// Match tolerance for analytically-exact / perfectly-conditioned spectra
 /// (diagonal, isolated simple eigenvalues, symmetric): these are computed to
@@ -67,7 +67,7 @@ fn nalgebra_eigs(n: usize, values: &[f64]) -> Vec<Complex<f64>> {
     DMatrix::from_row_slice(n, n, values)
         .complex_eigenvalues()
         .iter()
-        .cloned()
+        .map(|value| Complex::new(value.re, value.im))
         .collect()
 }
 

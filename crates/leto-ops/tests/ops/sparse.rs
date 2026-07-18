@@ -33,14 +33,14 @@ fn csr_zero_matrix_has_valid_empty_rows() {
     assert_eq!(csr.nrows(), 3);
     assert_eq!(csr.ncols(), 5);
     assert_eq!(csr.nnz(), 0);
-    assert_eq!(csr.values(), &[]);
-    assert_eq!(csr.col_indices(), &[]);
+    assert_eq!(csr.values(), &[] as &[f64]);
+    assert_eq!(csr.col_indices(), &[] as &[usize]);
     assert_eq!(csr.row_ptr(), &[0, 0, 0, 0]);
     for row in 0..csr.nrows() {
         let view = csr.row(row);
         assert_eq!(view.nnz(), 0);
-        assert_eq!(view.values(), &[]);
-        assert_eq!(view.col_indices(), &[]);
+        assert_eq!(view.values(), &[] as &[f64]);
+        assert_eq!(view.col_indices(), &[] as &[usize]);
     }
 }
 
@@ -169,8 +169,8 @@ fn csr_zero_transpose_swaps_shape_without_storage() {
 
     assert_eq!(transposed.shape(), (5, 2));
     assert_eq!(transposed.nnz(), 0);
-    assert_eq!(transposed.values(), &[]);
-    assert_eq!(transposed.col_indices(), &[]);
+    assert_eq!(transposed.values(), &[] as &[f64]);
+    assert_eq!(transposed.col_indices(), &[] as &[usize]);
     assert_eq!(transposed.row_ptr(), &[0, 0, 0, 0, 0, 0]);
 }
 
@@ -302,5 +302,5 @@ fn empty_width_dense_matrix_has_empty_csr_storage() {
     assert_eq!(csr.nnz(), 0);
     assert_eq!(csr.density(), 0.0);
     assert_eq!(csr.as_parts().2, &[0, 0, 0]);
-    assert_eq!(csr.to_dense().storage().as_slice(), &[]);
+    assert_eq!(csr.to_dense().storage().as_slice(), &[] as &[f64]);
 }

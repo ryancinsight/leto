@@ -6,6 +6,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Changed
+
+- `leto-ops` 0.38.2 uses Eunomia complex values directly in migration,
+  eigenvalue, and Schur oracles. Leto no longer owns a direct `num-complex`
+  workspace dependency.
+
 ### Fixed
 
 - `leto` 0.38.1 compacts duplicate COO coordinates with exact sum or keep-last
@@ -15,8 +21,6 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 - The newly added sparse modules are formatter- and warning-clean, and their
   former tautological CSC assertion is replaced by exact lookup and column
   contracts.
-
-### Changed
 
 - Leto 0.37.0 follows merged default branches for Mnemosyne, Moirai, Hermes,
   Eunomia, and Themis. The lockfile is the sole reproducibility pin.

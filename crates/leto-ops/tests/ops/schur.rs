@@ -1,9 +1,9 @@
 //! Real Schur `A = Q T Qᵀ`: reconstruction, orthogonality, structure, spectrum.
 
+use eunomia::Complex;
 use leto::{Array2, Storage};
 use leto_ops::{eigenvalues, schur, MatrixDecompose};
 use nalgebra::DMatrix;
-use num_complex::Complex;
 
 fn mat(n: usize, data: Vec<f64>) -> Array2<f64> {
     Array2::from_shape_vec([n, n], data).unwrap()
@@ -111,7 +111,10 @@ fn assert_spectrum_matches(mut got: Vec<leto::Complex<f64>>, want: &[Complex<f64
 
 fn nalgebra_spectrum(a: &Array2<f64>, n: usize) -> Vec<Complex<f64>> {
     let na = DMatrix::from_row_slice(n, n, a.storage().as_slice());
-    na.complex_eigenvalues().iter().copied().collect()
+    na.complex_eigenvalues()
+        .iter()
+        .map(|value| Complex::new(value.re, value.im))
+        .collect()
 }
 
 #[test]
