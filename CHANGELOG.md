@@ -8,6 +8,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- The reproducibility lock now resolves Eunomia 0.4.0 at `49dc115`, including
+  the canonical round-to-nearest-even sub-byte conversion kernel.
 - `leto-ops` 0.38.2 uses Eunomia complex values directly in migration,
   eigenvalue, and Schur oracles. Leto no longer owns a direct `num-complex`
   workspace dependency.

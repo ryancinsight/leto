@@ -1,5 +1,12 @@
 # Leto Development Checklist
 
+2026-07-18 [patch, complete]: Advanced the reproducibility lock from Eunomia
+0.2.0 `6f431f2d` to Eunomia 0.4.0 `49dc115`, carrying the canonical
+round-to-nearest-even sub-byte conversion and corrected reduced-format
+constants into Leto without changing Leto's public surface. Formatter,
+warning-denied all-target/all-feature Clippy, configured Nextest, doctest, and
+warning-denied rustdoc pass; Nextest is 593/593 and doctests are 9/9.
+
 2026-07-18 [patch, complete]: Took over the stale sparse duplicate-conversion
 scope from the shared tree. Replaced HashMap and multi-vector duplicate
 handling with one sorted streaming compaction; normalized arbitrary COO order
