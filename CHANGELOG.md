@@ -35,6 +35,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 - Leto 0.37.0 follows merged default branches for Mnemosyne, Moirai, Hermes,
   Eunomia, and Themis. The lockfile is the sole reproducibility pin.
 
+### Tests
+
+- The reduced-precision array-scalar contract runs once for Eunomia `F16` and
+  `Bf16`, asserting exact addition and multiplication values. Leto Ops also
+  pins exact `Scalar::from_usize` values for both formats.
+
 ### Breaking
 
 - Leto 0.39.0 removes raw `half::f16`/`half::bf16` implementations from

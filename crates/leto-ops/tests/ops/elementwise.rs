@@ -39,6 +39,10 @@ fn scalar_traits_are_eunomia_extensions() {
         <eunomia::F16 as leto_ops::Scalar>::from_usize(4),
         eunomia::F16::from_f32(4.0)
     );
+    assert_eq!(
+        <eunomia::Bf16 as leto_ops::Scalar>::from_usize(4),
+        eunomia::Bf16::from_f32(4.0)
+    );
 }
 
 #[test]

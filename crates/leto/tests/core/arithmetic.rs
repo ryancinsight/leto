@@ -3,6 +3,27 @@
 use leto::{Array2, Storage};
 use ndarray::Array2 as NdArray2;
 
+fn assert_reduced_precision_scalar_arithmetic<T>()
+where
+    T: leto::ScalarOperand
+        + eunomia::FloatElement
+        + core::fmt::Debug
+        + core::ops::Add<Output = T>
+        + core::ops::Mul<Output = T>,
+{
+    let value = |input| <T as eunomia::FloatElement>::from_f32(input);
+    let array = Array2::from_shape_vec([1, 2], vec![value(1.0), value(2.0)]).unwrap();
+
+    assert_eq!(
+        (&array + value(2.0)).storage().as_slice(),
+        &[value(3.0), value(4.0)]
+    );
+    assert_eq!(
+        (&array * value(2.0)).storage().as_slice(),
+        &[value(2.0), value(4.0)]
+    );
+}
+
 fn seq(len: usize, scale: f64, bias: f64) -> Vec<f64> {
     (0..len).map(|i| i as f64 * scale + bias).collect()
 }
@@ -74,6 +95,12 @@ fn scalar_operators_match_ndarray() {
         (&la / 2.0).storage().as_slice(),
         (&na / 2.0).as_slice().unwrap()
     );
+}
+
+#[test]
+fn eunomia_reduced_precision_types_are_scalar_operands() {
+    assert_reduced_precision_scalar_arithmetic::<eunomia::F16>();
+    assert_reduced_precision_scalar_arithmetic::<eunomia::Bf16>();
 }
 
 #[test]

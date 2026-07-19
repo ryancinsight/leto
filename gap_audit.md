@@ -17,12 +17,14 @@
   every direct `half` dependency is deleted. The lock resolves one Eunomia 0.5.0
   identity at `c196db5`, one Hermes 0.4.0 family at `c9bbdf8`, and one Moirai
   0.4.0 family at `8a51b2a`. Full all-feature workspace compilation,
-  warning-denied Clippy, configured Nextest 592/592, nine doctests, rustdoc,
+  warning-denied Clippy, configured Nextest 593/593, nine doctests, rustdoc,
   no-default-feature compilation, and full formatting pass. Warning-denied
   Clippy exposed one unrelated UDU oracle indexing lint, fixed by iterating
   directly over the right-hand-side values. The peer-owned matrix-trait,
   oracle-parity, and Schur rustfmt-only delta is composed without semantic
-  changes.
+  changes. Cumulative code review found no P0/P1 defect; its only P2 evidence
+  gap was closed by an exact generic array-scalar contract instantiated for
+  `F16` and `Bf16` plus exact `Scalar::from_usize` assertions for both.
 - **Semver evidence:** `leto` and `leto-ops` current and `origin/main` baselines
   build and classify with no required update under the explicit 0.39.0
   pre-1.0 break. `leto-python` extraction reaches a Rust 1.95 rustdoc ICE while
