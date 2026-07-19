@@ -1,26 +1,31 @@
 # Leto Work Backlog
 
-## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, todo]
+## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, in-progress]
 
 **Owner:** unclaimed
 
 **Scope:** `leto-ops` `PARALLEL_THRESHOLD` gating in `map.rs` (binary), `unary.rs`,
 and `reduction.rs`. Replace the uniform element-count gate with a per-op-intensity,
-cache-aware threshold: bandwidth-bound elementwise ops (`add`/`sub`/`mul`/`div`
-and bandwidth-bound unary maps) parallelize only when the working set exceeds
-shared LLC (`themis::CpuTopology`); compute-bound ops keep a low threshold. See
-gap_audit `2026-07-19 Parallel Threshold Ignores Arithmetic Intensity`.
+cache-aware threshold: bandwidth-bound elementwise ops parallelize only when the
+working set exceeds shared LLC (`themis::CpuTopology`); compute-bound ops keep a
+low threshold. See gap_audit `2026-07-19 Parallel Threshold Ignores Arithmetic
+Intensity`.
 
-**Dependencies:** a quiet benchmark host for the crossover sweep — the diagnosing
-run (`add_leto_64k` 43 µs parallel vs 14.6 µs serial) confirmed the defect but
-was too noisy to calibrate the replacement threshold.
+**Done:** the binary path (`map.rs` — `add`/`sub`/`mul`/`div`, uniformly
+bandwidth-bound) gates on `working_set > CacheGeometry::l3_bytes()`; the new
+`cached_cache_geometry()` reads L3 from `themis` once. Diagnosed 64k `f64` `add`
+43 µs → 16 µs, 305/305 tests green.
 
-**Acceptance:** an ADR records the intensity classification and the cache-derived
-threshold formula with each constant's derivation; a criterion sweep (64k →
-several MB, parallel vs serial, per op class) confirms the new thresholds never
-regress a bandwidth-bound op and preserve the compute-bound parallel wins (e.g.
-`exp`); `add`/`sub`/`mul`/`div` at 64k run serially; the full warning-denied
-gate passes.
+**Remaining:** `unary.rs` (mixed — `exp` compute-bound must stay parallel while
+`negate`/`abs` are bandwidth-bound, so it needs a per-op intensity marker) and
+`reduction.rs` (bandwidth-bound: read N, emit 1). A clean-host crossover sweep
+(64k → several MB, parallel vs serial, per op class) to refine the LLC-relative
+threshold beyond the correctness-safe cache-residency default; the diagnosing host
+was too noisy to calibrate exact values.
+
+**Acceptance:** unary/reduction gate by op intensity; the sweep confirms no
+bandwidth-bound regression and preserved compute-bound wins (e.g. `exp` 9.2× vs
+ndarray); the full warning-denied gate passes.
 
 ## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, done]
 

@@ -8,6 +8,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [minor] `leto-ops` binary elementwise ops (`add`/`sub`/`mul`/`div`) gate
+  parallelism on the working set relative to the shared last-level cache instead
+  of a fixed 65536-element count. A bandwidth-bound op now parallelizes only once
+  its working set (`operands · N · size_of::<T>()`) spills past the LLC, where
+  extra cores contribute DRAM bandwidth; below that a single core saturates cache
+  bandwidth and thread dispatch is pure overhead. Fixes a 64k `f64` `add` running
+  ~3× slower parallel than serial (**43 µs → 16 µs**, criterion — now faster than
+  ndarray's 17.6 µs). Adds `CacheGeometry::l3_bytes()`, `FALLBACK_L3_BYTES`, and a
+  process-cached `cached_cache_geometry()` (L3 is read from `themis` when the
+  `topology` feature is active). The unary and reduction paths keep the fixed
+  threshold pending per-op arithmetic-intensity classification (backlog
+  `LETO-PARALLEL-INTENSITY-1`).
 - `leto-ops` `normal_with_seed`/`normal_with_seed_into` emit *both* normals of
   each Box-Muller `(u1, u2)` pair (`radius·cos θ` and `radius·sin θ`) via a
   shared `StandardNormals` sampler, instead of computing `radius·cos θ` and
