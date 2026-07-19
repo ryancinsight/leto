@@ -1,6 +1,6 @@
 # Leto Development Checklist
 
-**Target version: 0.39.0** · **Phase: Execution**
+**Target version: 0.39.0** · **Phase: Closure**
 
 ## LETO-EUNOMIA-PRECISION-1 [major] — Owner: Codex `/root`
 
@@ -16,8 +16,8 @@
   `leto-python` semver extraction is externally blocked by a Rust 1.95 rustdoc
   ICE in NumPy's `ToPyArray::to_pyarray` link, while direct workspace rustdoc is
   green.
-- [ ] Publish, review, merge, remove the worktree, and preserve the peer-owned
-  main-tree edits.
+- [x] Publish, review, and merge as PR #46 (`0afece5`); preserve the peer-owned
+  main-tree edits byte-for-byte. Worktree removal follows this closeout merge.
 
 2026-07-18 [patch, complete]: Advanced the reproducibility lock from Eunomia
 0.2.0 `6f431f2d` to Eunomia 0.4.0 `49dc115`, carrying the canonical

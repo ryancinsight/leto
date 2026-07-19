@@ -25,6 +25,11 @@
   changes. Cumulative code review found no P0/P1 defect; its only P2 evidence
   gap was closed by an exact generic array-scalar contract instantiated for
   `F16` and `Bf16` plus exact `Scalar::from_usize` assertions for both.
+- **Delivery:** PR #46 merged as `0afece5`. Leto has no GitHub Actions workflow
+  or protected-branch requirement. CodeRabbit reported success but emitted no
+  review because its quota was exhausted; RecurseML returned an external
+  `ERROR` without a run ID or logs. The merge therefore rests on the complete
+  local machine-checked gate and the recorded cumulative code review.
 - **Semver evidence:** `leto` and `leto-ops` current and `origin/main` baselines
   build and classify with no required update under the explicit 0.39.0
   pre-1.0 break. `leto-python` extraction reaches a Rust 1.95 rustdoc ICE while
