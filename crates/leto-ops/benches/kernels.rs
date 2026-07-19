@@ -91,6 +91,36 @@ fn bench_elementwise(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_parallel_crossover(c: &mut Criterion) {
+    // Sweep bandwidth-bound `f64` `add` across the LLC-residency crossover to
+    // validate the working-set-vs-L3 parallel gate. Working set = 3·N·8 bytes, so
+    // on a 36 MiB L3 the gate's crossover sits near N ≈ 1.5M. Run under default
+    // features for the gate's decision, `--no-default-features` for an all-serial
+    // baseline, and with the gate temporarily forced parallel to locate the true
+    // crossover during threshold calibration.
+    let mut group = c.benchmark_group("parallel_crossover");
+    for &n in &[524_288usize, 1_048_576, 2_097_152, 4_194_304, 8_388_608] {
+        let a = Array::from_shape_vec([n], pinned_values(n, 1.0)).unwrap();
+        let b = Array::from_shape_vec([n], pinned_values(n, 0.5)).unwrap();
+        group.bench_function(format!("add_{}k", n / 1024), |bencher| {
+            bencher.iter_batched(
+                || Array::zeros([n]),
+                |mut out| {
+                    leto_ops::binary_map::<AddOp, f64, 1>(
+                        black_box(&a.view()),
+                        black_box(&b.view()),
+                        &mut out.view_mut(),
+                    )
+                    .unwrap();
+                    out
+                },
+                BatchSize::LargeInput,
+            );
+        });
+    }
+    group.finish();
+}
+
 fn bench_unary_map(c: &mut Criterion) {
     let mut group = c.benchmark_group("unary_map");
     let len = 1usize << 16;
@@ -530,6 +560,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_sparse_compare
+    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_sparse_compare
 }
 criterion_main!(kernels);

@@ -33,8 +33,12 @@
   Measured: 64k `f64` `add` 43 → 16 µs, `scalar_map_into` add ~73 → 9.4 µs;
   reductions do not over-parallelize (`sum` @64k serial 3.3 µs ≈ parallel 3.6 µs,
   efficient tree-reduction) so they keep their threshold. Correctness-safe (both
-  paths compute identically); 305/305 tests green. Only a clean-host crossover
-  sweep to refine exact thresholds remains under `LETO-PARALLEL-INTENSITY-1`.
+  paths compute identically); 305/305 tests green. **Resolved:** the
+  `parallel_crossover` sweep (`add` 512k → 8M, gate vs serial, 36 MiB-L3 host)
+  confirms the L3-working-set threshold is correctly calibrated — serial and
+  matching the baseline below L3, parallel and 1.26–1.78× faster above it (CIs
+  non-overlapping). The cache-residency default is optimal by measurement, not a
+  guess; `LETO-PARALLEL-INTENSITY-1` closed.
 
 ## 2026-07-18 Raw Reduced-Precision Ownership
 
