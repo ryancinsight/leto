@@ -75,9 +75,17 @@ fn symmetric_linalg_contract_analytical() {
     let trace: f64 = leto_eigenvalues.iter().sum();
     assert_close(trace, 15.0);
 
-    let pairwise_sum: f64 = leto_eigenvalues.iter().enumerate().map(|(i, &li)|
-        leto_eigenvalues.iter().skip(i + 1).map(|&lj| li * lj).sum::<f64>()
-    ).sum();
+    let pairwise_sum: f64 = leto_eigenvalues
+        .iter()
+        .enumerate()
+        .map(|(i, &li)| {
+            leto_eigenvalues
+                .iter()
+                .skip(i + 1)
+                .map(|&lj| li * lj)
+                .sum::<f64>()
+        })
+        .sum();
     assert_close(pairwise_sum, 65.0);
 
     let product: f64 = leto_eigenvalues.iter().product();

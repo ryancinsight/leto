@@ -111,7 +111,10 @@ fn schur_complex_pair() {
     assert_schur_contract(&a, 2);
     let s = schur(&a.view()).unwrap();
     let eigs = s.eigenvalues();
-    let mut mags: Vec<f64> = eigs.iter().map(|c| (c.re * c.re + c.im * c.im).sqrt()).collect();
+    let mut mags: Vec<f64> = eigs
+        .iter()
+        .map(|c| (c.re * c.re + c.im * c.im).sqrt())
+        .collect();
     mags.sort_by(|x, y| x.total_cmp(y));
     assert!((mags[0] - 1.0).abs() < 1e-7, "|eigenvalue| must be 1");
     assert!((mags[1] - 1.0).abs() < 1e-7, "|eigenvalue| must be 1");
@@ -140,7 +143,10 @@ fn schur_nonsymmetric_with_complex_eigs() {
     let eigs = s.eigenvalues();
     // Find the real eigenvalue (5).
     let real_eig = eigs.iter().find(|c| c.im.abs() < 1e-7).unwrap();
-    assert!((real_eig.re - 5.0).abs() < 1e-7, "real eigenvalue must be 5");
+    assert!(
+        (real_eig.re - 5.0).abs() < 1e-7,
+        "real eigenvalue must be 5"
+    );
 }
 
 #[test]
@@ -159,9 +165,9 @@ fn schur_eigenvalues_agree_with_eigenvalues_kernel() {
     let free = leto_ops::eigenvalues(&a.view()).unwrap();
     // Cross-validate: each Schur eigenvalue must match a free-function eigenvalue.
     for se in s.eigenvalues() {
-        let matched = free.iter().any(|fe| {
-            (se.re - fe.re).abs() < 1e-7 && (se.im - fe.im).abs() < 1e-7
-        });
+        let matched = free
+            .iter()
+            .any(|fe| (se.re - fe.re).abs() < 1e-7 && (se.im - fe.im).abs() < 1e-7);
         assert!(
             matched,
             "Schur eigenvalue {se:?} not found in free-function eigenvalues"

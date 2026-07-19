@@ -57,10 +57,7 @@ fn pinv_method_matches_moore_penrose_conditions() {
         let aap_t = aap.transpose([1, 0]).unwrap();
         // aap_t is strided (non-contiguous); to_contiguous materializes the copy.
         let aap_t_contig = aap_t.to_contiguous();
-        assert_close_slice(
-            aap.as_slice().unwrap(),
-            aap_t_contig.as_slice().unwrap(),
-        );
+        assert_close_slice(aap.as_slice().unwrap(), aap_t_contig.as_slice().unwrap());
     }
 }
 
@@ -129,9 +126,11 @@ fn cholesky_and_eigen_methods_match_analytical() {
     eig.sort_by(|x: &f64, y: &f64| x.total_cmp(y));
     let trace: f64 = eig.iter().sum();
     assert_close(trace, 15.0);
-    let pairwise_sum: f64 = eig.iter().enumerate().map(|(i, &li)|
-        eig.iter().skip(i + 1).map(|&lj| li * lj).sum::<f64>()
-    ).sum();
+    let pairwise_sum: f64 = eig
+        .iter()
+        .enumerate()
+        .map(|(i, &li)| eig.iter().skip(i + 1).map(|&lj| li * lj).sum::<f64>())
+        .sum();
     assert_close(pairwise_sum, 65.0);
     let product: f64 = eig.iter().product();
     assert_close(product, 83.0);
