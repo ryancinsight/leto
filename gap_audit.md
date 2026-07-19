@@ -25,15 +25,16 @@
   so extra cores contribute memory bandwidth; keep the low threshold for
   compute-bound ops. Needs an empirical crossover sweep on a quiet host to
   calibrate and verify.
-- **Status:** binary path resolved. `add`/`sub`/`mul`/`div` now gate on
-  working-set-vs-LLC via the new `CacheGeometry::l3_bytes()` (cache-derived, not a
-  guessed constant); the diagnosed 64k `f64` `add` dropped **43 µs → 16 µs**
-  (criterion, now faster than ndarray) with 305/305 tests green — the change is
-  correctness-safe (both parallel and serial paths compute identically, so only
-  which one runs changed). The unary (mixed intensity: `exp` compute-bound,
-  `negate`/`abs` bandwidth-bound) and reduction paths keep the fixed threshold;
-  per-op intensity classification plus a clean-host crossover sweep to refine the
-  exact LLC-relative threshold remain under `LETO-PARALLEL-INTENSITY-1`.
+- **Status:** binary, unary, and scalar paths resolved; reductions measured-fine.
+  All bandwidth-bound elementwise ops (`add`/`sub`/`mul`/`div` in `binary_map`;
+  `neg`/`abs` via `unary_map_into`; scalar broadcast via `scalar_map_into`) now
+  gate on working-set-vs-LLC through `CacheGeometry::l3_bytes()` (cache-derived,
+  not a guessed constant); `UnaryOp::COMPUTE_BOUND` keeps transcendentals eager.
+  Measured: 64k `f64` `add` 43 → 16 µs, `scalar_map_into` add ~73 → 9.4 µs;
+  reductions do not over-parallelize (`sum` @64k serial 3.3 µs ≈ parallel 3.6 µs,
+  efficient tree-reduction) so they keep their threshold. Correctness-safe (both
+  paths compute identically); 305/305 tests green. Only a clean-host crossover
+  sweep to refine exact thresholds remains under `LETO-PARALLEL-INTENSITY-1`.
 
 ## 2026-07-18 Raw Reduced-Precision Ownership
 

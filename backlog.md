@@ -11,21 +11,29 @@ working set exceeds shared LLC (`themis::CpuTopology`); compute-bound ops keep a
 low threshold. See gap_audit `2026-07-19 Parallel Threshold Ignores Arithmetic
 Intensity`.
 
-**Done:** the binary path (`map.rs` — `add`/`sub`/`mul`/`div`, uniformly
-bandwidth-bound) gates on `working_set > CacheGeometry::l3_bytes()`; the new
-`cached_cache_geometry()` reads L3 from `themis` once. Diagnosed 64k `f64` `add`
-43 µs → 16 µs, 305/305 tests green.
+**Done:**
+- Binary (`map.rs` — `add`/`sub`/`mul`/`div`): gates on
+  `working_set > CacheGeometry::l3_bytes()` via `cached_cache_geometry()` (L3 from
+  `themis`). Diagnosed 64k `f64` `add` 43 µs → 16 µs.
+- Unary + scalar-broadcast into caller-owned output (`unary_map_into`,
+  `scalar_map_into`): `UnaryOp::COMPUTE_BOUND` const marks transcendentals eager
+  and `neg`/`abs` bandwidth-bound; the shared `map_into_gated` gates bandwidth-
+  bound ops on working-set-vs-LLC. 64k `f64` `scalar_map_into` add ~73 µs → 9.4 µs.
+  Raw-closure `map_into`/`mapv` keep the eager default (closure intensity is
+  unknowable); the serial `mapv` path is unaffected.
+- Reductions: measured competitive (`sum` @64k serial 3.3 µs ≈ parallel 3.6 µs) —
+  the efficient parallel tree-reduction does not over-parallelize, so the existing
+  threshold is kept (no change needed). 305/305 tests green throughout.
 
-**Remaining:** `unary.rs` (mixed — `exp` compute-bound must stay parallel while
-`negate`/`abs` are bandwidth-bound, so it needs a per-op intensity marker) and
-`reduction.rs` (bandwidth-bound: read N, emit 1). A clean-host crossover sweep
-(64k → several MB, parallel vs serial, per op class) to refine the LLC-relative
-threshold beyond the correctness-safe cache-residency default; the diagnosing host
-was too noisy to calibrate exact values.
+**Remaining:** a clean-host crossover sweep (64k → several MB, parallel vs serial,
+per op class) to refine the exact LLC-relative threshold beyond the correctness-
+safe cache-residency default; the diagnosing host is too noisy to calibrate exact
+values. Optionally revisit whether the raw-closure `map_into`/`mapv` default
+should flip to bandwidth-bound (currently eager to avoid regressing rare
+compute-bound closures).
 
-**Acceptance:** unary/reduction gate by op intensity; the sweep confirms no
-bandwidth-bound regression and preserved compute-bound wins (e.g. `exp` 9.2× vs
-ndarray); the full warning-denied gate passes.
+**Acceptance:** the sweep confirms no bandwidth-bound regression and preserved
+compute-bound wins across op classes; the full warning-denied gate passes.
 
 ## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, done]
 
