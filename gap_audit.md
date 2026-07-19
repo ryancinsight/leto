@@ -25,9 +25,15 @@
   so extra cores contribute memory bandwidth; keep the low threshold for
   compute-bound ops. Needs an empirical crossover sweep on a quiet host to
   calibrate and verify.
-- **Status:** open — diagnosed with confirming evidence; fix deferred to a
-  clean-host calibration increment (`LETO-PARALLEL-INTENSITY-1`). Guessing a
-  replacement constant now would violate the derived-constant discipline.
+- **Status:** binary path resolved. `add`/`sub`/`mul`/`div` now gate on
+  working-set-vs-LLC via the new `CacheGeometry::l3_bytes()` (cache-derived, not a
+  guessed constant); the diagnosed 64k `f64` `add` dropped **43 µs → 16 µs**
+  (criterion, now faster than ndarray) with 305/305 tests green — the change is
+  correctness-safe (both parallel and serial paths compute identically, so only
+  which one runs changed). The unary (mixed intensity: `exp` compute-bound,
+  `negate`/`abs` bandwidth-bound) and reduction paths keep the fixed threshold;
+  per-op intensity classification plus a clean-host crossover sweep to refine the
+  exact LLC-relative threshold remain under `LETO-PARALLEL-INTENSITY-1`.
 
 ## 2026-07-18 Raw Reduced-Precision Ownership
 

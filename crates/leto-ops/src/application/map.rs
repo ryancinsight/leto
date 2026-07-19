@@ -4,9 +4,25 @@ use crate::application::index::{
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
+/// Whether a bandwidth-bound elementwise op over `len` elements of `T` should
+/// run in parallel. A binary map reads two operands and writes one, so its
+/// working set is `operands · len · size_of::<T>()`. The op is memory-bandwidth-
+/// bound, and one core nearly saturates that bandwidth while the data is
+/// resident in the shared last-level cache; parallelism pays only once the
+/// working set spills past the LLC, where additional cores add DRAM bandwidth.
+/// Below that, thread-dispatch overhead is pure loss.
+///
+/// Replaces a fixed 65536-element gate (`256 KB` L2 / `4 B` f32) that ignored
+/// both element size and arithmetic intensity, parallelizing bandwidth-bound
+/// ops far too eagerly — a 64k `f64` `add` (1.5 MB working set) ran ~3x slower
+/// parallel than serial. See gap_audit `2026-07-19 Parallel Threshold`.
 #[cfg(feature = "parallel")]
-// Parallel threshold: 256 KB / 4 bytes (f32) = 65536 elements.
-const PARALLEL_THRESHOLD: usize = 65536;
+fn parallelize_bandwidth_bound<T>(len: usize, operands: usize) -> bool {
+    let working_set = len
+        .saturating_mul(operands)
+        .saturating_mul(core::mem::size_of::<T>());
+    working_set > crate::infrastructure::cache::cached_cache_geometry().l3_bytes()
+}
 
 mod sealed {
     pub trait Sealed {}
@@ -147,7 +163,7 @@ where
 
             #[cfg(feature = "parallel")]
             {
-                if lhs_slice.len() >= PARALLEL_THRESHOLD {
+                if parallelize_bandwidth_bound::<T>(lhs_slice.len(), 3) {
                     parallel_binary_map_slice::<Op, T>(lhs_slice, rhs_slice, out_slice);
                     return Ok(());
                 }
@@ -177,7 +193,7 @@ where
 
     #[cfg(feature = "parallel")]
     {
-        if size >= PARALLEL_THRESHOLD && !out_layout.has_zero_stride_aliasing() {
+        if parallelize_bandwidth_bound::<T>(size, 3) && !out_layout.has_zero_stride_aliasing() {
             parallel_binary_map_strided::<Op, T, N>(StridedBinaryContext {
                 size,
                 shape,
