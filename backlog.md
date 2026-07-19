@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, review]
+## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, done]
 
 **Owner:** Codex `/root`
 
@@ -15,8 +15,8 @@ manifests contain no direct `half` dependency; Leto exposes Eunomia
 merged Eunomia and Hermes defaults; format, warning-denied all-target/all-feature
 Clippy, configured Nextest, doctests, rustdoc, no-default-feature compilation,
 residue audits, and Rust-crate semver classification pass; any Python semver
-tooling failure is isolated with exact evidence. Implementation and local gates
-are complete; remote review and merge remain.
+tooling failure is isolated with exact evidence. Delivered by PR #46 as merge
+commit `0afece5`.
 
 ## LETO-EUNOMIA-0.4-REFRESH — Provider lock [patch, done]
 
