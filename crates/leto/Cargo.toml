@@ -13,7 +13,6 @@ mnemosyne = { workspace = true, optional = true }
 # ── Numeric Foundations ──
 bytemuck = { workspace = true }
 eunomia = { workspace = true }
-half = { workspace = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 # ── Error Handling ──

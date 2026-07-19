@@ -19,6 +19,7 @@
 use crate::application::array::Array;
 use crate::application::reduction::iter_elements;
 use crate::infrastructure::storage::{Storage, VecStorage};
+use eunomia::{Bf16, F16};
 
 mod sealed {
     pub trait Sealed {}
@@ -43,22 +44,7 @@ macro_rules! impl_scalar_operand {
 }
 
 impl_scalar_operand!(
-    f32,
-    f64,
-    i8,
-    i16,
-    i32,
-    i64,
-    i128,
-    isize,
-    u8,
-    u16,
-    u32,
-    u64,
-    u128,
-    usize,
-    half::f16,
-    half::bf16
+    f32, f64, i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, F16, Bf16
 );
 
 /// Single core traversal for `&Array op &Array`. Panics on shape mismatch

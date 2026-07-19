@@ -1,5 +1,41 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-18 Raw Reduced-Precision Ownership
+
+- **Finding:** Leto still directly depends on `half` and implements its public
+  `ScalarOperand`, `Scalar`, `RealScalar`, and reduced-precision fixtures for
+  raw `half::f16`/`half::bf16`, while Eunomia owns the Atlas numeric vocabulary
+  and Hermes now exposes only Eunomia reduced-precision SIMD contracts.
+- **Decision:** replace the raw public implementations and all in-repo call
+  sites with `eunomia::F16`/`Bf16`; delete the direct dependency rather than
+  retaining a compatibility implementation. This is a pre-1.0 breaking public
+  contract and targets Leto 0.39.0.
+- **Evidence required:** compile-time trait coverage, exact reduced-precision
+  value tests, source/manifest residue scans, one locked Eunomia/Hermes identity,
+  and the full local/remote verification gates.
+- **Resolution:** production and test sources now use only Eunomia `F16`/`Bf16`;
+  every direct `half` dependency is deleted. The lock resolves one Eunomia 0.5.0
+  identity at `c196db5`, one Hermes 0.4.0 family at `c9bbdf8`, and one Moirai
+  0.4.0 family at `8a51b2a`. Full all-feature workspace compilation,
+  warning-denied Clippy, configured Nextest 593/593, nine doctests, rustdoc,
+  no-default-feature compilation, and full formatting pass. Warning-denied
+  Clippy exposed one unrelated UDU oracle indexing lint, fixed by iterating
+  directly over the right-hand-side values. The peer-owned matrix-trait,
+  oracle-parity, and Schur rustfmt-only delta is composed without semantic
+  changes. Cumulative code review found no P0/P1 defect; its only P2 evidence
+  gap was closed by an exact generic array-scalar contract instantiated for
+  `F16` and `Bf16` plus exact `Scalar::from_usize` assertions for both.
+- **Semver evidence:** `leto` and `leto-ops` current and `origin/main` baselines
+  build and classify with no required update under the explicit 0.39.0
+  pre-1.0 break. `leto-python` extraction reaches a Rust 1.95 rustdoc ICE while
+  resolving NumPy's `ToPyArray::to_pyarray` intra-doc link; direct workspace
+  rustdoc passes, and this migration changes no Python binding API.
+- **Pre-existing supply-chain residual:** Leto has no `deny.toml`, so
+  `cargo deny check` rejects the default license/source policy and reports
+  existing PyO3 0.23.5 advisories RUSTSEC-2025-0020 and RUSTSEC-2026-0177.
+  Re-open as a dedicated Python-boundary dependency upgrade to PyO3 0.29 or
+  newer with matching NumPy bindings and value-semantic Python tests.
+
 ## 2026-07-18 Eunomia 0.4 Provider Refresh
 
 - **Resolution:** the lock advances from Eunomia 0.2.0 `6f431f2d` to 0.4.0

@@ -17,7 +17,6 @@ themis = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
 bytemuck = { workspace = true }
-half = { workspace = true }
 eunomia = { workspace = true }
 
 # ── Error Handling ──
