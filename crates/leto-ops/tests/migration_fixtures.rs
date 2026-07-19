@@ -1,5 +1,4 @@
-use eunomia::{Complex32, Complex64};
-use half::f16;
+use eunomia::{Complex32, Complex64, F16};
 use leto::{Array1, Array2, Array3, SliceArg, Storage};
 use leto_ops::{add, mapv, matmul, mul, sum_axis_into};
 
@@ -136,23 +135,23 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
 }
 
 #[test]
-fn apollo_precision_conversion_fixture_supports_half_pair_storage() {
+fn apollo_precision_conversion_fixture_supports_reduced_pair_storage() {
     let input = Array1::from_shape_fn([4], |[index]| {
         let value = index as f64 + 0.5;
         Complex64::new(value, -value)
     });
 
-    let half_pairs = mapv(&input.view(), |value| {
+    let reduced_pairs = mapv(&input.view(), |value| {
         [
-            f16::from_f32(value.re as f32),
-            f16::from_f32(value.im as f32),
+            F16::from_f32(value.re as f32),
+            F16::from_f32(value.im as f32),
         ]
     })
     .unwrap();
 
-    assert_eq!(half_pairs.shape(), [4]);
-    assert_eq!(half_pairs.get([2]).unwrap()[0], f16::from_f32(2.5));
-    assert_eq!(half_pairs.get([2]).unwrap()[1], f16::from_f32(-2.5));
+    assert_eq!(reduced_pairs.shape(), [4]);
+    assert_eq!(reduced_pairs.get([2]).unwrap()[0], F16::from_f32(2.5));
+    assert_eq!(reduced_pairs.get([2]).unwrap()[1], F16::from_f32(-2.5));
 }
 
 #[test]

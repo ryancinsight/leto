@@ -13,6 +13,26 @@
 - **Evidence required:** compile-time trait coverage, exact reduced-precision
   value tests, source/manifest residue scans, one locked Eunomia/Hermes identity,
   and the full local/remote verification gates.
+- **Resolution:** production and test sources now use only Eunomia `F16`/`Bf16`;
+  every direct `half` dependency is deleted. The lock resolves one Eunomia 0.5.0
+  identity at `c196db5`, one Hermes 0.4.0 family at `c9bbdf8`, and one Moirai
+  0.4.0 family at `8a51b2a`. Full all-feature workspace compilation,
+  warning-denied Clippy, configured Nextest 592/592, nine doctests, rustdoc,
+  no-default-feature compilation, and full formatting pass. Warning-denied
+  Clippy exposed one unrelated UDU oracle indexing lint, fixed by iterating
+  directly over the right-hand-side values. The peer-owned matrix-trait,
+  oracle-parity, and Schur rustfmt-only delta is composed without semantic
+  changes.
+- **Semver evidence:** `leto` and `leto-ops` current and `origin/main` baselines
+  build and classify with no required update under the explicit 0.39.0
+  pre-1.0 break. `leto-python` extraction reaches a Rust 1.95 rustdoc ICE while
+  resolving NumPy's `ToPyArray::to_pyarray` intra-doc link; direct workspace
+  rustdoc passes, and this migration changes no Python binding API.
+- **Pre-existing supply-chain residual:** Leto has no `deny.toml`, so
+  `cargo deny check` rejects the default license/source policy and reports
+  existing PyO3 0.23.5 advisories RUSTSEC-2025-0020 and RUSTSEC-2026-0177.
+  Re-open as a dedicated Python-boundary dependency upgrade to PyO3 0.29 or
+  newer with matching NumPy bindings and value-semantic Python tests.
 
 ## 2026-07-18 Eunomia 0.4 Provider Refresh
 

@@ -1,5 +1,5 @@
 use crate::domain::scalar::Scalar;
-use eunomia::{FloatElement, NumericElement};
+use eunomia::{Bf16, FloatElement, NumericElement, F16};
 
 /// Floating-point scalars that provide the real math surface required by Leto
 /// operations.
@@ -75,5 +75,5 @@ macro_rules! impl_real_simd {
 impl_real_simd!(f32);
 impl_real_simd!(f64);
 
-impl RealScalar for half::f16 {}
-impl RealScalar for half::bf16 {}
+impl RealScalar for F16 {}
+impl RealScalar for Bf16 {}

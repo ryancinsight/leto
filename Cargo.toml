@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.38.2"
+version = "0.39.0"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -28,7 +28,6 @@ themis = { git = "https://github.com/ryancinsight/themis", default-features = fa
 
 # ── Numeric Foundations ──
 bytemuck = { version = "1.25", features = ["derive"] }
-half = { version = "2.7", features = ["bytemuck"] }
 
 # ── Optional Compatibility ──
 ndarray = "0.16"

@@ -85,13 +85,16 @@ fn empty_view_norms_are_zero() {
 
 #[test]
 fn norms_run_at_reduced_precision() {
-    use half::f16;
-    let values: Vec<f16> = [3.0f32, 4.0].iter().map(|&v| f16::from_f32(v)).collect();
+    use eunomia::F16;
+    let values: Vec<F16> = [3.0f32, 4.0]
+        .iter()
+        .map(|&value| F16::from_f32(value))
+        .collect();
     let array = Array::from_shape_vec([2], values).unwrap();
-    // 3-4-5 triangle is exactly representable in f16.
-    assert_eq!(norm_l2(&array.view()).unwrap(), f16::from_f32(5.0));
-    assert_eq!(norm_l1(&array.view()).unwrap(), f16::from_f32(7.0));
-    assert_eq!(norm_max(&array.view()).unwrap(), f16::from_f32(4.0));
+    // The 3-4-5 triangle is exactly representable in binary16.
+    assert_eq!(norm_l2(&array.view()).unwrap(), F16::from_f32(5.0));
+    assert_eq!(norm_l1(&array.view()).unwrap(), F16::from_f32(7.0));
+    assert_eq!(norm_max(&array.view()).unwrap(), F16::from_f32(4.0));
 }
 
 #[test]

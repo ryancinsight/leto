@@ -1,6 +1,5 @@
 use crate::domain::strategy::{SimdOperations, SimdStrategy};
-use eunomia::NumericElement;
-use half::{bf16, f16};
+use eunomia::{Bf16, NumericElement, F16};
 
 /// Leto operation scalar contract.
 ///
@@ -423,14 +422,14 @@ macro_rules! impl_scalar_plain {
 impl_scalar_simd!(f32);
 impl_scalar_simd!(f64);
 
-impl Scalar for f16 {
+impl Scalar for F16 {
     #[inline(always)]
     fn from_usize(value: usize) -> Self {
         Self::from_f32(value as f32)
     }
 }
 
-impl Scalar for bf16 {
+impl Scalar for Bf16 {
     #[inline(always)]
     fn from_usize(value: usize) -> Self {
         Self::from_f32(value as f32)

@@ -1,5 +1,5 @@
 use crate::domain::scalar::Scalar;
-use half::{bf16, f16};
+use eunomia::{Bf16, F16};
 
 mod sealed {
     pub trait Sealed {}
@@ -235,7 +235,8 @@ macro_rules! impl_simd_ops_native {
 impl_simd_ops_native!(f32);
 impl_simd_ops_native!(f64);
 
-// f16 and bf16 always use fallback
+// Reduced-precision types use the scalar fallback until the complete
+// `SimdOperations` surface has native Hermes kernels.
 macro_rules! impl_simd_ops_unsupported {
     ($t:ty) => {
         impl SimdOperations<$t> for SimdStrategy {
@@ -351,5 +352,5 @@ macro_rules! impl_simd_ops_unsupported {
     };
 }
 
-impl_simd_ops_unsupported!(f16);
-impl_simd_ops_unsupported!(bf16);
+impl_simd_ops_unsupported!(F16);
+impl_simd_ops_unsupported!(Bf16);

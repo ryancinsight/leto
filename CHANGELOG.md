@@ -6,8 +6,14 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+## 0.39.0 - 2026-07-18
+
 ### Changed
 
+- Leto and Leto Ops use Eunomia `F16`/`Bf16` for reduced-precision scalar,
+  real-math, array arithmetic, and migration-fixture contracts. The provider
+  lock resolves Eunomia 0.5.0 at `c196db5`, Hermes 0.4.0 at `c9bbdf8`, and
+  Moirai 0.4.0 at `8a51b2a`.
 - The reproducibility lock now resolves Eunomia 0.4.0 at `49dc115`, including
   the canonical round-to-nearest-even sub-byte conversion kernel.
 - `leto-ops` 0.38.2 uses Eunomia complex values directly in migration,
@@ -16,6 +22,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- The UDU solve oracle iterates directly over its right-hand side values,
+  keeping the warning-denied Clippy gate clean without index-coupled access.
 - `leto` 0.38.1 compacts duplicate COO coordinates with exact sum or keep-last
   semantics, removes zero sums, and normalizes arbitrary COO order when
   constructing CSC storage. CSR-to-CSC transpose and column access now preserve
@@ -29,6 +37,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Breaking
 
+- Leto 0.39.0 removes raw `half::f16`/`half::bf16` implementations from
+  `ScalarOperand`, `Scalar`, and `RealScalar`. Consumers migrate reduced
+  precision storage and kernels to `eunomia::F16`/`eunomia::Bf16`.
 - Leto 0.37.0 requires Rust 1.95 because Mnemosyne 0.5/Core 0.2 require it.
   Consumers must update their toolchain before resolving the provider graph.
 
