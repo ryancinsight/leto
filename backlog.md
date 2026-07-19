@@ -1,5 +1,27 @@
 # Leto Work Backlog
 
+## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, todo]
+
+**Owner:** unclaimed
+
+**Scope:** `leto-ops` `PARALLEL_THRESHOLD` gating in `map.rs` (binary), `unary.rs`,
+and `reduction.rs`. Replace the uniform element-count gate with a per-op-intensity,
+cache-aware threshold: bandwidth-bound elementwise ops (`add`/`sub`/`mul`/`div`
+and bandwidth-bound unary maps) parallelize only when the working set exceeds
+shared LLC (`themis::CpuTopology`); compute-bound ops keep a low threshold. See
+gap_audit `2026-07-19 Parallel Threshold Ignores Arithmetic Intensity`.
+
+**Dependencies:** a quiet benchmark host for the crossover sweep — the diagnosing
+run (`add_leto_64k` 43 µs parallel vs 14.6 µs serial) confirmed the defect but
+was too noisy to calibrate the replacement threshold.
+
+**Acceptance:** an ADR records the intensity classification and the cache-derived
+threshold formula with each constant's derivation; a criterion sweep (64k →
+several MB, parallel vs serial, per op class) confirms the new thresholds never
+regress a bandwidth-bound op and preserve the compute-bound parallel wins (e.g.
+`exp`); `add`/`sub`/`mul`/`div` at 64k run serially; the full warning-denied
+gate passes.
+
 ## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, done]
 
 **Owner:** Codex `/root`
