@@ -39,6 +39,23 @@ fn validate_unary_storage<T, U, const N: usize>(
 /// The output shape must match the input shape. The closure executes on values
 /// in the input scalar type and returns the output scalar type; precision
 /// changes are therefore explicit at the call site.
+/// Whether a map over `len` elements of `T` should run in parallel. Compute-bound
+/// ops (heavy per-element arithmetic) pay off past a small fixed element count;
+/// bandwidth-bound ops parallelize only once their working set (input + output)
+/// spills past the shared last-level cache, mirroring `binary_map`.
+#[cfg(feature = "parallel")]
+fn should_parallelize<T>(len: usize, compute_bound: bool) -> bool {
+    if compute_bound {
+        len >= PARALLEL_THRESHOLD
+    } else {
+        crate::application::map::parallelize_bandwidth_bound::<T>(len, 2)
+    }
+}
+
+/// Apply `f` elementwise into caller-owned output. Raw closures are treated as
+/// compute-bound (the historical eager-parallel default, preserved so existing
+/// callers do not regress); the typed [`unary_map_into`] passes the op's
+/// [`UnaryOp::COMPUTE_BOUND`] instead.
 pub fn map_into<T, U, F, const N: usize>(
     input: &ArrayView<'_, T, N>,
     output: &mut ArrayViewMut<'_, U, N>,
@@ -49,6 +66,23 @@ where
     U: Copy + Send + Sync + 'static,
     F: Fn(T) -> U + Copy + Send + Sync + 'static,
 {
+    map_into_gated(input, output, f, true)
+}
+
+/// [`map_into`] with an explicit compute-bound flag driving the parallel gate.
+pub(crate) fn map_into_gated<T, U, F, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    output: &mut ArrayViewMut<'_, U, N>,
+    f: F,
+    compute_bound: bool,
+) -> Result<()>
+where
+    T: Copy + Send + Sync + 'static,
+    U: Copy + Send + Sync + 'static,
+    F: Fn(T) -> U + Copy + Send + Sync + 'static,
+{
+    #[cfg(not(feature = "parallel"))]
+    let _ = compute_bound;
     if input.shape() != output.shape() {
         return Err(LetoError::ShapeMismatch {
             lhs: input.shape().to_vec(),
@@ -59,7 +93,7 @@ where
     if let (Some(input_slice), Some(output_slice)) = (input.as_slice(), output.as_mut_slice()) {
         #[cfg(feature = "parallel")]
         {
-            if input_slice.len() >= PARALLEL_THRESHOLD {
+            if should_parallelize::<T>(input_slice.len(), compute_bound) {
                 parallel_map_slice(input_slice, output_slice, f);
                 return Ok(());
             }
@@ -81,7 +115,7 @@ where
 
     #[cfg(feature = "parallel")]
     {
-        if size >= PARALLEL_THRESHOLD {
+        if should_parallelize::<T>(size, compute_bound) {
             parallel_map_strided(
                 StridedMapContext {
                     size,
@@ -289,15 +323,26 @@ where
 pub trait UnaryOp<T: RealScalar>: Copy + Send + Sync + 'static {
     /// Apply the scalar operation.
     fn apply(&self, x: T) -> T;
+
+    /// Whether this op is compute-bound — heavy enough per element that
+    /// parallelism pays even while the data is cache-resident (transcendentals,
+    /// `powf`). Bandwidth-bound ops (`neg`, `abs`: a trivial op over each element)
+    /// override to `false` and gate parallelism on working-set-vs-LLC, like
+    /// binary elementwise ops, so they are not parallelized into a slowdown.
+    const COMPUTE_BOUND: bool = true;
 }
 
 macro_rules! define_unary_op {
     ($(#[$meta:meta])* $name:ident => $method:ident) => {
+        define_unary_op!($(#[$meta])* $name => $method, true);
+    };
+    ($(#[$meta:meta])* $name:ident => $method:ident, $compute_bound:expr) => {
         $(#[$meta])*
         #[derive(Clone, Copy, Debug, Default)]
         pub struct $name;
 
         impl<T: RealScalar> UnaryOp<T> for $name {
+            const COMPUTE_BOUND: bool = $compute_bound;
             #[inline(always)]
             fn apply(&self, x: T) -> T {
                 x.$method()
@@ -323,9 +368,9 @@ define_unary_op!(/// Cosine operation marker.
 define_unary_op!(/// Square-root operation marker.
     SqrtOp => sqrt);
 define_unary_op!(/// Absolute-value operation marker.
-    AbsOp => abs);
+    AbsOp => abs, false);
 define_unary_op!(/// Additive-inverse operation marker.
-    NegOp => neg);
+    NegOp => neg, false);
 define_unary_op!(/// Reciprocal operation marker.
     RecipOp => recip);
 
@@ -356,7 +401,7 @@ where
     T: RealScalar,
     Op: UnaryOp<T>,
 {
-    map_into(input, output, move |x| op.apply(x))
+    map_into_gated(input, output, move |x| op.apply(x), Op::COMPUTE_BOUND)
 }
 
 /// Apply a named unary operation, allocating a C-contiguous output, through the

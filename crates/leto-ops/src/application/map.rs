@@ -17,7 +17,7 @@ use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 /// ops far too eagerly — a 64k `f64` `add` (1.5 MB working set) ran ~3x slower
 /// parallel than serial. See gap_audit `2026-07-19 Parallel Threshold`.
 #[cfg(feature = "parallel")]
-fn parallelize_bandwidth_bound<T>(len: usize, operands: usize) -> bool {
+pub(crate) fn parallelize_bandwidth_bound<T>(len: usize, operands: usize) -> bool {
     let working_set = len
         .saturating_mul(operands)
         .saturating_mul(core::mem::size_of::<T>());
@@ -516,6 +516,11 @@ where
 
 /// Apply a binary operation between every element and a single scalar into
 /// caller-owned output: `out = op(input, scalar)`.
+///
+/// Scalar arithmetic (`add`/`sub`/`mul`/`div` against a constant) is bandwidth-
+/// bound like [`binary_map`], so parallelism is gated on the working set versus
+/// the LLC rather than the eager compute-bound default — passing `false` to
+/// [`map_into_gated`](crate::application::unary::map_into_gated).
 #[inline]
 pub fn scalar_map_into<Op, T, const N: usize>(
     input: &ArrayView<'_, T, N>,
@@ -526,7 +531,7 @@ where
     Op: BinaryOp<T>,
     T: Scalar,
 {
-    crate::application::unary::map_into(input, output, move |x| Op::apply(x, scalar))
+    crate::application::unary::map_into_gated(input, output, move |x| Op::apply(x, scalar), false)
 }
 
 // -- Reductions --

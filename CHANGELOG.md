@@ -20,6 +20,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   `topology` feature is active). The unary and reduction paths keep the fixed
   threshold pending per-op arithmetic-intensity classification (backlog
   `LETO-PARALLEL-INTENSITY-1`).
+- [minor] `leto-ops` extends that cache-aware policy to unary and scalar-broadcast
+  maps into caller-owned output (`unary_map_into`, `scalar_map_into`). `UnaryOp`
+  gains a `COMPUTE_BOUND` const — transcendentals default `true`, trivial `neg`/
+  `abs` are `false`; bandwidth-bound unary/scalar ops now gate on working-set-vs-
+  LLC while compute-bound ops keep the eager threshold. A 64k `f64`
+  `scalar_map_into` add drops **~73 µs → 9.4 µs** (criterion; the bandwidth-bound
+  path no longer over-parallelizes). The raw-closure `map_into`/`mapv` keep the
+  eager default (a closure's intensity is unknowable) and the serial allocating
+  `mapv` is unaffected. Reductions were measured competitive (`sum` @64k serial
+  3.3 µs ≈ parallel 3.6 µs — the parallel tree-reduction does not over-parallelize)
+  and keep their threshold. Completes the unary/scalar half of
+  `LETO-PARALLEL-INTENSITY-1`.
 - `leto-ops` `normal_with_seed`/`normal_with_seed_into` emit *both* normals of
   each Box-Muller `(u1, u2)` pair (`radius·cos θ` and `radius·sin θ`) via a
   shared `StandardNormals` sampler, instead of computing `radius·cos θ` and

@@ -8,8 +8,8 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
 use leto_ops::{
-    add, bunch_kaufman, dot, map_into, matmul, norm_l1, norm_l2, norm_max, schur, sum, unary_map,
-    zip_mut_with, AddOp, ExpOp,
+    add, bunch_kaufman, dot, map_into, matmul, norm_l1, norm_l2, norm_max, scalar_map_into, schur,
+    sum, unary_map, zip_mut_with, AddOp, ExpOp,
 };
 use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
@@ -102,6 +102,26 @@ fn bench_unary_map(c: &mut Criterion) {
                 map_into(black_box(&input.view()), &mut out.view_mut(), |value| {
                     value + 0.5
                 })
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    // Typed scalar-add into caller-owned output. Bandwidth-bound, so the
+    // intensity-aware gate must keep a 64k `f64` fill (1 MB working set) serial
+    // rather than parallelizing it into a slowdown (cf. the raw `map_into` above,
+    // which stays eager as a compute-bound default).
+    group.bench_function("scalar_add_into_64k", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([len]),
+            |mut out| {
+                scalar_map_into::<AddOp, f64, 1>(
+                    black_box(&input.view()),
+                    0.5,
+                    &mut out.view_mut(),
+                )
                 .unwrap();
                 out
             },
