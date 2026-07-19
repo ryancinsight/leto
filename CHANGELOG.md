@@ -6,6 +6,20 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Changed
+
+- `leto-ops` `normal_with_seed`/`normal_with_seed_into` emit *both* normals of
+  each Box-Muller `(u1, u2)` pair (`radius·cos θ` and `radius·sin θ`) via a
+  shared `StandardNormals` sampler, instead of computing `radius·cos θ` and
+  discarding the sine half. This halves the `ln`/`sqrt`/trig work per sample:
+  64k `f64` normals run **1.94× faster** (1108 µs → 570 µs, criterion). The
+  `N(mean, std_dev)` distribution and per-seed determinism are unchanged, and
+  one generator now drives both the contiguous and strided paths so a seed
+  yields the same sequence regardless of output layout — but the exact draw
+  sequence for a given seed differs from prior releases (callers depending on
+  specific draw values, rather than the documented distribution, must
+  re-baseline).
+
 ## 0.39.0 - 2026-07-18
 
 ### Changed

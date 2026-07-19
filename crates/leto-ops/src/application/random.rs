@@ -67,6 +67,51 @@ pub fn uniform_with_seed<T: RealScalar, const N: usize>(
     Ok(out)
 }
 
+/// Box-Muller standard-normal sampler that emits *both* normals from each
+/// uniform pair.
+///
+/// The basic transform maps two uniforms `(u1, u2)` to two independent standard
+/// normals: with `radius = √(-2·ln u1)` and `θ = τ·u2`, they are `radius·cos θ`
+/// and `radius·sin θ`. Yielding only the cosine half — the historical behavior —
+/// discarded the sine half yet still paid the `ln`/`sqrt`/trig cost for every
+/// element. Caching the sine normal halves the transcendental work per sample.
+/// The distribution is identical; the exact per-seed *sequence* is not (callers
+/// depend on `N(mean, std_dev)` reproducibility, not on specific draw values).
+///
+/// One generator drives both the contiguous and strided output paths, so a seed
+/// yields the same sequence regardless of the destination layout.
+struct StandardNormals<T: RealScalar> {
+    rng: Xorshift64,
+    /// The sine-half normal of the most recent pair, awaiting emission.
+    cached: Option<T>,
+}
+
+impl<T: RealScalar> StandardNormals<T> {
+    #[inline]
+    fn new(seed: u64) -> Self {
+        Self {
+            rng: Xorshift64::new(seed),
+            cached: None,
+        }
+    }
+
+    /// The next standard normal `N(0, 1)`.
+    #[inline]
+    fn next_standard(&mut self) -> T {
+        if let Some(sine_half) = self.cached.take() {
+            return sine_half;
+        }
+        // `1 - u` flips the PRNG's `[0, 1)` onto `(0, 1]` so `ln u1` stays finite;
+        // `u2 ∈ [0, 1)` is the fraction of a full turn `τ`.
+        let u1 = T::ONE.sub(T::from_f64(self.rng.next_unit_f64()));
+        let u2 = T::from_f64(self.rng.next_unit_f64());
+        let radius = T::from_f64(-2.0).mul(u1.ln()).sqrt();
+        let angle = T::from_f64(std::f64::consts::TAU).mul(u2);
+        self.cached = Some(radius.mul(angle.sin()));
+        radius.mul(angle.cos())
+    }
+}
+
 /// Fill a caller-owned view with i.i.d. normal samples of the given `mean`
 /// and `std_dev`, derived deterministically from `seed`.
 pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
@@ -75,17 +120,11 @@ pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
     std_dev: T,
     seed: u64,
 ) -> Result<()> {
-    let tau = T::from_f64(std::f64::consts::TAU);
-    let neg_two = T::from_f64(-2.0);
-    let mut rng = Xorshift64::new(seed);
+    let mut normals = StandardNormals::<T>::new(seed);
 
     if let Some(out_slice) = out.as_mut_slice() {
         for val in out_slice.iter_mut() {
-            let u1 = T::ONE.sub(T::from_f64(rng.next_unit_f64()));
-            let u2 = T::from_f64(rng.next_unit_f64());
-            let radius = neg_two.mul(u1.ln()).sqrt();
-            let z0 = radius.mul(tau.mul(u2).cos());
-            *val = mean.add(std_dev.mul(z0));
+            *val = mean.add(std_dev.mul(normals.next_standard()));
         }
         return Ok(());
     }
@@ -109,11 +148,7 @@ pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
         let base_idx = traversal.base_index(row);
         let mut out_offset = out_layout.offset_of(base_idx)? as isize;
         for _ in 0..traversal.inner() {
-            let u1 = T::ONE.sub(T::from_f64(rng.next_unit_f64()));
-            let u2 = T::from_f64(rng.next_unit_f64());
-            let radius = neg_two.mul(u1.ln()).sqrt();
-            let z0 = radius.mul(tau.mul(u2).cos());
-            out_data[out_offset as usize] = mean.add(std_dev.mul(z0));
+            out_data[out_offset as usize] = mean.add(std_dev.mul(normals.next_standard()));
             out_offset += out_step;
         }
     }
@@ -124,8 +159,10 @@ pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
 /// Fill a C-contiguous array of `shape` with i.i.d. normal samples of the
 /// given `mean` and `std_dev`, derived deterministically from `seed`.
 ///
-/// Uses the Box-Muller transform. Each element consumes two uniforms; the
-/// arithmetic (`ln`, `sqrt`, `cos`) runs in the native precision of `T`.
+/// Uses the Box-Muller transform via [`StandardNormals`], which yields both
+/// normals of each `(u1, u2)` pair, so two output elements share one
+/// `ln`/`sqrt`/`sin`/`cos` evaluation. The arithmetic runs in the native
+/// precision of `T`.
 pub fn normal_with_seed<T: RealScalar, const N: usize>(
     shape: [usize; N],
     mean: T,
