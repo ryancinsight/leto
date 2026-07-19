@@ -1,5 +1,21 @@
 # Leto Work Backlog
 
+## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, in progress]
+
+**Owner:** Codex `/root`
+
+**Scope:** Leto/Leto Ops scalar contracts, arithmetic markers, reduced-precision
+tests, direct dependency manifests, provider lock, and synchronized PM
+artifacts. The peer-owned matrix-trait, oracle-parity, and Schur formatting
+files are outside this worktree scope.
+
+**Acceptance:** production and test Rust sources contain no raw `half` types;
+manifests contain no direct `half` dependency; Leto exposes Eunomia
+`F16`/`Bf16` natively through its scalar and real contracts; the lock resolves
+merged Eunomia and Hermes defaults; format, warning-denied all-target/all-feature
+Clippy, configured Nextest, doctests, rustdoc, no-default-feature compilation,
+residue audits, and semver classification pass.
+
 ## LETO-EUNOMIA-0.4-REFRESH — Provider lock [patch, done]
 
 **Owner:** Codex `/root`

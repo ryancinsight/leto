@@ -1,5 +1,19 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-18 Raw Reduced-Precision Ownership
+
+- **Finding:** Leto still directly depends on `half` and implements its public
+  `ScalarOperand`, `Scalar`, `RealScalar`, and reduced-precision fixtures for
+  raw `half::f16`/`half::bf16`, while Eunomia owns the Atlas numeric vocabulary
+  and Hermes now exposes only Eunomia reduced-precision SIMD contracts.
+- **Decision:** replace the raw public implementations and all in-repo call
+  sites with `eunomia::F16`/`Bf16`; delete the direct dependency rather than
+  retaining a compatibility implementation. This is a pre-1.0 breaking public
+  contract and targets Leto 0.39.0.
+- **Evidence required:** compile-time trait coverage, exact reduced-precision
+  value tests, source/manifest residue scans, one locked Eunomia/Hermes identity,
+  and the full local/remote verification gates.
+
 ## 2026-07-18 Eunomia 0.4 Provider Refresh
 
 - **Resolution:** the lock advances from Eunomia 0.2.0 `6f431f2d` to 0.4.0

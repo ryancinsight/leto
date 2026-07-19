@@ -1,5 +1,21 @@
 # Leto Development Checklist
 
+**Target version: 0.39.0** · **Phase: Execution**
+
+## LETO-EUNOMIA-PRECISION-1 [major] — Owner: Codex `/root`
+
+- [x] Reconcile origin and isolate the migration from fresh peer-owned
+  oracle-formatting edits in a bounded worktree.
+- [ ] Replace raw half types in scalar, real, arithmetic, and fixture contracts
+  with Eunomia `F16`/`Bf16`; remove direct `half` dependencies.
+- [ ] Refresh the lock to merged Eunomia and Hermes defaults and prove one
+  identity for each provider.
+- [ ] Pass format, warning-denied all-target/all-feature Clippy, configured
+  Nextest, doctests, rustdoc, no-default-feature compilation, residue audits,
+  and semver classification.
+- [ ] Publish, review, merge, remove the worktree, and preserve the peer-owned
+  main-tree edits.
+
 2026-07-18 [patch, complete]: Advanced the reproducibility lock from Eunomia
 0.2.0 `6f431f2d` to Eunomia 0.4.0 `49dc115`, carrying the canonical
 round-to-nearest-even sub-byte conversion and corrected reduced-format
