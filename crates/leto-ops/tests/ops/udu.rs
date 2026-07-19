@@ -58,12 +58,12 @@ fn udu_solve_and_inverse_self_consistent() {
     let x = f.solve(&rhs.view()).unwrap();
 
     // Self-validate: A · x = b (element-wise since x is rank-1).
-    for i in 0..n {
+    for (i, &rhs_value) in rhs_values.iter().enumerate().take(n) {
         let mut sum = 0.0;
         for j in 0..n {
             sum += a.get([i, j]).unwrap() * x.get([j]).unwrap();
         }
-        assert_close(sum, rhs_values[i]);
+        assert_close(sum, rhs_value);
     }
 
     let inv = f.inv().unwrap();
