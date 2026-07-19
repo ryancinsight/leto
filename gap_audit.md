@@ -1,5 +1,34 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-19 Parallel Threshold Ignores Arithmetic Intensity
+
+- **Finding:** `leto-ops` gates parallelism on a uniform element-count constant
+  (`PARALLEL_THRESHOLD` = 65536 in `map.rs`/`unary.rs`, 32768 in `reduction.rs`)
+  irrespective of an operation's arithmetic intensity. Bandwidth-bound binary
+  elementwise ops (`add`/`sub`/`mul`/`div`) parallelize the moment the array
+  reaches the threshold, where thread-dispatch overhead exceeds any benefit,
+  while compute-bound unary `exp` (which correctly wins 9.2× vs ndarray) needs
+  it — one gate cannot serve both intensities.
+- **Evidence (criterion, noisy host):** `parity_oracle/add_leto_64k` = 43 µs with
+  default features vs **14.6 µs** under `--no-default-features --features
+  std,mnemosyne-memory,topology` (parallel off) — ~3× slower parallel; serial
+  even beats ndarray's 17.6 µs. `PARALLEL_THRESHOLD` (65536) exactly equals the
+  benchmark `len` (`1<<16`), so the `>=` guard trips parallelism by one element.
+- **Impact:** every bandwidth-bound elementwise op on arrays from ~64k up to the
+  parallel-profitable size (several MB, past shared LLC) pays parallel overhead
+  for a net slowdown — `add`/`sub`/`mul`/`div` and the bandwidth-bound unary maps
+  (negate/abs/copy). Compute-bound transcendentals are unaffected.
+- **Fix direction ([minor]/[arch], ADR):** replace the uniform element-count gate
+  with an arithmetic-intensity- and cache-aware threshold — parallelize a
+  bandwidth-bound op only when its working set (`operands · N · size_of::<T>()`)
+  exceeds the shared last-level cache (available through `themis::CpuTopology`),
+  so extra cores contribute memory bandwidth; keep the low threshold for
+  compute-bound ops. Needs an empirical crossover sweep on a quiet host to
+  calibrate and verify.
+- **Status:** open — diagnosed with confirming evidence; fix deferred to a
+  clean-host calibration increment (`LETO-PARALLEL-INTENSITY-1`). Guessing a
+  replacement constant now would violate the derived-constant discipline.
+
 ## 2026-07-18 Raw Reduced-Precision Ownership
 
 - **Finding:** Leto still directly depends on `half` and implements its public
