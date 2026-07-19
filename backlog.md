@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, in-progress]
+## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, done]
 
 **Owner:** unclaimed
 
@@ -25,15 +25,22 @@ Intensity`.
   the efficient parallel tree-reduction does not over-parallelize, so the existing
   threshold is kept (no change needed). 305/305 tests green throughout.
 
-**Remaining:** a clean-host crossover sweep (64k → several MB, parallel vs serial,
-per op class) to refine the exact LLC-relative threshold beyond the correctness-
-safe cache-residency default; the diagnosing host is too noisy to calibrate exact
-values. Optionally revisit whether the raw-closure `map_into`/`mapv` default
-should flip to bandwidth-bound (currently eager to avoid regressing rare
-compute-bound closures).
+- Crossover sweep (`parallel_crossover` bench, `add` 512k → 8M, gate vs
+  `--no-default` serial) validates the L3-working-set threshold on a 36 MiB-L3
+  host: below L3 the gate is serial and matches the serial baseline (512k 942 vs
+  897 µs; 1M 1709 vs 1596 µs — within noise), above L3 it parallelizes and wins
+  (2M 1447 vs 2579 µs = 1.78×; 4M 3686 vs 4645 µs = 1.26×; 8M 5380 vs 9267 µs =
+  1.72×), with non-overlapping CIs. The crossover lands at the L3 boundary — 2M
+  parallel (1447 µs) even beats 1M serial (1709 µs) despite 2× the data. The
+  cache-residency default is confirmed optimal; no threshold refinement needed.
 
-**Acceptance:** the sweep confirms no bandwidth-bound regression and preserved
-compute-bound wins across op classes; the full warning-denied gate passes.
+**Remaining:** none for the threshold policy. A latent option (not required): flip
+the raw-closure `map_into`/`mapv` default to bandwidth-bound — currently eager to
+avoid regressing rare compute-bound closures, which should use typed ops anyway.
+
+**Acceptance:** met — every bandwidth-bound elementwise path gates on cache
+residency; the sweep confirms parallel wins above L3 and is correctly avoided
+below; no compute-bound regression; full warning-denied gate green.
 
 ## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, done]
 
