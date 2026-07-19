@@ -137,6 +137,46 @@ fn test_random_into() {
     assert_eq!(out2.storage().as_slice(), normal_owned.storage().as_slice());
 }
 
+/// A seed yields the same normal sequence regardless of the output view's
+/// layout. One `StandardNormals` generator drives both the contiguous
+/// (`as_mut_slice`) and the strided (`RowMajorTraversal`) fill paths, consuming
+/// draws in row-major order either way — so element `(i, j)` gets the same draw
+/// whether the destination is C-dense or transposed-strided. This guards the
+/// layout independence the Box-Muller pair-caching relies on: were one path to
+/// diverge (e.g. a future optimization applied to only the contiguous branch),
+/// the two fills would desynchronize and this test would fail.
+#[test]
+fn normal_seed_sequence_is_layout_independent() {
+    let seed = 7u64;
+
+    // Contiguous [3, 4], filled through the `as_mut_slice` fast path.
+    let mut contiguous = Array::from_elem([3, 4], 0.0f64);
+    leto_ops::normal_with_seed_into(&mut contiguous.view_mut(), 0.0, 1.0, seed).unwrap();
+
+    // The same logical [3, 4] as the transpose of a contiguous [4, 3]: the view
+    // is not C-dense, so `normal_with_seed_into` takes the strided path.
+    let mut backing = Array::from_elem([4, 3], 0.0f64);
+    {
+        let mut strided = backing.view_mut().transpose_mut([1, 0]).unwrap();
+        assert!(
+            !strided.is_c_dense(),
+            "transposed view must be strided to exercise the non-contiguous path"
+        );
+        leto_ops::normal_with_seed_into(&mut strided, 0.0, 1.0, seed).unwrap();
+    }
+    let strided_logical = backing.view().transpose([1, 0]).unwrap();
+
+    for i in 0..3 {
+        for j in 0..4 {
+            assert_eq!(
+                contiguous.get([i, j]).unwrap(),
+                strided_logical.get([i, j]).unwrap(),
+                "layout-independent draw at ({i}, {j})"
+            );
+        }
+    }
+}
+
 #[test]
 fn test_solvers_into() {
     // LU solve_into
