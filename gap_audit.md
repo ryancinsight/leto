@@ -36,6 +36,14 @@
   8 B value per nonzero), but it is a public-API format change on `CsrMatrix`
   that collides with a peer's in-flight sparse-LU/SpGEMM work on the same format.
   Deferred until that settles ([major], needs an ADR).
+- **Sibling (CSC, shipped):** `csc_spmv` carried the same unelided per-nonzero
+  `values[p]`/`row_indices[p]` checks around a scatter-add. Same elision (slice
+  each column's runs, zip with `col_ptr.windows(2)`; `y.fill` for zeroing) —
+  **−24% (n=4096) / −16% (n=65536)** (criterion, `bench_csc_spmv`, clean at
+  cache/L3). The gain is larger than CSR's because the residual per-nonzero work
+  is a costlier `y[i]` scatter, so its bounds check dominated more. The DRAM-bound
+  size could not be measured cleanly (concurrent-build contention); the change
+  only removes work, so it cannot regress.
 
 ## 2026-07-20 Blocked LU Cache-Resident Regression
 
