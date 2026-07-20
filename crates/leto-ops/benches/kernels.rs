@@ -15,7 +15,7 @@ use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
     svd_via_bidiagonal,
 };
-use leto_ops::{spmm, CsrMatrix};
+use leto_ops::{spmm, spmv_into, CsrMatrix};
 use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
 use std::hint::black_box;
 
@@ -569,6 +569,56 @@ fn bench_lu_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+/// Banded CSR matrix with `2·half_bw + 1` nonzeros per interior row — the
+/// structure of a 1-D stencil / discretized-PDE operator, the canonical Krylov
+/// SpMV workload. Column indices are strictly increasing within each row (CSR
+/// invariant); the diagonal is heavy so the operand is well-scaled.
+fn banded_csr(n: usize, half_bw: usize) -> CsrMatrix<f64> {
+    let mut values = Vec::new();
+    let mut col_indices = Vec::new();
+    let mut row_ptr = Vec::with_capacity(n + 1);
+    row_ptr.push(0);
+    for i in 0..n {
+        let lo = i.saturating_sub(half_bw);
+        let hi = (i + half_bw + 1).min(n);
+        for j in lo..hi {
+            col_indices.push(j);
+            values.push(if j == i {
+                (2 * half_bw + 1) as f64
+            } else {
+                -1.0
+            });
+        }
+        row_ptr.push(values.len());
+    }
+    CsrMatrix::from_parts(values, col_indices, row_ptr, n, n).expect("banded CSR is valid")
+}
+
+/// SpMV `y = A·x` scaling instrument. `A` is a 7-point-stencil banded operator
+/// (the per-iteration kernel of every Krylov solve). `4096` stays L2-resident
+/// (isolates per-nonzero instruction overhead); `1<<20` spills past the LLC
+/// (memory-bandwidth-bound). `spmv_into` is timed with a reused output buffer so
+/// the measurement is the kernel, not allocation.
+fn bench_spmv(c: &mut Criterion) {
+    let mut group = c.benchmark_group("spmv");
+    for &n in &[4096usize, 65536, 1 << 20] {
+        let a = banded_csr(n, 3);
+        let x = Array::from_shape_vec([n], pinned_values(n, 1.0e-3)).unwrap();
+        let mut y = vec![0.0f64; n];
+        group.bench_function(format!("banded7_{n}"), |bencher| {
+            bencher.iter(|| {
+                spmv_into(
+                    black_box(&a),
+                    black_box(&x.view()),
+                    black_box(y.as_mut_slice()),
+                )
+                .unwrap();
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default()
@@ -576,6 +626,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare
+    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv
 }
 criterion_main!(kernels);

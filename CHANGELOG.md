@@ -51,6 +51,19 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   any sampler change the exact per-seed draw *sequence* differs (Ziggurat consumes
   a data-dependent number of PRNG draws per sample), so callers depending on
   specific draw values rather than the documented distribution must re-baseline.
+- [patch] `leto-ops` SpMV (`spmv`/`spmv_into`) drops the per-nonzero
+  `values[p]`/`col_indices[p]`/`row_ptr[i]` bounds checks: each row's value and
+  column runs are sliced and zipped with `row_ptr.windows(2)`, collapsing
+  `O(nnz)` element checks into one `O(nrows)` slice check per row. Accumulation
+  order — and therefore every result — is unchanged (pure refactor over the same
+  nonzero traversal). Freeing the load pipeline from the interleaved checks
+  restores prefetch/ILP on the streaming values/indices: a banded 7-point-stencil
+  SpMV runs **−14% (n=4096, L2-resident) / −19% (n=65536, L3) / −27% (n=1<<20,
+  DRAM-bound, wider CI 19–34%; ~12.6 → ~18 GB/s)** (criterion, `bench_spmv`,
+  quiet host). SpMV is the kernel every Krylov iteration runs, so the gain
+  compounds across a solve. The residual data-dependent `xs[col]` gather check is
+  left in place; eliding it via `get_unchecked` is filed for a further quiet-host
+  measurement (gap_audit).
 
 ## 0.39.0 - 2026-07-18
 

@@ -1,5 +1,39 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-20 SpMV Bounds-Check Elision (Krylov Kernel)
+
+- **Finding:** `spmv_slice_into` (the CSR matrix–vector kernel every Krylov
+  iteration runs) indexed `values[p]`/`col_indices[p]` by a range whose bound
+  `row_ptr[i+1] ≤ nnz` the compiler cannot prove, so each nonzero carried three
+  bounds-check branches (plus the data-dependent `xs[col]` gather). Profiling a
+  banded 7-point-stencil SpMV: 0.46 ns/nnz (n=4096, L2), 0.57 ns/nnz (n=65536,
+  L3), 1.27 ns/nnz (n=1<<20, DRAM ≈ 12.6 GB/s — well below bandwidth, i.e.
+  ILP/latency-bound, not bandwidth-saturated → real headroom).
+- **Resolution (shipped):** iterate rows through `row_ptr.windows(2)` zipped with
+  `y`, slicing each row's value/column runs, so `O(nnz)` element checks collapse
+  to one `O(nrows)` slice check. Same nonzero traversal order → bitwise-identical
+  results (pure refactor; `spmv_matches_closed_form_and_overwrites_output`
+  unchanged). Restoring prefetch/ILP: **−14% (n=4096) / −19% (n=65536) / −27%
+  (n=1<<20, wider CI 19–34%)** (clean-host criterion vs `spmv_pre`, p=0.00); the DRAM-bound case rises
+  ~12.6 → ~18 GB/s. (A first reading showed −39% at n=1<<20; the clean re-measurement's
+  −27% with its wider CI is the figure of record — memory-bound throughput has
+  ~15% run-to-run variance on this host.)
+- **Residual (filed):** the last per-nonzero check is the data-dependent gather
+  `xs[col]`. The CSR invariant (`col < ncols`, enforced by `from_parts` and every
+  constructor) plus `spmv_into`'s `xs.len() == ncols` check prove it in-bounds, so
+  `xs.get_unchecked(col)` is sound. An attempt to measure it was invalidated by a
+  concurrent 31-process workspace build saturating memory bandwidth (apparent
+  +835% is contention, not code). Re-measure on a quiet host; ship the
+  `get_unchecked` (with the SAFETY proof + miri) only if it clears the ~10%
+  run-to-run noise. **Lesson:** memory-bound benchmarks are invalid under
+  concurrent builds — gate bench measurement on a quiet host (rustc/cargo
+  process count ≈ 0).
+- **Blocked lever:** narrowing `col_indices`/`row_ptr` from `usize` to `u32`
+  would halve index traffic (the dominant term for DRAM-bound SpMV: 8 B index vs
+  8 B value per nonzero), but it is a public-API format change on `CsrMatrix`
+  that collides with a peer's in-flight sparse-LU/SpGEMM work on the same format.
+  Deferred until that settles ([major], needs an ADR).
+
 ## 2026-07-20 Blocked LU Cache-Resident Regression
 
 - **Finding:** `lu_decompose` is unblocked (BLAS-2, rank-1 SIMD `axpy` trailing

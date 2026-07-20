@@ -39,12 +39,20 @@ pub fn spmv_into<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>, y: &mut [T]
 fn spmv_slice_into<T: Scalar>(a: &CsrMatrix<T>, xs: &[T], y: &mut [T]) -> Result<()> {
     let (values, col_indices, row_ptr) = a.as_parts();
 
-    for (i, slot) in y.iter_mut().enumerate() {
+    // Iterate rows through `row_ptr.windows(2)` zipped with `y` — eliding the
+    // `y[i]`/`row_ptr[i]`/`row_ptr[i+1]` bounds checks — and slice each row's
+    // value/column runs so the per-nonzero `values[p]`/`col_indices[p]` checks
+    // fall away too (one `O(nrows)` slice check replaces `O(nnz)` element
+    // checks). The residual `xs[col]` check is data-dependent; the CSR
+    // invariant (`col_indices[p] < ncols == xs.len()`, from `from_parts`) proves
+    // it in-bounds but the compiler cannot, so it stays for safety.
+    for (slot, window) in y.iter_mut().zip(row_ptr.windows(2)) {
+        let (start, end) = (window[0], window[1]);
+        let cols = &col_indices[start..end];
+        let vals = &values[start..end];
         let mut acc = T::ZERO;
-        // SAFETY-free: `from_parts`/`from_dense` guarantee row_ptr is monotone
-        // within bounds and every col index < ncols == xs.len().
-        for p in row_ptr[i]..row_ptr[i + 1] {
-            acc = acc.add(values[p].mul(xs[col_indices[p]]));
+        for (&value, &col) in vals.iter().zip(cols) {
+            acc = acc.add(value.mul(xs[col]));
         }
         *slot = acc;
     }
