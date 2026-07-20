@@ -664,6 +664,37 @@ fn bench_csc_spmv(c: &mut Criterion) {
     group.finish();
 }
 
+/// Row-major SPD matrix `AᵀA + nI` (well-conditioned, positive-definite), the
+/// input Cholesky requires.
+fn spd_values(n: usize) -> Vec<f64> {
+    let values = pinned_values(n * n, 1.0e-3);
+    let mut spd = vec![0.0f64; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            let mut acc = 0.0;
+            for k in 0..n {
+                acc += values[k * n + i] * values[k * n + j];
+            }
+            spd[i * n + j] = acc + if i == j { n as f64 } else { 0.0 };
+        }
+    }
+    spd
+}
+
+/// Cholesky scaling instrument. The `O(n³/3)` factorization is dominated by the
+/// Cholesky–Crout inner-product reduction; these cache-resident sizes isolate
+/// that reduction's throughput (scalar vs SIMD-dispatched).
+fn bench_cholesky_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("cholesky_scaling");
+    for &n in &[128usize, 256, 512] {
+        let spd = Array::from_shape_vec([n, n], spd_values(n)).unwrap();
+        group.bench_function(format!("cholesky_{n}x{n}"), |b| {
+            b.iter(|| black_box(cholesky_decompose(black_box(&spd.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default()
@@ -671,6 +702,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv
+    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling
 }
 criterion_main!(kernels);

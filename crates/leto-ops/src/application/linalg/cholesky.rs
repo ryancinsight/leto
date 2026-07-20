@@ -46,11 +46,14 @@ pub fn cholesky_decompose<T: RealScalar>(
 
     for r in 0..n {
         for c in 0..=r {
-            // acc = A[r][c] - Σ_{k<c} L[r][k]·L[c][k]
-            let mut acc = a[r * n + c];
-            for k in 0..c {
-                acc = acc.sub(a[r * n + k].mul(a[c * n + k]));
-            }
+            // acc = A[r][c] − Σ_{k<c} L[r][k]·L[c][k]: the Cholesky–Crout inner
+            // product over two contiguous row prefixes, dispatched through the
+            // SIMD `dot_slice` (SSOT with `solve_in_place`). The scalar reduction
+            // carries a loop-borne FP dependency and never autovectorizes, so
+            // this is the dominant `O(n³/3)` win. Reduction reorder is
+            // backward-stable, within the Cholesky differential oracle's tolerance.
+            let dot = T::dot_slice(&a[r * n..r * n + c], &a[c * n..c * n + c]);
+            let acc = a[r * n + c].sub(dot);
             if r == c {
                 if acc <= T::ZERO {
                     return Err(LetoError::StorageError {
