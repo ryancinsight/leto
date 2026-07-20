@@ -1,5 +1,40 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-20 Decomposition SIMD-Dispatch Gap (Cholesky shipped)
+
+- **Finding:** LU, Hessenberg reduction, the SVD values-path, Francis QR, and the
+  shared Householder primitive all route their inner sweeps through the SIMD
+  `Scalar` ops (`dot_slice`/`axpy_slice`), but three hot O(n³) decomposition
+  kernels were missed by that conversion and still ran hand-rolled scalar loops.
+  Measurement note: `schur` is the slowest decomposition (348 µs @32² vs LU 2.8 µs)
+  but it is a red herring — its Francis inner kernels are already SIMD; the cost is
+  Q-accumulation/iterations, not a scalar loop.
+- **Shipped (Cholesky):** `cholesky_decompose`'s Cholesky–Crout inner product
+  (`cholesky.rs:50`) was a scalar loop-carried reduction that never autovectorizes.
+  Routed through `dot_slice` (both operands already contiguous; same dispatch
+  `solve_in_place` already used). **−49% / −72% / −65% at n=128/256/512**
+  (`bench_cholesky_scaling`), a 2–3.5× win; reduction reorder within the
+  differential oracle's tolerance (15 QR/Cholesky value tests pass).
+- **Follow-ups (same pattern, disjoint increments):**
+  - QR panel reflector apply (`qr/decompose.rs:144-164`) — scalar axpy loops →
+    `axpy_slice`; smaller per-op gain (axpy is SSE2-autovectorizable), concentrates
+    on the n<256 unblocked path.
+  - SVD factor-path U/V accumulation (`bidiagonal/reduce.rs:200-207`) — scalar
+    reduction+axpy → `dot_slice`+`axpy_slice`; also a duplicate of
+    `householder::apply_right` (consolidation).
+  - Secondary (lower-traffic): full_piv_lu / bunch_kaufman trailing updates
+    (identical to the shipped LU fix); udu weighted-dot (hoist loop-invariant
+    `u[j][k]·d[k]` out of the `i`-loop); col_piv_qr pivot-norm down-dating (a
+    different, non-SIMD-dispatch fix).
+- **Cross-crate lead (hermes):** the CSR SpMV *scalar remainder*
+  (`hermes-simd-core/src/sparse/spmv.rs:149`) re-checks the gather bound
+  `x[cols[j]]` that the SIMD body 8 lines above already trusts (unchecked gather on
+  the `Validated<Csr>` invariant). Short rows (nnz < LANE_COUNT) run wholly through
+  it — ~10-30% on short-row SpMV via `get_unchecked` (foundational: backs every
+  sparse solver). The `SellP` fallback (`spmv.rs:341`) has the same shape.
+  hermes/eunomia f32/f64 SIMD hot paths are otherwise verified hand-written quality
+  (hardware FMA, 4-way accumulators, bounds-check-free inner loops, F16C for f16).
+
 ## 2026-07-20 SpMV Bounds-Check Elision (Krylov Kernel)
 
 - **Finding:** `spmv_slice_into` (the CSR matrix–vector kernel every Krylov

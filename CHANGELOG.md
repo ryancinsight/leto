@@ -73,6 +73,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   the residual per-nonzero work is a costlier `y[i]` scatter. (The DRAM-bound
   n=1<<20 case could not be measured cleanly under concurrent-build bandwidth
   contention; the change only removes work, so it cannot regress.)
+- [patch] `leto-ops` Cholesky (`cholesky_decompose`) routes its dominant
+  Cholesky–Crout inner product `Σ_{k<c} L[r][k]·L[c][k]` through the SIMD
+  `dot_slice` instead of a hand-rolled scalar loop. That reduction carries a
+  loop-borne FP dependency and never autovectorizes (even at the SSE2 baseline),
+  so it was the entire `O(n³/3)` kernel cost. A well-conditioned SPD factorization
+  runs **−49% (n=128) / −72% (n=256) / −65% (n=512)** — a 2–3.5× speedup
+  (criterion, `bench_cholesky_scaling`). The multi-accumulator reduction reorders
+  the summation (backward-stable, within the differential oracle's tolerance; all
+  15 QR/Cholesky value tests pass). The same dispatch `solve_in_place` already
+  used — the decompose path was simply never converted when LU/Householder were.
 
 ## 0.39.0 - 2026-07-18
 
