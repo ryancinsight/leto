@@ -520,7 +520,7 @@ where
 /// Scalar arithmetic (`add`/`sub`/`mul`/`div` against a constant) is bandwidth-
 /// bound like [`binary_map`], so parallelism is gated on the working set versus
 /// the LLC rather than the eager compute-bound default — passing `false` to
-/// [`map_into_gated`](crate::application::unary::map_into_gated).
+/// the internal `map_into_gated` kernel.
 #[inline]
 pub fn scalar_map_into<Op, T, const N: usize>(
     input: &ArrayView<'_, T, N>,
