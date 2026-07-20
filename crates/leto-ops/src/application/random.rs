@@ -159,10 +159,10 @@ pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
 /// Fill a C-contiguous array of `shape` with i.i.d. normal samples of the
 /// given `mean` and `std_dev`, derived deterministically from `seed`.
 ///
-/// Uses the Box-Muller transform via [`StandardNormals`], which yields both
-/// normals of each `(u1, u2)` pair, so two output elements share one
-/// `ln`/`sqrt`/`sin`/`cos` evaluation. The arithmetic runs in the native
-/// precision of `T`.
+/// Uses the Box-Muller transform via the internal `StandardNormals` iterator,
+/// which yields both normals of each `(u1, u2)` pair, so two output elements
+/// share one `ln`/`sqrt`/`sin`/`cos` evaluation. The arithmetic runs in the
+/// native precision of `T`.
 pub fn normal_with_seed<T: RealScalar, const N: usize>(
     shape: [usize; N],
     mean: T,
