@@ -138,13 +138,12 @@ fn test_random_into() {
 }
 
 /// A seed yields the same normal sequence regardless of the output view's
-/// layout. One `StandardNormals` generator drives both the contiguous
-/// (`as_mut_slice`) and the strided (`RowMajorTraversal`) fill paths, consuming
-/// draws in row-major order either way — so element `(i, j)` gets the same draw
-/// whether the destination is C-dense or transposed-strided. This guards the
-/// layout independence the Box-Muller pair-caching relies on: were one path to
-/// diverge (e.g. a future optimization applied to only the contiguous branch),
-/// the two fills would desynchronize and this test would fail.
+/// layout. One PRNG drives the shared Ziggurat sampler across both the
+/// contiguous (`as_mut_slice`) and strided (`RowMajorTraversal`) fill paths,
+/// consuming draws in row-major order either way — so element `(i, j)` gets the
+/// same draw whether the destination is C-dense or transposed-strided. Were one
+/// path to diverge (e.g. a future optimization applied to only the contiguous
+/// branch), the two fills would desynchronize and this test would fail.
 #[test]
 fn normal_seed_sequence_is_layout_independent() {
     let seed = 7u64;
@@ -250,7 +249,10 @@ fn ziggurat_normal_matches_analytical_distribution() {
     assert!(mean.abs() < 6.0 * (1.0 / nf).sqrt(), "mean {mean}");
     assert!((m2 - 1.0).abs() < 6.0 * (2.0 / nf).sqrt(), "variance {m2}");
     assert!(skew.abs() < 6.0 * (6.0 / nf).sqrt(), "skewness {skew}");
-    assert!((kurt - 3.0).abs() < 6.0 * (24.0 / nf).sqrt(), "kurtosis {kurt}");
+    assert!(
+        (kurt - 3.0).abs() < 6.0 * (24.0 / nf).sqrt(),
+        "kurtosis {kurt}"
+    );
 
     // Tail exceedance probabilities P(|Z| > k), k = 1..4.
     let expected_tail = [

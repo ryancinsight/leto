@@ -204,7 +204,8 @@ pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
         let base_idx = traversal.base_index(row);
         let mut out_offset = out_layout.offset_of(base_idx)? as isize;
         for _ in 0..traversal.inner() {
-            out_data[out_offset as usize] = mean.add(std_dev.mul(T::from_f64(ZIGGURAT_NORMAL.sample(&mut rng))));
+            out_data[out_offset as usize] =
+                mean.add(std_dev.mul(T::from_f64(ZIGGURAT_NORMAL.sample(&mut rng))));
             out_offset += out_step;
         }
     }
