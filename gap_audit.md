@@ -1,5 +1,22 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-20 Normal RNG at Parity (Ziggurat)
+
+- **Finding (closed):** `normal_with_seed` used Box-Muller — even after the
+  sine-half recovery (570 µs/64k `f64`) it trailed ndarray's Ziggurat ~3.9×. This
+  was the last profiled path on which leto-ops lost to ndarray.
+- **Resolution:** replaced Box-Muller with the Ziggurat method (Marsaglia & Tsang
+  2000, 128 layers). The `kn`/`wn`/`fx` tables are reconstructed from the published
+  `r`/`v` constants via the equal-area recurrence (Burkardt's reference form).
+  64k `f64` normals **1108 µs (0.39.0) → 210 µs**, at parity with ndarray (212 µs).
+  Correctness verified against the analytic normal — first four moments, tail
+  probabilities `P(|Z|>1..4)`, and a 200-bin chi-squared goodness-of-fit over 10M
+  samples (`ziggurat_normal_matches_analytical_distribution`) — with per-seed
+  determinism and layout independence preserved. leto-ops now matches or beats
+  ndarray on every profiled path.
+- **Note:** second per-seed *sequence* change for `normal_with_seed` this release
+  cycle (distribution preserved and verified; documented in CHANGELOG).
+
 ## 2026-07-19 Parallel Threshold Ignores Arithmetic Intensity
 
 - **Finding:** `leto-ops` gates parallelism on a uniform element-count constant

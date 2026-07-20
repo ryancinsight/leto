@@ -39,17 +39,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   3.3 µs ≈ parallel 3.6 µs — the parallel tree-reduction does not over-parallelize)
   and keep their threshold. Completes the unary/scalar half of
   `LETO-PARALLEL-INTENSITY-1`.
-- `leto-ops` `normal_with_seed`/`normal_with_seed_into` emit *both* normals of
-  each Box-Muller `(u1, u2)` pair (`radius·cos θ` and `radius·sin θ`) via a
-  shared `StandardNormals` sampler, instead of computing `radius·cos θ` and
-  discarding the sine half. This halves the `ln`/`sqrt`/trig work per sample:
-  64k `f64` normals run **1.94× faster** (1108 µs → 570 µs, criterion). The
-  `N(mean, std_dev)` distribution and per-seed determinism are unchanged, and
-  one generator now drives both the contiguous and strided paths so a seed
-  yields the same sequence regardless of output layout — but the exact draw
-  sequence for a given seed differs from prior releases (callers depending on
-  specific draw values, rather than the documented distribution, must
-  re-baseline).
+- [minor] `leto-ops` `normal_with_seed`/`normal_with_seed_into` draw standard
+  normals with the **Ziggurat method** (Marsaglia & Tsang 2000, 128 layers) in
+  place of Box-Muller. ~99% of samples take one table lookup and one integer
+  comparison with no transcendental, versus Box-Muller's `ln`/`sqrt`/`sin`/`cos`
+  on every sample: 64k `f64` normals run **210 µs, down from 1108 µs** in 0.39.0
+  (5.3×), now at parity with ndarray's Ziggurat (212 µs). The `N(mean, std_dev)`
+  distribution is verified against the analytic normal — first four moments, tail
+  probabilities `P(|Z| > 1..4)`, and a 200-bin chi-squared goodness-of-fit over
+  10M samples; per-seed determinism and layout independence still hold. As with
+  any sampler change the exact per-seed draw *sequence* differs (Ziggurat consumes
+  a data-dependent number of PRNG draws per sample), so callers depending on
+  specific draw values rather than the documented distribution must re-baseline.
 
 ## 0.39.0 - 2026-07-18
 
