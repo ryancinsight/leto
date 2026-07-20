@@ -51,8 +51,9 @@ pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
 };
 pub use application::sparse::{
-    csc_spmv, csc_spmv_into, spgemm, spmm, spmm_into, spmv, spmv_into, CooMatrix, CscColumn,
-    CscMatrix, CsrMatrix,
+    csc_spmv, csc_spmv_into, csr_to_dense, sparse_lu_solve, spgemm, spmm, spmm_into, spmv,
+    spmv_into, CooMatrix, CscColumn, CscMatrix, CsrMatrix, CsrRow, SparseLuSolver,
+    DENSE_LIMIT_DEFAULT,
 };
 pub use application::unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ErfOp, ErfcOp,
