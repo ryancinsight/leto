@@ -553,6 +553,22 @@ fn bench_sparse_compare(c: &mut Criterion) {
     group.finish();
 }
 
+/// LU scaling instrument. The factorization is a rank-1 (BLAS-2) trailing
+/// update; on a large-L3 host it stays cache-resident (and fast) until the
+/// working set exceeds the LLC (n ≈ 1200 at 36 MiB), so a blocked (BLAS-3)
+/// rewrite only pays past that size — an investigated but not-yet-shipped
+/// optimization (gap_audit `2026-07-20 Blocked LU cache-resident regression`).
+fn bench_lu_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("lu_scaling");
+    for &n in &[128usize, 256, 512] {
+        let mat = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0e-3)).unwrap();
+        group.bench_function(format!("lu_{n}x{n}"), |b| {
+            b.iter(|| black_box(lu_decompose(black_box(&mat.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default()
@@ -560,6 +576,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_sparse_compare
+    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare
 }
 criterion_main!(kernels);
