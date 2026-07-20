@@ -6,6 +6,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Removed
+
+- [major] Remove `leto_ops::{cg, gmres}`, `CgResult`, and `GmresResult` after
+  PCG and restarted right-preconditioned GMRES orchestration moved to Athena's
+  shared Leto CPU and Hephaestus WGPU recurrences. Leto retains arrays, CSR,
+  SpMV, reductions, and decompositions; no iterative-solver recurrence remains.
+
 ### Changed
 
 - [minor] `leto-ops` binary elementwise ops (`add`/`sub`/`mul`/`div`) gate

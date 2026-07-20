@@ -1,7 +1,9 @@
 # ADR: Sparse Array Support in Leto and Hephaestus
 
 ## Status
-Proposed
+
+Accepted for sparse storage and kernels. Solver ownership was superseded by
+Atlas ADR 0022 on 2026-07-19.
 
 ## Context
 The Atlas Physics Simulation Suite requires sparse array/tensor formats (CSR, CSC, COO, block-sparse) for efficient representation of sparse matrices in numerical methods (FEM, BEM, finite difference stencils). Current leto and hephaestus only support dense storage.
@@ -93,10 +95,12 @@ GPU sparse kernels will follow the same trait surface but use:
 
 ### Solvers
 
-Iterative solvers (CPU):
-- Conjugate Gradient (CG)
-- GMRES
-- BiCGSTAB
+Athena owns backend-neutral iterative-solver recurrences, convergence, and
+preconditioning. Leto owns the host arrays, CSR representation, SpMV, and
+reductions used by Athena's CPU backend. Leto's former CG and restarted GMRES
+implementations and result types were removed after Athena's generic
+`f32`/`f64` CPU suites, allocation-stability checks, and real Hephaestus WGPU
+suites passed. No iterative-solver recurrence remains in Leto.
 
 Direct solvers (where feasible):
 - Sparse LU for small structured systems
@@ -131,7 +135,7 @@ Sparse-aware autodiff primitives:
 1. **Phase 1**: Core sparse storage traits and COO format (construction)
 2. **Phase 2**: CSR and CSC formats with conversions
 3. **Phase 3**: Sparse-dense arithmetic operations
-4. **Phase 4**: Iterative solvers (CG, GMRES)
+4. **Phase 4**: Iterative solver extraction to Athena (complete)
 5. **Phase 5**: Block-sparse format
 6. **Phase 6**: GPU sparse kernels (hephaestus)
 7. **Phase 7**: Coeus autodiff integration
