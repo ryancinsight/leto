@@ -177,6 +177,118 @@ fn normal_seed_sequence_is_layout_independent() {
     }
 }
 
+/// Standard-normal CDF via the Abramowitz & Stegun 26.2.17 rational
+/// approximation (absolute error < 7.5e-8) — self-contained so the
+/// goodness-of-fit check needs no external `erf`.
+fn normal_cdf(x: f64) -> f64 {
+    const B: [f64; 5] = [
+        0.319_381_530,
+        -0.356_563_782,
+        1.781_477_937,
+        -1.821_255_978,
+        1.330_274_429,
+    ];
+    const P: f64 = 0.231_641_9;
+    let t = 1.0 / (1.0 + P * x.abs());
+    let phi = (-0.5 * x * x).exp() / (2.0 * std::f64::consts::PI).sqrt();
+    let poly = t * (B[0] + t * (B[1] + t * (B[2] + t * (B[3] + t * B[4]))));
+    let upper_tail = phi * poly; // ≈ 1 − Φ(|x|)
+    if x >= 0.0 {
+        1.0 - upper_tail
+    } else {
+        upper_tail
+    }
+}
+
+/// The Ziggurat sampler must reproduce `N(0, 1)`, not merely pass a mean/std
+/// check a broken tail or table could sneak past. Over 10M standard normals this
+/// verifies the first four moments, the tail exceedance probabilities
+/// `P(|Z| > k)`, and a 200-bin chi-squared goodness-of-fit against the analytic
+/// normal. Each moment/tail tolerance is that estimator's standard error at this
+/// `N` widened to 6σ, so a genuine distribution error fails while sampling noise
+/// does not; the chi-squared bound (df ≈ 150, correct sampler ~df) separates a
+/// correct sampler from a wrong one (which produces thousands).
+#[test]
+fn ziggurat_normal_matches_analytical_distribution() {
+    let n = 10_000_000usize;
+    let samples = leto_ops::normal_with_seed([n], 0.0f64, 1.0, 0x5eed_1234_abcd).unwrap();
+    let data = samples.storage().as_slice();
+
+    let (mut s1, mut s2, mut s3, mut s4) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let mut tail = [0u64; 4];
+    const BINS: usize = 200;
+    const LO: f64 = -6.0;
+    const HI: f64 = 6.0;
+    let width = (HI - LO) / BINS as f64;
+    let mut hist = [0u64; BINS];
+    for &z in data {
+        s1 += z;
+        s2 += z * z;
+        s3 += z * z * z;
+        s4 += z * z * z * z;
+        let az = z.abs();
+        for (k, t) in [1.0, 2.0, 3.0, 4.0].into_iter().enumerate() {
+            if az > t {
+                tail[k] += 1;
+            }
+        }
+        if (LO..HI).contains(&z) {
+            hist[((z - LO) / width) as usize] += 1;
+        }
+    }
+
+    let nf = n as f64;
+    let mean = s1 / nf;
+    let (e2, e3, e4) = (s2 / nf, s3 / nf, s4 / nf);
+    let m2 = e2 - mean * mean;
+    let m3 = e3 - 3.0 * mean * e2 + 2.0 * mean.powi(3);
+    let m4 = e4 - 4.0 * mean * e3 + 6.0 * mean * mean * e2 - 3.0 * mean.powi(4);
+    let skew = m3 / m2.powf(1.5);
+    let kurt = m4 / (m2 * m2);
+
+    // Moment-estimator standard errors at N: 1/√N, √(2/N), √(6/N), √(24/N).
+    assert!(mean.abs() < 6.0 * (1.0 / nf).sqrt(), "mean {mean}");
+    assert!((m2 - 1.0).abs() < 6.0 * (2.0 / nf).sqrt(), "variance {m2}");
+    assert!(skew.abs() < 6.0 * (6.0 / nf).sqrt(), "skewness {skew}");
+    assert!((kurt - 3.0).abs() < 6.0 * (24.0 / nf).sqrt(), "kurtosis {kurt}");
+
+    // Tail exceedance probabilities P(|Z| > k), k = 1..4.
+    let expected_tail = [
+        0.317_310_507_862_914_2,
+        0.045_500_263_896_358_42,
+        0.002_699_796_063_260_207,
+        0.000_063_342_483_666_24,
+    ];
+    for k in 0..4 {
+        let p_hat = tail[k] as f64 / nf;
+        let se = (expected_tail[k] * (1.0 - expected_tail[k]) / nf).sqrt();
+        assert!(
+            (p_hat - expected_tail[k]).abs() < 6.0 * se,
+            "P(|Z|>{}) = {p_hat}, expected {} (6σ = {})",
+            k + 1,
+            expected_tail[k],
+            6.0 * se
+        );
+    }
+
+    // Binned chi-squared goodness-of-fit over bins with expected count ≥ 5.
+    let mut chi2 = 0.0f64;
+    let mut df = 0usize;
+    for (b, &observed) in hist.iter().enumerate() {
+        let lo = LO + b as f64 * width;
+        let expected = nf * (normal_cdf(lo + width) - normal_cdf(lo));
+        if expected >= 5.0 {
+            let diff = observed as f64 - expected;
+            chi2 += diff * diff / expected;
+            df += 1;
+        }
+    }
+    assert!(
+        chi2 < 400.0,
+        "chi-squared {chi2} over {df} bins exceeds 400 (df ≈ 150; a correct sampler sits near df)"
+    );
+}
+
 #[test]
 fn test_solvers_into() {
     // LU solve_into
