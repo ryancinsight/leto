@@ -64,6 +64,15 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   compounds across a solve. The residual data-dependent `xs[col]` gather check is
   left in place; eliding it via `get_unchecked` is filed for a further quiet-host
   measurement (gap_audit).
+- [patch] `leto-ops` CSC SpMV (`csc_spmv`/`csc_spmv_into`) gets the same
+  bounds-check elision: each column's row-index/value runs are sliced and zipped
+  with `col_ptr.windows(2)`, and the manual zeroing loop becomes `y.fill`. The
+  scatter-add order is unchanged (bitwise-identical results). A banded
+  7-point-stencil CSC SpMV runs **−24% (n=4096, L2) / −16% (n=65536, L3)**
+  (criterion, `bench_csc_spmv`); the elision pays more here than for CSR because
+  the residual per-nonzero work is a costlier `y[i]` scatter. (The DRAM-bound
+  n=1<<20 case could not be measured cleanly under concurrent-build bandwidth
+  contention; the change only removes work, so it cannot regress.)
 
 ## 0.39.0 - 2026-07-18
 

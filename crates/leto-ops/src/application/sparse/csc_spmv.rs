@@ -34,31 +34,35 @@ pub fn csc_spmv_into<T: Scalar>(
         });
     }
 
-    // Zero the output vector before accumulation.
-    for slot in y.iter_mut() {
-        *slot = T::ZERO;
-    }
+    y.fill(T::ZERO);
 
     let (values, row_indices, col_ptr) = a.as_parts();
 
+    // Zip each column's `x` value with its `col_ptr` window, then slice the
+    // column's row-index/value runs so the per-nonzero `values[p]`/
+    // `row_indices[p]` bounds checks collapse into one `O(ncols)` slice check
+    // per column. The residual `y[i]` scatter check is data-dependent and stays.
     if let Some(xs) = x.as_slice() {
-        for j in 0..ncols {
-            let xj = xs[j];
+        for (&xj, window) in xs.iter().zip(col_ptr.windows(2)) {
             if xj == T::ZERO {
                 continue;
             }
-            for p in col_ptr[j]..col_ptr[j + 1] {
-                y[row_indices[p]] = y[row_indices[p]].add(values[p].mul(xj));
+            let rows = &row_indices[window[0]..window[1]];
+            let vals = &values[window[0]..window[1]];
+            for (&i, &value) in rows.iter().zip(vals) {
+                y[i] = y[i].add(value.mul(xj));
             }
         }
     } else {
-        for j in 0..ncols {
+        for (j, window) in col_ptr.windows(2).enumerate() {
             let xj = *x.get([j])?;
             if xj == T::ZERO {
                 continue;
             }
-            for p in col_ptr[j]..col_ptr[j + 1] {
-                y[row_indices[p]] = y[row_indices[p]].add(values[p].mul(xj));
+            let rows = &row_indices[window[0]..window[1]];
+            let vals = &values[window[0]..window[1]];
+            for (&i, &value) in rows.iter().zip(vals) {
+                y[i] = y[i].add(value.mul(xj));
             }
         }
     }
