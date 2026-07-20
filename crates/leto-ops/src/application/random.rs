@@ -216,7 +216,7 @@ pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
 /// Fill a C-contiguous array of `shape` with i.i.d. normal samples of the
 /// given `mean` and `std_dev`, derived deterministically from `seed`.
 ///
-/// Standard normals come from the [`ZigguratNormal`] tables (Marsaglia & Tsang);
+/// Standard normals come from the `ZigguratNormal` tables (Marsaglia & Tsang);
 /// the standard-normal deviate is drawn in `f64` and converted once to `T`, then
 /// scaled by `std_dev` and shifted by `mean`.
 pub fn normal_with_seed<T: RealScalar, const N: usize>(

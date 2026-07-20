@@ -18,16 +18,19 @@
   ~12.6 → ~18 GB/s. (A first reading showed −39% at n=1<<20; the clean re-measurement's
   −27% with its wider CI is the figure of record — memory-bound throughput has
   ~15% run-to-run variance on this host.)
-- **Residual (filed):** the last per-nonzero check is the data-dependent gather
-  `xs[col]`. The CSR invariant (`col < ncols`, enforced by `from_parts` and every
-  constructor) plus `spmv_into`'s `xs.len() == ncols` check prove it in-bounds, so
-  `xs.get_unchecked(col)` is sound. An attempt to measure it was invalidated by a
-  concurrent 31-process workspace build saturating memory bandwidth (apparent
-  +835% is contention, not code). Re-measure on a quiet host; ship the
-  `get_unchecked` (with the SAFETY proof + miri) only if it clears the ~10%
-  run-to-run noise. **Lesson:** memory-bound benchmarks are invalid under
-  concurrent builds — gate bench measurement on a quiet host (rustc/cargo
-  process count ≈ 0).
+- **Residual (measured — no clear win, not pursued):** the last per-nonzero check
+  is the data-dependent gather `xs[col]`. The CSR invariant (`col < ncols`,
+  enforced by `from_parts` and every constructor) plus `spmv_into`'s
+  `xs.len() == ncols` check prove it in-bounds, so `xs.get_unchecked(col)` is
+  sound. Measured twice: both DRAM-bound runs were contaminated by concurrent
+  workspace builds saturating memory bandwidth (apparent +835%/+17% is contention,
+  not code), but the **cache-resident n=4096 case — least bandwidth-sensitive —
+  showed no change (p=0.29)**, indicating the residual check is not the limiter.
+  Per "escalate to `get_unchecked` only on a *measured* shortfall," the unchecked
+  gather is **not shipped** — no demonstrated benefit, and it adds an `unsafe` +
+  miri burden. The safe elision is the optimum for this format. **Lesson:**
+  memory-bound benchmarks are invalid under concurrent builds — gate measurement
+  on a quiet host (rustc/cargo process count ≈ 0).
 - **Blocked lever:** narrowing `col_indices`/`row_ptr` from `usize` to `u32`
   would halve index traffic (the dominant term for DRAM-bound SpMV: 8 B index vs
   8 B value per nonzero), but it is a public-API format change on `CsrMatrix`
