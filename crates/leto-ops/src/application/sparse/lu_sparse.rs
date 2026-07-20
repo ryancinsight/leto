@@ -137,12 +137,16 @@ pub fn csr_to_dense<T: RealScalar>(matrix: &CsrMatrix<T>) -> Array2<T> {
     let ncols = matrix.ncols();
     let mut data = vec![T::ZERO; nrows * ncols];
     for row in 0..nrows {
-        for (col, &value) in matrix.row(row).col_indices().iter().zip(matrix.row(row).values()) {
+        for (col, &value) in matrix
+            .row(row)
+            .col_indices()
+            .iter()
+            .zip(matrix.row(row).values())
+        {
             data[row * ncols + col] = value;
         }
     }
-    Array2::from_shape_vec([nrows, ncols], data)
-        .expect("shape matches nrows * ncols")
+    Array2::from_shape_vec([nrows, ncols], data).expect("shape matches nrows * ncols")
 }
 
 #[cfg(test)]
@@ -202,21 +206,55 @@ mod tests {
         let expected_x0 = 13.0 / 9.0;
         let expected_x1 = 19.0 / 9.0;
         let expected_x2 = 20.0 / 9.0;
-        assert!((x[0] - expected_x0).abs() < 1e-10, "x[0] = {} expected {}", x[0], expected_x0);
-        assert!((x[1] - expected_x1).abs() < 1e-10, "x[1] = {} expected {}", x[1], expected_x1);
-        assert!((x[2] - expected_x2).abs() < 1e-10, "x[2] = {} expected {}", x[2], expected_x2);
+        assert!(
+            (x[0] - expected_x0).abs() < 1e-10,
+            "x[0] = {} expected {}",
+            x[0],
+            expected_x0
+        );
+        assert!(
+            (x[1] - expected_x1).abs() < 1e-10,
+            "x[1] = {} expected {}",
+            x[1],
+            expected_x1
+        );
+        assert!(
+            (x[2] - expected_x2).abs() < 1e-10,
+            "x[2] = {} expected {}",
+            x[2],
+            expected_x2
+        );
     }
 
     #[test]
     fn rejects_system_over_dense_limit() {
-        let solver = SparseLuSolver { max_size: 4, pivot_tolerance: 1e-12 };
-        let a = make_csr(5, 5, &[(0, 0, 1.0), (1, 1, 1.0), (2, 2, 1.0), (3, 3, 1.0), (4, 4, 1.0)]);
+        let solver = SparseLuSolver {
+            max_size: 4,
+            pivot_tolerance: 1e-12,
+        };
+        let a = make_csr(
+            5,
+            5,
+            &[
+                (0, 0, 1.0),
+                (1, 1, 1.0),
+                (2, 2, 1.0),
+                (3, 3, 1.0),
+                (4, 4, 1.0),
+            ],
+        );
         let b = vec![1.0_f64; 5];
         let err = solver.solve(&a, &b).expect_err("over limit");
         match &err {
             LetoError::StorageError { reason } => {
-                assert!(reason.contains("exceeds dense_limit"), "unexpected: {reason}");
-                assert!(reason.contains("iterative"), "should suggest iterative: {reason}");
+                assert!(
+                    reason.contains("exceeds dense_limit"),
+                    "unexpected: {reason}"
+                );
+                assert!(
+                    reason.contains("iterative"),
+                    "should suggest iterative: {reason}"
+                );
             }
             other => panic!("unexpected error: {other:?}"),
         }
