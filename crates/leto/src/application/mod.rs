@@ -18,6 +18,8 @@ pub mod iter;
 pub mod reduction;
 /// Multivariate summary statistics (covariance, correlation).
 pub mod statistics;
+/// Typed finite-difference stencil contracts.
+pub mod stencil;
 /// Structural array operations (concat, pad, split).
 pub mod structure;
 /// Borrowed array view types.
@@ -41,5 +43,6 @@ pub use reduction::{
     sum_axis, var_all, var_axis, Interpolation,
 };
 pub use statistics::{covariance, pearson_correlation};
+pub use stencil::{BoundaryCondition, Laplacian2D, LaplacianError, LaplacianPolarity};
 pub use structure::{concat, pad, split, stack, PadWidth};
 pub use view::{ArrayView, ArrayViewMut};

@@ -35,6 +35,20 @@
   hermes/eunomia f32/f64 SIMD hot paths are otherwise verified hand-written quality
   (hardware FMA, 4-way accumulators, bounds-check-free inner loops, F16C for f16).
 
+## 2026-07-20 Typed Laplacian Ownership
+
+- **Finding:** Hephaestus owned a WGPU Laplacian, but Leto exposed no matching
+  CPU contract. CFDrs consequently kept a live CPU formula and another local
+  test oracle, and its CPU/GPU solver operators selected opposite signs.
+- **Resolution:** Leto owns the validated dimensional contract and Leto Ops
+  owns the CPU evaluation; Hephaestus consumes the same boundary and polarity
+  types. Consumer formulas are deleted in the paired migration.
+- **Evidence tier:** generic `f32`/`f64` closed-form value regression plus
+  compile-time type unification and focused package gates.
+- **Residual:** three-dimensional and variable-coefficient CFD operators are
+  distinct contracts and remain outside this two-dimensional uniform-grid
+  slice.
+
 ## 2026-07-20 SpMV Bounds-Check Elision (Krylov Kernel)
 
 - **Finding:** `spmv_slice_into` (the CSR matrix–vector kernel every Krylov

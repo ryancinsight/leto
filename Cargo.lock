@@ -18,6 +18,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aequitas"
+version = "0.1.0"
+source = "git+https://github.com/ryancinsight/aequitas?rev=be3a1ac91286a17aecf18f0065d2aa6b385eb67b#be3a1ac91286a17aecf18f0065d2aa6b385eb67b"
+dependencies = [
+ "eunomia",
+ "typenum",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -330,11 +339,10 @@ dependencies = [
 
 [[package]]
 name = "eunomia"
-version = "0.5.0"
-source = "git+https://github.com/ryancinsight/eunomia#c196db52a07fe34ef4e873013874c3167ae347cf"
+version = "0.6.0"
+source = "git+https://github.com/ryancinsight/eunomia#9ae3cb359dbac8b4045abf4a5a33ff5d4ad834b9"
 dependencies = [
  "bytemuck",
- "half",
  "libm",
  "rkyv",
 ]
@@ -615,6 +623,7 @@ dependencies = [
 name = "leto"
 version = "0.39.0"
 dependencies = [
+ "aequitas",
  "bytemuck",
  "eunomia",
  "mnemosyne",
@@ -629,6 +638,7 @@ dependencies = [
 name = "leto-ops"
 version = "0.39.0"
 dependencies = [
+ "aequitas",
  "bytemuck",
  "criterion",
  "eunomia",
@@ -1688,6 +1698,12 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "typenum"
+version = "1.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "unarray"

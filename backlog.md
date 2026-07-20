@@ -1,5 +1,19 @@
 # Leto Work Backlog
 
+## LETO-LAPLACIAN-1 — Typed Cartesian stencil ownership [minor, done]
+
+**Owner:** Codex `/root`
+
+**Scope:** `leto` typed grid, boundary, spacing, and polarity contracts;
+`leto-ops` CPU evaluation; dependency lock; tests; ADR and PM artifacts.
+
+**Acceptance:** one native-precision CPU implementation covers `f32` and `f64`;
+the typed contract is reusable by Hephaestus; invalid dimensions, spacing, and
+array lengths return typed failures; the anisotropic Neumann quadratic matches
+its closed form; focused package gates pass. **Evidence:** all-target/all-feature
+check and warning-denied Clippy; configured Nextest 575/575; doctests 9/9; and
+warning-denied rustdoc.
+
 ## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, done]
 
 **Owner:** unclaimed

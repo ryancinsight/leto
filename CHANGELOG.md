@@ -15,6 +15,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [minor] Add the typed `Laplacian2D<T>` Cartesian stencil contract and the
+  allocation-free `leto-ops::laplacian_2d_into` CPU implementation. Aequitas
+  lengths, boundary policy, and explicit polarity now define one provider-owned
+  contract shared with accelerator backends.
 - [minor] `leto-ops` binary elementwise ops (`add`/`sub`/`mul`/`div`) gate
   parallelism on the working set relative to the shared last-level cache instead
   of a fixed 65536-element count. A bandwidth-bound op now parallelizes only once

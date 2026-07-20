@@ -14,6 +14,8 @@ pub mod reduction;
 pub mod scan;
 /// Sparse matrices (CSR) and sparsity-exploiting kernels.
 pub mod sparse;
+/// Cartesian finite-difference stencil operations.
+pub mod stencil;
 /// Unary map operations.
 pub mod unary;
 /// Rank-1 vector operations.
@@ -47,6 +49,7 @@ pub use scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
 };
 pub use sparse::{spgemm, spmm, spmm_into, spmv, spmv_into, CsrMatrix};
+pub use stencil::laplacian_2d_into;
 pub use unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ExpOp, LnOp, NegOp,
     PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
