@@ -51,6 +51,41 @@ fn lu_exposes_pivot_permutation_without_copying() {
 }
 
 #[test]
+fn lu_reconstructs_permuted_matrix_at_scale() {
+    // Beyond the small fixtures, verify the defining identity `P·A = L·U` on a
+    // 200×200 matrix: (L·U)[i,j] must equal A[pivots[i], j]. A diagonally
+    // dominant matrix is well-conditioned, so the reconstruction error is O(n·ε).
+    let n = 200usize;
+    let mut data = vec![0.0f64; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            data[i * n + j] = ((i * 7 + j * 13) % 17) as f64 * 0.01 - 0.08;
+        }
+        data[i * n + i] += n as f64; // strong diagonal → well-conditioned
+    }
+    let a = Array::from_shape_vec([n, n], data.clone()).unwrap();
+    let lu = lu_decompose(&a.view()).unwrap();
+    let f = lu.factors().storage().as_slice();
+    let pivots = lu.pivots();
+
+    let mut max_err = 0.0f64;
+    for i in 0..n {
+        for j in 0..n {
+            // (L·U)[i,j] with unit-lower L (diagonal 1) packed below, U on/above.
+            let mut lu_ij = 0.0f64;
+            for k in 0..=i.min(j) {
+                let l = if k < i { f[i * n + k] } else { 1.0 };
+                lu_ij += l * f[k * n + j];
+            }
+            max_err = max_err.max((lu_ij - data[pivots[i] * n + j]).abs());
+        }
+    }
+    // Stable-factorization error is ~n·ε (≈4e-14 here); 1e-9 is far above that
+    // and far below any real factorization defect.
+    assert!(max_err < 1e-9, "LU reconstruction max error {max_err}");
+}
+
+#[test]
 fn inv_times_original_is_identity() {
     let values = vec![2.0f64, 1.0, 1.0, 1.0, 3.0, 2.0, 1.0, 0.0, 0.5];
     let a = Array::from_shape_vec([3, 3], values.clone()).unwrap();

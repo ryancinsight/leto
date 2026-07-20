@@ -1,5 +1,27 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-20 Blocked LU Cache-Resident Regression
+
+- **Finding:** `lu_decompose` is unblocked (BLAS-2, rank-1 SIMD `axpy` trailing
+  update). Profiling: LU @256 = 988 µs vs matmul @256 = 404 µs — 2.4× the time at
+  ⅓ the FLOPs (~7× lower FLOP rate), the classic BLAS-2 vs BLAS-3 gap.
+- **Investigated:** implemented a right-looking blocked (BLAS-3) LU (64-column
+  panel factored unblocked, unit-lower solve for `U12`, trailing update
+  `A22 −= L21·U12` via matmul). Correct — `P·A = L·U` reconstruction verified at
+  n=200 — but **slower at the tested sizes**: LU @256 988 µs → 1.65 ms, @512
+  neutral (criterion, non-overlapping CIs at 256).
+- **Cause:** this host's 36 MiB L3 keeps LU matrices cache-resident to n ≈ 1200
+  (`3·n²·8 < L3`), so the unblocked SIMD `axpy` runs at cache bandwidth and the
+  blocked version's overhead (panel-extraction copies, per-panel allocations,
+  small rectangular matmuls) dominates. Blocking's cache-reuse benefit only
+  materializes once the matrix exceeds the LLC.
+- **Decision:** reverted — never ship a regression. Kept the `lu_scaling`
+  benchmark and a large-`n` `P·A=L·U` reconstruction test as coverage. A future
+  blocked LU should (a) gate on `working_set > l3_bytes` (the cache-aware
+  threshold already used by the parallel policy) so it never regresses
+  cache-resident sizes, (b) eliminate the trailing-update copies via matmul into
+  strided views, and (c) verify the win at `n` past the LLC on a quiet host.
+
 ## 2026-07-20 Normal RNG at Parity (Ziggurat)
 
 - **Finding (closed):** `normal_with_seed` used Box-Muller — even after the
