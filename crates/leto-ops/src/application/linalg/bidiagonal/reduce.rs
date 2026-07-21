@@ -197,14 +197,15 @@ fn apply_reflectors_right<T: RealScalar>(vectors: &[T], betas: &[T], matrix: &mu
         for row in 0..dim {
             let row_start = row * dim;
             let row_values = &mut matrix[row_start..row_start + dim];
-            let mut dot = T::ZERO;
-            for col in 0..dim {
-                dot = dot.add(row_values[col].mul(vector[col]));
-            }
+            // Per-row reflector apply over full-dimension contiguous slices:
+            // dot = row_values·vector (a loop-carried reduction → SIMD `dot_slice`,
+            // the Cholesky-class win, SSOT with `householder::apply_right`), then
+            // row_values −= (β·dot)·vector (axpy → `axpy_slice`). The slices are
+            // length `dim`, long enough that the SIMD dispatch pays — unlike QR's
+            // short within-panel slices, which regressed.
+            let dot = T::dot_slice(row_values, vector);
             let scale = betas[reflector].mul(dot);
-            for col in 0..dim {
-                row_values[col] = row_values[col].sub(scale.mul(vector[col]));
-            }
+            T::axpy_slice(T::ZERO.sub(scale), vector, row_values); // row_values −= scale·vector
         }
     }
 }

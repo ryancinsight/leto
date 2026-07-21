@@ -29,10 +29,12 @@
     `axpy_slice` measured **+9–18% at n=64/128/192/256** (`bench_qr_scaling`, clean
     ~6-proc, p=0.00). Kept scalar; QR authors had already tuned the blocked-path
     crossover (`BLOCK_MIN_ROWS`). `bench_qr_scaling` added as coverage.
-  - SVD factor-path U/V accumulation (`bidiagonal/reduce.rs:200-207`) — the `dot`
-    reduction converts to `dot_slice` (the Cholesky-class win); per the meta-pattern
-    leave the paired axpy scalar unless profiled long. Still a
-    `householder::apply_right` duplicate (consolidation).
+  - SVD factor-path U/V accumulation (`bidiagonal/reduce.rs`, `apply_reflectors_right`)
+    — **shipped.** Both the `dot` reduction and the paired axpy converted (`dot_slice`
+    + `axpy_slice`): the slices are full-dimension (long), so per the meta-pattern the
+    axpy pays here too (unlike QR). **−52% / −49% / −38% at n=64/128/192**
+    (`bench_svd_scaling`, ~1.6–2.1×; 13 SVD tests pass). Confirms the meta-pattern's
+    "provably long" axpy exception.
   - Secondary (lower-traffic): full_piv_lu / bunch_kaufman trailing updates are
     axpys (LU-style) — profile before converting per the meta-pattern; udu
     weighted-dot is a reduction (hoist loop-invariant `u[j][k]·d[k]`, then
