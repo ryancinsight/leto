@@ -23,7 +23,7 @@ Evidence column: `parity.rs` / `oracle_parity.rs` = differential test file;
 | Transpose / permute | `.t()`/`permuted_axes` | `transpose`/permute | Verified | core/transform |
 | Broadcast | `broadcast` | layout broadcast | Verified | layout_property |
 | Axis iteration, rows/columns | `axis_iter`, `rows` | `AxisIter*`, `rows/columns` | Verified | core_tests |
-| reshape / into_shape | `into_shape_with_order` | reshape/to_contiguous | Verified | apollo_ndarray_contract |
+| reshape / into_shape | `into_shape_with_order` | reshape/to_contiguous | Verified | core/transform — zero-copy dense reshape, owned rank change, strided rejection, and logical-order materialization |
 | Elementwise add/sub/mul/div | `+ - * /` | `add/sub/mul/div` | Complete | parity.rs, kernels.rs `add_*` |
 | Scalar–array arithmetic | `&a + s` | `scalar_map` | Verified | parity.rs |
 | Unary math (exp/ln/sin/cos/sqrt/abs/neg/recip/powf) | `mapv(f)` | `unary_map`+ZST ops | Complete | parity.rs, kernels.rs `exp_*` |

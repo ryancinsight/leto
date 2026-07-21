@@ -19,9 +19,6 @@ serde = { version = "1", default-features = false, features = ["derive"], option
 # ── Error Handling ──
 thiserror = { workspace = true }
 
-# ── Optional Compatibility ──
-ndarray = { workspace = true, optional = true }
-
 [features]
 default = ["std", "parallel", "mnemosyne-memory"]
 std = ["aequitas/std", "serde/std"]
@@ -30,7 +27,6 @@ parallel = []
 # mnemosyne integration
 mnemosyne-alloc = ["dep:mnemosyne", "alloc"]
 mnemosyne-memory = ["mnemosyne-alloc"]
-ndarray-compat = ["dep:ndarray", "std"]
 serde = ["dep:serde"]
 
 [dev-dependencies]

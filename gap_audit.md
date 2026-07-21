@@ -1,5 +1,26 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-21 Public ndarray Compatibility Boundary
+
+- **Finding:** `leto` contradicted its production dependency policy through an
+  optional `ndarray-compat` feature. That feature exposed a public third-party
+  re-export and six conversion implementations, including two unsafe raw-slice
+  reconstructions. No live Atlas manifest or Rust caller uses the feature or
+  conversion module; Apollo HEAD `2a22319` consumes native Leto arrays and its
+  resolved graph has no Rust `ndarray` package.
+- **Resolution:** remove the feature, optional dependency, module, re-export,
+  conversion-only integration tests, and the conversion fixture from Leto Ops.
+  `ndarray` remains a dev-dependency oracle. Consumer language/FFI boundaries
+  construct native Leto arrays directly; no replacement adapter is introduced.
+- **Coverage preservation:** canonical Leto suites retain constructor/storage,
+  transpose, broadcast, axis mutation, signed-stride slicing, layout bounds,
+  reshape, and logical-order materialization coverage. Configured Nextest passes
+  266/266 after the conversion-only suite is removed. ADR 0017 records the
+  public migration and ownership decision.
+- **Evidence limit:** tests prove retained Leto value semantics; the production
+  dependency scan and Cargo graph prove boundary removal. Neither is a runtime
+  performance measurement.
+
 ## 2026-07-20 Decomposition SIMD-Dispatch Gap (Cholesky shipped)
 
 - **Finding:** LU, Hessenberg reduction, the SVD values-path, Francis QR, and the
@@ -443,12 +464,11 @@ Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
 
 ## Consumer Position
 
-- **Apollo** (spectral transforms): partially migrated. Pins
-  `leto rev=fd1d87b` with `["std", "ndarray-compat"]`; exposes
-  `forward_leto`/`inverse_leto` boundaries on FFT, CZT, DHT, NUFFT, SHT,
-  Radon, STFT; nalgebra removed (FrFT/GFT eigendecomposition now uses
-  `leto_ops::symmetric_eigen_jacobi`, GFT adjacency uses `leto::Array2<f64>`).
-  ndarray remains the internal CPU compute substrate and differential oracle.
+- **Apollo** (spectral transforms): migrated to native Leto host arrays at HEAD
+  `2a22319`; its manifests and resolved Rust graph contain no `ndarray` or
+  `ndarray-compat` dependency edge. Transform APIs expose Leto boundaries, and
+  nalgebra is removed (FrFT/GFT eigendecomposition uses
+  `leto_ops::symmetric_eigen_jacobi`; GFT adjacency uses `leto::Array2<f64>`).
 - **Coeus** (tensor/autodiff, burn replacement): CPU array layer **fully
   consolidated onto leto** (re-verified 2026-06-15 against coeus HEAD
   `037fdd5`; pins leto `d8d34c61`, older than current leto HEAD `723a63c`).
@@ -489,7 +509,7 @@ sum/mean/min/max keep-dim axis reductions,
 argmin/argmax, 2D matmul, variance/std (all + axis, finite
 `ddof`), quantile/median (all + axis, five interpolation strategies),
 covariance/Pearson correlation
-(rowvar), CoW storage, Mnemosyne storage, ndarray-compat conversions, and
+(rowvar), CoW storage, Mnemosyne storage, and
 owned-array convenience methods for consumer migration (`as_slice_mut`,
 memory-order mutable slices, `mapv`, `zip_map`, `fill`, `assign`, and
 `[usize; N]` indexing), plus rank-1 `usize` indexing and owned-array

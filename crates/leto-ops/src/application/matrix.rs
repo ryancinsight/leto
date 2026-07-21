@@ -257,7 +257,10 @@ fn serial_cc_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
+        zero_output(
+            validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"),
+            out,
+        );
     }
 
     let lhs_offset = lhs.offset();
@@ -294,7 +297,10 @@ fn parallel_cc_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
+        zero_output(
+            validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"),
+            out,
+        );
     }
 
     let lhs_offset = lhs.offset();
@@ -339,7 +345,10 @@ fn serial_outer_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
+        zero_output(
+            validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"),
+            out,
+        );
     }
 
     let lhs_offset = lhs.offset();
@@ -376,7 +385,10 @@ fn parallel_outer_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
+        zero_output(
+            validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"),
+            out,
+        );
     }
 
     let lhs_offset = lhs.offset();

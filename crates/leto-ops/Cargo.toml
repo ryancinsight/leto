@@ -24,7 +24,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 aequitas.workspace = true
-leto = { workspace = true, features = ["ndarray-compat"] }
+leto = { workspace = true }
 ndarray = { workspace = true }
 ndarray-rand = { workspace = true }
 criterion = { workspace = true }
