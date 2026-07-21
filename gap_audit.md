@@ -56,10 +56,14 @@
     axpy pays here too (unlike QR). **−52% / −49% / −38% at n=64/128/192**
     (`bench_svd_scaling`, ~1.6–2.1×; 13 SVD tests pass). Confirms the meta-pattern's
     "provably long" axpy exception.
-  - Secondary (lower-traffic): full_piv_lu / bunch_kaufman trailing updates are
-    axpys (LU-style) — profile before converting per the meta-pattern; udu
-    weighted-dot is a reduction (hoist loop-invariant `u[j][k]·d[k]`, then
-    `dot_slice`); col_piv_qr pivot-norm down-dating (a different, non-SIMD fix).
+  - udu weighted-dot (`udu/decompose.rs`) — **shipped.** Hoisted the loop-invariant
+    `w[k] = u[j][k]·d[k]` (shared by the pivot `dj` and every `u[i][j]`) and reduced
+    both through `dot_slice`. Stacks the algorithmic O(n³) recompute drop with the
+    SIMD reduction: **−44% / −62% / −69% at n=64/128/256** (`bench_udu_scaling`,
+    ~1.8–3.2×; 3 UDU tests pass) — the largest per-decomposition win so far.
+  - Secondary remaining (lower-traffic): full_piv_lu / bunch_kaufman trailing
+    updates are axpys (LU-style long slices — profile against the meta-pattern
+    before converting); col_piv_qr pivot-norm down-dating (a different, non-SIMD fix).
 - **Cross-crate lead (hermes):** the CSR SpMV *scalar remainder*
   (`hermes-simd-core/src/sparse/spmv.rs:149`) re-checks the gather bound
   `x[cols[j]]` that the SIMD body 8 lines above already trusts (unchecked gather on

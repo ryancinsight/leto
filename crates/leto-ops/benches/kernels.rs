@@ -13,7 +13,7 @@ use leto_ops::{
 };
 use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
-    svd_via_bidiagonal,
+    svd_via_bidiagonal, udu_decompose,
 };
 use leto_ops::{csc_spmv_into, spmm, spmv_into, CscMatrix, CsrMatrix};
 use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
@@ -725,6 +725,22 @@ fn bench_svd_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+/// UDUᵀ scaling instrument. The symmetric-indefinite factorization's inner work
+/// is a per-entry weighted dot `Σ_{k>j} u[i][k]·u[j][k]·d[k]`; `u[j][k]·d[k]` is
+/// loop-invariant across the `i`-loop, so hoisting it and reducing via `dot_slice`
+/// is both an algorithmic (O(n³) recompute) and a SIMD win. SPD input is a safe
+/// symmetric subset (no zero pivots).
+fn bench_udu_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("udu_scaling");
+    for &n in &[64usize, 128, 256] {
+        let sym = Array::from_shape_vec([n, n], spd_values(n)).unwrap();
+        group.bench_function(format!("udu_{n}x{n}"), |b| {
+            b.iter(|| black_box(udu_decompose(black_box(&sym.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default()
@@ -732,6 +748,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling, bench_qr_scaling, bench_svd_scaling
+    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling, bench_qr_scaling, bench_svd_scaling, bench_udu_scaling
 }
 criterion_main!(kernels);
