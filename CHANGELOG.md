@@ -99,6 +99,15 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   within the SVD differential/reconstruction oracle's tolerance (all 13 SVD value
   tests pass, incl. `f32`); the values-only path (`colmajor`) was already SIMD.
   De-duplicates `householder::apply_right`. Adds `bench_svd_scaling`.
+- [patch] `leto-ops` UDUᵀ (`udu_decompose`) hoists the loop-invariant weights
+  `w[k] = u[j][k]·d[k]` out of the inner elimination loop and reduces through the
+  SIMD `dot_slice`. The pivot `dj` and every `u[i][j]` reduce against the *same*
+  hoisted `w`, so this stacks two wins: it drops the `O(n³)` recompute of
+  `u[j][k]·d[k]` (one multiply per inner term) and turns both weighted-dot
+  reductions into SIMD. A symmetric factorization runs **−44% (n=64) / −62%
+  (n=128) / −69% (n=256)** — a ~1.8–3.2× speedup (criterion, `bench_udu_scaling`,
+  quiet host). The reorder+regroup is within the reconstruction oracle's tolerance
+  (all 3 UDU value tests pass). Adds `bench_udu_scaling`.
 
 ## 0.39.0 - 2026-07-18
 

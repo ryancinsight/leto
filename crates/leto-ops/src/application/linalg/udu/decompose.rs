@@ -65,13 +65,23 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
     let pivot_tol = scale.mul(T::ONE.div(T::from_usize(1_000_000_000_000)));
     let mut u = vec![T::ZERO; n * n];
     let mut d = vec![T::ZERO; n];
+    // Reusable hoist buffer for the loop-invariant weights `w[k] = u[j][k]·d[k]`.
+    let mut w = vec![T::ZERO; n];
 
     for j in (0..n).rev() {
-        let mut dj = a[j * n + j];
-        for k in (j + 1)..n {
-            let ujk = u[j * n + k];
-            dj = dj.sub(ujk.mul(ujk).mul(d[k]));
+        // Hoist `w = u[j][j+1..] ⊙ d[j+1..]`: these weights are loop-invariant
+        // across the `i`-loop below and shared with this pivot reduction, so the
+        // hoist drops the `O(n³)` `u[j][k]·d[k]` recompute and turns both
+        // reductions into the SIMD `dot_slice` (SSOT with Cholesky/`solve`).
+        let w = &mut w[..n - (j + 1)];
+        for (wk, (&ujk, &dk)) in w
+            .iter_mut()
+            .zip(u[j * n + (j + 1)..j * n + n].iter().zip(&d[j + 1..n]))
+        {
+            *wk = ujk.mul(dk);
         }
+        // dj = a[j][j] − Σ_{k>j} u[j][k]·w[k]  (≡ u[j][k]²·d[k])
+        let dj = a[j * n + j].sub(T::dot_slice(&u[j * n + (j + 1)..j * n + n], w));
         if dj.abs() <= pivot_tol {
             return Err(LetoError::StorageError {
                 reason: "UDU encountered a zero pivot (needs symmetric pivoting)".to_string(),
@@ -81,10 +91,8 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         u[j * n + j] = T::ONE;
 
         for i in (0..j).rev() {
-            let mut uij = a[i * n + j];
-            for k in (j + 1)..n {
-                uij = uij.sub(u[i * n + k].mul(u[j * n + k]).mul(d[k]));
-            }
+            // uij = a[i][j] − Σ_{k>j} u[i][k]·w[k]
+            let uij = a[i * n + j].sub(T::dot_slice(&u[i * n + (j + 1)..i * n + n], w));
             u[i * n + j] = uij.div(dj);
         }
     }
