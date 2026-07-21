@@ -24,6 +24,7 @@ mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
+aequitas = { git = "https://github.com/ryancinsight/aequitas", rev = "be3a1ac91286a17aecf18f0065d2aa6b385eb67b", default-features = false }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──

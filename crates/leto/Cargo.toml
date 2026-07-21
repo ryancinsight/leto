@@ -12,6 +12,7 @@ mnemosyne = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
 bytemuck = { workspace = true }
+aequitas = { workspace = true }
 eunomia = { workspace = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
@@ -23,7 +24,7 @@ ndarray = { workspace = true, optional = true }
 
 [features]
 default = ["std", "parallel", "mnemosyne-memory"]
-std = ["serde/std"]
+std = ["aequitas/std", "serde/std"]
 alloc = ["serde/alloc"]
 parallel = []
 # mnemosyne integration

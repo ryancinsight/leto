@@ -55,6 +55,7 @@ pub use application::sparse::{
     spmv_into, CooMatrix, CscColumn, CscMatrix, CsrMatrix, CsrRow, SparseLuSolver,
     DENSE_LIMIT_DEFAULT,
 };
+pub use application::stencil::laplacian_2d_into;
 pub use application::unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ErfOp, ErfcOp,
     ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,

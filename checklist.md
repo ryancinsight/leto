@@ -2,6 +2,18 @@
 
 **Target version: 0.39.0** · **Phase: Closure**
 
+## LETO-LAPLACIAN-1 [minor] — Owner: Codex `/root`
+
+- [x] Define the validated Aequitas spacing, boundary, and polarity contract.
+- [x] Implement one native-precision CPU stencil into caller-owned storage.
+- [x] Add generic `f32`/`f64` closed-form Neumann coverage.
+- [x] Pass focused format, check, Clippy, Nextest, doctest, and rustdoc gates.
+
+**Evidence:** all-target/all-feature check and warning-denied Clippy pass;
+configured Nextest passes 575/575; doctests pass 9/9; warning-denied rustdoc
+passes; and the generic closed-form stencil regression passes for `f32` and
+`f64`.
+
 ## LETO-EUNOMIA-PRECISION-1 [major] — Owner: Codex `/root`
 
 - [x] Reconcile origin and isolate the migration from fresh peer-owned

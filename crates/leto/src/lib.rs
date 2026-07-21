@@ -38,6 +38,7 @@ pub use infrastructure::sparse::{
 };
 
 pub use application::array::Array;
+pub use application::stencil::{BoundaryCondition, Laplacian2D, LaplacianError, LaplacianPolarity};
 pub use application::view::{ArrayView, ArrayViewMut};
 pub use application::{
     concat, covariance, mean_all, mean_axis, median_all, median_axis, pad, pearson_correlation,
