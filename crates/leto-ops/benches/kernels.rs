@@ -695,6 +695,22 @@ fn bench_cholesky_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+/// QR scaling instrument. The Householder panel reflector's rank-1 apply
+/// (`w += vᵀ·A`; `A −= v·w`) dominates `qr_decompose` at O(m·n²). Square sizes
+/// below `BLOCK_MIN_ROWS` (256) run the *entire* apply through the within-panel
+/// scalar loops; n=256 crosses into the blocked compact-WY path, so the
+/// SIMD-dispatch win concentrates at n<256.
+fn bench_qr_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("qr_scaling");
+    for &n in &[64usize, 128, 192, 256] {
+        let mat = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0e-3)).unwrap();
+        group.bench_function(format!("qr_{n}x{n}"), |b| {
+            b.iter(|| black_box(qr_decompose(black_box(&mat.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = kernels;
     config = Criterion::default()
@@ -702,6 +718,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling
+    targets = bench_matmul, bench_elementwise, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling, bench_qr_scaling
 }
 criterion_main!(kernels);

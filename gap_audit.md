@@ -15,17 +15,28 @@
   `solve_in_place` already used). **−49% / −72% / −65% at n=128/256/512**
   (`bench_cholesky_scaling`), a 2–3.5× win; reduction reorder within the
   differential oracle's tolerance (15 QR/Cholesky value tests pass).
-- **Follow-ups (same pattern, disjoint increments):**
-  - QR panel reflector apply (`qr/decompose.rs:144-164`) — scalar axpy loops →
-    `axpy_slice`; smaller per-op gain (axpy is SSE2-autovectorizable), concentrates
-    on the n<256 unblocked path.
-  - SVD factor-path U/V accumulation (`bidiagonal/reduce.rs:200-207`) — scalar
-    reduction+axpy → `dot_slice`+`axpy_slice`; also a duplicate of
-    `householder::apply_right` (consolidation).
-  - Secondary (lower-traffic): full_piv_lu / bunch_kaufman trailing updates
-    (identical to the shipped LU fix); udu weighted-dot (hoist loop-invariant
-    `u[j][k]·d[k]` out of the `i`-loop); col_piv_qr pivot-norm down-dating (a
-    different, non-SIMD-dispatch fix).
+- **Meta-pattern (from Cholesky + QR):** a scalar **reduction** (dot; loop-carried
+  FP dependency → does *not* autovectorize) converts to `dot_slice` as a big win
+  (Cholesky, 2–3.5×). A scalar **axpy** (no loop-carried dependency → *already*
+  autovectorizes at the SSE2 baseline, inlined) does *not*: `axpy_slice` adds a
+  cross-crate `hermes_simd::axpy` call + `assert` + `Result` per call, which loses
+  to the inlined SSE2 loop for short slices. Convert reductions; leave
+  already-vectorizing axpys scalar unless the slices are provably long.
+- **Follow-ups (disjoint increments):**
+  - QR panel reflector apply (`qr/decompose.rs:144-164`) — **investigated →
+    regression, not converted.** The within-panel `w += vᵣ·row_r` / `row_r −= vᵣ·w`
+    are axpys over short (trail ~n/2, shrinking; 32-col blocked panels) slices;
+    `axpy_slice` measured **+9–18% at n=64/128/192/256** (`bench_qr_scaling`, clean
+    ~6-proc, p=0.00). Kept scalar; QR authors had already tuned the blocked-path
+    crossover (`BLOCK_MIN_ROWS`). `bench_qr_scaling` added as coverage.
+  - SVD factor-path U/V accumulation (`bidiagonal/reduce.rs:200-207`) — the `dot`
+    reduction converts to `dot_slice` (the Cholesky-class win); per the meta-pattern
+    leave the paired axpy scalar unless profiled long. Still a
+    `householder::apply_right` duplicate (consolidation).
+  - Secondary (lower-traffic): full_piv_lu / bunch_kaufman trailing updates are
+    axpys (LU-style) — profile before converting per the meta-pattern; udu
+    weighted-dot is a reduction (hoist loop-invariant `u[j][k]·d[k]`, then
+    `dot_slice`); col_piv_qr pivot-norm down-dating (a different, non-SIMD fix).
 - **Cross-crate lead (hermes):** the CSR SpMV *scalar remainder*
   (`hermes-simd-core/src/sparse/spmv.rs:149`) re-checks the gather bound
   `x[cols[j]]` that the SIMD body 8 lines above already trusts (unchecked gather on
