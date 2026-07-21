@@ -16,10 +16,12 @@ pub mod axis;
 pub mod chunks;
 pub mod element;
 pub mod lanes;
+pub mod lending;
 pub mod windows;
 
 pub use axis::{AxisIter, AxisIterMut};
 pub use chunks::{AxisChunks, ExactChunks};
 pub use element::{ElementIter, IndexedIter, IndexedIterMut};
 pub use lanes::{Lanes, LanesMut};
+pub use lending::{LendingIterator, Tiles};
 pub use windows::Windows;

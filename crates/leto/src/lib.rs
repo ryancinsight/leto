@@ -46,7 +46,7 @@ pub use application::{
     ArrayD, ArrayView1, ArrayView2, ArrayView3, ArrayView4, ArrayViewMut1, ArrayViewMut2,
     ArrayViewMut3, ArrayViewMut4, AxisChunks, AxisIter, AxisIterMut, ElementIter, ExactChunks,
     FixedMatrix, FixedVector, IndexedIter, IndexedIterMut, Interpolation, Lanes, LanesMut,
-    PadWidth, ScalarOperand, Windows,
+    LendingIterator, PadWidth, ScalarOperand, Tiles, Windows,
 };
 
 #[cfg(feature = "ndarray-compat")]
