@@ -257,7 +257,7 @@ fn serial_cc_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
     }
 
     let lhs_offset = lhs.offset();
@@ -294,7 +294,7 @@ fn parallel_cc_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
     }
 
     let lhs_offset = lhs.offset();
@@ -339,7 +339,7 @@ fn serial_outer_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
     }
 
     let lhs_offset = lhs.offset();
@@ -376,7 +376,7 @@ fn parallel_outer_matmul<T: Scalar>(
     let [_, n] = rhs.shape();
 
     if !accumulate {
-        zero_output(validate_matmul(lhs, rhs, out).unwrap(), out);
+        zero_output(validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"), out);
     }
 
     let lhs_offset = lhs.offset();
@@ -1024,7 +1024,7 @@ pub fn batched_matmul<T: Scalar>(
                 };
 
                 if let Err(e) = matmul(&lhs_view, &rhs_view, &mut out_view) {
-                    let mut slot = error_slot_w.lock().unwrap();
+                    let mut slot = error_slot_w.lock().expect("mutex not poisoned");
                     if slot.is_none() {
                         *slot = Some(e);
                     }
@@ -1032,7 +1032,7 @@ pub fn batched_matmul<T: Scalar>(
                 }
             });
 
-            if let Some(e) = error_slot.lock().unwrap().take() {
+            if let Some(e) = error_slot.lock().expect("mutex not poisoned").take() {
                 return Err(e);
             }
             return Ok(());

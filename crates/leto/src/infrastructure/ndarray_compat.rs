@@ -254,12 +254,12 @@ where
         if is_contiguous {
             let (vec, _) = nd_array.into_raw_vec_and_offset();
             let layout = Layout::new(l_shape, l_strides, 0);
-            Self::new(layout, VecStorage::new(vec)).unwrap()
+            Self::new(layout, VecStorage::new(vec)).expect("ndarray layout is valid")
         } else {
             let contiguous = nd_array.to_owned();
             let (vec, _) = contiguous.into_raw_vec_and_offset();
-            let layout = Layout::c_contiguous(l_shape).unwrap();
-            Self::new(layout, VecStorage::new(vec)).unwrap()
+            let layout = Layout::c_contiguous(l_shape).expect("ndarray shape produces valid c-contiguous layout");
+            Self::new(layout, VecStorage::new(vec)).expect("ndarray layout is valid")
         }
     }
 }

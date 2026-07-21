@@ -59,7 +59,7 @@ pub fn matexp<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     }
 
     if rows == 0 {
-        return Ok(Array2::from_shape_vec([0, 0], vec![]).unwrap());
+        return Ok(Array2::from_shape_vec([0, 0], vec![]).expect("empty shape matches empty vec"));
     }
 
     // 1. Scaling: choose s with ‖A / 2ˢ‖_∞ ≤ 1/2.
