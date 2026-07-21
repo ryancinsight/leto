@@ -8,6 +8,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Removed
 
+- [major] Remove `leto`'s public `ndarray-compat` feature, `ndarray` re-export,
+  and owned/borrowed conversion implementations. No live Atlas consumer uses
+  the boundary: Apollo consumes native Leto arrays, while `ndarray` remains a
+  dev-only differential oracle. Consumers remove the feature and construct
+  native Leto arrays at their language or third-party ownership boundary. This
+  also deletes two unsafe raw-slice reconstructions; no compatibility shim is
+  retained. See ADR 0017.
 - [major] Remove `leto_ops::{cg, gmres}`, `CgResult`, and `GmresResult` after
   PCG and restarted right-preconditioned GMRES orchestration moved to Athena's
   shared Leto CPU and Hephaestus WGPU recurrences. Leto retains arrays, CSR,

@@ -4,17 +4,25 @@
 
 ## LETO-NDARRAY-BOUNDARY-1 [major] — Owner: Codex `/root`
 
-- [ ] Remove the public feature, conversion module, re-export, and
+- [x] Remove the public feature, conversion module, re-export, and
       conversion-only contract suite without weakening canonical Leto tests.
-- [ ] Record the ownership decision, unsafe-boundary removal, migration, and
+- [x] Record the ownership decision, unsafe-boundary removal, migration, and
       retained-oracle proof in ADR 0017 and synchronized public documentation.
-- [ ] Correct the `Tiles` constructor Rustdoc link that blocks documentation.
-- [ ] Verify production/dev dependency separation and the current Apollo native
+- [x] Correct the `Tiles` constructor Rustdoc link that blocks documentation.
+- [x] Verify production/dev dependency separation and the current Apollo native
       Leto consumer contract.
-- [ ] Pass format, warning-denied Clippy, configured Nextest, doctest, Rustdoc,
+- [x] Pass format, warning-denied Clippy, configured Nextest, doctest, Rustdoc,
       dependency-residue, and SemVer classification gates.
 - [ ] Commit, publish, review, merge, refresh Apollo, and reconcile the Atlas
       gitlink without touching the live UDU benchmark lane.
+
+**Provider evidence:** format and warning-denied all-target/all-feature Clippy
+pass for `leto` and `leto-ops`; configured Nextest passes 266/266 and 305/305;
+doctests pass 1/1 and 8/8; warning-denied Rustdoc passes; six Atlas consumer
+source/manifest scans contain no removed-surface residue; the normal dependency
+graph contains no `ndarray` while the dev graph contains one oracle edge; and
+`cargo-semver-checks` reports the removed feature and module as the two expected
+major breaks, with explicit major-release classification passing.
 
 ## LETO-LAPLACIAN-1 [minor] — Owner: Codex `/root`
 
@@ -775,7 +783,7 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [patch] Fix ndarray-to-Leto zero-copy view conversion for negative strides by preserving signed strides and anchoring the borrowed backing slice at the minimum physical address.
 - [x] [patch] Add Apollo ndarray-validation contract coverage for constructors, C-order storage, transpose, broadcast, axis iteration, mutable views, owned ndarray round trips, negative-stride views, slice-with metadata, and storage-bound rejection.
 - [x] [minor] Add Mnemosyne-backed owned constructors (`zeros_mnemosyne`, `from_mnemosyne_slice`) so Apollo can return Leto arrays with provider-owned allocation instead of ndarray-owned storage. Verified against ndarray C-order values and storage-bound rejection.
-- [x] [patch] Fix reduction module rustdoc links so `cargo doc -p leto --features mnemosyne-alloc,ndarray-compat --no-deps` is warning-clean.
+- [x] [patch] Fix reduction module rustdoc links so `cargo doc -p leto --features mnemosyne-alloc --no-deps` is warning-clean.
 - [x] [patch] Match ndarray retained single-element range stride metadata by setting the sliced axis stride to `0` when `SliceArg::range` selects exactly one logical element; empty ranges keep their computed stride.
 - [x] [patch] Add Apollo migration test coverage for Mnemosyne-backed Leto owned constructors as the first FFT replacement prerequisite.
 - [x] [minor] Add indexed mutable zip traversal (`indexed_zip_mut_with`, `indexed_zip2_mut_with`) to cover ndarray `Zip::indexed`-style Apollo/Coeus position-aware call sites without allocation.

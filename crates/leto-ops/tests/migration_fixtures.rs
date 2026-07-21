@@ -211,66 +211,6 @@ fn coeus_tensor_matmul_fixture_matches_dense_layer_shape() {
 }
 
 #[test]
-fn test_ndarray_compatibility_conversions() {
-    use leto::{Array2, ArrayView2, ArrayViewMut2};
-    use ndarray::s;
-    use ndarray::Array2 as NdArray2;
-
-    // 1. Leto to ndarray view conversion
-    let leto_arr = Array2::from_shape_vec([2, 3], vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
-    let nd_view = ndarray::ArrayView::try_from(leto_arr.view()).unwrap();
-    assert_eq!(nd_view.shape(), &[2, 3]);
-    assert_eq!(nd_view.strides(), &[3, 1]);
-    assert_close(nd_view[[0, 0]], 1.0);
-    assert_close(nd_view[[1, 2]], 6.0);
-
-    // 2. ndarray view to Leto view conversion
-    let leto_view_back = ArrayView2::from(nd_view);
-    assert_eq!(leto_view_back.shape(), [2, 3]);
-    assert_eq!(leto_view_back.strides(), [3, 1]);
-    assert_close(*leto_view_back.get([1, 2]).unwrap(), 6.0);
-
-    // 3. Leto mut view to ndarray mut view conversion
-    let mut leto_arr_mut = leto_arr;
-    {
-        let mut nd_view_mut = ndarray::ArrayViewMut::try_from(leto_arr_mut.view_mut()).unwrap();
-        nd_view_mut[[0, 1]] = 20.0;
-    }
-    assert_close(*leto_arr_mut.get([0, 1]).unwrap(), 20.0);
-
-    // 4. ndarray to Leto owned conversion
-    let nd_arr =
-        NdArray2::from_shape_vec((2, 3), vec![10.0f32, 20.0, 30.0, 40.0, 50.0, 60.0]).unwrap();
-    let leto_owned = Array2::from(nd_arr.clone());
-    assert_eq!(leto_owned.shape(), [2, 3]);
-    assert_close(*leto_owned.get([0, 0]).unwrap(), 10.0);
-    assert_close(*leto_owned.get([1, 2]).unwrap(), 60.0);
-
-    // 5. Leto owned to ndarray conversion
-    let nd_back = ndarray::Array::try_from(leto_owned).unwrap();
-    assert_eq!(nd_back.shape(), &[2, 3]);
-    assert_close(nd_back[[0, 0]], 10.0);
-
-    // 6. negative-stride ndarray views convert without copying.
-    let nd_source = NdArray2::from_shape_vec((2, 3), vec![1_i32, 2, 3, 4, 5, 6]).unwrap();
-    let reversed = nd_source.slice(s![..;-1, ..;-1]);
-    let leto_reversed = ArrayView2::from(reversed);
-    assert_eq!(leto_reversed.shape(), [2, 3]);
-    assert_eq!(leto_reversed.strides(), [-3, -1]);
-    assert_eq!(*leto_reversed.get([0, 0]).unwrap(), 6);
-    assert_eq!(*leto_reversed.get([1, 2]).unwrap(), 1);
-
-    let mut nd_mut = NdArray2::from_shape_vec((2, 3), vec![1_i32, 2, 3, 4, 5, 6]).unwrap();
-    {
-        let reversed_rows = nd_mut.slice_mut(s![..;-1, ..]);
-        let mut leto_mut = ArrayViewMut2::from(reversed_rows);
-        assert_eq!(leto_mut.strides(), [-3, 1]);
-        *leto_mut.get_mut([0, 1]).unwrap() = 50;
-    }
-    assert_eq!(nd_mut[[1, 1]], 50);
-}
-
-#[test]
 fn apollo_dht_real_transform_simulation() {
     let n = 8;
     let signal = Array1::from_shape_fn([n], |[i]| (i as f64 * 0.5).sin());

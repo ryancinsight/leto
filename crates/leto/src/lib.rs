@@ -48,6 +48,3 @@ pub use application::{
     FixedMatrix, FixedVector, IndexedIter, IndexedIterMut, Interpolation, Lanes, LanesMut,
     LendingIterator, PadWidth, ScalarOperand, Tiles, Windows,
 };
-
-#[cfg(feature = "ndarray-compat")]
-pub use infrastructure::ndarray_compat;

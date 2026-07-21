@@ -284,9 +284,11 @@ The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
 
 ## Dependency Policy
 
-Core Leto crates must not depend on `ndarray`. `leto-ops` uses `ndarray` only as
-a dev-dependency differential oracle for replacement tests; production features
-must remain independent of `ndarray`.
+Core Leto crates must not depend on `ndarray` in production. Leto packages use
+`ndarray` only as a dev-dependency differential oracle for replacement tests;
+no public feature, re-export, or conversion implementation exposes it.
+Language and FFI consumers construct native Leto arrays at their ownership
+boundaries instead of routing through a provider compatibility module.
 
 Downstream Atlas repositories consume Leto through a Git remote. Provider-side
 changes must be committed and pushed before Apollo, Coeus, or other consumers

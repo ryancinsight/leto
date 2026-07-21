@@ -78,8 +78,7 @@ pub trait LendingIterator {
 /// the backing data; no element is copied. The yielded view's lifetime is tied
 /// to `&'this self` (the GAT bound).
 ///
-/// Construct via [`Array::tiles`](crate::application::array::Array::tiles) or
-/// [`ArrayView::tiles`](crate::application::view::ArrayView::tiles).
+/// Construct with [`Tiles::new`].
 pub struct Tiles<'a, T, const N: usize> {
     data: &'a [T],
     parent_layout: Layout<N>,
@@ -104,14 +103,14 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
         if N == 0 {
             return None;
         }
-        if tile_shape.iter().any(|&t| t == 0) {
+        if tile_shape.contains(&0) {
             return None;
         }
         let parent_shape = parent_layout.shape;
         let mut tile_grid = [0usize; N];
         let mut total = 1usize;
         for i in 0..N {
-            tile_grid[i] = (parent_shape[i] + tile_shape[i] - 1) / tile_shape[i];
+            tile_grid[i] = parent_shape[i].div_ceil(tile_shape[i]);
             total = total.checked_mul(tile_grid[i])?;
         }
         Some(Self {
@@ -173,11 +172,7 @@ impl<'a, T: Copy, const N: usize> LendingIterator for Tiles<'a, T, N> {
         let origin: [usize; N] = std::array::from_fn(|i| tile_idx[i] * self.tile_shape[i]);
         let offset = self.parent_layout.offset_of(origin).ok()?;
 
-        let view_layout = Layout::new(
-            extent,
-            self.parent_layout.strides,
-            offset,
-        );
+        let view_layout = Layout::new(extent, self.parent_layout.strides, offset);
 
         self.cursor += 1;
 
@@ -200,8 +195,8 @@ mod tests {
     #[test]
     fn tile_count_exact_divisible() {
         let a = array2x3();
-        let tiles = Tiles::new(a.storage().as_slice(), a.layout(), [1, 3])
-            .expect("valid tile shape");
+        let tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [1, 3]).expect("valid tile shape");
         // 2x3 / 1x3 = 2 tiles
         assert_eq!(tiles.total_tiles(), 2);
     }
@@ -209,8 +204,8 @@ mod tests {
     #[test]
     fn tile_count_partial_boundary() {
         let a = array2x3();
-        let tiles = Tiles::new(a.storage().as_slice(), a.layout(), [1, 2])
-            .expect("valid tile shape");
+        let tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [1, 2]).expect("valid tile shape");
         // 2 rows x ceil(3/2) = 2x2 = 4 tiles (last column tile has width 1)
         assert_eq!(tiles.total_tiles(), 4);
     }
@@ -218,8 +213,8 @@ mod tests {
     #[test]
     fn tiles_cover_all_elements() {
         let a = array2x3();
-        let mut tiles = Tiles::new(a.storage().as_slice(), a.layout(), [1, 2])
-            .expect("valid tile shape");
+        let mut tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [1, 2]).expect("valid tile shape");
         let mut collected = Vec::new();
         while let Some(tile) = tiles.next() {
             for val in tile.iter() {
@@ -235,8 +230,8 @@ mod tests {
     #[test]
     fn tile_yields_correct_values_exact() {
         let a = array2x3();
-        let mut tiles = Tiles::new(a.storage().as_slice(), a.layout(), [1, 3])
-            .expect("valid tile shape");
+        let mut tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [1, 3]).expect("valid tile shape");
         let row0 = tiles.next().expect("first tile");
         assert_eq!(
             row0.iter().copied().collect::<Vec<_>>(),
@@ -253,8 +248,8 @@ mod tests {
     #[test]
     fn lending_iterator_manual_loop() {
         let a = array2x3();
-        let mut tiles = Tiles::new(a.storage().as_slice(), a.layout(), [1, 3])
-            .expect("valid tile shape");
+        let mut tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [1, 3]).expect("valid tile shape");
         let mut sums = Vec::new();
         while let Some(tile) = tiles.next() {
             sums.push(tile.iter().copied().sum::<f64>());
@@ -271,8 +266,8 @@ mod tests {
     #[test]
     fn count_remaining_exhausts_iterator() {
         let a = array2x3();
-        let mut tiles = Tiles::new(a.storage().as_slice(), a.layout(), [1, 3])
-            .expect("valid tile shape");
+        let mut tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [1, 3]).expect("valid tile shape");
         assert_eq!(tiles.count_remaining(), 2);
         // Iterator is now exhausted
         assert!(tiles.next().is_none());

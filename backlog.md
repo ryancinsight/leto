@@ -651,7 +651,7 @@ Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is
 - [x] [minor] Add unpivoted symmetric indefinite `U D Uᵀ` decomposition with determinant/solve/inverse helpers. Remaining [major] surface: pivoted symmetric-indefinite factorization for zero-pivot cases.
 
 ## Apollo Migration Gate [arch]
-- [x] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates. Apollo pins Leto by Git rev with `["std", "ndarray-compat"]` and exposes `forward_leto`/`inverse_leto` API boundaries on FFT, CZT, DHT, NUFFT, SHT, Radon, and STFT.
+- [x] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates. The initial Apollo boundary requested `["std", "ndarray-compat"]`; current Apollo consumes native Leto arrays without that retired feature and exposes Leto boundaries across its transform families.
 - [x] [minor] Replace Apollo's nalgebra dependency: FrFT/GFT eigendecomposition migrated to `leto_ops::symmetric_eigen_jacobi`; GFT adjacency storage migrated to `leto::Array2<f64>`.
 - [x] Add representative Leto-side Apollo and Coeus migration fixtures before direct consumer updates. Verification: fixtures cover Apollo FFT-like rank/complex/precision shapes and Coeus reduction/broadcast/matmul shapes.
 - [ ] Migrate one low-risk Apollo crate first, preferably a verification-only or WGPU verification path, and keep differential tests against `ndarray`.
