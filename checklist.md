@@ -2,6 +2,18 @@
 
 **Target version: 0.39.0** · **Phase: Closure**
 
+## LETO-PYTHON-RELEASE-1 [patch] — Owner: Codex `/root`
+
+- [x] Add the pinned build-once GitHub Release and PyPI workflow.
+- [x] Document the `leto-python` distribution, `leto_python` import, Cargo
+      version source, supported CPython range, and OIDC publication contract.
+- [x] Build, install, import, and inspect a production CPython 3.13 wheel
+      locally as `leto-python` 0.39.0 / `leto_python`.
+- [x] Create the protected `pypi` environment restricted to
+      `leto-python-v*` tags.
+- [ ] Pass hosted CI on the exact release-automation head.
+- [ ] Register the PyPI pending trusted publisher.
+
 ## LETO-NDARRAY-BOUNDARY-1 [major] — Owner: Codex `/root`
 
 - [x] Remove the public feature, conversion module, re-export, and

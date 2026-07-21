@@ -1,5 +1,25 @@
 # Leto Work Backlog
 
+## LETO-PYTHON-RELEASE-1 — Python release wheels [patch, in progress]
+
+**Owner:** Codex `/root`
+
+**Scope:** the `leto-python` release workflow, protected GitHub environment,
+distribution documentation, and PyPI trusted publisher. Python binding behavior
+is a non-goal.
+
+**Acceptance:** a GitHub Release tagged `leto-python-v<version>` builds locked
+Linux, Windows, and universal macOS wheels for CPython 3.9–3.13, installs and
+imports each wheel as `leto_python`, validates Cargo-owned distribution identity,
+attests and attaches the exact artifacts, then publishes the same wheels to the
+`leto-python` PyPI project through OIDC.
+
+**Current evidence:** the release workflow and synchronized distribution
+contract are implemented, and GitHub environment `pypi` accepts only
+`leto-python-v*` tags. A locked CPython 3.13 wheel builds as `leto-python`
+0.39.0, installs into an isolated target, and imports as `leto_python`. Hosted
+CI and pending-publisher registration remain open.
+
 ## LETO-NDARRAY-BOUNDARY-1 — Retire public ndarray compatibility [major, in progress]
 
 **Owner:** Codex `/root` (stale shared-tree takeover; last prior edit
