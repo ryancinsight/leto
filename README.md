@@ -41,6 +41,15 @@ scheme and the crate responsibility.
 | `leto-ops` | Elementwise arithmetic, reductions, matrix multiplication, SIMD hooks, and Moirai-backed parallel loops. |
 | `leto-python` | Thin PyO3/NumPy boundary over Rust operations with GIL release around compute. |
 
+## Python Releases
+
+GitHub Releases tagged `leto-python-v<version>` build locked CPython 3.9–3.13
+wheels for Linux, Windows, and macOS. The workflow installs and imports each
+wheel as `leto_python`, verifies that its `leto-python` metadata version matches
+the release tag, attests and attaches the exact wheel set to the GitHub Release,
+then publishes those same artifacts to PyPI through OIDC Trusted Publishing.
+The tag version must equal the workspace Cargo version.
+
 ## Core API
 
 The core type model separates layout from storage:

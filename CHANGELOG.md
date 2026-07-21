@@ -22,6 +22,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [patch] GitHub Releases tagged `leto-python-v<version>` now build, install,
+  attest, and attach locked CPython 3.9–3.13 wheels for Linux, Windows, and
+  macOS, then publish the exact wheel set to PyPI through OIDC.
+
 - [minor] Add the typed `Laplacian2D<T>` Cartesian stencil contract and the
   allocation-free `leto-ops::laplacian_2d_into` CPU implementation. Aequitas
   lengths, boundary policy, and explicit polarity now define one provider-owned
