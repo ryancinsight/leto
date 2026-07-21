@@ -87,6 +87,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   the summation (backward-stable, within the differential oracle's tolerance; all
   15 QR/Cholesky value tests pass). The same dispatch `solve_in_place` already
   used — the decompose path was simply never converted when LU/Householder were.
+- [patch] `leto-ops` full SVD (`svd_via_bidiagonal`/`svd_decompose`) routes the
+  U/V orthogonal-factor accumulation (`apply_reflectors_right`) through the SIMD
+  `dot_slice` + `axpy_slice` instead of hand-rolled scalar loops. The per-row apply
+  is a `dot` reduction (loop-carried FP dependency → never autovectorizes) plus an
+  axpy, both over full-dimension contiguous slices — long enough that the SIMD
+  dispatch pays for the axpy too (unlike QR's short within-panel slices, which
+  regressed and were left scalar). A square SVD-with-vectors runs **−52% (n=64) /
+  −49% (n=128) / −38% (n=192)** — a ~1.6–2.1× speedup (criterion,
+  `bench_svd_scaling`, fair low-contention comparison). The reduction reorder is
+  within the SVD differential/reconstruction oracle's tolerance (all 13 SVD value
+  tests pass, incl. `f32`); the values-only path (`colmajor`) was already SIMD.
+  De-duplicates `householder::apply_right`. Adds `bench_svd_scaling`.
 
 ## 0.39.0 - 2026-07-18
 
