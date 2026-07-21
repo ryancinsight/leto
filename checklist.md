@@ -2,6 +2,20 @@
 
 **Target version: 0.39.0** · **Phase: Closure**
 
+## LETO-NDARRAY-BOUNDARY-1 [major] — Owner: Codex `/root`
+
+- [ ] Remove the public feature, conversion module, re-export, and
+      conversion-only contract suite without weakening canonical Leto tests.
+- [ ] Record the ownership decision, unsafe-boundary removal, migration, and
+      retained-oracle proof in ADR 0017 and synchronized public documentation.
+- [ ] Correct the `Tiles` constructor Rustdoc link that blocks documentation.
+- [ ] Verify production/dev dependency separation and the current Apollo native
+      Leto consumer contract.
+- [ ] Pass format, warning-denied Clippy, configured Nextest, doctest, Rustdoc,
+      dependency-residue, and SemVer classification gates.
+- [ ] Commit, publish, review, merge, refresh Apollo, and reconcile the Atlas
+      gitlink without touching the live UDU benchmark lane.
+
 ## LETO-LAPLACIAN-1 [minor] — Owner: Codex `/root`
 
 - [x] Define the validated Aequitas spacing, boundary, and polarity contract.

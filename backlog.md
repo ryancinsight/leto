@@ -1,5 +1,23 @@
 # Leto Work Backlog
 
+## LETO-NDARRAY-BOUNDARY-1 — Retire public ndarray compatibility [major, in progress]
+
+**Owner:** Codex `/root` (stale shared-tree takeover; last prior edit
+2026-07-21 12:20:37 -0400)
+
+**Scope:** remove the public `ndarray-compat` feature, conversion module,
+conversion-only tests, and downstream feature requests; retain `ndarray` only
+as a test/benchmark oracle. Correct the pre-existing `Tiles` Rustdoc link that
+blocks the package documentation gate. Non-goals: removing independent
+differential oracles or changing Leto array semantics.
+
+**Acceptance:** production manifests and Rust sources contain no `ndarray`
+dependency or conversion surface; all retained array, view, stride, mutation,
+and storage contracts pass their canonical suites; the breaking boundary and
+consumer migration are documented in ADR 0017; Apollo consumes native Leto
+without the removed feature; format, warning-denied Clippy, configured Nextest,
+doctest, Rustdoc, dependency, and SemVer gates pass.
+
 ## LETO-LAPLACIAN-1 — Typed Cartesian stencil ownership [minor, done]
 
 **Owner:** Codex `/root`
