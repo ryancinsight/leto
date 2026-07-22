@@ -20,10 +20,9 @@ contract are implemented, and GitHub environment `pypi` accepts only
 0.39.0, installs into an isolated target, and imports as `leto_python`. Hosted
 CI and pending-publisher registration remain open.
 
-## LETO-NDARRAY-BOUNDARY-1 — Retire public ndarray compatibility [major, in progress]
+## LETO-NDARRAY-BOUNDARY-1 — Retire public ndarray compatibility [major, done]
 
-**Owner:** Codex `/root` (stale shared-tree takeover; last prior edit
-2026-07-21 12:20:37 -0400)
+**Owner:** Codex `/root`
 
 **Scope:** remove the public `ndarray-compat` feature, conversion module,
 conversion-only tests, and downstream feature requests; retain `ndarray` only
@@ -37,6 +36,11 @@ and storage contracts pass their canonical suites; the breaking boundary and
 consumer migration are documented in ADR 0017; Apollo consumes native Leto
 without the removed feature; format, warning-denied Clippy, configured Nextest,
 doctest, Rustdoc, dependency, and SemVer gates pass.
+
+**Current evidence:** Leto 0.40.0 releases the removed compatibility surface;
+the configured provider gates and the expected major SemVer classification pass.
+Apollo commit `324f380` consumes native Leto arrays, and its manifests and
+resolved Rust graph contain no `ndarray` or `ndarray-compat` dependency edge.
 
 ## LETO-LAPLACIAN-1 — Typed Cartesian stencil ownership [minor, done]
 
@@ -566,7 +570,9 @@ no unmeasured "optimization" per performance_engineering.
   comparison shows reverse reductions at parity or faster than ndarray, while
   dense 128x128 matmul is slower than ndarray/nalgebra and remains open.
 - [x] [patch] `cargo test --all-features` passes: 34 `leto` core tests, 28 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, property, differential, PyO3 boundary, and downstream-shape migration fixture tests.
-- [x] [patch] Apollo scan confirms `ndarray` is still a public and internal dependency across many crates, including `Array1`/`Array2`/`Array3`, `zeros`, `from_shape_fn`, `from_vec`, `from_shape_vec`, `mapv`, shape checks, axis semantics, and Python `numpy` ownership conversion.
+- [x] [patch] The 2026-06-10 Apollo scan identified its public and internal
+  `ndarray` usage; the completed migration replaces those array, shape, mapping,
+  and Python ownership boundaries with native Leto arrays at commit `324f380`.
 - [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
 - [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
 - [x] [patch] `cargo test --all-features` is clean.
@@ -674,9 +680,12 @@ Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is
 - [x] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates. The initial Apollo boundary requested `["std", "ndarray-compat"]`; current Apollo consumes native Leto arrays without that retired feature and exposes Leto boundaries across its transform families.
 - [x] [minor] Replace Apollo's nalgebra dependency: FrFT/GFT eigendecomposition migrated to `leto_ops::symmetric_eigen_jacobi`; GFT adjacency storage migrated to `leto::Array2<f64>`.
 - [x] Add representative Leto-side Apollo and Coeus migration fixtures before direct consumer updates. Verification: fixtures cover Apollo FFT-like rank/complex/precision shapes and Coeus reduction/broadcast/matmul shapes.
-- [ ] Migrate one low-risk Apollo crate first, preferably a verification-only or WGPU verification path, and keep differential tests against `ndarray`.
-- [ ] Migrate public Apollo APIs only after compatibility/migration notes are in Apollo CHANGELOG because replacing `ndarray::Array*` public types is a breaking API change.
-- [ ] Remove Apollo's workspace `ndarray` dependency only after all crate manifests and Python bindings no longer expose or construct `ndarray` arrays except under a temporary compatibility feature.
+- [x] Migrate Apollo transform crates to native Leto arrays with consumer-side
+  value-semantic and differential coverage.
+- [x] Record Apollo's public array-boundary migration in its changelog and
+  update all in-repository callers in the same development line.
+- [x] Remove Apollo's workspace `ndarray` dependency after its manifests,
+  kernels, validation, and Python bindings consume native Leto arrays.
 
 ## Phase 9: Blocked-reflector vectorization (eig/SVD disparity) [major]
 Source: `docs/adr/0010-blocked-reflector-vectorization.md`; `gap_audit.md` eig/SVD residuals.

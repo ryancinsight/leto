@@ -1,6 +1,6 @@
 # Leto Development Checklist
 
-**Target version: 0.39.0** · **Phase: Closure**
+**Target version: 0.40.0** · **Phase: Closure**
 
 ## LETO-PYTHON-RELEASE-1 [patch] — Owner: Codex `/root`
 
@@ -25,8 +25,8 @@
       Leto consumer contract.
 - [x] Pass format, warning-denied Clippy, configured Nextest, doctest, Rustdoc,
       dependency-residue, and SemVer classification gates.
-- [ ] Commit, publish, review, merge, refresh Apollo, and reconcile the Atlas
-      gitlink without touching the live UDU benchmark lane.
+- [x] Commit, publish, review, and merge the boundary in Leto 0.40.0; refresh
+      Apollo to native Leto arrays. The meta-repository owns its gitlink update.
 
 **Provider evidence:** format and warning-denied all-target/all-feature Clippy
 pass for `leto` and `leto-ops`; configured Nextest passes 266/266 and 305/305;
@@ -801,11 +801,17 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [minor] Add indexed mutable zip traversal (`indexed_zip_mut_with`, `indexed_zip2_mut_with`) to cover ndarray `Zip::indexed`-style Apollo/Coeus position-aware call sites without allocation.
 - [x] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings. Added explicit Apollo FFT three-axis mutable rank-1 lane slicing over rank-3 Leto arrays so ndarray-free 3D axis-pass mutation is covered. Verification: `cargo fmt --check`; `cargo test -p leto-ops --test migration_fixtures --all-features`; `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`.
 - [x] [patch] Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and non-differentiable storage boundaries: DONE on the coeus side as `coeus-leto/tests/contract.rs` (cross-repo behavior contracts) plus `coeus-ops/tests/*_leto_diff.rs` and `coeus-tensor/tests/*_leto_diff.rs` differential suites (verified 2026-06-15).
-- [x] [minor] Add optional `ndarray` compatibility feature for differential tests and transitional conversions only; core crates must not depend on `ndarray`.
-- [ ] [minor] Publish a pushed Git revision only after `fmt`, `clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features`, docs, and differential ndarray parity tests pass.
+- [x] [major] Retire the transitional `ndarray` compatibility feature after
+  consumers migrate; retain `ndarray` only as Leto's differential oracle.
+- [x] [minor] Publish Leto 0.40.0 after format, warning-denied Clippy, configured
+  Nextest, doctest, Rustdoc, dependency, and SemVer gates pass.
 
 ## Gap analysis: ndarray/nalgebra replacement [arch]
-- [x] [patch] Audit Leto against `ndarray` 0.16, `nalgebra`, Apollo usage, and Coeus backend requirements; record in `gap_audit.md` (2026-06-10). Findings: Apollo partially migrated (Git-pinned Leto, `forward_leto` boundaries, nalgebra removed via `symmetric_eigen_jacobi`); Coeus has zero Leto references and duplicates the layout/storage layer; layer-boundary decision recorded in `gap_audit.md` §C/`README.md`.
+- [x] [patch] Audit Leto against `ndarray` 0.16, `nalgebra`, Apollo usage, and
+  Coeus backend requirements; record the 2026-06-10 baseline in `gap_audit.md`.
+  That audit found partial Apollo migration and no Coeus Leto references; both
+  consumer migrations are now complete, while the recorded layer boundary
+  remains authoritative.
 - [x] [patch] Sync README role, layer boundary, linear-algebra features, and replacement status with the audited state.
 
 ## Next increments (ordered)
@@ -841,11 +847,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   stay in coeus by the layer boundary; Leto owns narrow CPU sparse parity
   kernels such as CSR SpMV/SpMM. No leto-side capability gap remains for the CPU
   re-base.
-- [ ] [minor] Apollo internal FFT-kernel migration off ndarray using the new
-  memory-order slice access (boundary `forward_leto`/`inverse_leto` APIs already
-  in place). Apollo (HEAD `db76ca2`) still uses ndarray as its internal CPU
-  compute substrate; leto boundaries exist but end-to-end kernel migration is
-  apollo-owned work.
+- [x] [minor] Apollo internal FFT-kernel migration off ndarray using Leto's
+  memory-order slice access. Apollo commit `324f380` exposes native Leto arrays
+  across its transform families; its manifests and resolved Rust graph contain
+  no `ndarray` or `ndarray-compat` edge.
 - [ ] [arch] Stack-wide themis-0.9 re-pin cascade (downstream-blocking,
   meta/stack-owned). All leaf upstreams are pushed on themis-0.9
   (themis `7c38eb2` 0.9.11; mnemosyne `0174b80`; moirai `4aa94f1`; hermes

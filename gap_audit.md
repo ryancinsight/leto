@@ -6,7 +6,7 @@
   optional `ndarray-compat` feature. That feature exposed a public third-party
   re-export and six conversion implementations, including two unsafe raw-slice
   reconstructions. No live Atlas manifest or Rust caller uses the feature or
-  conversion module; Apollo HEAD `2a22319` consumes native Leto arrays and its
+  conversion module; Apollo commit `324f380` consumes native Leto arrays and its
   resolved graph has no Rust `ndarray` package.
 - **Resolution:** remove the feature, optional dependency, module, re-export,
   conversion-only integration tests, and the conversion fixture from Leto Ops.
@@ -468,8 +468,8 @@ Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
 
 ## Consumer Position
 
-- **Apollo** (spectral transforms): migrated to native Leto host arrays at HEAD
-  `2a22319`; its manifests and resolved Rust graph contain no `ndarray` or
+- **Apollo** (spectral transforms): migrated to native Leto host arrays at
+  commit `324f380`; its manifests and resolved Rust graph contain no `ndarray` or
   `ndarray-compat` dependency edge. Transform APIs expose Leto boundaries, and
   nalgebra is removed (FrFT/GFT eigendecomposition uses
   `leto_ops::symmetric_eigen_jacobi`; GFT adjacency uses `leto::Array2<f64>`).
@@ -883,9 +883,8 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   value-semantic full-vs-values parity and strided-view tests.
 - Contiguous-slice view access: CLOSED — `as_slice`/`as_mut_slice` are now
   offset-independent C-dense; `as_slice_memory_order`/`as_mut_slice_memory_order`
-  expose F-order/offset blocks. Apollo hot-kernel migration still unproven end
-  to end (boundaries exist; internal FFT compute still on ndarray), but the
-  named blocker is removed.
+  expose F-order/offset blocks. Apollo's end-to-end native Leto migration is
+  complete at commit `324f380`; its resolved Rust graph contains no `ndarray`.
 - std::ops operator overloading: DEFERRED ([arch]) in
   `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule). `scalar_map`
   covers array–scalar arithmetic; no consumer blocked.

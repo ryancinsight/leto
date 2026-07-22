@@ -266,13 +266,10 @@ Current value-semantic coverage includes:
   dependency by migrating eigendecomposition to
   `leto_ops::symmetric_eigen_jacobi` and graph adjacency storage to
   `leto::Array2<f64>`.
-- **ndarray, Apollo**: partial. Apollo pins Leto as a Git dependency and
-  exposes `forward_leto`/`inverse_leto` boundaries on FFT, CZT, DHT, NUFFT,
-  SHT, Radon, and STFT; `ndarray` remains Apollo's internal CPU compute
-  substrate and differential oracle. The prior named blocker for hot-kernel
-  migration, contiguous-slice access on Leto views with memory-order
-  guarantees, is closed in 0.3.0; Apollo still needs end-to-end internal kernel
-  migration work.
+- **ndarray, Apollo**: replaced. Apollo commit `324f380` uses native Leto host
+  arrays across its transform families; its manifests and resolved Rust graph
+  contain no `ndarray` or retired `ndarray-compat` dependency edge. Leto retains
+  `ndarray` only as its own dev-dependency differential oracle.
 - **Coeus backend**: CPU array layer consolidated onto Leto (verified
   2026-06-15 against coeus HEAD `037fdd5`). Coeus's CPU `BackendOps` route every
   array primitive (elementwise, matmul + batched, axis reductions,
