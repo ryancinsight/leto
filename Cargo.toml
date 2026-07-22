@@ -23,8 +23,8 @@ leto-ops = { path = "crates/leto-ops" }
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { git = "https://github.com/ryancinsight/hermes.git" }
-eunomia = { git = "https://github.com/ryancinsight/eunomia", default-features = false }
-aequitas = { git = "https://github.com/ryancinsight/aequitas", rev = "cf9b2c3debabf0c08a2769fa8246908ad7cf53da", default-features = false }
+eunomia = { version = "0.7.0", git = "https://github.com/ryancinsight/eunomia", rev = "7021628fe8eb3637c297105f626ee5df78abda84", default-features = false }
+aequitas = { version = "0.1.0", git = "https://github.com/ryancinsight/aequitas", rev = "767e2d0550f1dc15bd8c4434a1a1002806f93498", default-features = false }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
