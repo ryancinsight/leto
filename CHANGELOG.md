@@ -6,6 +6,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+## 0.40.0 - 2026-07-21
+
 ### Removed
 
 - [major] Remove `leto`'s public `ndarray-compat` feature, `ndarray` re-export,
