@@ -33,6 +33,7 @@ bytemuck = { version = "1.25", features = ["derive"] }
 # ── Optional Compatibility ──
 ndarray = "0.16"
 ndarray-rand = "0.15"
+nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 
 # ── Error and Utility ──
 thiserror = "2"
