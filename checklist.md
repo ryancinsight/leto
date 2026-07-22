@@ -2,6 +2,27 @@
 
 **Target version: 0.40.0** · **Phase: Closure**
 
+## LETO-PARITY-HARNESS-1 [patch] — Owner: Codex `/root/implement_horae`
+
+- [x] Cross the one-hour stale-claim threshold with no renewed Leto process,
+      write, or commit; preserve the two existing harness commits and manifest
+      clarification on a dedicated branch.
+- [x] Replace boolean-only and inconsistent tolerance checks with reported,
+      value-semantic differentials and analytically scaled bounds.
+- [x] Correct exercised-API, SSOT, and performance-evidence claims.
+- [x] Synchronize README and completeness evidence without duplicating the
+      canonical test ownership.
+- [x] Run focused example execution and proportional repository gates.
+- [x] Publish as PR #69, resolve the single hosted review finding, merge, and
+      remove the branch after the locally authoritative gates pass.
+
+**Evidence:** both examples execute eleven bounded value differentials;
+focused example Nextest passes 7/7; warning-denied all-target/all-feature
+Clippy passes; configured all-target/all-feature Nextest passes 688/688;
+doctests pass 8/8; warning-denied Rustdoc passes; ndarray 0.16.1 and nalgebra
+0.35.0 are isolated to dev-only oracle ownership. The repository defines no PR
+test workflow; Greptile's single P2 finding was fixed and resolved.
+
 ## LETO-PYTHON-RELEASE-1 [patch] — Owner: Codex `/root`
 
 - [x] Add the pinned build-once GitHub Release and PyPI workflow.
