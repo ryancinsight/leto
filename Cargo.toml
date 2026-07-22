@@ -22,7 +22,7 @@ leto-ops = { path = "crates/leto-ops" }
 # ── Systems and Parallelization ──
 mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
 moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
-hermes-simd = { git = "https://github.com/ryancinsight/hermes.git" }
+hermes-simd = { version = "0.4.1", git = "https://github.com/ryancinsight/hermes.git", rev = "fbdab542f501f832731f909d1f7b72458016efd5" }
 eunomia = { version = "0.7.0", git = "https://github.com/ryancinsight/eunomia", rev = "7021628fe8eb3637c297105f626ee5df78abda84", default-features = false }
 aequitas = { version = "0.1.0", git = "https://github.com/ryancinsight/aequitas", rev = "767e2d0550f1dc15bd8c4434a1a1002806f93498", default-features = false }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
