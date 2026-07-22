@@ -1,5 +1,21 @@
 # Leto Work Backlog
 
+## LETO-PARITY-HARNESS-1 — Runnable migration evidence [patch, in progress]
+
+**Owner:** Codex `/root/implement_horae` (stale-claim takeover at
+2026-07-22 13:26 ET)
+
+**Scope:** `leto-ops` ndarray/nalgebra parity examples, their oracle-only
+dev-dependencies, README and completeness evidence, and owner-local checklist
+state. Production kernels and dependency ownership are non-goals.
+
+**Acceptance:** both examples run deterministic, value-semantic differential
+checks with explicit error magnitudes and analytically scaled bounds; claims
+match the APIs actually exercised; single-shot timings and nonexistent SSOT
+references are absent; format, warning-denied Clippy, configured Nextest,
+doctest, Rustdoc, and example execution gates pass; the branch merges through
+green repository CI and leaves one clean `main` worktree.
+
 ## LETO-PYTHON-RELEASE-1 — Python release wheels [patch, in progress]
 
 **Owner:** Codex `/root`
