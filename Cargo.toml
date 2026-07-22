@@ -30,7 +30,11 @@ themis = { git = "https://github.com/ryancinsight/themis", default-features = fa
 # ── Numeric Foundations ──
 bytemuck = { version = "1.25", features = ["derive"] }
 
-# ── Optional Compatibility ──
+# ── Optional Compatibility (dev-only differential oracle deps) ──
+# `ndarray` / `ndarray-rand` / `nalgebra` are used only in dev-dependencies
+# for property/differential tests and legacy parity oracles. No production
+# crate depends on them; they remain here so dev-dependency versions are
+# pinned once at the workspace root (audit-noise reduction).
 ndarray = "0.16"
 ndarray-rand = "0.15"
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }

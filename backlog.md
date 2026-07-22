@@ -16,6 +16,13 @@ references are absent; format, warning-denied Clippy, configured Nextest,
 doctest, Rustdoc, and example execution gates pass; the branch merges through
 green repository CI and leaves one clean `main` worktree.
 
+**Current evidence:** both executables pass and report eleven bounded
+observations. Focused example Nextest passes 7/7; warning-denied
+all-target/all-feature Clippy passes; configured all-target/all-feature Nextest
+passes 401/401; doctests pass 8/8; warning-denied Rustdoc passes. The normal
+dependency graph contains neither ndarray nor nalgebra, while the dev graph
+contains the intended oracle edges.
+
 ## LETO-PYTHON-RELEASE-1 — Python release wheels [patch, in progress]
 
 **Owner:** Codex `/root`

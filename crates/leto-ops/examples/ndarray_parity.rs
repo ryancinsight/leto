@@ -1,156 +1,239 @@
-//! # `ndarray` × `leto` Parity Harness
+//! Runnable `ndarray` to Leto migration evidence.
 //!
-//! Canonical migration-parity harness for `ndarray` → `leto` array operations.
-//! Lives in `leto-ops` alongside the `nalgebra_parity` example: both legacy
-//! array libraries are validated at the replacement-crate source, not in
-//! downstream consumers.
+//! The harness executes deterministic construction, elementwise, reduction,
+//! and matrix operations through both providers. It reports the measured
+//! absolute differential for each operation and checks it against one of two
+//! contracts:
 //!
-//! ## Operations covered
+//! - elementwise operations must be bitwise equal because both paths execute
+//!   the same ordered IEEE-754 operation per element;
+//! - reductions use `2γₙ Σ|term|`, the triangle-inequality bound for two
+//!   independently rounded accumulation orders.
 //!
-//! | Operation | ndarray | leto / leto-ops |
-//! |---|---|---|
-//! | 1-D array construction | `Array1::from_vec` | `Array1::from_shape_vec` |
-//! | Element-wise add | `&a + &b` | `leto_ops::add` |
-//! | Dot product | `a.dot(&b)` | `leto_ops::dot` |
-//! | Matrix multiply | `a.dot(&b)` (2-D) | `leto_ops::matmul` |
-//! | Sum all elements | `a.sum()` | `leto_ops::sum` |
-//! | Map element-wise | `a.mapv(f)` | `leto_ops::mapv` |
-//!
-//! Parity tolerance: L∞ ≤ 1e-12 (same IEEE-754 arithmetic, same data).
-//!
-//! ## Run
+//! Run with:
 //!
 //! ```sh
-//! cargo run --release --example ndarray_parity -p leto-ops
+//! cargo run --locked -p leto-ops --example ndarray_parity
 //! ```
 
-use leto::{Array1 as LetoArray1, Array2 as LetoArray2};
+mod support;
+
+use leto::{Array1 as LetoArray1, Array2 as LetoArray2, Storage};
 use leto_ops::{add, dot, mapv, matmul, sum};
 use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
+use support::{gamma, max_abs_diff, Observation};
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-fn l_inf_diff(a: &[f64], b: &[f64]) -> f64 {
-    a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0_f64, f64::max)
+/// Each independently rounded reduction differs from the exact sum by at
+/// most `γₙ Σ|term|`; the triangle inequality bounds their difference by twice
+/// that value.
+fn two_path_reduction_bound(terms: usize, absolute_term_sum: f64) -> f64 {
+    2.0 * gamma(terms) * absolute_term_sum
 }
 
-// ── Parity checks ──────────────────────────────────────────────────────────
-
-fn check_elementwise_add() -> bool {
-    let n = 256usize;
-    let a_data: Vec<f64> = (0..n).map(|i| (i as f64) * 0.01).collect();
-    let b_data: Vec<f64> = (0..n).map(|i| (i as f64 * 0.03 + 1.0).sin()).collect();
-
-    // ndarray
-    let a_nd = NdArray1::from_vec(a_data.clone());
-    let b_nd = NdArray1::from_vec(b_data.clone());
-    let c_nd: Vec<f64> = (&a_nd + &b_nd).into_raw_vec();
-
-    // leto
-    let a_le = LetoArray1::from_shape_vec([n], a_data).expect("valid");
-    let b_le = LetoArray1::from_shape_vec([n], b_data).expect("valid");
-    let mut c_le = LetoArray1::<f64>::zeros([n]);
-    add(&a_le.view(), &b_le.view(), &mut c_le.view_mut()).expect("add");
-    let c_le_vec: Vec<f64> = c_le.iter().copied().collect();
-
-    l_inf_diff(&c_nd, &c_le_vec) < 1e-12
+fn check_construction() -> Observation {
+    let values: Vec<f64> = (0..32).map(|index| index as f64 * 0.25 - 2.0).collect();
+    let ndarray = NdArray1::from_vec(values.clone());
+    let leto = LetoArray1::from_shape_vec([values.len()], values)
+        .expect("input length matches the declared shape");
+    Observation::new(
+        "construction",
+        max_abs_diff(
+            ndarray
+                .as_slice()
+                .expect("an owned ndarray vector is contiguous"),
+            leto.storage().as_slice(),
+        ),
+        0.0,
+    )
 }
 
-fn check_dot_product() -> bool {
-    let n = 512usize;
-    let a_data: Vec<f64> = (0..n).map(|i| (i as f64 * 0.07).sin()).collect();
-    let b_data: Vec<f64> = (0..n).map(|i| (i as f64 * 0.11).cos()).collect();
+fn check_elementwise_add() -> Observation {
+    let element_count = 256;
+    let lhs_values: Vec<f64> = (0..element_count)
+        .map(|index| index as f64 * 0.01)
+        .collect();
+    let rhs_values: Vec<f64> = (0..element_count)
+        .map(|index| (index as f64 * 0.03 + 1.0).sin())
+        .collect();
 
-    // ndarray
-    let a_nd = NdArray1::from_vec(a_data.clone());
-    let b_nd = NdArray1::from_vec(b_data.clone());
-    let dot_nd = a_nd.dot(&b_nd);
+    let ndarray_lhs = NdArray1::from_vec(lhs_values.clone());
+    let ndarray_rhs = NdArray1::from_vec(rhs_values.clone());
+    let ndarray_result = &ndarray_lhs + &ndarray_rhs;
 
-    // leto
-    let a_le = LetoArray1::from_shape_vec([n], a_data).expect("valid");
-    let b_le = LetoArray1::from_shape_vec([n], b_data).expect("valid");
-    let dot_le = dot(&a_le.view(), &b_le.view()).expect("dot");
+    let leto_lhs = LetoArray1::from_shape_vec([element_count], lhs_values)
+        .expect("input length matches the declared shape");
+    let leto_rhs = LetoArray1::from_shape_vec([element_count], rhs_values)
+        .expect("input length matches the declared shape");
+    let mut leto_result = LetoArray1::<f64>::zeros([element_count]);
+    add(
+        &leto_lhs.view(),
+        &leto_rhs.view(),
+        &mut leto_result.view_mut(),
+    )
+    .expect("equal shapes satisfy elementwise addition");
 
-    (dot_nd - dot_le).abs() < 1e-10
+    Observation::new(
+        "elementwise_add",
+        max_abs_diff(
+            ndarray_result
+                .as_slice()
+                .expect("the result of contiguous operands is contiguous"),
+            leto_result.storage().as_slice(),
+        ),
+        0.0,
+    )
 }
 
-fn check_matmul() -> bool {
-    let m = 16usize;
-    let k = 24usize;
-    let p = 12usize;
-    let a_data: Vec<f64> = (0..m * k).map(|i| (i as f64 * 0.05).sin()).collect();
-    let b_data: Vec<f64> = (0..k * p).map(|i| (i as f64 * 0.07).cos()).collect();
+fn check_dot_product() -> Observation {
+    let element_count = 512;
+    let lhs_values: Vec<f64> = (0..element_count)
+        .map(|index| (index as f64 * 0.07).sin())
+        .collect();
+    let rhs_values: Vec<f64> = (0..element_count)
+        .map(|index| (index as f64 * 0.11).cos())
+        .collect();
+    let absolute_term_sum = lhs_values
+        .iter()
+        .zip(&rhs_values)
+        .map(|(lhs, rhs)| (lhs * rhs).abs())
+        .sum();
 
-    // ndarray
-    let a_nd = NdArray2::from_shape_vec((m, k), a_data.clone()).expect("valid");
-    let b_nd = NdArray2::from_shape_vec((k, p), b_data.clone()).expect("valid");
-    let c_nd = a_nd.dot(&b_nd);
-    let nd_flat: Vec<f64> = c_nd.into_raw_vec();
+    let ndarray_result =
+        NdArray1::from_vec(lhs_values.clone()).dot(&NdArray1::from_vec(rhs_values.clone()));
+    let leto_lhs = LetoArray1::from_shape_vec([element_count], lhs_values)
+        .expect("input length matches the declared shape");
+    let leto_rhs = LetoArray1::from_shape_vec([element_count], rhs_values)
+        .expect("input length matches the declared shape");
+    let leto_result =
+        dot(&leto_lhs.view(), &leto_rhs.view()).expect("equal lengths satisfy dot product");
 
-    // leto
-    let a_le = LetoArray2::from_shape_vec([m, k], a_data).expect("valid");
-    let b_le = LetoArray2::from_shape_vec([k, p], b_data).expect("valid");
-    let mut c_le = LetoArray2::<f64>::zeros([m, p]);
-    matmul(&a_le.view(), &b_le.view(), &mut c_le.view_mut()).expect("matmul");
-    let le_flat: Vec<f64> = c_le.iter().copied().collect();
-
-    l_inf_diff(&nd_flat, &le_flat) < 1e-10
+    Observation::new(
+        "dot_product",
+        (ndarray_result - leto_result).abs(),
+        two_path_reduction_bound(element_count, absolute_term_sum),
+    )
 }
 
-fn check_sum_reduction() -> bool {
-    let n = 1024usize;
-    let data: Vec<f64> = (0..n).map(|i| (i as f64 * 0.13).sin()).collect();
+fn check_matmul() -> Observation {
+    let (rows, inner, columns) = (16, 24, 12);
+    let lhs_values: Vec<f64> = (0..rows * inner)
+        .map(|index| (index as f64 * 0.05).sin())
+        .collect();
+    let rhs_values: Vec<f64> = (0..inner * columns)
+        .map(|index| (index as f64 * 0.07).cos())
+        .collect();
 
-    // ndarray
-    let a_nd = NdArray1::from_vec(data.clone());
-    let sum_nd = a_nd.sum();
+    let ndarray_lhs = NdArray2::from_shape_vec((rows, inner), lhs_values.clone())
+        .expect("input length matches the declared shape");
+    let ndarray_rhs = NdArray2::from_shape_vec((inner, columns), rhs_values.clone())
+        .expect("input length matches the declared shape");
+    let ndarray_result = ndarray_lhs.dot(&ndarray_rhs);
 
-    // leto — uses `sum` from leto-ops (the exported re-export of map::sum)
-    let a_le = LetoArray1::from_shape_vec([n], data).expect("valid");
-    let sum_le: f64 = sum(&a_le.view());
+    let leto_lhs = LetoArray2::from_shape_vec([rows, inner], lhs_values.clone())
+        .expect("input length matches the declared shape");
+    let leto_rhs = LetoArray2::from_shape_vec([inner, columns], rhs_values.clone())
+        .expect("input length matches the declared shape");
+    let mut leto_result = LetoArray2::<f64>::zeros([rows, columns]);
+    matmul(
+        &leto_lhs.view(),
+        &leto_rhs.view(),
+        &mut leto_result.view_mut(),
+    )
+    .expect("compatible matrix shapes satisfy multiplication");
 
-    (sum_nd - sum_le).abs() < 1e-9
+    let maximum_absolute_term_sum = (0..rows)
+        .flat_map(|row| {
+            let lhs_values = &lhs_values;
+            let rhs_values = &rhs_values;
+            (0..columns).map(move |column| {
+                (0..inner)
+                    .map(|index| {
+                        (lhs_values[row * inner + index] * rhs_values[index * columns + column])
+                            .abs()
+                    })
+                    .sum::<f64>()
+            })
+        })
+        .fold(0.0_f64, f64::max);
+
+    Observation::new(
+        "matmul",
+        max_abs_diff(
+            ndarray_result
+                .as_slice()
+                .expect("contiguous matrix inputs produce a contiguous result"),
+            leto_result.storage().as_slice(),
+        ),
+        two_path_reduction_bound(inner, maximum_absolute_term_sum),
+    )
 }
 
-fn check_mapv() -> bool {
-    let n = 256usize;
-    let data: Vec<f64> = (0..n).map(|i| (i as f64 * 0.04).cos()).collect();
+fn check_sum_reduction() -> Observation {
+    let element_count = 1024;
+    let values: Vec<f64> = (0..element_count)
+        .map(|index| (index as f64 * 0.13).sin())
+        .collect();
+    let absolute_term_sum = values.iter().map(|value| value.abs()).sum();
+    let ndarray_result = NdArray1::from_vec(values.clone()).sum();
+    let leto = LetoArray1::from_shape_vec([element_count], values)
+        .expect("input length matches the declared shape");
+    let leto_result = sum(&leto.view());
 
-    // ndarray: mapv applies f element-wise with copy semantics
-    let a_nd = NdArray1::from_vec(data.clone());
-    let c_nd_vec: Vec<f64> = a_nd.mapv(|x: f64| x * x + 1.0).into_raw_vec();
-
-    // leto: mapv — same copy semantics, returns Result<Array>
-    let a_le = LetoArray1::from_shape_vec([n], data).expect("valid");
-    let c_le = mapv(&a_le.view(), |x: f64| x * x + 1.0).expect("mapv");
-    let le_vec: Vec<f64> = c_le.iter().copied().collect();
-
-    l_inf_diff(&c_nd_vec, &le_vec) < 1e-12
+    Observation::new(
+        "sum_reduction",
+        (ndarray_result - leto_result).abs(),
+        two_path_reduction_bound(element_count, absolute_term_sum),
+    )
 }
 
-// ── main ───────────────────────────────────────────────────────────────────
+fn check_mapv() -> Observation {
+    let element_count = 256;
+    let values: Vec<f64> = (0..element_count)
+        .map(|index| (index as f64 * 0.04).cos())
+        .collect();
+    let ndarray = NdArray1::from_vec(values.clone());
+    let ndarray_result = ndarray.mapv(|value| value * value + 1.0);
+    let leto = LetoArray1::from_shape_vec([element_count], values)
+        .expect("input length matches the declared shape");
+    let leto_result =
+        mapv(&leto.view(), |value: f64| value * value + 1.0).expect("map preserves shape");
+
+    Observation::new(
+        "mapv",
+        max_abs_diff(
+            ndarray_result
+                .as_slice()
+                .expect("the result of a contiguous input is contiguous"),
+            leto_result.storage().as_slice(),
+        ),
+        0.0,
+    )
+}
+
+fn observations() -> [Observation; 6] {
+    [
+        check_construction(),
+        check_elementwise_add(),
+        check_dot_product(),
+        check_matmul(),
+        check_sum_reduction(),
+        check_mapv(),
+    ]
+}
 
 fn main() {
-    let checks: &[(&str, bool)] = &[
-        ("elementwise_add", check_elementwise_add()),
-        ("dot_product",     check_dot_product()),
-        ("matmul",          check_matmul()),
-        ("sum_reduction",   check_sum_reduction()),
-        ("mapv",            check_mapv()),
-    ];
-
-    let all_pass = checks.iter().all(|(_, p)| *p);
-
-    for (name, pass) in checks {
-        eprintln!("  {:20} {}", name, if *pass { "PASS ✅" } else { "FAIL ❌" });
+    let observations = observations();
+    for observation in observations {
+        eprintln!(
+            "{:<20} error={:.6e} bound={:.6e}",
+            observation.name, observation.error, observation.bound
+        );
+        observation.assert_within_bound();
     }
-
     println!(
-        "{{\"crate\":\"leto-ops\",\"harness\":\"ndarray_parity\",\"all_pass\":{all_pass}}}"
+        "{{\"crate\":\"leto-ops\",\"harness\":\"ndarray_parity\",\"checks\":{},\"all_pass\":true}}",
+        observations.len()
     );
-    eprintln!("─── ndarray × leto parity ─── {}", if all_pass { "PASS ✅" } else { "FAIL ❌" });
-
-    assert!(all_pass, "ndarray × leto parity FAIL — see above");
 }
 
 #[cfg(test)]
@@ -158,27 +241,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn construction_parity() {
+        check_construction().assert_within_bound();
+    }
+
+    #[test]
     fn elementwise_add_parity() {
-        assert!(check_elementwise_add());
+        check_elementwise_add().assert_within_bound();
     }
 
     #[test]
     fn dot_product_parity() {
-        assert!(check_dot_product());
+        check_dot_product().assert_within_bound();
     }
 
     #[test]
     fn matmul_parity() {
-        assert!(check_matmul());
+        check_matmul().assert_within_bound();
     }
 
     #[test]
     fn sum_reduction_parity() {
-        assert!(check_sum_reduction());
+        check_sum_reduction().assert_within_bound();
     }
 
     #[test]
     fn mapv_parity() {
-        assert!(check_mapv());
+        check_mapv().assert_within_bound();
     }
 }

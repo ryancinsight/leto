@@ -7,13 +7,19 @@
 - [x] Cross the one-hour stale-claim threshold with no renewed Leto process,
       write, or commit; preserve the two existing harness commits and manifest
       clarification on a dedicated branch.
-- [ ] Replace boolean-only and inconsistent tolerance checks with reported,
+- [x] Replace boolean-only and inconsistent tolerance checks with reported,
       value-semantic differentials and analytically scaled bounds.
-- [ ] Correct exercised-API, SSOT, and performance-evidence claims.
-- [ ] Synchronize README and completeness evidence without duplicating the
+- [x] Correct exercised-API, SSOT, and performance-evidence claims.
+- [x] Synchronize README and completeness evidence without duplicating the
       canonical test ownership.
-- [ ] Run focused example execution and proportional repository gates.
+- [x] Run focused example execution and proportional repository gates.
 - [ ] Publish, review, merge through green CI, and remove the branch.
+
+**Evidence:** both examples execute eleven bounded value differentials;
+focused example Nextest passes 7/7; warning-denied all-target/all-feature
+Clippy passes; configured all-target/all-feature Nextest passes 401/401;
+doctests pass 8/8; warning-denied Rustdoc passes; and dependency-edge scans
+isolate ndarray/nalgebra to dev-only oracle ownership.
 
 ## LETO-PYTHON-RELEASE-1 [patch] — Owner: Codex `/root`
 

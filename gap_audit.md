@@ -1,5 +1,24 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-22 Runnable Migration Evidence
+
+- **Closed evidence gap:** `leto-ops` now owns runnable `ndarray_parity` and
+  `nalgebra_parity` examples in addition to its focused integration tests and
+  Criterion benchmarks. The examples are deterministic and input-sensitive;
+  they report measured error magnitudes rather than boolean-only success.
+- **Numerical contract:** elementwise equal-order operations require exact
+  equality; independent reductions use `2γₙ Σ|term|`; the manufactured Poisson
+  solve uses normalized backward error, the exact discrete sine eigenmode, and
+  the exact infinity-norm condition number
+  `κ∞(A) = 2 maxᵢ i(n + 1 - i)` for forward bounds.
+- **Architecture effect:** ndarray and nalgebra remain dev-only differential
+  oracles. Production dependency ownership and kernel implementations are
+  unchanged. The examples contain no one-shot timing claim; performance
+  evidence remains owned by the controlled Criterion suite.
+- **Evidence limit:** these examples cover a representative migration workflow,
+  not the full provider surfaces. `docs/completeness/parity_matrix.md` and its
+  focused contract suites remain the completeness SSOT.
+
 ## 2026-07-21 Public ndarray Compatibility Boundary
 
 - **Finding:** `leto` contradicted its production dependency policy through an

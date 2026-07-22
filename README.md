@@ -260,6 +260,25 @@ Current value-semantic coverage includes:
   borrowed arrays, and strided views all carry the surface. The full ndarray
   0.16 / nalgebra 0.35 completeness program lives in `docs/completeness/`.
 
+### Runnable Migration Evidence
+
+`leto-ops` ships two deterministic, CI-safe examples for consumer migration
+checks:
+
+```sh
+cargo run --locked -p leto-ops --example ndarray_parity
+cargo run --locked -p leto-ops --example nalgebra_parity
+```
+
+`ndarray_parity` compares construction, elementwise addition, dot product,
+matrix multiplication, sum, and `mapv`, reporting every absolute differential
+against exact-operation or `γₙ` reduction bounds. `nalgebra_parity` compares a
+manufactured Dirichlet Poisson solve through nalgebra dense LU and Leto Ops
+COO→CSR plus `SparseLuSolver`; it independently checks normalized residuals and
+the exact discrete sine eigenmode with condition-number-scaled bounds. These
+are runnable workflow examples, not benchmarks. Controlled performance
+comparisons remain in the Criterion targets.
+
 ## Replacement Status
 
 - **nalgebra**: replaced for Apollo. Apollo removed its `nalgebra`
@@ -290,9 +309,10 @@ The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
 
 ## Dependency Policy
 
-Core Leto crates must not depend on `ndarray` in production. Leto packages use
-`ndarray` only as a dev-dependency differential oracle for replacement tests;
-no public feature, re-export, or conversion implementation exposes it.
+Core Leto crates must not depend on `ndarray` or `nalgebra` in production. Leto
+packages use them only as dev-dependency differential oracles for replacement
+tests and examples; no public feature, re-export, or conversion implementation
+exposes either provider.
 Language and FFI consumers construct native Leto arrays at their ownership
 boundaries instead of routing through a provider compatibility module.
 

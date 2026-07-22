@@ -1,224 +1,242 @@
-//! # `nalgebra` × `leto` / `leto-ops` Parity Harness
+//! Runnable `nalgebra` to Leto migration evidence.
 //!
-//! This is the **canonical** migration-parity harness for the Atlas array and
-//! linear-algebra stack.  It lives in `leto-ops` because `leto` (Array/Layout)
-//! and `leto-ops` (SpMV, sparse LU, GEMV) are the *direct* replacements for
-//! `nalgebra::DMatrix` / `DVector` and its decompositions; parity evidence
-//! belongs at the source, not scattered across downstream consumers such as
-//! `cfd-math`.
+//! Both providers solve the manufactured one-dimensional Poisson system
+//! `-u'' = sin(πx)` with homogeneous Dirichlet boundaries. The legacy path uses
+//! a dense `nalgebra` matrix and LU; the Atlas path assembles Leto Ops COO/CSR,
+//! carries its right-hand side in a Leto `Array1`, and uses `SparseLuSolver`.
+//! The latter intentionally exercises the solver's documented dense-backed
+//! boundary for systems within `DENSE_LIMIT_DEFAULT`.
 //!
-//! ## What it proves
+//! Verification is independent of provider agreement:
 //!
-//! Solves the manufactured 1-D Poisson problem
+//! - each normalized residual is bounded by `γ₍₃ₙ₎`, the backward-error bound
+//!   for partial-pivoting LU on this diagonally dominant, growth-factor-one
+//!   Poisson matrix;
+//! - both solutions are compared with the exact discrete sine eigenmode;
+//! - the forward bounds use the exact infinity-norm condition number
+//!   `κ∞(A) = 2 maxᵢ i(n + 1 - i)` and the standard perturbation inequality
+//!   `κ η / (1 - κ η)`.
 //!
-//! ```text
-//!   u'' = -sin(π x),   u(0) = u(1) = 0,   x ∈ [0, 1]
-//! ```
+//! No timing is emitted: performance evidence belongs in a controlled
+//! Criterion benchmark, not a one-shot example.
 //!
-//! whose exact solution is `u*(x) = sin(π x) / π²` using **two independent
-//! paths** with identical discrete operators and RHS:
-//!
-//! | Path   | Array type                | Solver                              |
-//! |--------|---------------------------|-------------------------------------|
-//! | Legacy | `nalgebra::DMatrix<f64>`  | `nalgebra` LU decomposition         |
-//! | Atlas  | `leto::Array1<f64>` + `leto_ops::CsrMatrix` | `leto_ops::SparseLuSolver` |
-//!
-//! Parity tolerances (SSOT: `migration_validation.md`):
-//! - Solution L∞ agreement: ≤ 1e-6
-//! - Residual L∞ (both paths): ≤ 1e-8
-//!
-//! Emits a JSON summary line suitable for CI regression gates.
-//!
-//! ## Run
+//! Run with:
 //!
 //! ```sh
-//! cargo run --release --example nalgebra_parity -p leto-ops
+//! cargo run --locked -p leto-ops --example nalgebra_parity
 //! ```
 
+mod support;
+
+use leto::{Array1, Storage};
 use leto_ops::{CooMatrix, CsrMatrix, SparseLuSolver};
 use nalgebra::{DMatrix, DVector};
 use std::f64::consts::PI;
-use std::time::Instant;
+use support::{gamma, max_abs_diff, Observation};
 
-// ── Problem specification ──────────────────────────────────────────────────
-
-/// 1-D Poisson discretisation on `n` interior points with mesh spacing
-/// `h = 1 / (n + 1)`. The Laplacian stencil is scaled by `1/h²`
-/// consistently on both paths so the manufactured solution is the same
-/// discrete object.
 #[derive(Clone, Copy, Debug)]
 struct Problem {
-    n: usize,
-    h: f64,
-    h2_inv: f64,
+    order: usize,
+    spacing: f64,
+    inverse_spacing_squared: f64,
 }
 
 impl Problem {
-    fn new(n: usize) -> Self {
-        let h = 1.0 / (n as f64 + 1.0);
-        Self { n, h, h2_inv: h.recip() * h.recip() }
+    fn new(order: usize) -> Self {
+        assert!(order >= 3, "the parity problem requires an interior row");
+        let spacing = 1.0 / (order as f64 + 1.0);
+        Self {
+            order,
+            spacing,
+            inverse_spacing_squared: spacing.recip() * spacing.recip(),
+        }
     }
 
-    /// RHS vector `b[i] = sin(π x_i)` at interior grid points.
-    fn rhs_vec(&self) -> Vec<f64> {
-        (1..=self.n).map(|i| (PI * i as f64 * self.h).sin()).collect()
-    }
-
-    /// Exact solution `u*(x_i) = sin(π x_i) / π²`.
-    fn exact_vec(&self) -> Vec<f64> {
-        (1..=self.n)
-            .map(|i| (PI * i as f64 * self.h).sin() / (PI * PI))
+    fn rhs(&self) -> Vec<f64> {
+        (1..=self.order)
+            .map(|index| (PI * index as f64 * self.spacing).sin())
             .collect()
     }
-}
 
-// ── Legacy path: nalgebra dense LU ────────────────────────────────────────
-
-/// Solve on a **dense** `nalgebra::DMatrix` using `nalgebra`'s own partial-
-/// pivoting LU decomposition.  Zero Atlas types appear here — genuine legacy
-/// reference implementing the pre-migration code path.
-fn solve_nalgebra(p: &Problem, b: &[f64]) -> (Vec<f64>, u128) {
-    let n = p.n;
-    let scale = p.h2_inv;
-
-    let mut a = DMatrix::<f64>::zeros(n, n);
-    for i in 0..n {
-        a[(i, i)] = 2.0 * scale;
-        if i > 0 {
-            a[(i, i - 1)] = -scale;
-        }
-        if i + 1 < n {
-            a[(i, i + 1)] = -scale;
-        }
+    /// Exact solution of the discrete operator, using its first sine
+    /// eigenvalue `4 h⁻² sin²(πh/2)` rather than the continuum eigenvalue `π²`.
+    fn discrete_solution(&self) -> Vec<f64> {
+        let half_angle = 0.5 * PI * self.spacing;
+        let eigenvalue = 4.0 * self.inverse_spacing_squared * half_angle.sin() * half_angle.sin();
+        (1..=self.order)
+            .map(|index| (PI * index as f64 * self.spacing).sin() / eigenvalue)
+            .collect()
     }
 
-    let b_dv = DVector::from_column_slice(b);
-    let t0 = Instant::now();
-    let x = a.lu().solve(&b_dv).expect("nalgebra LU solve succeeded");
-    let elapsed = t0.elapsed().as_micros();
-    (x.as_slice().to_vec(), elapsed)
+    fn continuum_solution(&self) -> Vec<f64> {
+        (1..=self.order)
+            .map(|index| (PI * index as f64 * self.spacing).sin() / (PI * PI))
+            .collect()
+    }
+
+    /// Exact infinity-norm condition number for the scaled Dirichlet
+    /// tridiagonal matrix. Scaling by `h⁻²` cancels between `A` and `A⁻¹`.
+    fn condition_number_infinity(&self) -> f64 {
+        let left = self.order.div_ceil(2);
+        let right = self.order + 1 - left;
+        2.0 * (left * right) as f64
+    }
+
+    fn matrix_norm_infinity(&self) -> f64 {
+        4.0 * self.inverse_spacing_squared
+    }
 }
 
-// ── Atlas path: leto Array1 + leto-ops COO → CSR + SparseLuSolver ─────────
-
-/// Assemble the tridiagonal Laplacian via `CooMatrix → CsrMatrix` (the
-/// canonical Atlas assembly pipeline: COO accumulation then sorted CSR
-/// compression) and solve with `SparseLuSolver` (the Atlas direct sparse
-/// solver that delegates to `leto_ops::lu_decompose` for the dense-backed
-/// path at problem sizes ≤ `DENSE_LIMIT_DEFAULT`).
-///
-/// Uses **only** Atlas types — `leto::Array1`, `leto_ops::CooMatrix`,
-/// `leto_ops::CsrMatrix`, `leto_ops::SparseLuSolver`.
-fn solve_atlas(p: &Problem, b: &[f64]) -> (Vec<f64>, u128) {
-    let n = p.n;
-    let scale = p.h2_inv;
-
-    // Assembly: push (row, col, value) triplets into COO then compress to CSR.
-    let mut coo = CooMatrix::<f64>::new(n, n);
-    for i in 0..n {
-        if i > 0 {
-            coo.push(i, i - 1, -scale);
+fn solve_nalgebra(problem: &Problem, rhs: &[f64]) -> Vec<f64> {
+    let mut matrix = DMatrix::<f64>::zeros(problem.order, problem.order);
+    for row in 0..problem.order {
+        matrix[(row, row)] = 2.0 * problem.inverse_spacing_squared;
+        if row > 0 {
+            matrix[(row, row - 1)] = -problem.inverse_spacing_squared;
         }
-        coo.push(i, i, 2.0 * scale);
-        if i + 1 < n {
-            coo.push(i, i + 1, -scale);
+        if row + 1 < problem.order {
+            matrix[(row, row + 1)] = -problem.inverse_spacing_squared;
         }
     }
-    let csr: CsrMatrix<f64> = coo.to_csr();
-
-    let b_arr: Vec<f64> = b.to_vec();
-    let solver = SparseLuSolver::default();
-
-    let t0 = Instant::now();
-    let x_vec: Vec<f64> = solver.solve(&csr, &b_arr).expect("Atlas sparse LU succeeded");
-    let elapsed = t0.elapsed().as_micros();
-
-    (x_vec, elapsed)
+    let rhs = DVector::from_column_slice(rhs);
+    matrix
+        .lu()
+        .solve(&rhs)
+        .expect("the Dirichlet Poisson matrix is positive definite")
+        .as_slice()
+        .to_vec()
 }
 
-// ── Diagnostics ────────────────────────────────────────────────────────────
-
-fn l_inf_diff(a: &[f64], b: &[f64]) -> f64 {
-    a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0_f64, f64::max)
+fn solve_leto(problem: &Problem, rhs: &[f64]) -> Vec<f64> {
+    let mut matrix = CooMatrix::<f64>::new(problem.order, problem.order);
+    for row in 0..problem.order {
+        if row > 0 {
+            matrix.push(row, row - 1, -problem.inverse_spacing_squared);
+        }
+        matrix.push(row, row, 2.0 * problem.inverse_spacing_squared);
+        if row + 1 < problem.order {
+            matrix.push(row, row + 1, -problem.inverse_spacing_squared);
+        }
+    }
+    let matrix: CsrMatrix<f64> = matrix.to_csr();
+    let rhs = Array1::from_shape_vec([problem.order], rhs.to_vec())
+        .expect("right-hand-side length matches the system order");
+    SparseLuSolver::default()
+        .solve(&matrix, rhs.storage().as_slice())
+        .expect("the system order and positive-definite matrix satisfy the solver contract")
 }
 
-/// Compute `‖A x − b‖∞` via the tridiagonal stencil (no extra allocation).
-fn residual_linf(p: &Problem, x: &[f64], b: &[f64]) -> f64 {
-    let scale = p.h2_inv;
-    (0..p.n)
-        .map(|i| {
-            let mut v = 2.0 * scale * x[i];
-            if i > 0 {
-                v -= scale * x[i - 1];
+fn maximum_absolute(values: &[f64]) -> f64 {
+    values
+        .iter()
+        .map(|value| value.abs())
+        .fold(0.0_f64, f64::max)
+}
+
+fn residual_infinity(problem: &Problem, solution: &[f64], rhs: &[f64]) -> f64 {
+    assert_eq!(solution.len(), problem.order);
+    assert_eq!(rhs.len(), problem.order);
+    (0..problem.order)
+        .map(|row| {
+            let mut value = 2.0 * problem.inverse_spacing_squared * solution[row];
+            if row > 0 {
+                value -= problem.inverse_spacing_squared * solution[row - 1];
             }
-            if i + 1 < p.n {
-                v -= scale * x[i + 1];
+            if row + 1 < problem.order {
+                value -= problem.inverse_spacing_squared * solution[row + 1];
             }
-            (v - b[i]).abs()
+            (value - rhs[row]).abs()
         })
         .fold(0.0_f64, f64::max)
 }
 
-// ── main ───────────────────────────────────────────────────────────────────
+fn normalized_backward_error(problem: &Problem, solution: &[f64], rhs: &[f64]) -> f64 {
+    let denominator =
+        problem.matrix_norm_infinity() * maximum_absolute(solution) + maximum_absolute(rhs);
+    residual_infinity(problem, solution, rhs) / denominator
+}
+
+fn forward_error_bound(problem: &Problem, solution_scale: f64, backward_bound: f64) -> f64 {
+    let conditioned_error = problem.condition_number_infinity() * backward_bound;
+    assert!(
+        conditioned_error < 1.0,
+        "forward-error inequality requires condition * backward error < 1"
+    );
+    solution_scale * conditioned_error / (1.0 - conditioned_error)
+}
+
+fn observations(problem: &Problem) -> ([Observation; 5], f64) {
+    let rhs = problem.rhs();
+    let discrete_solution = problem.discrete_solution();
+    let continuum_solution = problem.continuum_solution();
+    let nalgebra_solution = solve_nalgebra(problem, &rhs);
+    let leto_solution = solve_leto(problem, &rhs);
+
+    let backward_bound = gamma(3 * problem.order);
+    let solution_scale = maximum_absolute(&discrete_solution);
+    let provider_forward_bound = forward_error_bound(problem, solution_scale, backward_bound);
+    let observations = [
+        Observation::new(
+            "nalgebra_backward",
+            normalized_backward_error(problem, &nalgebra_solution, &rhs),
+            backward_bound,
+        ),
+        Observation::new(
+            "leto_backward",
+            normalized_backward_error(problem, &leto_solution, &rhs),
+            backward_bound,
+        ),
+        Observation::new(
+            "nalgebra_discrete",
+            max_abs_diff(&nalgebra_solution, &discrete_solution),
+            provider_forward_bound,
+        ),
+        Observation::new(
+            "leto_discrete",
+            max_abs_diff(&leto_solution, &discrete_solution),
+            provider_forward_bound,
+        ),
+        Observation::new(
+            "provider_agreement",
+            max_abs_diff(&nalgebra_solution, &leto_solution),
+            2.0 * provider_forward_bound,
+        ),
+    ];
+    let discretization_error = max_abs_diff(&discrete_solution, &continuum_solution);
+    (observations, discretization_error)
+}
+
+fn run(order: usize) {
+    let problem = Problem::new(order);
+    let (observations, discretization_error) = observations(&problem);
+    for observation in observations {
+        eprintln!(
+            "{:<20} error={:.6e} bound={:.6e}",
+            observation.name, observation.error, observation.bound
+        );
+        observation.assert_within_bound();
+    }
+    eprintln!("continuum discretization error={discretization_error:.6e}");
+    println!(
+        "{{\"crate\":\"leto-ops\",\"harness\":\"nalgebra_parity\",\"problem_n\":{order},\"checks\":{},\"all_pass\":true}}",
+        observations.len()
+    );
+}
 
 fn main() {
-    let problem = Problem::new(512);
-    let b = problem.rhs_vec();
-    let exact = problem.exact_vec();
-
-    let (u_legacy, legacy_us) = solve_nalgebra(&problem, &b);
-    let (u_atlas, atlas_us) = solve_atlas(&problem, &b);
-
-    let resid_legacy = residual_linf(&problem, &u_legacy, &b);
-    let resid_atlas = residual_linf(&problem, &u_atlas, &b);
-    let diff_solutions = l_inf_diff(&u_legacy, &u_atlas);
-    let err_atlas_exact = l_inf_diff(&u_atlas, &exact);
-
-    let parity_pass = resid_legacy < 1e-8 && resid_atlas < 1e-8 && diff_solutions < 1e-6;
-
-    // JSON line for CI regression gates.
-    println!(
-        "{{\"crate\":\"leto-ops\",\"problem_n\":{n},\
-         \"legacy_solve_us\":{legacy_us},\"atlas_solve_us\":{atlas_us},\
-         \"resid_legacy\":{resid_legacy:.6e},\"resid_atlas\":{resid_atlas:.6e},\
-         \"diff_solutions\":{diff_solutions:.6e},\"err_atlas_exact\":{err_atlas_exact:.6e},\
-         \"parity_pass\":{parity_pass}}}",
-        n = problem.n,
-    );
-
-    eprintln!("─── nalgebra × leto-ops parity ({} interior pts) ───", problem.n);
-    eprintln!("  Legacy : nalgebra::DMatrix + nalgebra LU");
-    eprintln!("  Atlas  : leto::Array1 + CooMatrix→CsrMatrix + SparseLuSolver");
-    eprintln!("  resid legacy  L∞ : {resid_legacy:.3e}  (tol 1e-8)");
-    eprintln!("  resid atlas   L∞ : {resid_atlas:.3e}  (tol 1e-8)");
-    eprintln!("  solution diff L∞ : {diff_solutions:.3e}  (tol 1e-6)");
-    eprintln!("  atlas vs exact   : {err_atlas_exact:.3e}");
-    eprintln!("  legacy time      : {legacy_us} µs");
-    eprintln!("  atlas  time      : {atlas_us} µs");
-    eprintln!("  PARITY {}", if parity_pass { "PASS ✅" } else { "FAIL ❌" });
-
-    assert!(
-        parity_pass,
-        "nalgebra × leto-ops parity FAIL: diff={diff_solutions:.3e}, \
-         resid_legacy={resid_legacy:.3e}, resid_atlas={resid_atlas:.3e}"
-    );
+    run(512);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Quick parity smoke test on a small problem (n=64).
     #[test]
-    fn parity_n64() {
-        let p = Problem::new(64);
-        let b = p.rhs_vec();
-        let exact = p.exact_vec();
-        let (u_l, _) = solve_nalgebra(&p, &b);
-        let (u_a, _) = solve_atlas(&p, &b);
-        let diff = l_inf_diff(&u_l, &u_a);
-        assert!(diff < 1e-6, "solution diff {diff:.3e} exceeds 1e-6");
-        let err = l_inf_diff(&u_a, &exact);
-        assert!(err < 1e-5, "atlas vs exact {err:.3e} exceeds 1e-5");
+    fn poisson_solve_parity() {
+        let problem = Problem::new(64);
+        let (observations, _) = observations(&problem);
+        for observation in observations {
+            observation.assert_within_bound();
+        }
     }
 }
