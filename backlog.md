@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## LETO-PARITY-HARNESS-1 — Runnable migration evidence [patch, in progress]
+## LETO-PARITY-HARNESS-1 — Runnable migration evidence [patch, complete]
 
 **Owner:** Codex `/root/implement_horae` (stale-claim takeover at
 2026-07-22 13:26 ET)
@@ -13,15 +13,18 @@ state. Production kernels and dependency ownership are non-goals.
 checks with explicit error magnitudes and analytically scaled bounds; claims
 match the APIs actually exercised; single-shot timings and nonexistent SSOT
 references are absent; format, warning-denied Clippy, configured Nextest,
-doctest, Rustdoc, and example execution gates pass; the branch merges through
-green repository CI and leaves one clean `main` worktree.
+doctest, Rustdoc, and example execution gates pass; available hosted review
+checks pass (this repository defines no PR test workflow); the branch merges
+and leaves one clean `main` worktree.
 
-**Current evidence:** both executables pass and report eleven bounded
-observations. Focused example Nextest passes 7/7; warning-denied
-all-target/all-feature Clippy passes; configured all-target/all-feature Nextest
-passes 401/401; doctests pass 8/8; warning-denied Rustdoc passes. The normal
-dependency graph contains neither ndarray nor nalgebra, while the dev graph
-contains the intended oracle edges.
+**Current evidence:** both executables pass against ndarray 0.16.1 and nalgebra
+0.35.0 and report eleven bounded observations. Focused example Nextest passes
+7/7; warning-denied all-target/all-feature Clippy passes; configured
+all-target/all-feature Nextest passes 688/688; doctests pass 8/8;
+warning-denied Rustdoc passes. The normal dependency graph contains neither
+ndarray nor nalgebra, while the dev graph contains the intended oracle edges.
+Greptile's single P2 version-alignment finding was fixed and resolved on PR
+#69; no repository PR test workflow exists.
 
 ## LETO-PYTHON-RELEASE-1 — Python release wheels [patch, in progress]
 

@@ -13,13 +13,15 @@
 - [x] Synchronize README and completeness evidence without duplicating the
       canonical test ownership.
 - [x] Run focused example execution and proportional repository gates.
-- [ ] Publish, review, merge through green CI, and remove the branch.
+- [x] Publish as PR #69, resolve the single hosted review finding, merge, and
+      remove the branch after the locally authoritative gates pass.
 
 **Evidence:** both examples execute eleven bounded value differentials;
 focused example Nextest passes 7/7; warning-denied all-target/all-feature
-Clippy passes; configured all-target/all-feature Nextest passes 401/401;
-doctests pass 8/8; warning-denied Rustdoc passes; and dependency-edge scans
-isolate ndarray/nalgebra to dev-only oracle ownership.
+Clippy passes; configured all-target/all-feature Nextest passes 688/688;
+doctests pass 8/8; warning-denied Rustdoc passes; ndarray 0.16.1 and nalgebra
+0.35.0 are isolated to dev-only oracle ownership. The repository defines no PR
+test workflow; Greptile's single P2 finding was fixed and resolved.
 
 ## LETO-PYTHON-RELEASE-1 [patch] — Owner: Codex `/root`
 
