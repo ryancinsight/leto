@@ -21,6 +21,18 @@ contention make that row non-actionable until a quiet-host rerun. Provider
 gates pass: 306/306 Nextest, 8/8 doctests, warning-denied Clippy/Rustdoc,
 format, and diff checks.
 
+## LETO-MATMUL-PERF-1 [minor] — Owner: Codex `/root` (in progress)
+
+- [ ] Establish a quiet-host, counterbalanced dense matmul baseline against
+      ndarray at 64×64, 128×128, and 256×256 before changing production code.
+- [ ] Profile the current row/block/column kernel and cache-topology decision;
+      reject any tile, packing, dispatch, or allocation change without a
+      statistically significant value-preserving improvement.
+- [ ] If the profile identifies a complete provider-owned fix, implement it
+      in the canonical matmul module with differential tests and synchronized
+      benchmark/PM evidence; otherwise close this item as an evidence-only
+      audit with the measured blocker and no speculative rewrite.
+
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 
 - [x] Add the provider-owned `ArrayView1` sparse-LU solve seam and preserve

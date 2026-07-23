@@ -583,8 +583,12 @@ no unmeasured "optimization" per performance_engineering.
   once the row/block/column tile policy is benchmarked across matrix sizes.
   Current 0.18.1 row block is a fixed L2-fit const-generic specialization, not
   runtime topology selection.
-- [ ] [minor] Close dense matmul oracle performance parity before any
-  replacement claim: 0.19.7 fused multi-row AXPY improves Leto but still trails
+- [ ] [minor] `LETO-MATMUL-PERF-1`: Close dense matmul oracle performance
+  parity before any replacement claim. **Owner:** Codex `/root` (in progress).
+  **Claimed files:** `crates/leto-ops/src/application/matrix.rs`,
+  `crates/leto-ops/benches/kernels.rs`, `benchmark_results.md`,
+  `gap_audit.md`, and `checklist.md`.
+  The 0.19.7 fused multi-row AXPY improves Leto but still trails
   ndarray/nalgebra at 64x64, 128x128, and 256x256. Current medians:
   Leto 17.430 µs / 108.98 µs / 1.0631 ms; ndarray 8.4923 µs / 66.527 µs /
   495.95 µs; nalgebra 8.7752 µs / 62.935 µs / 505.35 µs. Investigate
