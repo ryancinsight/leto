@@ -608,6 +608,19 @@ no unmeasured "optimization" per performance_engineering.
   27.483/223.69/1.8522 ms. The current parallel threshold remains the measured
   better policy. Flamegraph collection is blocked by missing Windows dtrace
   and administrator-only blondie; no speculative production rewrite landed.
+- [ ] [patch] `LETO-STRIDED-REDUCE-1`: Reduce the overhead of the genuinely
+  non-unit-stride whole-array reduction fallback without copying the view.
+  **Owner:** Codex `/root` (in progress). **Claimed files:**
+  `crates/leto-ops/src/application/reduction.rs`,
+  `crates/leto-ops/tests/ops/reduction.rs`,
+  `crates/leto-ops/benches/kernels.rs`, `benchmark_results.md`,
+  `gap_audit.md`, and `checklist.md`. Acceptance: one canonical generic
+  fallback preserves logical values and the existing reduction contract for
+  positive and negative strides, performs no allocation or materialization,
+  and shows a value-preserving benchmark improvement for the existing
+  `sum_strided_step2_256x256` case; if the measured result is not positive,
+  close with evidence and retain the current implementation. Do not add a
+  second scalar-type or operation-specific kernel.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted

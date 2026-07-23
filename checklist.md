@@ -41,6 +41,16 @@ parallel `23.597 µs` versus serial `27.483 µs` at 64×64; serial is also
 blocked by missing Windows `dtrace` and administrator-only `blondie`. No
 production change is justified; future matmul work requires a working profile.
 
+## LETO-STRIDED-REDUCE-1 [patch] — Owner: Codex `/root` (in progress)
+
+- [ ] Establish the current `sum_strided_step2_256x256` baseline and inspect
+      the fallback's allocation and memory-access behavior.
+- [ ] Implement one generic, zero-copy reduction fallback only if the
+      measured model identifies a real loop-overhead or dependency-chain
+      defect; preserve positive/negative stride value semantics.
+- [ ] Add focused regression coverage and update the benchmark/gap evidence;
+      otherwise close this item as evidence-only with the blocker recorded.
+
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 
 - [x] Add the provider-owned `ArrayView1` sparse-LU solve seam and preserve
