@@ -56,8 +56,10 @@ The `Crates.io Release` workflow validates a named workspace package on manual
 dispatch. After that package's required first release is published locally and
 its crates.io Trusted Publisher is registered, a GitHub Release tagged
 `crate-<package>-v<version>` packages, verifies, and publishes the matching
-Cargo version with a short-lived OIDC token. `leto-python` remains a wheel-only
-artifact and is marked `publish = false` for crates.io.
+Cargo version with a short-lived OIDC token. Validation runs in a separate
+read-only job. The publish job is bound to the GitHub `crates-io` environment;
+register each package's Trusted Publisher with that environment. `leto-python`
+remains a wheel-only artifact and is marked `publish = false` for crates.io.
 
 ## Core API
 
