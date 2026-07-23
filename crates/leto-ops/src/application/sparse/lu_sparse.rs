@@ -52,7 +52,7 @@
 use crate::application::linalg::lu::lu_decompose;
 use crate::application::sparse::csc::CscMatrix;
 use crate::application::sparse::csr::CsrMatrix;
-use crate::application::sparse::lu_numeric::{factor_numeric, NumericLu};
+use crate::application::sparse::lu_numeric::factor_numeric;
 use crate::application::sparse::lu_symbolic::{factor_symbolic, SymbolicLu};
 use crate::domain::real::RealScalar;
 use leto::{Array1, Array2, ArrayView1, LetoError, Result};
