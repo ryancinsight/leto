@@ -6,6 +6,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Added
+
+- [minor] Add `SparseLuSolver::solve_view`, which accepts a native Leto
+  `ArrayView1` and returns an owned `Array1` solution. Consumers can preserve
+  their existing array storage across the sparse-LU boundary without staging
+  the right-hand side or copying the returned solution through `Vec`.
+
 ## 0.40.0 - 2026-07-21
 
 ### Removed

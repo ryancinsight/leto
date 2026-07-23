@@ -2,16 +2,16 @@
 
 **Target version: 0.40.0** · **Phase: Closure**
 
-## LETO-SPARSE-LU-VIEW-1 [patch] — Owner: Codex `/root`
+## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 
-- [ ] Add the provider-owned `ArrayView1` sparse-LU solve seam and preserve
+- [x] Add the provider-owned `ArrayView1` sparse-LU solve seam and preserve
       the legacy slice API through that canonical implementation.
-- [ ] Add generic value-semantic provider coverage for the view path.
-- [ ] Convert the `CFDrs` direct solver to pass an `Array1` view and return the
+- [x] Add generic value-semantic provider coverage for the view path.
+- [x] Convert the `CFDrs` direct solver to pass an `Array1` view and return the
       provider-owned solution directly.
-- [ ] Synchronize the provider/consumer Rustdoc, changelog, and active PM
+- [x] Synchronize the provider/consumer Rustdoc, changelog, and active PM
       evidence with the allocation ownership boundary.
-- [ ] Pass format, warning-denied checks, configured Nextest, doctest, and
+- [x] Pass format, warning-denied checks, configured Nextest, doctest, and
       Rustdoc gates for both affected repositories.
 - [ ] Commit and publish the provider and consumer increments, then integrate
       the exact upstream revision in `CFDrs`.
