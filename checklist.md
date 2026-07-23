@@ -62,14 +62,21 @@ coverage. After removal, the unchanged implementation measured `28.226 µs`
 [27.481, 28.889] in a 20-sample run; an intervening run measured `31.633 µs`
 [30.099, 33.701]. The spread is not attributed to the candidate.
 
-## LETO-EXTERNAL-ORACLE-1 [arch] — Owner: Codex `/root` (in progress)
+## LETO-EXTERNAL-ORACLE-1 [arch] — Owner: Codex `/root` (complete)
 
-- [ ] Verify normal dependency ownership and enumerate active dev-only oracle
+- [x] Verify normal dependency ownership and enumerate active dev-only oracle
       imports, examples, and benchmark rows.
-- [ ] Reconcile the stale removal plan with the current independent evidence
+- [x] Reconcile the stale removal plan with the current independent evidence
       harnesses; do not delete active comparisons without an equivalent oracle.
-- [ ] Synchronize the backlog and gap audit, then run the graph and focused
+- [x] Synchronize the backlog and gap audit, then run the graph and focused
       documentation gates.
+
+**Evidence:** normal dependency graph has zero `ndarray`, `ndarray-rand`, and
+`nalgebra` edges; the dev graph resolves `ndarray 0.16.1`, `ndarray-rand 0.15.0`,
+and `nalgebra 0.35.0`. Seven active source files use these crates for
+independent tests, examples, and benchmark comparisons. The stale removal
+plan is closed without deleting verification evidence or changing production
+ownership.
 
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 

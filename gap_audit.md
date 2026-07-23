@@ -1,5 +1,27 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-23 Oracle ownership reconciliation
+
+- **Finding:** the backlog still claimed that legacy `ndarray`/`nalgebra`
+  oracle code should be removed, but current parity examples and differential
+  tests actively use those crates as independent value-semantic references.
+  `ndarray`, `ndarray-rand`, and `nalgebra` are declared only as dev
+  dependencies in the provider manifest.
+- **Evidence:** `cargo tree --locked -p leto-ops --no-default-features
+  --edges normal` contains no `ndarray`, `ndarray-rand`, or `nalgebra` edge.
+  The dev graph resolves `ndarray 0.16.1`, `ndarray-rand 0.15.0`, and
+  `nalgebra 0.35.0`. Active source references are limited to seven files:
+  `crates/leto-ops/benches/kernels.rs`, the two parity examples, and four
+  differential/parity test modules.
+- **Resolution:** close `LETO-EXTERNAL-ORACLE-1` as an ownership
+  reconciliation. Retain the independent dev-only oracle boundary and its
+  useful benchmark rows; deleting it without equivalent analytical or
+  published-reference coverage would weaken verification and violate the
+  evidence requirement.
+- **Limit:** this proves dependency direction and current oracle ownership,
+  not complete parity across every provider operation. New removal work needs
+  an explicit replacement oracle per operation family.
+
 ## 2026-07-23 Dense matmul parity audit
 
 - **Finding:** the historical 0.19.7 oracle rows marked dense matmul as slower

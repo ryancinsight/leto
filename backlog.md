@@ -199,9 +199,9 @@ warning-denied all-target/all-feature Clippy; Nextest 305/305; doctest 8/8;
 warning-denied rustdoc; 196/196 applicable SemVer checks. Merged as PR #42
 (`cf47686`).
 
-## LETO-EXTERNAL-ORACLE-1 — Reconcile legacy oracle ownership [arch, in progress]
+## LETO-EXTERNAL-ORACLE-1 — Reconcile legacy oracle ownership [arch, done]
 
-**Owner:** Codex `/root`
+**Owner:** Codex `/root` (complete)
 
 **Claimed files:** `backlog.md`, `checklist.md`, `gap_audit.md`,
 `crates/leto-ops/Cargo.toml`, and the current oracle import sites.
@@ -217,6 +217,13 @@ and benchmark roles; retain independent value-semantic evidence where no
 analytical replacement exists; and update this item so it no longer claims
 that active oracle code is obsolete. No compatibility wrapper or production
 dependency is introduced.
+
+**Evidence:** the normal `leto-ops` graph has no `ndarray`, `ndarray-rand`, or
+`nalgebra` edge. The dev graph resolves `ndarray 0.16.1`, `ndarray-rand 0.15.0`,
+and `nalgebra 0.35.0`. Active references are limited to seven source files:
+the `kernels.rs` benchmark, `ndarray_parity.rs`, `nalgebra_parity.rs`, and
+four differential/parity test modules. The previous removal target was stale;
+the active independent oracle boundary is intentional and remains dev-only.
 
 ## LETO-SPARSE-DUPLICATE-1 — Sparse conversion contract [patch, done]
 
