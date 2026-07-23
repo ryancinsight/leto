@@ -15,6 +15,21 @@ fn test_sum_reduction() {
 }
 
 #[test]
+fn whole_reduction_preserves_non_unit_stride_values() {
+    let input = Array::from_shape_vec(
+        [2, 4],
+        vec![1.0f64, 100.0, 2.0, 200.0, 3.0, 300.0, 4.0, 400.0],
+    )
+    .unwrap();
+    let selected = input
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(Some(0), None, 2)])
+        .unwrap();
+
+    assert_eq!(sum(&selected), 10.0);
+}
+
+#[test]
 fn test_axis_reductions_keep_reduced_dimension() {
     let layout = Layout::c_contiguous([2, 3]).unwrap();
     let input = Array::new(

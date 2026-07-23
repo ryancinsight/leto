@@ -62,6 +62,27 @@ coverage run. Concurrent Cargo builds and outliers make that row unsuitable
 for a speedup claim; rerun on a quiet, counterbalanced host before changing a
 production kernel.
 
+## Non-unit-stride reduction audit (2026-07-23)
+
+The quiet baseline command was `rustup run nightly cargo bench --locked
+-p leto-ops --bench kernels --all-features
+"reductions/sum_(contiguous_256x256|strided_step2_256x256)" -- --noplot`.
+The candidate used one generic, order-preserving four-way loop in the existing
+zero-copy fallback and was removed after the controlled comparison.
+
+| Benchmark | Baseline median | Candidate median | Result |
+| --- | ---: | ---: | --- |
+| reductions/sum_contiguous_256x256 | 4.1184 µs | 4.6830 µs | candidate control regression in run |
+| reductions/sum_strided_step2_256x256 | 28.849 µs | 27.793 µs | `p = 0.06`; no significant improvement |
+
+The candidate did not justify a production change. The retained fallback
+borrows the source storage and performs no materialization; the added
+value-semantic test covers the selected step-2 logical values. After removing
+the candidate, the unchanged implementation measured `28.226 µs`
+[27.481, 28.889] in a 20-sample run; an intervening 10-sample run measured
+`31.633 µs` [30.099, 33.701]. This spread is recorded as host/run variance,
+not as a production regression or speedup claim.
+
 ## Dense matmul parity audit (2026-07-23)
 
 Commands: `rustup run nightly cargo bench --locked -p leto-ops --bench

@@ -41,15 +41,26 @@ parallel `23.597 µs` versus serial `27.483 µs` at 64×64; serial is also
 blocked by missing Windows `dtrace` and administrator-only `blondie`. No
 production change is justified; future matmul work requires a working profile.
 
-## LETO-STRIDED-REDUCE-1 [patch] — Owner: Codex `/root` (in progress)
+## LETO-STRIDED-REDUCE-1 [patch] — Owner: Codex `/root` (complete)
 
-- [ ] Establish the current `sum_strided_step2_256x256` baseline and inspect
+- [x] Establish the current `sum_strided_step2_256x256` baseline and inspect
       the fallback's allocation and memory-access behavior.
-- [ ] Implement one generic, zero-copy reduction fallback only if the
+- [x] Implement one generic, zero-copy reduction fallback only if the
       measured model identifies a real loop-overhead or dependency-chain
       defect; preserve positive/negative stride value semantics.
-- [ ] Add focused regression coverage and update the benchmark/gap evidence;
+- [x] Add focused regression coverage and update the benchmark/gap evidence;
       otherwise close this item as evidence-only with the blocker recorded.
+
+**Evidence:** the quiet baseline measured `sum_strided_step2_256x256` at
+`28.849 µs` [28.408, 29.110]. An order-preserving four-way generic loop
+candidate measured `27.793 µs` [27.052, 28.853], `p = 0.06`, which is not a
+significant improvement; the same candidate run moved the contiguous control
+to `4.683 µs` [4.4823, 4.8297] from `4.1184 µs` [4.0946, 4.1298]. The helper
+was removed. The zero-copy row-walk implementation remains canonical, and
+`whole_reduction_preserves_non_unit_stride_values` adds value-semantic
+coverage. After removal, the unchanged implementation measured `28.226 µs`
+[27.481, 28.889] in a 20-sample run; an intervening run measured `31.633 µs`
+[30.099, 33.701]. The spread is not attributed to the candidate.
 
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 

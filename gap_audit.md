@@ -55,6 +55,31 @@
   warning-denied package Rustdoc, package format check, and `git diff --check`
   pass. The benchmark target is the only source file changed.
 
+## 2026-07-23 Non-unit-stride reduction audit
+
+- **Finding:** the existing whole-array reduction fallback already walks the
+  borrowed view directly, so it performs no copy or temporary allocation. Its
+  remaining cost is scalar loop/index work for a non-unit last-axis stride;
+  the canonical `sum_strided_step2_256x256` case measured `28.849 µs`
+  [28.408, 29.110] on a quiet host.
+- **Experiment:** an order-preserving four-way generic loop was evaluated in
+  the canonical reduction module. It measured `27.793 µs` [27.052, 28.853]
+  versus the baseline with `p = 0.06`, which is not a significant improvement.
+  The contiguous control moved from `4.1184 µs` [4.0946, 4.1298] to
+  `4.6830 µs` [4.4823, 4.8297] in the candidate run, so the candidate was
+  removed rather than retained as speculative optimization.
+- **Resolution:** retain the existing zero-copy row-walk implementation and
+  add `whole_reduction_preserves_non_unit_stride_values` to pin the selected
+  logical values. No allocation, scalar-type fork, or operation-specific
+  duplicate was introduced.
+- **Limit:** no call-stack profile was available on this Windows session;
+  future strided reduction work requires a working profiler or an independent
+  measured kernel model before changing the production traversal. A post-revert
+  20-sample run of the unchanged implementation measured `28.226 µs`
+  [27.481, 28.889], while an intervening 10-sample run measured `31.633 µs`
+  [30.099, 33.701]; this run-to-run spread prevents attribution of small
+  deltas to the removed candidate.
+
 ## 2026-07-22 Sparse LU native-view boundary
 
 - **Finding:** `SparseLuSolver::solve` only accepted `&[T]` and returned
