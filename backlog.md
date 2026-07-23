@@ -1,5 +1,26 @@
 # Leto Work Backlog
 
+## LETO-SPARSE-LU-VIEW-1 — Preserve native RHS views at the sparse-LU seam [patch, in progress]
+
+**Owner:** Codex `/root`
+
+**Scope:** `leto-ops` sparse direct-solver input-view API, its value-semantic
+regression coverage, Rustdoc, and the downstream `CFDrs` direct-solver call
+site. Non-goals: changing the dense-backed LU algorithm, sparse matrix
+storage, pivot policy, or the legacy slice-returning API.
+
+**Acceptance:** the provider exposes one `ArrayView1`-based solve path that
+validates the existing size and shape contracts, the `CFDrs` consumer passes
+its native `Array1` view without an intermediate RHS or solution `Vec`, and
+provider plus consumer tests preserve exact value semantics for supported
+`f32`/`f64` solves. Warning-denied format, check, Clippy, configured Nextest,
+doctest, and Rustdoc gates pass on the exact revisions. No compatibility
+adapter or concrete-precision duplicate is introduced.
+
+**Claimed files:** `crates/leto-ops/src/application/sparse/lu_sparse.rs`,
+`crates/leto-ops/src/application/sparse/mod.rs`, and the corresponding
+`CFDrs` direct-solver source, tests, and active PM entries.
+
 ## LETO-PARITY-HARNESS-1 — Runnable migration evidence [patch, complete]
 
 **Owner:** Codex `/root/implement_horae` (stale-claim takeover at
