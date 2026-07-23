@@ -5,6 +5,10 @@
 //! path exists. Kernels are generic over `RealScalar` and run in native
 //! precision per the `Scalar` contract.
 
+/// Complex linear algebra: solve and inverse for `Array2<Complex<f64>>`.
+pub mod complex_linalg;
+/// Hermitian eigensolver (Jacobi and implicit QR with Wilkinson shift).
+pub mod hermitian;
 /// Golub–Kahan bidiagonalization via two-sided Householder reflectors.
 pub mod bidiagonal;
 /// Symmetric-indefinite Bunch–Kaufman `P A Pᵀ = L D Lᵀ` factorization.
@@ -23,6 +27,8 @@ pub mod full_piv_lu;
 pub mod hessenberg;
 /// Shared Householder reflector primitive (SSOT for orthogonal transforms).
 pub(crate) mod householder;
+/// Iterative solvers (CG, BiCGSTAB, GMRES, LSQR) and preconditioners.
+pub mod iterative;
 /// LU decomposition with partial pivoting, solve, determinant, inverse.
 pub mod lu;
 /// Batched LU decomposition over a stack of square matrices.
@@ -82,3 +88,19 @@ pub use svd::{
     svd_rank_revealing_with_tolerance, svd_via_bidiagonal, SvdDecomposition,
 };
 pub use udu::{udu_decompose, UduDecomposition};
+
+/// Iterative solvers (SSOT re-export).
+pub use iterative::{
+    BiCGSTAB, Configurable, ConvergenceMonitor, ConjugateGradient, IdentityPreconditioner,
+    ILUPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
+    LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason, Preconditioner,
+    GMRES,
+};
+
+/// Complex linear algebra (re-export).
+pub use complex_linalg::{complex_inv, complex_solve};
+
+/// Hermitian eigensolvers (re-export).
+pub use hermitian::{
+    hermitian_eigen_jacobi, hermitian_eigen_qr, HermitianEigenConfig, HermitianEigenResult,
+};

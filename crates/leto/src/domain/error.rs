@@ -66,6 +66,21 @@ pub enum LetoError {
         /// The convergence tolerance that was not met.
         tol: f64,
     },
+
+    /// An invalid input or configuration was supplied to an operation or solver.
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
+    /// A numerical breakdown condition was detected (e.g., near-zero denominator, NaN).
+    #[error("Numerical breakdown: {0}")]
+    NumericalBreakdown(String),
+
+    /// The matrix is not positive definite (required for Cholesky / CG).
+    #[error("Matrix is not positive definite: {detail}")]
+    NotPositiveDefinite {
+        /// Explanation of the condition detected.
+        detail: String,
+    },
 }
 
 /// A specialized Result alias for Leto operations.

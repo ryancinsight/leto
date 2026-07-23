@@ -30,6 +30,5 @@ mnemosyne-memory = ["mnemosyne-alloc"]
 serde = ["dep:serde"]
 
 [dev-dependencies]
-ndarray = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }

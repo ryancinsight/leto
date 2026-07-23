@@ -53,7 +53,9 @@ mod coo;
 mod csc;
 mod csc_spmv;
 mod csr;
+mod lu_numeric;
 mod lu_sparse;
+mod lu_symbolic;
 mod spgemm;
 mod spmm;
 mod spmv;
@@ -62,7 +64,11 @@ pub use coo::CooMatrix;
 pub use csc::{CscColumn, CscMatrix};
 pub use csc_spmv::{csc_spmv, csc_spmv_into};
 pub use csr::{CsrMatrix, CsrRow};
+pub use lu_numeric::{factor_numeric, NumericLu};
 pub use lu_sparse::{csr_to_dense, sparse_lu_solve, SparseLuSolver, DENSE_LIMIT_DEFAULT};
+pub use lu_symbolic::{factor_symbolic, SymbolicLu};
 pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into};
 pub use spmv::{spmv, spmv_into};
+
+

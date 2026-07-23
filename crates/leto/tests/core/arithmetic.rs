@@ -1,7 +1,6 @@
-//! Value-semantic + ndarray-differential tests for elementwise operators (ADR 0004).
+//! Value-semantic tests for elementwise operators (ADR 0004).
 
 use leto::{Array2, Storage};
-use ndarray::Array2 as NdArray2;
 
 fn assert_reduced_precision_scalar_arithmetic<T>()
 where
@@ -34,39 +33,71 @@ fn leto_pair() -> (Array2<f64>, Array2<f64>) {
     (a, b)
 }
 
-fn nd_pair() -> (NdArray2<f64>, NdArray2<f64>) {
-    let a = NdArray2::from_shape_vec((3, 4), seq(12, 0.5, 1.0)).unwrap();
-    let b = NdArray2::from_shape_vec((3, 4), seq(12, 0.25, 2.0)).unwrap();
-    (a, b)
+/// Reference elementwise add using plain Rust loops (replaces external oracle).
+fn ref_add(a: &[f64], b: &[f64]) -> Vec<f64> {
+    a.iter().zip(b.iter()).map(|(x, y)| x + y).collect()
+}
+
+fn ref_sub(a: &[f64], b: &[f64]) -> Vec<f64> {
+    a.iter().zip(b.iter()).map(|(x, y)| x - y).collect()
+}
+
+fn ref_mul(a: &[f64], b: &[f64]) -> Vec<f64> {
+    a.iter().zip(b.iter()).map(|(x, y)| x * y).collect()
+}
+
+fn ref_div(a: &[f64], b: &[f64]) -> Vec<f64> {
+    a.iter().zip(b.iter()).map(|(x, y)| x / y).collect()
+}
+
+fn ref_scalar_add(a: &[f64], s: f64) -> Vec<f64> {
+    a.iter().map(|x| x + s).collect()
+}
+
+fn ref_scalar_sub(a: &[f64], s: f64) -> Vec<f64> {
+    a.iter().map(|x| x - s).collect()
+}
+
+fn ref_scalar_mul(a: &[f64], s: f64) -> Vec<f64> {
+    a.iter().map(|x| x * s).collect()
+}
+
+fn ref_scalar_div(a: &[f64], s: f64) -> Vec<f64> {
+    a.iter().map(|x| x / s).collect()
+}
+
+fn ref_neg(a: &[f64]) -> Vec<f64> {
+    a.iter().map(|x| -x).collect()
 }
 
 #[test]
-fn array_array_operators_match_ndarray() {
+fn array_array_operators_match_reference() {
     let (la, lb) = leto_pair();
-    let (na, nb) = nd_pair();
+    let a_slice = la.storage().as_slice();
+    let b_slice = lb.storage().as_slice();
 
     assert_eq!(
         (&la + &lb).storage().as_slice(),
-        (&na + &nb).as_slice().unwrap()
+        ref_add(a_slice, b_slice)
     );
     assert_eq!(
         (&la - &lb).storage().as_slice(),
-        (&na - &nb).as_slice().unwrap()
+        ref_sub(a_slice, b_slice)
     );
     assert_eq!(
         (&la * &lb).storage().as_slice(),
-        (&na * &nb).as_slice().unwrap()
+        ref_mul(a_slice, b_slice)
     );
     assert_eq!(
         (&la / &lb).storage().as_slice(),
-        (&na / &nb).as_slice().unwrap()
+        ref_div(a_slice, b_slice)
     );
 }
 
 #[test]
 fn mul_is_elementwise_not_matmul() {
-    // `*` is the Hadamard product: shape is preserved and each element is the
-    // product of the corresponding inputs (ndarray semantics, ADR 0004).
+    //  is the Hadamard product: shape is preserved and each element is the
+    // product of the corresponding inputs (ADR 0004).
     let a = Array2::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
     let b = Array2::from_shape_vec([2, 2], vec![5.0, 6.0, 7.0, 8.0]).unwrap();
     let c = &a * &b;
@@ -75,25 +106,25 @@ fn mul_is_elementwise_not_matmul() {
 }
 
 #[test]
-fn scalar_operators_match_ndarray() {
+fn scalar_operators_match_reference() {
     let (la, _) = leto_pair();
-    let (na, _) = nd_pair();
+    let a_slice = la.storage().as_slice();
 
     assert_eq!(
         (&la + 2.0).storage().as_slice(),
-        (&na + 2.0).as_slice().unwrap()
+        ref_scalar_add(a_slice, 2.0)
     );
     assert_eq!(
         (&la - 1.5).storage().as_slice(),
-        (&na - 1.5).as_slice().unwrap()
+        ref_scalar_sub(a_slice, 1.5)
     );
     assert_eq!(
         (&la * 3.0).storage().as_slice(),
-        (&na * 3.0).as_slice().unwrap()
+        ref_scalar_mul(a_slice, 3.0)
     );
     assert_eq!(
         (&la / 2.0).storage().as_slice(),
-        (&na / 2.0).as_slice().unwrap()
+        ref_scalar_div(a_slice, 2.0)
     );
 }
 
@@ -104,20 +135,23 @@ fn eunomia_reduced_precision_types_are_scalar_operands() {
 }
 
 #[test]
-fn neg_matches_ndarray() {
+fn neg_matches_reference() {
     let (la, _) = leto_pair();
-    let (na, _) = nd_pair();
-    assert_eq!((-&la).storage().as_slice(), (-&na).as_slice().unwrap());
+    assert_eq!(
+        (-&la).storage().as_slice(),
+        ref_neg(la.storage().as_slice())
+    );
 }
 
 #[test]
 fn operators_compose() {
-    // `-(&a * 2.0 + &b)` exercises chaining of scalar, binary, and unary ops.
+    //  exercises chaining of scalar, binary, and unary ops.
     let (la, lb) = leto_pair();
-    let (na, nb) = nd_pair();
+    let a_slice = la.storage().as_slice();
+    let b_slice = lb.storage().as_slice();
     let leto = -&(&(&la * 2.0) + &lb);
-    let nd = -&(&(&na * 2.0) + &nb);
-    assert_eq!(leto.storage().as_slice(), nd.as_slice().unwrap());
+    let expected = ref_neg(&ref_add(&ref_scalar_mul(a_slice, 2.0), b_slice));
+    assert_eq!(leto.storage().as_slice(), &expected);
 }
 
 #[test]
