@@ -62,6 +62,15 @@ coverage. After removal, the unchanged implementation measured `28.226 µs`
 [27.481, 28.889] in a 20-sample run; an intervening run measured `31.633 µs`
 [30.099, 33.701]. The spread is not attributed to the candidate.
 
+## LETO-EXTERNAL-ORACLE-1 [arch] — Owner: Codex `/root` (in progress)
+
+- [ ] Verify normal dependency ownership and enumerate active dev-only oracle
+      imports, examples, and benchmark rows.
+- [ ] Reconcile the stale removal plan with the current independent evidence
+      harnesses; do not delete active comparisons without an equivalent oracle.
+- [ ] Synchronize the backlog and gap audit, then run the graph and focused
+      documentation gates.
+
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 
 - [x] Add the provider-owned `ArrayView1` sparse-LU solve seam and preserve

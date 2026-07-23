@@ -199,19 +199,24 @@ warning-denied all-target/all-feature Clippy; Nextest 305/305; doctest 8/8;
 warning-denied rustdoc; 196/196 applicable SemVer checks. Merged as PR #42
 (`cf47686`).
 
-## LETO-EXTERNAL-ORACLE-1 — Retire legacy oracle crates [arch, todo]
+## LETO-EXTERNAL-ORACLE-1 — Reconcile legacy oracle ownership [arch, in progress]
 
-**Owner:** unclaimed
+**Owner:** Codex `/root`
 
-**Scope:** `leto-ops` test and benchmark dependencies only. Production graph
-ownership is already clean.
+**Claimed files:** `backlog.md`, `checklist.md`, `gap_audit.md`,
+`crates/leto-ops/Cargo.toml`, and the current oracle import sites.
 
-**Acceptance:** remove nalgebra from 14 test/benchmark files and ndarray from
-six without weakening differential evidence. Each decomposition oracle must be
-replaced by an independent analytical identity, published reference case, or
-property/finite-residual contract before deleting the external comparison.
-Remove obsolete nalgebra/ndarray benchmark rows while retaining Leto-native
-measurements and stored baselines.
+**Scope:** reconcile the stale removal plan against the current `leto-ops`
+test, benchmark, example, manifest, and normal dependency graph. Production
+graph ownership and the retained independent oracle role are in scope;
+deleting active evidence is not.
+
+**Acceptance:** prove that `ndarray`, `ndarray-rand`, and `nalgebra` do not enter
+the normal dependency graph; enumerate their active dev-only tests, examples,
+and benchmark roles; retain independent value-semantic evidence where no
+analytical replacement exists; and update this item so it no longer claims
+that active oracle code is obsolete. No compatibility wrapper or production
+dependency is introduced.
 
 ## LETO-SPARSE-DUPLICATE-1 — Sparse conversion contract [patch, done]
 
