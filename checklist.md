@@ -2,6 +2,17 @@
 
 **Target version: 0.40.0** · **Phase: Closure**
 
+## LETO-KERNEL-BENCHMARKS-1 [patch] — Owner: Codex `/root` (in progress)
+
+- [ ] Extend the canonical `leto-ops` Criterion harness so elementwise,
+      reduction, and matmul groups each expose a contiguous baseline and a
+      genuinely strided fallback case without changing the timed workload.
+- [ ] Record the benchmark design, exact commands, and result limits in the
+      matching `gap_audit.md` entry; do not claim a production optimization
+      until a controlled baseline comparison identifies one.
+- [ ] Pass the package format, warning-denied check/Clippy, configured
+      Nextest, doctest, and Rustdoc gates for the benchmark target.
+
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 
 - [x] Add the provider-owned `ArrayView1` sparse-LU solve seam and preserve
