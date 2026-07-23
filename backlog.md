@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## LETO-SPARSE-LU-VIEW-1 — Preserve native RHS views at the sparse-LU seam [minor, in progress]
+## LETO-SPARSE-LU-VIEW-1 — Preserve native RHS views at the sparse-LU seam [minor, complete]
 
 **Owner:** Codex `/root`
 
@@ -22,10 +22,11 @@ adapter or concrete-precision duplicate is introduced.
 `CFDrs` direct-solver source, tests, and active PM entries.
 
 **Current evidence:** provider check, warning-denied all-target Clippy, focused
-sparse Nextest (29/29), doctests (8/8), and Rustdoc pass. Consumer integration
-is implemented and passes its focused check, lib Clippy, direct-solver Nextest
-(4/4), doctest, and Rustdoc gates against the local provider source. Hosted
-integration and public-surface SemVer classification remain open.
+sparse Nextest (29/29), doctests (8/8), Rustdoc, and public-surface SemVer
+classification (196/196 checks, 57 skipped) pass. Consumer integration passes
+its focused check, lib Clippy, direct-solver Nextest (4/4), doctest, and
+Rustdoc gates against merged Leto `b24fc860864abad84af3118aa2bb27c32bb81265`.
+Leto PR #70 and CFDrs PR #309 are merged; Atlas pins both merged child heads.
 
 ## LETO-PARITY-HARNESS-1 — Runnable migration evidence [patch, complete]
 

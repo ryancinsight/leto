@@ -13,7 +13,7 @@
       evidence with the allocation ownership boundary.
 - [x] Pass format, warning-denied checks, configured Nextest, doctest, and
       Rustdoc gates for both affected repositories.
-- [ ] Commit and publish the provider and consumer increments, then integrate
+- [x] Commit and publish the provider and consumer increments, then integrate
       the exact upstream revision in `CFDrs`.
 
 ## LETO-PARITY-HARNESS-1 [patch] — Owner: Codex `/root/implement_horae`
