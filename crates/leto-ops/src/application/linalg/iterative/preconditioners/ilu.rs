@@ -49,14 +49,10 @@ impl<T: RealField + FloatElement + Copy + LetoScalar> ILUPreconditioner<T> {
 
         // Build diagonal-position lookup.
         let mut diag_positions = vec![0usize; n];
-        for row in 0..n {
-            let start = row_offsets[row];
+        for (row, &start) in row_offsets.iter().enumerate().take(n) {
             let end = row_offsets[row + 1];
-            for k in start..end {
-                if col_indices[k] == row {
-                    diag_positions[row] = k;
-                    break;
-                }
+            if let Some(pos) = col_indices[start..end].iter().position(|&c| c == row) {
+                diag_positions[row] = start + pos;
             }
         }
 

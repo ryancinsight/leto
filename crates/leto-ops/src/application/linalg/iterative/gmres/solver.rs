@@ -100,6 +100,7 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
 
     /// Create with default configuration and `restart_dim = 30`.
     #[must_use]
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self {
         Self::new(IterativeSolverConfig::default(), 30)
     }

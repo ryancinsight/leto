@@ -40,6 +40,7 @@ fn vec_norm<T: NumericElement>(work: &Array1<T>, n: usize) -> T {
 ///
 /// # Errors
 /// Returns [`LetoError::InvalidInput`] if preconditioner workspace is missing.
+#[allow(clippy::too_many_arguments)]
 pub fn arnoldi_step<T, Op, P>(
     a: &Op,
     v: &mut KrylovBasis<T>,

@@ -52,6 +52,7 @@ impl<T: RealField + Copy + NumericElement> ConjugateGradient<T> {
 
     /// Create with default configuration.
     #[must_use]
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self
     where
         T: FloatElement,

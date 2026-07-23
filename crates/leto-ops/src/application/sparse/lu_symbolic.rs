@@ -158,8 +158,11 @@ pub fn factor_symbolic<T: Scalar>(csc: &CscMatrix<T>) -> SymbolicLu {
         // 1. Seed reach with column j of A's direct row indices: every
         //    `A[i, j]` is structurally nonzero, so row `i` is in the column-j
         //    pattern. (Merging also marks these rows.)
-        for p in col_ptr[j]..col_ptr[j + 1] {
-            let r = row_indices[p];
+        for &r in row_indices
+            .iter()
+            .take(col_ptr[j + 1])
+            .skip(col_ptr[j])
+        {
             if !marked[r] {
                 marked[r] = true;
                 reach.push(r);
@@ -187,8 +190,11 @@ pub fn factor_symbolic<T: Scalar>(csc: &CscMatrix<T>) -> SymbolicLu {
                 continue; // leaf — no L column k yet (computed only for k < j)
             }
             // Merge L column k's structurally-nonzero rows into the pattern.
-            for lp in l_col_ptr[k]..l_col_ptr[k + 1] {
-                let r = l_row_indices[lp];
+            for &r in l_row_indices
+                .iter()
+                .take(l_col_ptr[k + 1])
+                .skip(l_col_ptr[k])
+            {
                 if !marked[r] {
                     marked[r] = true;
                     reach.push(r);

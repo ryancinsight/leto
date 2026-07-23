@@ -133,10 +133,14 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
         let l_row_indices = &self.symbolic.l_row_indices;
         for j in 0..n {
             let yj = y[j];
-            for p in l_col_ptr[j]..l_col_ptr[j + 1] {
-                let orig_i = l_row_indices[p];
+            for (p, &orig_i) in l_row_indices
+                .iter()
+                .enumerate()
+                .take(l_col_ptr[j + 1])
+                .skip(l_col_ptr[j])
+            {
                 let slot_i = row_inv[orig_i];
-                y[slot_i] = y[slot_i] - self.l_values[p] * yj;
+                y[slot_i] -= self.l_values[p] * yj;
             }
         }
 
@@ -149,18 +153,27 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
         let mut x = y; // reuse buffer; overwritten column by column
         for j in (0..n).rev() {
             // Divide by diagonal U[j,j]  (u_row_indices[p] == j is slot j).
-            for p in u_col_ptr[j]..u_col_ptr[j + 1] {
-                if u_row_indices[p] == j {
-                    x[j] = x[j] / self.u_values[p];
-                    break;
-                }
+            let u_diag = u_row_indices
+                .iter()
+                .enumerate()
+                .take(u_col_ptr[j + 1])
+                .skip(u_col_ptr[j])
+                .find(|(_, &r)| r == j)
+                .map(|(p, _)| p);
+            if let Some(p) = u_diag {
+                x[j] = x[j] / self.u_values[p];
             }
             // Propagate: x[slot_i] -= U[orig_i, j] · x[j] for orig_i < j.
-            for p in u_col_ptr[j]..u_col_ptr[j + 1] {
-                let orig_i = u_row_indices[p];
+            let xj = x[j];
+            for (p, &orig_i) in u_row_indices
+                .iter()
+                .enumerate()
+                .take(u_col_ptr[j + 1])
+                .skip(u_col_ptr[j])
+            {
                 if orig_i < j {
                     let slot_i = row_inv[orig_i];
-                    x[slot_i] = x[slot_i] - self.u_values[p] * x[j];
+                    x[slot_i] -= self.u_values[p] * xj;
                 }
             }
         }
@@ -317,8 +330,7 @@ pub fn factor_numeric<'a, T: RealScalar>(
                 if k >= j {
                     continue; // only fan out from prior columns
                 }
-                for lp in l_col_ptr[k]..l_col_ptr[k + 1] {
-                    let i = l_row_indices[lp];
+                for &i in l_row_indices.iter().take(l_col_ptr[k + 1]).skip(l_col_ptr[k]) {
                     let slot = row_inv[i];
                     if work_mark[slot] != j {
                         work_mark[slot] = j;
@@ -335,10 +347,14 @@ pub fn factor_numeric<'a, T: RealScalar>(
                 continue;
             }
             let u_kj = work[k];
-            for lp in l_col_ptr[k]..l_col_ptr[k + 1] {
-                let i = l_row_indices[lp];
+            for (lp, &i) in l_row_indices
+                .iter()
+                .enumerate()
+                .take(l_col_ptr[k + 1])
+                .skip(l_col_ptr[k])
+            {
                 let slot = row_inv[i];
-                work[slot] = work[slot] - l_values[lp] * u_kj;
+                work[slot] -= l_values[lp] * u_kj;
             }
         }
         // (work_mark is already set for all nonzeros; no additional bookkeeping needed)
@@ -352,8 +368,12 @@ pub fn factor_numeric<'a, T: RealScalar>(
         let mut pivot_slot = j;
         let mut pivot_mag = work[j].abs();
         let mut max_in_col = pivot_mag;
-        for slot in (j + 1)..n {
-            let mag = work[slot].abs();
+        for (slot, &mag) in work
+            .iter()
+            .enumerate()
+            .take(n)
+            .skip(j + 1)
+        {
             if mag > pivot_mag {
                 pivot_mag = mag;
                 pivot_slot = slot;
