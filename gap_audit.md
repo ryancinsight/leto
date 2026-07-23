@@ -1,5 +1,21 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-22 Sparse LU native-view boundary
+
+- **Finding:** `SparseLuSolver::solve` only accepted `&[T]` and returned
+  `Vec<T>`. `CFDrs` therefore copied its native `Array1` right-hand side into
+  a temporary `Vec`, and copied the provider's `Vec` result back into a new
+  `Array1` on every direct solve.
+- **Resolution:** add one provider-owned `solve_view` method over
+  `ArrayView1`, route the legacy slice method through it, and migrate the
+  `CFDrs` consumer to the native view/result contract. The dense-backed LU
+  algorithm and matrix storage remain unchanged.
+- **Evidence target:** provider and consumer value-semantic direct-solve
+  regressions, warning-denied package gates, configured Nextest, doctest,
+  Rustdoc, and public-surface SemVer classification. Allocation reduction is
+  established by the ownership/data-flow audit; no runtime allocation profile
+  is claimed by this change.
+
 ## 2026-07-22 Runnable Migration Evidence
 
 - **Closed evidence gap:** `leto-ops` now owns runnable `ndarray_parity` and

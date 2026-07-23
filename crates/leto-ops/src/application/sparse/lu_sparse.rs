@@ -30,7 +30,7 @@
 use crate::application::linalg::lu::lu_decompose;
 use crate::application::sparse::CsrMatrix;
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, LetoError, Result};
+use leto::{Array1, Array2, ArrayView1, LetoError, Result};
 
 /// Default maximum order for the dense-LU path.
 pub const DENSE_LIMIT_DEFAULT: usize = 2048;
@@ -68,15 +68,7 @@ impl SparseLuSolver {
         size <= self.max_size
     }
 
-    /// Solve `A · x = b` for a sparse square system `A`.
-    ///
-    /// Expands `matrix` to a dense `n × n` buffer and calls the partial-pivoting
-    /// dense LU from `leto-ops`. Returns [`LetoError::StorageError`] when:
-    /// - `n > self.max_size` (system too large — use an iterative solver)
-    /// - `matrix` is not square
-    /// - `rhs.len() != n`
-    /// - `matrix` is singular to the working precision of `T`
-    pub fn solve<T: RealScalar>(&self, matrix: &CsrMatrix<T>, rhs: &[T]) -> Result<Vec<T>> {
+    fn validate<T: RealScalar>(&self, matrix: &CsrMatrix<T>, rhs_len: usize) -> Result<usize> {
         let n = matrix.nrows();
         if matrix.ncols() != n {
             return Err(LetoError::StorageError {
@@ -87,11 +79,10 @@ impl SparseLuSolver {
                 ),
             });
         }
-        if rhs.len() != n {
+        if rhs_len != n {
             return Err(LetoError::StorageError {
                 reason: format!(
-                    "SparseLuSolver: RHS length {} does not match matrix order {n}",
-                    rhs.len()
+                    "SparseLuSolver: RHS length {rhs_len} does not match matrix order {n}"
                 ),
             });
         }
@@ -104,13 +95,53 @@ impl SparseLuSolver {
                 ),
             });
         }
+        Ok(n)
+    }
 
+    /// Solve `A · x = b` from a native Leto one-dimensional view.
+    ///
+    /// The right-hand side remains borrowed through validation and dense LU
+    /// substitution. The returned solution owns only its result storage; no
+    /// consumer-side `Vec` staging is required.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::StorageError`] when the matrix is non-square, the
+    /// right-hand side length does not match the matrix order, or the system
+    /// exceeds `max_size`. Dense LU errors are forwarded unchanged.
+    pub fn solve_view<T: RealScalar>(
+        &self,
+        matrix: &CsrMatrix<T>,
+        rhs: &ArrayView1<'_, T>,
+    ) -> Result<Array1<T>> {
+        self.validate(matrix, rhs.shape()[0])?;
+        self.solve_validated(matrix, rhs)
+    }
+
+    fn solve_validated<T: RealScalar>(
+        &self,
+        matrix: &CsrMatrix<T>,
+        rhs: &ArrayView1<'_, T>,
+    ) -> Result<Array1<T>> {
         let dense = csr_to_dense(matrix);
+        let lu = lu_decompose(&dense.view())?;
+        lu.solve(rhs)
+    }
+
+    /// Solve `A · x = b` for a sparse square system `A`.
+    ///
+    /// Expands `matrix` to a dense `n × n` buffer and calls the partial-pivoting
+    /// dense LU from `leto-ops`. Returns [`LetoError::StorageError`] when:
+    /// - `n > self.max_size` (system too large — use an iterative solver)
+    /// - `matrix` is not square
+    /// - `rhs.len() != n`
+    /// - `matrix` is singular to the working precision of `T`
+    pub fn solve<T: RealScalar>(&self, matrix: &CsrMatrix<T>, rhs: &[T]) -> Result<Vec<T>> {
+        let n = self.validate(matrix, rhs.len())?;
         let rhs_array = Array1::from_shape_vec([n], rhs.to_vec())
             .expect("rhs length verified equal to n above");
 
-        let lu = lu_decompose(&dense.view())?;
-        let x = lu.solve(&rhs_array.view())?;
+        let x = self.solve_validated(matrix, &rhs_array.view())?;
 
         Ok(x.iter().copied().collect())
     }
@@ -170,6 +201,17 @@ mod tests {
         let x = sparse_lu_solve(&a, &b).expect("identity system solves");
         assert!((x[0] - 3.0).abs() < 1e-12, "x[0] = {}", x[0]);
         assert!((x[1] - 7.0).abs() < 1e-12, "x[1] = {}", x[1]);
+    }
+
+    #[test]
+    fn solves_native_array_view() {
+        let a = make_csr(2, 2, &[(0, 0, 3.0), (0, 1, 1.0), (1, 0, 1.0), (1, 1, 2.0)]);
+        let b = Array1::from_shape_vec([2], vec![9.0_f64, 8.0]).expect("RHS shape");
+        let x = SparseLuSolver::default()
+            .solve_view(&a, &b.view())
+            .expect("native view solve");
+
+        assert_eq!(x.as_slice(), Some(&[2.0, 3.0][..]));
     }
 
     #[test]
@@ -305,7 +347,10 @@ mod tests {
         coo.push(1, 1, 4.0_f32);
         let a = coo.to_csr();
         let b = vec![6.0_f32, 8.0_f32];
-        let x = sparse_lu_solve(&a, &b).expect("f32 solve");
+        let rhs = Array1::from_shape_vec([2], b).expect("RHS shape");
+        let x = SparseLuSolver::default()
+            .solve_view(&a, &rhs.view())
+            .expect("f32 solve");
         assert!((x[0] - 3.0_f32).abs() < 1e-5, "x[0] = {}", x[0]);
         assert!((x[1] - 2.0_f32).abs() < 1e-5, "x[1] = {}", x[1]);
     }
