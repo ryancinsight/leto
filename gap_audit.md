@@ -1,5 +1,30 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-23 Dense matmul parity audit
+
+- **Finding:** the historical 0.19.7 oracle rows marked dense matmul as slower
+  than ndarray at 64×64, 128×128, and 256×256. A quiet-host rerun against the
+  current default-feature release path changed that conclusion: Leto measured
+  `23.597 µs` [17.659, 29.520], `123.63 µs` [117.41, 130.97], and `233.60 µs`
+  [202.28, 253.87] at those sizes; ndarray measured `12.770 µs` [11.437,
+  14.460], `113.07 µs` [104.34, 120.96], and `952.54 µs` [935.68, 981.42].
+- **Resolution:** no production change is justified by the current evidence.
+  The existing `is_parallel_beneficial` threshold selects the parallel dense
+  path at 64×64; a focused 20-sample rerun measured `23.597 µs` with parallel
+  execution versus `27.483 µs` [26.478, 28.271] with parallelism disabled.
+  At 128×128 and 256×256, the serial path measured `223.69 µs` [222.72,
+  224.43] and `1.8522 ms` [1.8208, 1.9032], respectively. The measured
+  default path is therefore the better current policy across the tested sizes.
+- **Profile limit:** `cargo flamegraph` could not collect samples on this
+  Windows session because `dtrace` was unavailable and its `blondie` fallback
+  required administrator rights. The result is controlled benchmark and source
+  dispatch evidence, not a call-stack profile or a topology proof.
+- **Verification:** locked Criterion oracle runs used the same deterministic
+  f64 inputs and current release profile; a no-default-feature Leto run
+  isolated the serial comparison. No production source changed. The claim is
+  closed as an evidence-only audit; future tile or packing work requires a
+  working profiler and a changed kernel hypothesis.
+
 ## 2026-07-23 Contiguous and non-unit-stride benchmark coverage
 
 - **Finding:** the canonical `leto-ops` Criterion harness had selected

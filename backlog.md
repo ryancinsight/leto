@@ -583,8 +583,8 @@ no unmeasured "optimization" per performance_engineering.
   once the row/block/column tile policy is benchmarked across matrix sizes.
   Current 0.18.1 row block is a fixed L2-fit const-generic specialization, not
   runtime topology selection.
-- [ ] [minor] `LETO-MATMUL-PERF-1`: Close dense matmul oracle performance
-  parity before any replacement claim. **Owner:** Codex `/root` (in progress).
+- [x] [minor] `LETO-MATMUL-PERF-1`: Close dense matmul oracle performance
+  parity before any replacement claim. **Owner:** Codex `/root` (complete).
   **Claimed files:** `crates/leto-ops/src/application/matrix.rs`,
   `crates/leto-ops/benches/kernels.rs`, `benchmark_results.md`,
   `gap_audit.md`, and `checklist.md`.
@@ -602,7 +602,12 @@ no unmeasured "optimization" per performance_engineering.
   post-0.19.7 `MATMUL_ROW_BLOCK=64`, or post-0.19.7 row-block
   fused-branch/alpha-buffer hoisting, or post-0.19.7 generic 4x4 registered
   dense tiles, or broad depth-batched row-panel AXPY routing without a changed
-  kernel model and profile evidence.
+  kernel model and profile evidence. **Closed 2026-07-23 as an evidence-only
+  audit:** current default-feature medians are Leto 23.597/123.63/233.60 µs
+  versus ndarray 12.770/113.07/952.54 µs at 64/128/256; serial Leto is
+  27.483/223.69/1.8522 ms. The current parallel threshold remains the measured
+  better policy. Flamegraph collection is blocked by missing Windows dtrace
+  and administrator-only blondie; no speculative production rewrite landed.
 - [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
   borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
   `norm` uses `NormKind::accumulate_slice` plus the new defaulted

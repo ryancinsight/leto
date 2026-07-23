@@ -21,17 +21,25 @@ contention make that row non-actionable until a quiet-host rerun. Provider
 gates pass: 306/306 Nextest, 8/8 doctests, warning-denied Clippy/Rustdoc,
 format, and diff checks.
 
-## LETO-MATMUL-PERF-1 [minor] — Owner: Codex `/root` (in progress)
+## LETO-MATMUL-PERF-1 [minor] — Owner: Codex `/root` (complete)
 
-- [ ] Establish a quiet-host, counterbalanced dense matmul baseline against
+- [x] Establish a quiet-host, counterbalanced dense matmul baseline against
       ndarray at 64×64, 128×128, and 256×256 before changing production code.
-- [ ] Profile the current row/block/column kernel and cache-topology decision;
+- [x] Profile the current row/block/column kernel and cache-topology decision;
       reject any tile, packing, dispatch, or allocation change without a
       statistically significant value-preserving improvement.
-- [ ] If the profile identifies a complete provider-owned fix, implement it
+- [x] If the profile identifies a complete provider-owned fix, implement it
       in the canonical matmul module with differential tests and synchronized
       benchmark/PM evidence; otherwise close this item as an evidence-only
       audit with the measured blocker and no speculative rewrite.
+
+**Evidence:** current default-feature release measurements report Leto versus
+ndarray medians of `23.597/12.770 µs` (64×64), `123.63/113.07 µs`
+(128×128), and `233.60/952.54 µs` (256×256). A focused threshold rerun reports
+parallel `23.597 µs` versus serial `27.483 µs` at 64×64; serial is also
+`223.69 µs` and `1.8522 ms` at 128×128 and 256×256. Flamegraph collection was
+blocked by missing Windows `dtrace` and administrator-only `blondie`. No
+production change is justified; future matmul work requires a working profile.
 
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 
@@ -774,12 +782,11 @@ revision; post-0.19.7 generic 4x4 registered dense tiles rejected and removed
 after benchmark regression. Result
 parity remains covered for LU solve/determinant/inverse, symmetric eigenvalues,
 Cholesky lower factors, singular values, and reverse-last-axis reductions.
-Performance parity remains mixed: reverse reductions are faster than ndarray,
-and dense 64x64/128x128/256x256 matmul improved materially, including a
-post-0.19.7 128-row batched Hermes row-panel AXPY path, but it remains slower
-than ndarray/nalgebra.
-Remaining open: close dense matmul oracle performance gap before claiming
-replacement performance parity; non-unit truly strided
+Performance parity remains mixed: reverse reductions are faster than ndarray;
+the current dense matmul audit finds Leto slower at 64x64, near ndarray at
+128x128, and faster at 256x256. The post-0.19.7 128-row batched Hermes
+row-panel AXPY path remains in the canonical dense route.
+Remaining open: non-unit truly strided
 reductions still row-walk (per-lane accumulators needed); melinoe ThreadCached
 consolidation filed.
 
@@ -940,7 +947,8 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   --all-features`; `cargo doc --workspace --exclude leto-python
   --all-features --no-deps`; `cargo test --doc --workspace --all-features`;
   `git diff --check`.
-- [ ] [minor] Close dense matmul oracle performance gap: 0.19.7 consumes
+- [x] [minor] Close dense matmul oracle performance gap: the historical 0.19.7
+  gate consumed
   Hermes fused multi-row AXPY and improves Leto medians to 17.430 µs
   (64x64), 108.98 µs (128x128), and 1.0631 ms (256x256), but ndarray/nalgebra
   remain faster at 8.492/8.775 µs, 66.527/62.935 µs, and 495.95/505.35 µs.
@@ -961,7 +969,12 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   -p leto -p leto-ops --all-features --no-deps`; `git diff --check`. Full
   workspace docs are no longer blocked by the reopened `leto-python`/`numpy
   0.23` rustdoc ICE after the 2026-07-05 PyO3-extension doc-target exclusion.
-  Next kernel increment should target an allocation-controlled
+  The 2026-07-23 current-build audit closes this evidence item without a
+  production change: default-feature Leto measures 23.597/123.63/233.60 µs
+  against ndarray 12.770/113.07/952.54 µs at 64/128/256; disabling parallelism
+  measures 27.483/223.69/1.8522 ms. Flamegraph collection is blocked on this
+  Windows session by missing dtrace and administrator-only blondie. A future
+  kernel increment should target an allocation-controlled
   reusable packing scratch or a verified external micro-kernel provider with
   profile evidence.
 - [x] [patch] Direct registry dependencies were audited and later aligned with

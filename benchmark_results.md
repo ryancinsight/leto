@@ -62,7 +62,36 @@ coverage run. Concurrent Cargo builds and outliers make that row unsuitable
 for a speedup claim; rerun on a quiet, counterbalanced host before changing a
 production kernel.
 
-## Oracle comparison gate (ndarray / nalgebra, 0.19.7, 2026-06-13)
+## Dense matmul parity audit (2026-07-23)
+
+Commands: `rustup run nightly cargo bench --locked -p leto-ops --bench
+kernels --all-features
+"oracle_compare/matmul_(leto|ndarray)_(64x64|128x128|256x256)" -- --noplot`
+and a no-default-feature Leto comparison with `--features std`. The first run
+used the current sample-size-10, 500 ms Criterion configuration on a quiet
+host. The 64×64 threshold comparison was rerun with 20 samples, 1 s warm-up,
+and 2 s measurement. These are empirical measurements, not proof of a global
+ranking.
+
+| Benchmark | Median | 95% CI | Result |
+| --- | ---: | ---: | --- |
+| oracle_compare/matmul_leto_64x64 (parallel) | 23.597 µs | 17.659–29.520 µs | slower than ndarray |
+| oracle_compare/matmul_ndarray_64x64 | 12.770 µs | 11.437–14.460 µs | oracle baseline |
+| oracle_compare/matmul_leto_128x128 (parallel) | 123.63 µs | 117.41–130.97 µs | near ndarray; intervals overlap |
+| oracle_compare/matmul_ndarray_128x128 | 113.07 µs | 104.34–120.96 µs | oracle baseline |
+| oracle_compare/matmul_leto_256x256 (parallel) | 233.60 µs | 202.28–253.87 µs | 4.08× faster than ndarray median |
+| oracle_compare/matmul_ndarray_256x256 | 952.54 µs | 935.68–981.42 µs | oracle baseline |
+| oracle_compare/matmul_leto_64x64 (serial) | 27.483 µs | 26.478–28.271 µs | 16.5% slower than parallel |
+| oracle_compare/matmul_leto_128x128 (serial) | 223.69 µs | 222.72–224.43 µs | 80.9% slower than parallel |
+| oracle_compare/matmul_leto_256x256 (serial) | 1.8522 ms | 1.8208–1.9032 ms | 7.93× slower than parallel |
+
+The current parallel threshold is retained. `cargo flamegraph` could not
+profile this Windows session because `dtrace` was unavailable and the
+`blondie` fallback required administrator rights. No production optimization
+claim is made; a future tile or packing change needs a working profile and a
+value-preserving benchmark win.
+
+## Historical oracle comparison gate (ndarray / nalgebra, 0.19.7, 2026-06-13)
 
 Methodology: `cargo bench -p leto-ops --bench kernels --all-features
 "oracle_compare/matmul_(leto|ndarray|nalgebra)_(64|128|256)x(64|128|256)"
@@ -86,11 +115,10 @@ Evidence tier: empirical benchmark comparison, not a proof.
 | oracle_compare/norm_l2_reverse_leto_256x256 | 9.3496 µs | faster than ndarray |
 | oracle_compare/norm_l2_reverse_ndarray_256x256 | 30.877 µs | oracle baseline |
 
-Result: reverse-last-axis reductions satisfy current ndarray performance parity
-on this benchmark shape. Dense matmul does not: Leto is ~2.05x slower than
-ndarray at 64x64, ~1.64x slower at 128x128, and ~2.14x slower at 256x256 by
-median. Replacement claims must exclude dense matmul performance parity until
-the open target below is closed.
+Historical result: reverse-last-axis reductions satisfy the recorded ndarray
+performance parity on this benchmark shape. The dense matmul rows are retained
+as the 0.19.7 historical baseline; the current parity audit above supersedes
+their conclusion for the present default-feature build.
 
 ## Measured optimization history
 
