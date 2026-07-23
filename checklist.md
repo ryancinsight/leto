@@ -2,16 +2,24 @@
 
 **Target version: 0.40.0** · **Phase: Closure**
 
-## LETO-KERNEL-BENCHMARKS-1 [patch] — Owner: Codex `/root` (in progress)
+## LETO-KERNEL-BENCHMARKS-1 [patch] — Owner: Codex `/root`
 
-- [ ] Extend the canonical `leto-ops` Criterion harness so elementwise,
+- [x] Extend the canonical `leto-ops` Criterion harness so elementwise,
       reduction, and matmul groups each expose a contiguous baseline and a
       genuinely strided fallback case without changing the timed workload.
-- [ ] Record the benchmark design, exact commands, and result limits in the
+- [x] Record the benchmark design, exact commands, and result limits in the
       matching `gap_audit.md` entry; do not claim a production optimization
       until a controlled baseline comparison identifies one.
-- [ ] Pass the package format, warning-denied check/Clippy, configured
+- [x] Pass the package format, warning-denied check/Clippy, configured
       Nextest, doctest, and Rustdoc gates for the benchmark target.
+
+**Evidence:** prepared-view default-feature Criterion coverage reports elementwise add
+`11.796 µs` contiguous vs `49.229 µs` step-2 and sum `3.6693 µs` contiguous
+vs `34.150 µs` step-2. Matmul reports `407.01 µs` dense vs `297.46 µs`
+step-2 in the matched run, but a prior `217.13 µs` step-2 sample and build
+contention make that row non-actionable until a quiet-host rerun. Provider
+gates pass: 306/306 Nextest, 8/8 doctests, warning-denied Clippy/Rustdoc,
+format, and diff checks.
 
 ## LETO-SPARSE-LU-VIEW-1 [minor] — Owner: Codex `/root`
 

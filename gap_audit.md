@@ -1,5 +1,35 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-23 Contiguous and non-unit-stride benchmark coverage
+
+- **Finding:** the canonical `leto-ops` Criterion harness had selected
+  transposed/reversed cases, but it did not isolate a C-dense baseline from a
+  genuinely non-unit-stride fallback for each of elementwise binary mapping,
+  whole-array reduction, and matrix multiplication. The production dispatch
+  predicates already distinguish these layouts; the missing evidence was
+  benchmark coverage, not an established kernel defect.
+- **Resolution:** `crates/leto-ops/benches/kernels.rs` now prepares identical
+  logical 256×256 C-dense and step-2 views outside the timed closures. New
+  rows cover elementwise add, whole-array sum, and matmul with a step-2 LHS;
+  the existing transposed/reverse cases remain for their distinct layout
+  contracts. No production kernel or API changed.
+- **Evidence:** locked default-feature Criterion runs on the default Windows
+  workstation reported elementwise C-dense `11.796 µs` [11.175, 12.282] vs
+  step-2 `49.229 µs` [47.403, 50.473], and sum C-dense `3.6693 µs`
+  [3.5824, 3.7651] vs step-2 `34.150 µs` [33.013, 35.310]. A matched matmul
+  run reported dense `407.01 µs` [331.81, 449.28] vs step-2 `297.46 µs`
+  [276.48, 316.65].
+- **Limit:** the matmul step-2 row also measured `217.13 µs` [209.40, 228.93]
+  in an earlier run, with outliers in both runs; this host was concurrently
+  building Cargo targets. The matmul numbers are therefore coverage evidence,
+  not a speedup claim. A quiet-host counterbalanced rerun is required before
+  any production optimization or topology decision.
+- **Verification:** `cargo check --locked -p leto-ops --benches`, warning-denied
+  all-target Clippy, `cargo nextest run --locked -p leto-ops --all-features`
+  (306/306), `cargo test --doc --locked -p leto-ops --all-features` (8/8),
+  warning-denied package Rustdoc, package format check, and `git diff --check`
+  pass. The benchmark target is the only source file changed.
+
 ## 2026-07-22 Sparse LU native-view boundary
 
 - **Finding:** `SparseLuSolver::solve` only accepted `&[T]` and returned

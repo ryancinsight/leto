@@ -1,9 +1,10 @@
 # leto-ops criterion baselines
 
 Harness: `crates/leto-ops/benches/kernels.rs` (`cargo bench -p leto-ops`).
-Methodology: criterion, sample_size 20, median + 95% CI; pinned deterministic
-inputs (no RNG); default features; f64. Machine class: Windows 11 x86_64 dev
-workstation (AVX2-class). These baselines gate optimization work (atlas ADR
+Methodology: Criterion, sample_size 10 in the current harness, median + 95% CI;
+pinned deterministic inputs (no RNG); default features; f64. Historical rows
+retain their recorded sample size. Machine class: Windows 11 x86_64 dev
+workstation (AVX2-class). These baselines gate optimization work (Atlas ADR
 0002 leto slice): a statistically significant regression in a touched kernel
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
@@ -36,6 +37,30 @@ the 256-column benchmark shape.
 | reductions/sum_reverse_last_axis_256x256 | 5.203 µs | borrowed unit-stride row slices (0.19.0), −21.56% median in criterion run |
 | reductions/norm_l2_reverse_last_axis_256x256 | 9.615 µs | borrowed unit-stride row slices (0.19.0), −18.00% median in criterion run |
 | zip/zip_mut_with_transposed_256x256 | 40.7 µs | line-tiled (0.16.1); closure-opaque body limits further gain |
+
+## Contiguous and non-unit-stride coverage (2026-07-23)
+
+Commands: `rustup run nightly cargo bench --locked -p leto-ops --bench kernels
+"contiguous_256x256|strided_step2" -- --noplot` and `rustup run nightly cargo
+bench --locked -p leto-ops --bench kernels
+"matmul/(dense_256x256|strided_step2_lhs_256x256)" -- --noplot`. Criterion
+uses the current sample-size-10, 500 ms warm-up/measurement configuration;
+inputs are prepared before timing and the logical workload is 256×256 f64 in
+every row.
+
+| Benchmark | Median | 95% CI | Coverage |
+| --- | ---: | ---: | --- |
+| elementwise_add/contiguous_256x256 | 11.796 µs | 11.175–12.282 µs | C-dense binary map |
+| elementwise_add/strided_step2_lhs_256x256 | 49.229 µs | 47.403–50.473 µs | non-unit-stride binary fallback |
+| reductions/sum_contiguous_256x256 | 3.6693 µs | 3.5824–3.7651 µs | C-dense whole-array sum |
+| reductions/sum_strided_step2_256x256 | 34.150 µs | 33.013–35.310 µs | non-unit-stride row walk |
+| matmul/dense_256x256 | 407.01 µs | 331.81–449.28 µs | C-dense contraction |
+| matmul/strided_step2_lhs_256x256 | 297.46 µs | 276.48–316.65 µs | fallback copy plus contraction |
+
+The matmul step-2 row also measured 217.13 µs [209.40, 228.93] in the prior
+coverage run. Concurrent Cargo builds and outliers make that row unsuitable
+for a speedup claim; rerun on a quiet, counterbalanced host before changing a
+production kernel.
 
 ## Oracle comparison gate (ndarray / nalgebra, 0.19.7, 2026-06-13)
 

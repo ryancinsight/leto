@@ -682,11 +682,14 @@ no unmeasured "optimization" per performance_engineering.
 - [x] Split matrix multiplication into its own module and documented each raw-pointer block with storage-span safety invariants. Verification: `leto-ops` focused tests and clippy pass.
 - [x] [patch] Route dense-but-offset matmul views (batched `b>0`, sliced sub-array outputs) through the in-place fast kernels via offset-independent `is_c_dense`/`is_f_dense`, removing the per-batch scratch allocation + operand copy + copy-back; replace `batched_matmul`'s per-batch parallel `Mutex` poll with a relaxed `AtomicBool` early-out. Verification: 405 workspace tests incl. new offset-dense in-place test + batched/differential/parity oracles.
 - [x] [patch] Fixed `batched_matmul`'s parallel closure full-buffer `&mut` aliasing: each task now borrows only its batch's physical span (`min_max_offsets`) with a rebased offset, so no two concurrent `&mut` overlap. A disjointness guard (`batch_stride ≥ per-matrix span`, plus non-empty) routes interleaved-batch outputs to the sound sequential loop. Verified by new interleaved-output (vs C-contiguous reference) and empty-output tests + the batched differential/parity oracles (407 workspace tests). (Per-row `parallel_dot/cc/outer` kernels were already disjoint.)
-- [ ] [patch] `LETO-KERNEL-BENCHMARKS-1`: Add contiguous fast paths and
+- [x] [patch] `LETO-KERNEL-BENCHMARKS-1`: Add contiguous fast paths and
   strided fallback benchmarks for elementwise ops, reductions, and matmul.
-  **Owner:** Codex `/root` (in progress). **Claimed files:**
+  **Owner:** Codex `/root`. **Claimed files:**
   `crates/leto-ops/benches/kernels.rs`, `checklist.md`, and the matching
-  performance-audit evidence in `gap_audit.md`.
+  performance-audit evidence in `gap_audit.md`. The new rows use prepared
+  C-dense and step-2 256×256 f64 views; the elementwise and sum rows are
+  stable coverage evidence, while matmul remains noisy and is explicitly not
+  an optimization claim.
 - [ ] Verify Moirai scheduling uses bounded work partitioning without raw-pointer aliasing hazards.
 - [ ] Integrate Hermes SIMD through sealed scalar/vector traits, not ad hoc per-operation dispatch.
 - [ ] Keep Mnemosyne allocation optional and feature-gated; no downstream Apollo/Coeus crate should need allocator-specific types in public domain structs.

@@ -1,9 +1,11 @@
 //! Criterion baselines for the leto-ops hot kernels.
 //!
-//! These baselines are the prerequisite gate for the cache-aware tiling work
-//! (atlas ADR 0002 leto slice): per `performance_engineering`, no change is
+//! These baselines are the prerequisite gate for cache-aware kernel work
+//! (Atlas ADR 0002 Leto slice): per `performance_engineering`, no change is
 //! labeled an optimization without a recorded baseline comparison. Inputs are
-//! pinned; report median + CI from criterion's standard output.
+//! pinned; report median + CI from Criterion's standard output. Each hot-kernel
+//! family includes a C-dense case and a prepared non-unit-stride view so view
+//! construction and allocation do not contaminate the timed operation.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
@@ -45,6 +47,33 @@ fn bench_matmul(c: &mut Criterion) {
             );
         });
     }
+
+    let n = 256usize;
+    let strided_lhs_storage =
+        Array::from_shape_vec([n * 2, n * 2], pinned_values(n * n * 4, 1.0e-3)).unwrap();
+    let strided_lhs = strided_lhs_storage
+        .view()
+        .slice_with::<2>(&[
+            SliceArg::range(None, None, 2),
+            SliceArg::range(None, None, 2),
+        ])
+        .unwrap();
+    let rhs = Array::from_shape_vec([n, n], pinned_values(n * n, 2.0e-3)).unwrap();
+    group.bench_function("strided_step2_lhs_256x256", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([n, n]),
+            |mut out| {
+                matmul(
+                    black_box(&strided_lhs),
+                    black_box(&rhs.view()),
+                    &mut out.view_mut(),
+                )
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
     group.finish();
 }
 
@@ -79,6 +108,47 @@ fn bench_elementwise(c: &mut Criterion) {
                 let at = sq_a.transpose([1, 0]).unwrap();
                 leto_ops::binary_map::<AddOp, f64, 2>(
                     black_box(&at),
+                    black_box(&sq_b.view()),
+                    &mut out.view_mut(),
+                )
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("contiguous_256x256", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([n, n]),
+            |mut out| {
+                leto_ops::binary_map::<AddOp, f64, 2>(
+                    black_box(&sq_a.view()),
+                    black_box(&sq_b.view()),
+                    &mut out.view_mut(),
+                )
+                .unwrap();
+                out
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    let strided_lhs_storage =
+        Array::from_shape_vec([n * 2, n * 2], pinned_values(n * n * 4, 1.0)).unwrap();
+    let strided_lhs = strided_lhs_storage
+        .view()
+        .slice_with::<2>(&[
+            SliceArg::range(None, None, 2),
+            SliceArg::range(None, None, 2),
+        ])
+        .unwrap();
+    group.bench_function("strided_step2_lhs_256x256", |bencher| {
+        bencher.iter_batched(
+            || Array::zeros([n, n]),
+            |mut out| {
+                leto_ops::binary_map::<AddOp, f64, 2>(
+                    black_box(&strided_lhs),
                     black_box(&sq_b.view()),
                     &mut out.view_mut(),
                 )
@@ -216,6 +286,9 @@ fn bench_reductions(c: &mut Criterion) {
 
     let n = 256usize;
     let square = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0)).unwrap();
+    group.bench_function("sum_contiguous_256x256", |bencher| {
+        bencher.iter(|| sum(black_box(&square.view())));
+    });
     let transposed = square.transpose([1, 0]).unwrap();
     group.bench_function("sum_transposed_256x256", |bencher| {
         bencher.iter(|| sum(black_box(&transposed)));
@@ -230,6 +303,19 @@ fn bench_reductions(c: &mut Criterion) {
         .unwrap();
     group.bench_function("sum_reverse_last_axis_256x256", |bencher| {
         bencher.iter(|| sum(black_box(&reversed)));
+    });
+
+    let strided_storage =
+        Array::from_shape_vec([n * 2, n * 2], pinned_values(n * n * 4, 1.0)).unwrap();
+    let strided = strided_storage
+        .view()
+        .slice_with::<2>(&[
+            SliceArg::range(None, None, 2),
+            SliceArg::range(None, None, 2),
+        ])
+        .unwrap();
+    group.bench_function("sum_strided_step2_256x256", |bencher| {
+        bencher.iter(|| sum(black_box(&strided)));
     });
     group.bench_function("norm_l2_reverse_last_axis_256x256", |bencher| {
         bencher.iter(|| norm_l2(black_box(&reversed)).unwrap());
