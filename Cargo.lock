@@ -718,14 +718,14 @@ name = "mnemosyne"
 version = "0.6.0"
 dependencies = [
  "eunomia",
- "mnemosyne-arena 0.6.0",
- "mnemosyne-backend 0.6.0",
- "mnemosyne-core 0.6.0",
- "mnemosyne-decay 0.6.0",
- "mnemosyne-hardened 0.6.0",
+ "mnemosyne-arena 0.3.0",
+ "mnemosyne-backend 0.5.0",
+ "mnemosyne-core 0.2.0",
+ "mnemosyne-decay 0.2.0",
+ "mnemosyne-hardened 0.2.0",
  "mnemosyne-heap",
- "mnemosyne-local 0.6.0",
- "mnemosyne-prof 0.6.0",
+ "mnemosyne-local 0.3.0",
+ "mnemosyne-prof 0.2.0",
 ]
 
 [[package]]
@@ -733,13 +733,23 @@ name = "mnemosyne"
 version = "0.6.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
- "mnemosyne-arena 0.3.0",
+ "mnemosyne-arena 0.3.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-backend 0.5.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-decay 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-hardened 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-local 0.3.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-prof 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+]
+
+[[package]]
+name = "mnemosyne-arena"
+version = "0.3.0"
+dependencies = [
+ "eunomia",
  "mnemosyne-backend 0.5.0",
  "mnemosyne-core 0.2.0",
- "mnemosyne-decay 0.2.0",
- "mnemosyne-hardened 0.2.0",
- "mnemosyne-local 0.3.0",
- "mnemosyne-prof 0.2.0",
+ "themis",
 ]
 
 [[package]]
@@ -747,19 +757,16 @@ name = "mnemosyne-arena"
 version = "0.3.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
- "mnemosyne-backend 0.5.0",
- "mnemosyne-core 0.2.0",
+ "mnemosyne-backend 0.5.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "themis",
 ]
 
 [[package]]
-name = "mnemosyne-arena"
-version = "0.6.0"
+name = "mnemosyne-backend"
+version = "0.5.0"
 dependencies = [
- "eunomia",
- "mnemosyne-backend 0.6.0",
- "mnemosyne-core 0.6.0",
- "themis",
+ "mnemosyne-core 0.2.0",
 ]
 
 [[package]]
@@ -767,15 +774,12 @@ name = "mnemosyne-backend"
 version = "0.5.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
- "mnemosyne-core 0.2.0",
+ "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
 ]
 
 [[package]]
-name = "mnemosyne-backend"
-version = "0.6.0"
-dependencies = [
- "mnemosyne-core 0.6.0",
-]
+name = "mnemosyne-build-util"
+version = "0.2.0"
 
 [[package]]
 name = "mnemosyne-build-util"
@@ -783,22 +787,17 @@ version = "0.2.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 
 [[package]]
-name = "mnemosyne-build-util"
-version = "0.6.0"
+name = "mnemosyne-core"
+version = "0.2.0"
 
 [[package]]
 name = "mnemosyne-core"
 version = "0.2.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
-
-[[package]]
-name = "mnemosyne-core"
-version = "0.6.0"
 
 [[package]]
 name = "mnemosyne-decay"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
  "mnemosyne-arena 0.3.0",
  "mnemosyne-backend 0.5.0",
@@ -807,11 +806,19 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-decay"
-version = "0.6.0"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
- "mnemosyne-arena 0.6.0",
- "mnemosyne-backend 0.6.0",
- "mnemosyne-core 0.6.0",
+ "mnemosyne-arena 0.3.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-backend 0.5.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+]
+
+[[package]]
+name = "mnemosyne-hardened"
+version = "0.2.0"
+dependencies = [
+ "mnemosyne-core 0.2.0",
 ]
 
 [[package]]
@@ -819,33 +826,25 @@ name = "mnemosyne-hardened"
 version = "0.2.0"
 source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
- "mnemosyne-core 0.2.0",
-]
-
-[[package]]
-name = "mnemosyne-hardened"
-version = "0.6.0"
-dependencies = [
- "mnemosyne-core 0.6.0",
+ "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
 ]
 
 [[package]]
 name = "mnemosyne-heap"
-version = "0.6.0"
+version = "0.3.0"
 dependencies = [
  "melinoe",
- "mnemosyne-arena 0.6.0",
- "mnemosyne-backend 0.6.0",
- "mnemosyne-core 0.6.0",
- "mnemosyne-local 0.6.0",
- "mnemosyne-prof 0.6.0",
+ "mnemosyne-arena 0.3.0",
+ "mnemosyne-backend 0.5.0",
+ "mnemosyne-core 0.2.0",
+ "mnemosyne-local 0.3.0",
+ "mnemosyne-prof 0.2.0",
  "themis",
 ]
 
 [[package]]
 name = "mnemosyne-local"
 version = "0.3.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
  "melinoe",
  "mnemosyne-arena 0.3.0",
@@ -859,22 +858,22 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-local"
-version = "0.6.0"
+version = "0.3.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
  "melinoe",
- "mnemosyne-arena 0.6.0",
- "mnemosyne-backend 0.6.0",
- "mnemosyne-build-util 0.6.0",
- "mnemosyne-core 0.6.0",
- "mnemosyne-decay 0.6.0",
- "mnemosyne-prof 0.6.0",
+ "mnemosyne-arena 0.3.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-backend 0.5.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-build-util 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-decay 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-prof 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
  "themis",
 ]
 
 [[package]]
 name = "mnemosyne-prof"
 version = "0.2.0"
-source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
  "backtrace",
  "mnemosyne-build-util 0.2.0",
@@ -883,11 +882,12 @@ dependencies = [
 
 [[package]]
 name = "mnemosyne-prof"
-version = "0.6.0"
+version = "0.2.0"
+source = "git+https://github.com/ryancinsight/Mnemosyne.git#034a8b53fdc97035d6f66bc422369ee1fe6d2738"
 dependencies = [
  "backtrace",
- "mnemosyne-build-util 0.6.0",
- "mnemosyne-core 0.6.0",
+ "mnemosyne-build-util 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
+ "mnemosyne-core 0.2.0 (git+https://github.com/ryancinsight/Mnemosyne.git)",
 ]
 
 [[package]]

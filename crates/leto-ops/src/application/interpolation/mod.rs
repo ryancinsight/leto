@@ -16,10 +16,10 @@
 //! ```rust
 //! use leto_ops::application::interpolation::{LinearInterpolation, Interpolation1D};
 //!
-//! let interp = LinearInterpolation::new(vec![0.0, 1.0, 2.0], vec![0.0, 1.0, 4.0])
+//! let interp = LinearInterpolation::<f64>::new(vec![0.0, 1.0, 2.0], vec![0.0, 1.0, 4.0])
 //!     .expect("valid data");
-//! let y = interp.interpolate(0.5).expect("in range");
-//! assert!((y - 0.5).abs() < 1e-12);
+//! let y = interp.interpolate(0.5_f64).expect("in range");
+//! assert!((y - 0.5_f64).abs() < 1e-12);
 //! ```
 
 pub mod cubic_spline;
