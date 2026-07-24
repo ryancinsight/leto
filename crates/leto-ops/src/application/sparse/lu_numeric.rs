@@ -210,9 +210,7 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
 /// # Examples
 ///
 /// ```
-/// use leto_ops::application::sparse::{
-///     CooMatrix, lu_numeric::factor_numeric, lu_symbolic::factor_symbolic,
-/// };
+/// use leto_ops::application::sparse::{CooMatrix, factor_numeric, factor_symbolic};
 ///
 /// let mut coo = CooMatrix::new(2, 2);
 /// coo.push(0, 0, 4.0_f64);
@@ -224,7 +222,7 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
 /// let lu = factor_numeric(&csc, &symbolic, 1e-12).expect("2x2 SPD recovery");
 ///
 /// use leto::{Array1};
-/// let b = Array1::from_shape_vec([2], vec![9.0_f64, 8.0]).expect("b shape");
+/// let b = Array1::from_shape_vec([2], vec![11.0_f64, 11.0]).expect("b shape");
 /// let x = lu.solve(&b.view()).expect("solve");
 /// assert!((x[0] - 2.0_f64).abs() < 1e-10);
 /// assert!((x[1] - 3.0_f64).abs() < 1e-10);
@@ -330,7 +328,11 @@ pub fn factor_numeric<'a, T: RealScalar>(
                 if k >= j {
                     continue; // only fan out from prior columns
                 }
-                for &i in l_row_indices.iter().take(l_col_ptr[k + 1]).skip(l_col_ptr[k]) {
+                for &i in l_row_indices
+                    .iter()
+                    .take(l_col_ptr[k + 1])
+                    .skip(l_col_ptr[k])
+                {
                     let slot = row_inv[i];
                     if work_mark[slot] != j {
                         work_mark[slot] = j;
@@ -368,12 +370,7 @@ pub fn factor_numeric<'a, T: RealScalar>(
         let mut pivot_slot = j;
         let mut pivot_mag = work[j].abs();
         let mut max_in_col = pivot_mag;
-        for (slot, &mag) in work
-            .iter()
-            .enumerate()
-            .take(n)
-            .skip(j + 1)
-        {
+        for (slot, &mag) in work.iter().enumerate().take(n).skip(j + 1) {
             if mag > pivot_mag {
                 pivot_mag = mag;
                 pivot_slot = slot;
@@ -479,7 +476,10 @@ pub fn factor_numeric<'a, T: RealScalar>(
     // phase uses original-row indices, and the numeric phase's running
     // row_inv state diverges from the final state once any pivot swap fires.
     // Matrices that require pivoting should use the dense LU path instead.
-    let pivoting_free = row_perm.iter().enumerate().all(|(slot, &orig)| slot == orig);
+    let pivoting_free = row_perm
+        .iter()
+        .enumerate()
+        .all(|(slot, &orig)| slot == orig);
     if !pivoting_free {
         return Err(LetoError::NumericalBreakdown(
             "SparseLu: partial pivoting required for this matrix; \

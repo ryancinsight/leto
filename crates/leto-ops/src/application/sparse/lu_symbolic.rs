@@ -115,7 +115,7 @@ impl SymbolicLu {
 /// # Examples
 ///
 /// ```
-/// use leto_ops::application::sparse::{CooMatrix, lu_symbolic::factor_symbolic};
+/// use leto_ops::application::sparse::{CooMatrix, factor_symbolic};
 ///
 /// let mut coo = CooMatrix::new(3, 3);
 /// // Identity matrix: U == I, L is empty.
@@ -158,11 +158,7 @@ pub fn factor_symbolic<T: Scalar>(csc: &CscMatrix<T>) -> SymbolicLu {
         // 1. Seed reach with column j of A's direct row indices: every
         //    `A[i, j]` is structurally nonzero, so row `i` is in the column-j
         //    pattern. (Merging also marks these rows.)
-        for &r in row_indices
-            .iter()
-            .take(col_ptr[j + 1])
-            .skip(col_ptr[j])
-        {
+        for &r in row_indices.iter().take(col_ptr[j + 1]).skip(col_ptr[j]) {
             if !marked[r] {
                 marked[r] = true;
                 reach.push(r);
