@@ -20,7 +20,8 @@ pub fn complex_solve(a: &Array2<C64>, b: &Array1<C64>) -> Result<Array1<C64>> {
     if a.shape()[1] != n {
         return Err(LetoError::InvalidInput(format!(
             "complex_solve: A must be square, got {}×{}",
-            a.shape()[0], a.shape()[1]
+            a.shape()[0],
+            a.shape()[1]
         )));
     }
     if b.shape()[0] != n {
@@ -97,7 +98,8 @@ pub fn complex_inv(a: &Array2<C64>) -> Result<Array2<C64>> {
     if a.shape()[1] != n {
         return Err(LetoError::InvalidInput(format!(
             "complex_inv: A must be square, got {}×{}",
-            a.shape()[0], a.shape()[1]
+            a.shape()[0],
+            a.shape()[1]
         )));
     }
 
@@ -108,8 +110,7 @@ pub fn complex_inv(a: &Array2<C64>) -> Result<Array2<C64>> {
     for col in 0..n {
         let mut e = vec![zero; n];
         e[col] = one;
-        let e_arr = Array1::from_vec([n], e)
-            .map_err(|e| LetoError::InvalidInput(e.to_string()))?;
+        let e_arr = Array1::from_vec([n], e).map_err(|e| LetoError::InvalidInput(e.to_string()))?;
         let x = complex_solve(a, &e_arr)?;
         let xs = x.as_slice().ok_or_else(|| {
             LetoError::InvalidInput("complex_inv: solve output not contiguous".into())
@@ -132,7 +133,12 @@ mod tests {
         // A = [[2+i, 1], [1, 2-i]], b = [3+i, 2-i]
         let a = Array2::from_vec(
             [2, 2],
-            vec![C64::new(2.0, 1.0), C64::new(1.0, 0.0), C64::new(1.0, 0.0), C64::new(2.0, -1.0)],
+            vec![
+                C64::new(2.0, 1.0),
+                C64::new(1.0, 0.0),
+                C64::new(1.0, 0.0),
+                C64::new(2.0, -1.0),
+            ],
         )
         .unwrap();
         let b = Array1::from_vec([2], vec![C64::new(3.0, 1.0), C64::new(2.0, -1.0)]).unwrap();
@@ -143,7 +149,11 @@ mod tests {
             for j in 0..2 {
                 ax += a[[i, j]] * x[j];
             }
-            assert!((ax - b[i]).norm() < 1e-12, "row {i}: Ax = {ax}, b = {}", b[i]);
+            assert!(
+                (ax - b[i]).norm() < 1e-12,
+                "row {i}: Ax = {ax}, b = {}",
+                b[i]
+            );
         }
     }
 
@@ -151,7 +161,12 @@ mod tests {
     fn identity_inverse() {
         let eye = Array2::from_vec(
             [2, 2],
-            vec![C64::new(1.0, 0.0), C64::new(0.0, 0.0), C64::new(0.0, 0.0), C64::new(1.0, 0.0)],
+            vec![
+                C64::new(1.0, 0.0),
+                C64::new(0.0, 0.0),
+                C64::new(0.0, 0.0),
+                C64::new(1.0, 0.0),
+            ],
         )
         .unwrap();
         let inv = complex_inv(&eye).expect("inverse of identity");
@@ -168,7 +183,12 @@ mod tests {
     fn singular_returns_err() {
         let sing = Array2::from_vec(
             [2, 2],
-            vec![C64::new(1.0, 0.0), C64::new(2.0, 0.0), C64::new(2.0, 0.0), C64::new(4.0, 0.0)],
+            vec![
+                C64::new(1.0, 0.0),
+                C64::new(2.0, 0.0),
+                C64::new(2.0, 0.0),
+                C64::new(4.0, 0.0),
+            ],
         )
         .unwrap();
         let b = Array1::from_vec([2], vec![C64::new(1.0, 0.0), C64::new(2.0, 0.0)]).unwrap();

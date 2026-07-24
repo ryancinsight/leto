@@ -104,15 +104,11 @@ fn ref_sum_axis(data: &[f64], rows: usize, cols: usize, axis: usize) -> Vec<f64>
 fn ref_mean_axis(data: &[f64], rows: usize, cols: usize, axis: usize) -> Vec<f64> {
     if axis == 0 {
         (0..cols)
-            .map(|c| {
-                (0..rows).map(|r| data[r * cols + c]).sum::<f64>() / rows as f64
-            })
+            .map(|c| (0..rows).map(|r| data[r * cols + c]).sum::<f64>() / rows as f64)
             .collect()
     } else {
         (0..rows)
-            .map(|r| {
-                (0..cols).map(|c| data[r * cols + c]).sum::<f64>() / cols as f64
-            })
+            .map(|r| (0..cols).map(|c| data[r * cols + c]).sum::<f64>() / cols as f64)
             .collect()
     }
 }
@@ -155,19 +151,31 @@ fn elementwise_add_sub_mul_div_match_reference() {
 
     let mut out = Array2::zeros(shape);
     add(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
-    assert_close_slice(out.storage().as_slice(), &ref_binop(&a_vals, &b_vals, |x, y| x + y));
+    assert_close_slice(
+        out.storage().as_slice(),
+        &ref_binop(&a_vals, &b_vals, |x, y| x + y),
+    );
 
     let mut out = Array2::zeros(shape);
     sub(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
-    assert_close_slice(out.storage().as_slice(), &ref_binop(&a_vals, &b_vals, |x, y| x - y));
+    assert_close_slice(
+        out.storage().as_slice(),
+        &ref_binop(&a_vals, &b_vals, |x, y| x - y),
+    );
 
     let mut out = Array2::zeros(shape);
     mul(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
-    assert_close_slice(out.storage().as_slice(), &ref_binop(&a_vals, &b_vals, |x, y| x * y));
+    assert_close_slice(
+        out.storage().as_slice(),
+        &ref_binop(&a_vals, &b_vals, |x, y| x * y),
+    );
 
     let mut out = Array2::zeros(shape);
     div(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
-    assert_close_slice(out.storage().as_slice(), &ref_binop(&a_vals, &b_vals, |x, y| x / y));
+    assert_close_slice(
+        out.storage().as_slice(),
+        &ref_binop(&a_vals, &b_vals, |x, y| x / y),
+    );
 }
 
 #[test]
@@ -178,10 +186,16 @@ fn scalar_add_mul_match_reference() {
     let a = Array2::from_shape_vec(shape, vals.clone()).unwrap();
 
     let leto_add = scalar_map::<AddOp, f64, 2>(&a.view(), 3.5).unwrap();
-    assert_close_slice(leto_add.storage().as_slice(), &ref_scalar(&vals, 3.5, |x, s| x + s));
+    assert_close_slice(
+        leto_add.storage().as_slice(),
+        &ref_scalar(&vals, 3.5, |x, s| x + s),
+    );
 
     let leto_mul = scalar_map::<MulOp, f64, 2>(&a.view(), 2.0).unwrap();
-    assert_close_slice(leto_mul.storage().as_slice(), &ref_scalar(&vals, 2.0, |x, s| x * s));
+    assert_close_slice(
+        leto_mul.storage().as_slice(),
+        &ref_scalar(&vals, 2.0, |x, s| x * s),
+    );
 }
 
 #[test]
@@ -218,9 +232,15 @@ fn sum_mean_axis_match_reference() {
 
     for axis in 0..2usize {
         let leto_sum = sum_axis(&a.view(), axis).unwrap();
-        assert_close_slice(leto_sum.storage().as_slice(), &ref_sum_axis(&vals, 3, 5, axis));
+        assert_close_slice(
+            leto_sum.storage().as_slice(),
+            &ref_sum_axis(&vals, 3, 5, axis),
+        );
         let leto_mean = mean_axis(&a.view(), axis).unwrap();
-        assert_close_slice(leto_mean.storage().as_slice(), &ref_mean_axis(&vals, 3, 5, axis));
+        assert_close_slice(
+            leto_mean.storage().as_slice(),
+            &ref_mean_axis(&vals, 3, 5, axis),
+        );
     }
 }
 
@@ -256,7 +276,10 @@ fn matmul_matches_reference_dot() {
     let mut out = Array2::zeros([m, n]);
     matmul(&a.view(), &b.view(), &mut out.view_mut()).unwrap();
 
-    assert_close_slice(out.storage().as_slice(), &ref_matmul(&a_vals, &b_vals, m, k, n));
+    assert_close_slice(
+        out.storage().as_slice(),
+        &ref_matmul(&a_vals, &b_vals, m, k, n),
+    );
 }
 
 #[test]

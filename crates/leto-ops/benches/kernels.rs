@@ -540,7 +540,7 @@ fn bench_decomposition_compare(c: &mut Criterion) {
 }
 
 /// Sparse vs dense matrix product on a deliberately sparse operand: with the
-/// matrix ~5% dense, the CSR  does  work where dense 
+/// matrix ~5% dense, the CSR  does  work where dense
 /// does , so the sparse path is expected ~order-of-magnitude faster.
 /// The one-time  compression is excluded from the timed region (the
 /// sparse workflow compresses once and reuses); the dense matmul is the baseline.
@@ -757,7 +757,7 @@ fn bench_svd_scaling(c: &mut Criterion) {
 
 /// UDUᵀ scaling instrument. The symmetric-indefinite factorization's inner work
 /// is a per-entry weighted dot ;  is
-/// loop-invariant across the -loop, so hoisting it and reducing via 
+/// loop-invariant across the -loop, so hoisting it and reducing via
 /// is both an algorithmic (O(n³) recompute) and a SIMD win. SPD input is a safe
 /// symmetric subset (no zero pivots).
 fn bench_udu_scaling(c: &mut Criterion) {

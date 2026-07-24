@@ -95,7 +95,11 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
     /// Panics if `restart_dim == 0`.
     pub fn new(config: IterativeSolverConfig<T>, restart_dim: usize) -> Self {
         assert!(restart_dim > 0, "GMRES restart dimension must be positive");
-        Self { config, restart_dim, workspace: Mutex::new(None) }
+        Self {
+            config,
+            restart_dim,
+            workspace: Mutex::new(None),
+        }
     }
 
     /// Create with default configuration and `restart_dim = 30`.
@@ -197,7 +201,12 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
             for k in 0..inner {
                 // Split mutable borrows: pass only what Arnoldi needs.
                 let Workspace {
-                    v, h, basis_work, work, precond_work, ..
+                    v,
+                    h,
+                    basis_work,
+                    work,
+                    precond_work,
+                    ..
                 } = ws;
                 arnoldi::arnoldi_step(
                     a,
@@ -254,7 +263,10 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
         Err(LetoError::ConvergenceError {
             max_iters: self.config.max_iterations,
             residual: NumericElement::to_f64(
-                *monitor.residual_history.last().unwrap_or(&<T as NumericElement>::ZERO),
+                *monitor
+                    .residual_history
+                    .last()
+                    .unwrap_or(&<T as NumericElement>::ZERO),
             ),
             tol: NumericElement::to_f64(self.config.tolerance),
         })

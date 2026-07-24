@@ -76,22 +76,10 @@ fn array_array_operators_match_reference() {
     let a_slice = la.storage().as_slice();
     let b_slice = lb.storage().as_slice();
 
-    assert_eq!(
-        (&la + &lb).storage().as_slice(),
-        ref_add(a_slice, b_slice)
-    );
-    assert_eq!(
-        (&la - &lb).storage().as_slice(),
-        ref_sub(a_slice, b_slice)
-    );
-    assert_eq!(
-        (&la * &lb).storage().as_slice(),
-        ref_mul(a_slice, b_slice)
-    );
-    assert_eq!(
-        (&la / &lb).storage().as_slice(),
-        ref_div(a_slice, b_slice)
-    );
+    assert_eq!((&la + &lb).storage().as_slice(), ref_add(a_slice, b_slice));
+    assert_eq!((&la - &lb).storage().as_slice(), ref_sub(a_slice, b_slice));
+    assert_eq!((&la * &lb).storage().as_slice(), ref_mul(a_slice, b_slice));
+    assert_eq!((&la / &lb).storage().as_slice(), ref_div(a_slice, b_slice));
 }
 
 #[test]

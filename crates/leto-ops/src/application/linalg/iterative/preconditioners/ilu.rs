@@ -92,7 +92,13 @@ impl<T: RealField + FloatElement + Copy + LetoScalar> ILUPreconditioner<T> {
         }
 
         let _ = nnz; // acknowledged
-        Ok(Self { lu_values: values, col_indices, row_offsets, diag_positions, n })
+        Ok(Self {
+            lu_values: values,
+            col_indices,
+            row_offsets,
+            diag_positions,
+            n,
+        })
     }
 }
 

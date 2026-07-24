@@ -1,11 +1,17 @@
+/// 1-D finite-difference differentiation operators.
+pub mod diff;
 /// Shared logical-index conversion helpers.
 pub(crate) mod index;
+/// 1-D interpolation (linear, cubic spline, Lagrange).
+pub mod interpolation;
 /// Dense linear algebra: eigensolver and norms.
 pub mod linalg;
 /// Elementwise binary and aggregate map operations.
 pub mod map;
 /// Matrix multiplication operations.
 pub mod matrix;
+/// Numerical quadrature (integration) rules.
+pub mod quadrature;
 /// Deterministic seeded random array constructors.
 pub mod random;
 /// Axis-aware keep-dim reduction operations.

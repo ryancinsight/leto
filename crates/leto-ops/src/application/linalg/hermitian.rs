@@ -99,14 +99,14 @@ fn wilkinson_shift(a: &Array2<C64>, n: usize) -> f64 {
     let disc = (tr * tr / 4.0 - det).sqrt();
     let l1 = tr / 2.0 + disc;
     let l2 = tr / 2.0 - disc;
-    if (l1 - d).abs() < (l2 - d).abs() { l1 } else { l2 }
+    if (l1 - d).abs() < (l2 - d).abs() {
+        l1
+    } else {
+        l2
+    }
 }
 
-fn sort_eig(
-    ev: Array1<f64>,
-    vecs: Array2<C64>,
-    descending: bool,
-) -> (Array1<f64>, Array2<C64>) {
+fn sort_eig(ev: Array1<f64>, vecs: Array2<C64>, descending: bool) -> (Array1<f64>, Array2<C64>) {
     let n = ev.len();
     let mut idx: Vec<usize> = (0..n).collect();
     if descending {
@@ -211,7 +211,8 @@ pub fn hermitian_eigen_jacobi(
     if a.shape()[1] != n {
         return Err(LetoError::InvalidInput(format!(
             "hermitian_eigen_jacobi: A must be square, got {}×{}",
-            a.shape()[0], a.shape()[1]
+            a.shape()[0],
+            a.shape()[1]
         )));
     }
     verify_hermitian(a)?;
@@ -279,17 +280,30 @@ pub fn hermitian_eigen_jacobi(
     }
 
     let od_norm = off_diag_norm(&h, n);
-    let (eigenvalues, eigenvectors) =
-        if config.sort_descending { sort_eig(eigenvalues, v, true) } else { (eigenvalues, v) };
+    let (eigenvalues, eigenvectors) = if config.sort_descending {
+        sort_eig(eigenvalues, v, true)
+    } else {
+        (eigenvalues, v)
+    };
 
     let condition_number = if config.estimate_condition && n > 0 {
         let lo = eigenvalues[n - 1].abs();
-        if lo > 1e-14 { Some(eigenvalues[0].abs() / lo) } else { None }
+        if lo > 1e-14 {
+            Some(eigenvalues[0].abs() / lo)
+        } else {
+            None
+        }
     } else {
         None
     };
 
-    Ok(HermitianEigenResult { eigenvalues, eigenvectors, iterations: iters, off_diagonal_norm: od_norm, condition_number })
+    Ok(HermitianEigenResult {
+        eigenvalues,
+        eigenvectors,
+        iterations: iters,
+        off_diagonal_norm: od_norm,
+        condition_number,
+    })
 }
 
 /// Compute eigendecomposition of a complex Hermitian matrix via implicit QR
@@ -307,7 +321,8 @@ pub fn hermitian_eigen_qr(
     if a.shape()[1] != n {
         return Err(LetoError::InvalidInput(format!(
             "hermitian_eigen_qr: A must be square, got {}×{}",
-            a.shape()[0], a.shape()[1]
+            a.shape()[0],
+            a.shape()[1]
         )));
     }
     verify_hermitian(a)?;
@@ -323,7 +338,11 @@ pub fn hermitian_eigen_qr(
 
     for iter in 0..config.max_iterations {
         iters = iter;
-        let shift = if iter % 10 == 0 { h[[n - 1, n - 1]].re } else { wilkinson_shift(&h, n) };
+        let shift = if iter % 10 == 0 {
+            h[[n - 1, n - 1]].re
+        } else {
+            wilkinson_shift(&h, n)
+        };
 
         for i in 0..n {
             h[[i, i]] -= C64::new(shift, 0.0);
@@ -345,15 +364,28 @@ pub fn hermitian_eigen_qr(
     }
 
     let od_norm = off_diag_norm(&h, n);
-    let (eigenvalues, eigenvectors) =
-        if config.sort_descending { sort_eig(eigenvalues, q, true) } else { (eigenvalues, q) };
+    let (eigenvalues, eigenvectors) = if config.sort_descending {
+        sort_eig(eigenvalues, q, true)
+    } else {
+        (eigenvalues, q)
+    };
 
     let condition_number = if config.estimate_condition && n > 0 {
         let lo = eigenvalues[n - 1].abs();
-        if lo > 1e-14 { Some(eigenvalues[0].abs() / lo) } else { None }
+        if lo > 1e-14 {
+            Some(eigenvalues[0].abs() / lo)
+        } else {
+            None
+        }
     } else {
         None
     };
 
-    Ok(HermitianEigenResult { eigenvalues, eigenvectors, iterations: iters, off_diagonal_norm: od_norm, condition_number })
+    Ok(HermitianEigenResult {
+        eigenvalues,
+        eigenvectors,
+        iterations: iters,
+        off_diagonal_norm: od_norm,
+        condition_number,
+    })
 }

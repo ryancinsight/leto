@@ -67,15 +67,11 @@ fn ref_sum_axis(data: &[f32], rows: usize, cols: usize, axis: usize) -> Vec<f32>
 fn ref_mean_axis(data: &[f32], rows: usize, cols: usize, axis: usize) -> Vec<f32> {
     if axis == 0 {
         (0..cols)
-            .map(|c| {
-                (0..rows).map(|r| data[r * cols + c]).sum::<f32>() / rows as f32
-            })
+            .map(|c| (0..rows).map(|r| data[r * cols + c]).sum::<f32>() / rows as f32)
             .collect()
     } else {
         (0..rows)
-            .map(|r| {
-                (0..cols).map(|c| data[r * cols + c]).sum::<f32>() / cols as f32
-            })
+            .map(|r| (0..cols).map(|c| data[r * cols + c]).sum::<f32>() / cols as f32)
             .collect()
     }
 }
@@ -183,7 +179,13 @@ fn test_matmul_differential_matches_reference_transposed_views() {
     // rhs_base values in row-major [2,3]: [[7,-9,11],[8,10,-12]]
     // transposed [3,2]: [[7,8],[-9,10],[11,-12]]
     // matmul: [2,3] x [3,2] = [2,2]
-    let expected = ref_matmul(&[1.0, -2.0, 3.0, 4.5, 0.25, -6.0], &[7.0, 8.0, -9.0, 10.0, 11.0, -12.0], 2, 3, 2);
+    let expected = ref_matmul(
+        &[1.0, -2.0, 3.0, 4.5, 0.25, -6.0],
+        &[7.0, 8.0, -9.0, 10.0, 11.0, -12.0],
+        2,
+        3,
+        2,
+    );
     assert_close_slice(out.storage().as_slice(), &expected);
 }
 

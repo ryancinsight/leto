@@ -32,10 +32,7 @@ fn check_construction() -> Observation {
         .expect("input length matches the declared shape");
     Observation::new(
         "construction",
-        max_abs_diff(
-            leto.storage().as_slice(),
-            leto.storage().as_slice(),
-        ),
+        max_abs_diff(leto.storage().as_slice(), leto.storage().as_slice()),
         0.0,
     )
 }
@@ -70,10 +67,7 @@ fn check_elementwise_add() -> Observation {
 
     Observation::new(
         "elementwise_add",
-        max_abs_diff(
-            leto_result.storage().as_slice(),
-            &reference,
-        ),
+        max_abs_diff(leto_result.storage().as_slice(), &reference),
         0.0,
     )
 }
@@ -100,11 +94,7 @@ fn check_dot_product() -> Observation {
         dot(&leto_lhs.view(), &leto_rhs.view()).expect("equal lengths satisfy dot product");
 
     // Reference: plain dot product.
-    let reference: f64 = lhs_values
-        .iter()
-        .zip(&rhs_values)
-        .map(|(x, y)| x * y)
-        .sum();
+    let reference: f64 = lhs_values.iter().zip(&rhs_values).map(|(x, y)| x * y).sum();
 
     Observation::new(
         "dot_product",
@@ -163,10 +153,7 @@ fn check_matmul() -> Observation {
 
     Observation::new(
         "matmul",
-        max_abs_diff(
-            leto_result.storage().as_slice(),
-            &reference,
-        ),
+        max_abs_diff(leto_result.storage().as_slice(), &reference),
         two_path_reduction_bound(inner, max_abs_term_sum),
     )
 }
@@ -204,10 +191,7 @@ fn check_mapv() -> Observation {
 
     Observation::new(
         "mapv",
-        max_abs_diff(
-            leto_result.storage().as_slice(),
-            &reference,
-        ),
+        max_abs_diff(leto_result.storage().as_slice(), &reference),
         0.0,
     )
 }

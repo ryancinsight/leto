@@ -43,16 +43,22 @@ impl<T: RealField + FloatElement + Copy + LetoScalar> JacobiPreconditioner<T> {
             }
             inv_diag[row] = <T as NumericElement>::ONE / d;
         }
-        Self { inv_diagonal: inv_diag }
+        Self {
+            inv_diagonal: inv_diag,
+        }
     }
 
     /// Construct from an explicit inverse-diagonal vector (zero-copy path).
     pub fn from_inv_diagonal(inv_diag: Array1<T>) -> Self {
-        Self { inv_diagonal: inv_diag }
+        Self {
+            inv_diagonal: inv_diag,
+        }
     }
 }
 
-impl<T: RealField + FloatElement + Copy + LetoScalar> Preconditioner<T> for JacobiPreconditioner<T> {
+impl<T: RealField + FloatElement + Copy + LetoScalar> Preconditioner<T>
+    for JacobiPreconditioner<T>
+{
     fn apply_to(&self, r: &Array1<T>, z: &mut Array1<T>) -> Result<()> {
         let n = r.shape()[0];
         if z.shape()[0] != n {

@@ -105,11 +105,7 @@ impl LsqrSolver {
     /// `at` is its transpose.  Pass the same object for both when the
     /// operator supplies `apply_transpose`.
     #[must_use]
-    pub fn solve<Op: LinearOperator<f64>>(
-        &self,
-        a: &Op,
-        b: &Array1<f64>,
-    ) -> LsqrResult {
+    pub fn solve<Op: LinearOperator<f64>>(&self, a: &Op, b: &Array1<f64>) -> LsqrResult {
         let n = b.shape()[0];
         let mut x = Array1::zeros([n]);
 
@@ -185,10 +181,7 @@ impl LsqrSolver {
             }
 
             // Givens rotation.
-            let rho = (rho_bar * rho_bar
-                + beta_new * beta_new
-                + damping * damping)
-                .sqrt();
+            let rho = (rho_bar * rho_bar + beta_new * beta_new + damping * damping).sqrt();
             if rho < 1e-12 {
                 break;
             }
@@ -256,5 +249,9 @@ fn estimate_condition(rho_values: &[f64]) -> f64 {
     }
     let max = rho_values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let min = rho_values.iter().cloned().fold(f64::INFINITY, f64::min);
-    if min < 1e-300 { f64::INFINITY } else { max / min }
+    if min < 1e-300 {
+        f64::INFINITY
+    } else {
+        max / min
+    }
 }

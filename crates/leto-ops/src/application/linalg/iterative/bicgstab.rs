@@ -191,7 +191,10 @@ impl<T: RealField + Copy + NumericElement> BiCGSTAB<T> {
         Err(LetoError::ConvergenceError {
             max_iters: self.config.max_iterations,
             residual: NumericElement::to_f64(
-                *monitor.residual_history.last().unwrap_or(&<T as NumericElement>::ZERO),
+                *monitor
+                    .residual_history
+                    .last()
+                    .unwrap_or(&<T as NumericElement>::ZERO),
             ),
             tol: NumericElement::to_f64(self.config.tolerance),
         })

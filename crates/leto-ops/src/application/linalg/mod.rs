@@ -5,10 +5,6 @@
 //! path exists. Kernels are generic over `RealScalar` and run in native
 //! precision per the `Scalar` contract.
 
-/// Complex linear algebra: solve and inverse for `Array2<Complex<f64>>`.
-pub mod complex_linalg;
-/// Hermitian eigensolver (Jacobi and implicit QR with Wilkinson shift).
-pub mod hermitian;
 /// Golub–Kahan bidiagonalization via two-sided Householder reflectors.
 pub mod bidiagonal;
 /// Symmetric-indefinite Bunch–Kaufman `P A Pᵀ = L D Lᵀ` factorization.
@@ -17,12 +13,16 @@ pub mod bunch_kaufman;
 pub mod cholesky;
 /// QR with column pivoting: rank-revealing `A P = Q R`.
 pub mod col_piv_qr;
+/// Complex linear algebra: solve and inverse for `Array2<Complex<f64>>`.
+pub mod complex_linalg;
 /// Real symmetric eigensolver (Jacobi rotations).
 pub mod eigen;
 /// General (non-symmetric) eigenvalues via shifted complex QR.
 pub mod eigenvalues;
 /// LU with complete (full) pivoting: rank-revealing `P A Q = L U`.
 pub mod full_piv_lu;
+/// Hermitian eigensolver (Jacobi and implicit QR with Wilkinson shift).
+pub mod hermitian;
 /// Upper Hessenberg reduction via Householder reflectors.
 pub mod hessenberg;
 /// Shared Householder reflector primitive (SSOT for orthogonal transforms).
@@ -91,10 +91,10 @@ pub use udu::{udu_decompose, UduDecomposition};
 
 /// Iterative solvers (SSOT re-export).
 pub use iterative::{
-    BiCGSTAB, Configurable, ConvergenceMonitor, ConjugateGradient, IdentityPreconditioner,
-    ILUPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
-    LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason, Preconditioner,
-    GMRES,
+    BiCGSTAB, Configurable, ConjugateGradient, ConvergenceMonitor, ILUPreconditioner,
+    IdentityPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
+    LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason,
+    Preconditioner, GMRES,
 };
 
 /// Complex linear algebra (re-export).

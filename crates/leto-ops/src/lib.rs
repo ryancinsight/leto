@@ -20,31 +20,97 @@ pub use domain::strategy::SimdStrategy;
 pub use domain::strategy::ParallelStrategy;
 
 pub use application::linalg::{
-    bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve,
-    col_piv_qr, det, eigenvalues, full_piv_lu, hessenberg, inv, kron, l2_normalize,
-    l2_normalize_into, lu_decompose, matexp, matpow, matrix_rank, matrix_rank_with_tolerance, norm,
-    norm_l1, norm_l2, norm_max, pinv, qr_decompose, schur, singular_values, solve,
-    solve_least_squares, svd_decompose, svd_decompose_with_tolerance, svd_rank_revealing,
-    svd_rank_revealing_with_tolerance, svd_via_bidiagonal, symmetric_eigen_jacobi,
-    symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
-    symmetric_eigenvalues_jacobi_with_tolerance, trace, udu_decompose, AsMatrixView,
-    BidiagonalDecomposition, BunchKaufmanDecomposition, CholeskyDecomposition,
-    ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition,
-    MatrixDecompose, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
-    NormKind, NormL1, NormL2, NormMax, QrDecomposition, RealSchur, SvdDecomposition,
-    SymmetricEigenDecomposition, UduDecomposition,
-    // ── Iterative solvers (SSOT) ──────────────────────────────────────────────
-    BiCGSTAB, Configurable, ConvergenceMonitor, ConjugateGradient, IdentityPreconditioner,
-    ILUPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
-    LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason,
-    Preconditioner, GMRES,
+    bidiagonalize,
+    bunch_kaufman,
+    cholesky_decompose,
+    cholesky_det,
+    cholesky_inv,
+    cholesky_solve,
+    col_piv_qr,
     // ── Complex linear algebra ────────────────────────────────────────────────
-    complex_inv, complex_solve,
+    complex_inv,
+    complex_solve,
+    det,
+    eigenvalues,
+    full_piv_lu,
     // ── Hermitian eigensolvers ─────────────────────────────────────────────────
-    hermitian_eigen_jacobi, hermitian_eigen_qr, HermitianEigenConfig, HermitianEigenResult,
+    hermitian_eigen_jacobi,
+    hermitian_eigen_qr,
+    hessenberg,
+    inv,
+    kron,
+    l2_normalize,
+    l2_normalize_into,
+    lu_decompose,
+    matexp,
+    matpow,
+    matrix_rank,
+    matrix_rank_with_tolerance,
+    norm,
+    norm_l1,
+    norm_l2,
+    norm_max,
+    pinv,
+    qr_decompose,
+    schur,
+    singular_values,
+    solve,
+    solve_least_squares,
+    svd_decompose,
+    svd_decompose_with_tolerance,
+    svd_rank_revealing,
+    svd_rank_revealing_with_tolerance,
+    svd_via_bidiagonal,
+    symmetric_eigen_jacobi,
+    symmetric_eigen_jacobi_with_tolerance,
+    symmetric_eigenvalues_jacobi,
+    symmetric_eigenvalues_jacobi_with_tolerance,
+    trace,
+    udu_decompose,
+    AsMatrixView,
+    // ── Iterative solvers (SSOT) ──────────────────────────────────────────────
+    BiCGSTAB,
+    BidiagonalDecomposition,
+    BunchKaufmanDecomposition,
+    CholeskyDecomposition,
+    ColPivQrDecomposition,
+    Configurable,
+    ConjugateGradient,
+    ConvergenceMonitor,
+    FullPivLuDecomposition,
+    HermitianEigenConfig,
+    HermitianEigenResult,
+    HessenbergDecomposition,
+    ILUPreconditioner,
+    IdentityPreconditioner,
+    IterativeLinearSolver,
+    IterativeSolverConfig,
+    JacobiPreconditioner,
+    LinearOperator,
+    LinearSolver,
+    LsqrConfig,
+    LsqrResult,
+    LsqrSolver,
+    LsqrStopReason,
+    LuDecomposition,
+    MatrixDecompose,
+    MatrixFunction,
+    MatrixNorm,
+    MatrixProduct,
+    MatrixProperties,
+    MatrixSolve,
+    NormKind,
+    NormL1,
+    NormL2,
+    NormMax,
+    Preconditioner,
+    QrDecomposition,
+    RealSchur,
+    SvdDecomposition,
+    SymmetricEigenDecomposition,
+    UduDecomposition,
+    GMRES,
 };
-/// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ).
-pub use application::special::{erf, j0, j1, jn, sinc};
 pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
     MulOp, SubOp,
@@ -66,6 +132,8 @@ pub use application::sparse::{
     spmv_into, CooMatrix, CscColumn, CscMatrix, CsrMatrix, CsrRow, SparseLuSolver,
     DENSE_LIMIT_DEFAULT,
 };
+/// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ).
+pub use application::special::{erf, j0, j1, jn, sinc};
 pub use application::stencil::laplacian_2d_into;
 pub use application::unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ErfOp, ErfcOp,
@@ -77,4 +145,21 @@ pub use application::zip::{
     indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip2_mut_with,
     indexed_zip4_mut_with, indexed_zip_mut_with, zip2_mut_with, zip3_mut_with, zip5_mut_with,
     zip_fold, zip_mut_with, CoordinateMapPlan,
+};
+
+// ── Interpolation (SSOT) ──────────────────────────────────────────────────────
+/// 1-D interpolation trait and implementations.
+pub use application::interpolation::{
+    CubicSplineInterpolation, Interpolation1D, LagrangeInterpolation, LinearInterpolation,
+};
+
+// ── Finite-difference differentiation (SSOT) ─────────────────────────────────
+/// Generic 1-D finite-difference operator.
+pub use application::diff::{FiniteDifference, FiniteDifferenceScheme};
+
+// ── Quadrature (SSOT) ─────────────────────────────────────────────────────────
+/// Numerical quadrature (integration) rules.
+pub use application::quadrature::{
+    CompositeQuadrature, GaussLegendre2, GaussLegendre3, GaussLegendre5, Quadrature, SimpsonsRule,
+    TrapezoidalRule,
 };

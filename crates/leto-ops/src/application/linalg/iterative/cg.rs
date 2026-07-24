@@ -47,7 +47,10 @@ pub struct ConjugateGradient<T: RealField + Copy> {
 impl<T: RealField + Copy + NumericElement> ConjugateGradient<T> {
     /// Create with explicit configuration.
     pub const fn new(config: IterativeSolverConfig<T>) -> Self {
-        Self { config, workspace: Mutex::new(None) }
+        Self {
+            config,
+            workspace: Mutex::new(None),
+        }
     }
 
     /// Create with default configuration.
@@ -141,7 +144,9 @@ impl<T: RealField + Copy + NumericElement> ConjugateGradient<T> {
             let pap = dot(&p_buf, &ws.ap);
             let pap_scale = norm(&p_buf) * norm(&ws.ap);
             if NumericElement::abs(pap) < bd_tol * (<T as NumericElement>::ONE + pap_scale) {
-                return Err(LetoError::NumericalBreakdown("CG: p·Ap ≈ 0 — breakdown".into()));
+                return Err(LetoError::NumericalBreakdown(
+                    "CG: p·Ap ≈ 0 — breakdown".into(),
+                ));
             }
             if pap < <T as NumericElement>::ZERO {
                 return Err(LetoError::NotPositiveDefinite {

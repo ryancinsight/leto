@@ -70,5 +70,3 @@ pub use lu_symbolic::{factor_symbolic, SymbolicLu};
 pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into};
 pub use spmv::{spmv, spmv_into};
-
-
