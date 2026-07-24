@@ -726,8 +726,7 @@ fn bench_cholesky_scaling(c: &mut Criterion) {
 }
 
 /// QR scaling instrument. The Householder panel reflector's rank-1 apply
-/// ( 15:13:57 up 37 min,  1 user,  load average: 1.17, 1.30, 1.88
-USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU  WHAT; ) dominates  at O(m·n²). Square sizes
+/// dominates at O(m·n²). Square sizes
 /// below  (256) run the *entire* apply through the within-panel
 /// scalar loops; n=256 crosses into the blocked compact-WY path, so the
 /// SIMD-dispatch win concentrates at n<256.

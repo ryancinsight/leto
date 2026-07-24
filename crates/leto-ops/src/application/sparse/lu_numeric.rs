@@ -519,13 +519,13 @@ mod tests {
         let dense = a.to_dense();
         let [nrows, ncols] = dense.shape();
         let mut r = 0.0_f64;
-        for i in 0..nrows {
+        for (i, &bi) in b.iter().enumerate().take(nrows) {
             let mut sum = 0.0;
-            for j in 0..ncols {
+            for (j, &xj) in x.iter().enumerate().take(ncols) {
                 let v = dense.get([i, j]).copied().unwrap_or(0.0);
-                sum += v * x[j];
+                sum += v * xj;
             }
-            let dx = (sum - b[i]).abs();
+            let dx = (sum - bi).abs();
             if dx > r {
                 r = dx;
             }
