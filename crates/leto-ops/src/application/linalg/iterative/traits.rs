@@ -25,6 +25,22 @@ pub trait LinearOperator<T: RealField + Copy>: Send + Sync {
     /// Returning `0` signals "unchecked" — the solver skips dimension validation.
     fn size(&self) -> usize;
 
+    /// Number of rows of A (output dimension of `apply`).
+    ///
+    /// Defaults to [`Self::size`] so square-operator impls need not override.
+    /// Rectangular operators must override to expose the correct row count.
+    fn nrows(&self) -> usize {
+        self.size()
+    }
+
+    /// Number of columns of A (input dimension of `apply` / output of `apply_transpose`).
+    ///
+    /// Defaults to [`Self::size`] so square-operator impls need not override.
+    /// Rectangular operators (m × n, m ≠ n) must override to return `n`.
+    fn ncols(&self) -> usize {
+        self.size()
+    }
+
     /// Whether the operator is symmetric (A = Aᵀ).  Defaults to `false`.
     fn is_symmetric(&self) -> bool {
         false

@@ -71,6 +71,9 @@ pub struct LsqrResult {
     pub converged: bool,
     /// The stopping condition that triggered exit.
     pub stop_reason: LsqrStopReason,
+    /// Per-iteration ‖r‖ estimates (non-increasing).  Empty when LSQR exits
+    /// before the first iteration (zero RHS or zero ‖Aᵀb‖).
+    pub residual_history: Vec<f64>,
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -106,7 +109,8 @@ impl LsqrSolver {
     /// operator supplies `apply_transpose`.
     #[must_use]
     pub fn solve<Op: LinearOperator<f64>>(&self, a: &Op, b: &Array1<f64>) -> LsqrResult {
-        let n = b.shape()[0];
+        let m = b.shape()[0]; // number of rows (observations)
+        let n = if a.ncols() > 0 { a.ncols() } else { m }; // number of cols (unknowns)
         let mut x = Array1::zeros([n]);
 
         // Initialise bidiagonalisation: u = b / β₁.
@@ -121,6 +125,7 @@ impl LsqrSolver {
                 condition_number: 1.0,
                 converged: true,
                 stop_reason: LsqrStopReason::Converged,
+                residual_history: vec![],
             };
         }
         div_in_place(&mut u, beta);
@@ -138,6 +143,7 @@ impl LsqrSolver {
                 condition_number: 1.0,
                 converged: true,
                 stop_reason: LsqrStopReason::Converged,
+                residual_history: vec![beta],
             };
         }
         div_in_place(&mut v, alpha);
@@ -148,19 +154,19 @@ impl LsqrSolver {
         let mut rho_bar = alpha;
         let damping = self.config.damping;
 
-        let mut residual_norms = Vec::new();
+        // Seed history with the initial primal residual ‖b‖ = beta so the
+        // caller always receives at least one entry even for 1-iteration solves.
+        let mut residual_norms = vec![beta];
         let mut at_residual_norms = Vec::new();
         let mut rho_values = Vec::new();
         let mut stop_reason = LsqrStopReason::MaxIterations;
         let mut converged = false;
 
-        let m = v.shape()[0]; // columns of A
-
         for _ in 1..=self.config.max_iterations {
             // Bidiagonalisation.
-            let mut av = Array1::zeros([n]);
+            let mut av = Array1::zeros([m]);
             let _ = a.apply(&v, &mut av);
-            for i in 0..n {
+            for i in 0..m {
                 av[i] -= u[i] * alpha;
             }
             let beta_new = norm_l2(&av);
@@ -169,9 +175,9 @@ impl LsqrSolver {
                 div_in_place(&mut u_new, beta_new);
             }
 
-            let mut atv = Array1::zeros([m]);
+            let mut atv = Array1::zeros([n]);
             let _ = a.apply_transpose(&u_new, &mut atv);
-            for j in 0..m {
+            for j in 0..n {
                 atv[j] -= v[j] * beta_new;
             }
             let alpha_new = norm_l2(&atv);
@@ -239,6 +245,7 @@ impl LsqrSolver {
             condition_number: cond,
             converged,
             stop_reason,
+            residual_history: residual_norms,
         }
     }
 }
