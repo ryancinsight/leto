@@ -19,9 +19,9 @@ repository = "https://github.com/ryancinsight/leto.git"
 leto = { path = "crates/leto" }
 leto-ops = { path = "crates/leto-ops" }
 
-# ── Systems and Parallelization ──
-mnemosyne = { git = "https://github.com/ryancinsight/Mnemosyne.git" }
-moirai = { git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+# ── Systems and Parallelization (local path for migration) ──
+mnemosyne = { path = "../mnemosyne/crates/mnemosyne", features = ["std_tls", "eunomia"] }
+moirai = { path = "../moirai/moirai", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { version = "0.4.1", git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { version = "0.7.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 aequitas = { version = "0.1.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
