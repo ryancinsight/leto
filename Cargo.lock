@@ -20,7 +20,6 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 [[package]]
 name = "aequitas"
 version = "0.1.0"
-source = "git+https://github.com/ryancinsight/aequitas#ce3ef7a6ea26a025b91df99034cadbbcf9b01330"
 dependencies = [
  "eunomia",
  "typenum",
@@ -340,7 +339,6 @@ dependencies = [
 [[package]]
 name = "eunomia"
 version = "0.7.0"
-source = "git+https://github.com/ryancinsight/eunomia#f6cd644b5a6cc1e462ff3e19ae8d182851b8edc2"
 dependencies = [
  "bytemuck",
  "libm",

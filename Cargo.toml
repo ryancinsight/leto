@@ -23,8 +23,8 @@ leto-ops = { path = "crates/leto-ops" }
 mnemosyne = { path = "../mnemosyne/crates/mnemosyne", features = ["std_tls", "eunomia"] }
 moirai = { path = "../moirai/moirai", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { path = "../hermes/crates/hermes-simd" }
-eunomia = { version = "0.7.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
-aequitas = { version = "0.1.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
+eunomia = { path = "../eunomia/crates/eunomia", default-features = false }
+aequitas = { path = "../aequitas", version = "0.1.0", default-features = false }
 themis = { git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
