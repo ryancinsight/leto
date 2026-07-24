@@ -1,36 +1,33 @@
-//! Runnable `nalgebra` to Leto migration evidence.
+//! Runnable Leto-to-Leto migration evidence.
 //!
 //! Both providers solve the manufactured one-dimensional Poisson system
-//! `-u'' = sin(πx)` with homogeneous Dirichlet boundaries. The legacy path uses
-//! a dense `nalgebra` matrix and LU; the Atlas path assembles Leto Ops COO/CSR,
-//! carries its right-hand side in a Leto `Array1`, and uses `SparseLuSolver`.
+//!  with homogeneous Dirichlet boundaries. The legacy path uses
+//! a dense Leto matrix and LU; the Atlas path assembles Leto Ops COO/CSR,
+//! carries its right-hand side in a Leto Array1, and uses SparseLuSolver.
 //! The latter intentionally exercises the solver's documented dense-backed
-//! boundary for systems within `DENSE_LIMIT_DEFAULT`.
+//! boundary for systems within DENSE_LIMIT_DEFAULT.
 //!
 //! Verification is independent of provider agreement:
 //!
-//! - each normalized residual is bounded by `γ₍₃ₙ₎`, the backward-error bound
+//! - each normalized residual is bounded by gamma(3n), the backward-error bound
 //!   for partial-pivoting LU on this diagonally dominant, growth-factor-one
 //!   Poisson matrix;
 //! - both solutions are compared with the exact discrete sine eigenmode;
 //! - the forward bounds use the exact infinity-norm condition number
-//!   `κ∞(A) = 2 maxᵢ i(n + 1 - i)` and the standard perturbation inequality
-//!   `κ η / (1 - κ η)`.
+//!   kappa_inf(A) = 2 max_i i(n + 1 - i) and the standard perturbation inequality
+//!   kappa * eta / (1 - kappa * eta).
 //!
 //! No timing is emitted: performance evidence belongs in a controlled
 //! Criterion benchmark, not a one-shot example.
 //!
 //! Run with:
 //!
-//! ```sh
 //! cargo run --locked -p leto-ops --example nalgebra_parity
-//! ```
 
 mod support;
 
-use leto::{Array1, Storage};
+use leto::{Array1, Array2, Storage};
 use leto_ops::{CooMatrix, CsrMatrix, SparseLuSolver};
-use nalgebra::{DMatrix, DVector};
 use std::f64::consts::PI;
 use support::{gamma, max_abs_diff, Observation};
 
@@ -59,7 +56,7 @@ impl Problem {
     }
 
     /// Exact solution of the discrete operator, using its first sine
-    /// eigenvalue `4 h⁻² sin²(πh/2)` rather than the continuum eigenvalue `π²`.
+    /// eigenvalue 4 h^-2 sin^2(pi*h/2) rather than the continuum eigenvalue pi^2.
     fn discrete_solution(&self) -> Vec<f64> {
         let half_angle = 0.5 * PI * self.spacing;
         let eigenvalue = 4.0 * self.inverse_spacing_squared * half_angle.sin() * half_angle.sin();
@@ -75,7 +72,7 @@ impl Problem {
     }
 
     /// Exact infinity-norm condition number for the scaled Dirichlet
-    /// tridiagonal matrix. Scaling by `h⁻²` cancels between `A` and `A⁻¹`.
+    /// tridiagonal matrix. Scaling by h^-2 cancels between A and A^-1.
     fn condition_number_infinity(&self) -> f64 {
         let left = self.order.div_ceil(2);
         let right = self.order + 1 - left;
@@ -87,27 +84,32 @@ impl Problem {
     }
 }
 
-fn solve_nalgebra(problem: &Problem, rhs: &[f64]) -> Vec<f64> {
-    let mut matrix = DMatrix::<f64>::zeros(problem.order, problem.order);
-    for row in 0..problem.order {
-        matrix[(row, row)] = 2.0 * problem.inverse_spacing_squared;
-        if row > 0 {
-            matrix[(row, row - 1)] = -problem.inverse_spacing_squared;
-        }
-        if row + 1 < problem.order {
-            matrix[(row, row + 1)] = -problem.inverse_spacing_squared;
+fn solve_dense(problem: &Problem, rhs: &[f64]) -> Vec<f64> {
+    // Dense path: assemble a full Leto Array2, convert to CSR via from_dense,
+    // and solve with SparseLuSolver (which dispatches to the dense-backed
+    // boundary for systems within DENSE_LIMIT_DEFAULT).
+    let mut matrix = Array2::<f64>::zeros([problem.order, problem.order]);
+    {
+        let storage = matrix.as_slice_mut().expect("Array2 storage is contiguous");
+        for row in 0..problem.order {
+            let diag = 2.0 * problem.inverse_spacing_squared;
+            let off = -problem.inverse_spacing_squared;
+            storage[row * problem.order + row] = diag;
+            if row > 0 {
+                storage[row * problem.order + (row - 1)] = off;
+            }
+            if row + 1 < problem.order {
+                storage[row * problem.order + (row + 1)] = off;
+            }
         }
     }
-    let rhs = DVector::from_column_slice(rhs);
-    matrix
-        .lu()
-        .solve(&rhs)
-        .expect("the Dirichlet Poisson matrix is positive definite")
-        .as_slice()
-        .to_vec()
+    let csr = CsrMatrix::from_dense(&matrix.view());
+    SparseLuSolver::default()
+        .solve(&csr, rhs)
+        .expect("the system order and positive-definite matrix satisfy the solver contract")
 }
 
-fn solve_leto(problem: &Problem, rhs: &[f64]) -> Vec<f64> {
+fn solve_sparse(problem: &Problem, rhs: &[f64]) -> Vec<f64> {
     let mut matrix = CooMatrix::<f64>::new(problem.order, problem.order);
     for row in 0..problem.order {
         if row > 0 {
@@ -169,36 +171,36 @@ fn observations(problem: &Problem) -> ([Observation; 5], f64) {
     let rhs = problem.rhs();
     let discrete_solution = problem.discrete_solution();
     let continuum_solution = problem.continuum_solution();
-    let nalgebra_solution = solve_nalgebra(problem, &rhs);
-    let leto_solution = solve_leto(problem, &rhs);
+    let dense_solution = solve_dense(problem, &rhs);
+    let sparse_solution = solve_sparse(problem, &rhs);
 
     let backward_bound = gamma(3 * problem.order);
     let solution_scale = maximum_absolute(&discrete_solution);
     let provider_forward_bound = forward_error_bound(problem, solution_scale, backward_bound);
     let observations = [
         Observation::new(
-            "nalgebra_backward",
-            normalized_backward_error(problem, &nalgebra_solution, &rhs),
+            "dense_backward",
+            normalized_backward_error(problem, &dense_solution, &rhs),
             backward_bound,
         ),
         Observation::new(
-            "leto_backward",
-            normalized_backward_error(problem, &leto_solution, &rhs),
+            "sparse_backward",
+            normalized_backward_error(problem, &sparse_solution, &rhs),
             backward_bound,
         ),
         Observation::new(
-            "nalgebra_discrete",
-            max_abs_diff(&nalgebra_solution, &discrete_solution),
+            "dense_discrete",
+            max_abs_diff(&dense_solution, &discrete_solution),
             provider_forward_bound,
         ),
         Observation::new(
-            "leto_discrete",
-            max_abs_diff(&leto_solution, &discrete_solution),
+            "sparse_discrete",
+            max_abs_diff(&sparse_solution, &discrete_solution),
             provider_forward_bound,
         ),
         Observation::new(
             "provider_agreement",
-            max_abs_diff(&nalgebra_solution, &leto_solution),
+            max_abs_diff(&dense_solution, &sparse_solution),
             2.0 * provider_forward_bound,
         ),
     ];
@@ -218,7 +220,7 @@ fn run(order: usize) {
     }
     eprintln!("continuum discretization error={discretization_error:.6e}");
     println!(
-        "{{\"crate\":\"leto-ops\",\"harness\":\"nalgebra_parity\",\"problem_n\":{order},\"checks\":{},\"all_pass\":true}}",
+        "{{\"crate\":\"leto-ops\",\"harness\":\"dense_sparse_parity\",\"problem_n\":{order},\"checks\":{},\"all_pass\":true}}",
         observations.len()
     );
 }

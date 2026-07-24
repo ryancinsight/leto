@@ -19,18 +19,16 @@ themis = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 eunomia = { workspace = true }
 
+# ── Serialization ──
+serde = { workspace = true }
+
 # ── Error Handling ──
 thiserror = { workspace = true }
 
 [dev-dependencies]
 aequitas.workspace = true
 leto = { workspace = true }
-ndarray = { workspace = true }
-ndarray-rand = { workspace = true }
-nalgebra = { workspace = true }
 criterion = { workspace = true }
-rand = "0.8"
-rand_chacha = "0.3"
 
 [[bench]]
 name = "kernels"

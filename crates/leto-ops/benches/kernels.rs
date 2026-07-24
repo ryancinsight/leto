@@ -1,7 +1,7 @@
 //! Criterion baselines for the leto-ops hot kernels.
 //!
 //! These baselines are the prerequisite gate for cache-aware kernel work
-//! (Atlas ADR 0002 Leto slice): per `performance_engineering`, no change is
+//! (Atlas ADR 0002 Leto slice): per , no change is
 //! labeled an optimization without a recorded baseline comparison. Inputs are
 //! pinned; report median + CI from Criterion's standard output. Each hot-kernel
 //! family includes a C-dense case and a prepared non-unit-stride view so view
@@ -18,7 +18,6 @@ use leto_ops::{
     svd_via_bidiagonal, udu_decompose,
 };
 use leto_ops::{csc_spmv_into, spmm, spmv_into, CscMatrix, CsrMatrix};
-use ndarray::{Array1 as NdArray1, Array2 as NdArray2};
 use std::hint::black_box;
 
 fn pinned_values(len: usize, scale: f64) -> Vec<f64> {
@@ -162,10 +161,10 @@ fn bench_elementwise(c: &mut Criterion) {
 }
 
 fn bench_parallel_crossover(c: &mut Criterion) {
-    // Sweep bandwidth-bound `f64` `add` across the LLC-residency crossover to
+    // Sweep bandwidth-bound   across the LLC-residency crossover to
     // validate the working-set-vs-L3 parallel gate. Working set = 3·N·8 bytes, so
     // on a 36 MiB L3 the gate's crossover sits near N ≈ 1.5M. Run under default
-    // features for the gate's decision, `--no-default-features` for an all-serial
+    // features for the gate's decision,  for an all-serial
     // baseline, and with the gate temporarily forced parallel to locate the true
     // crossover during threshold calibration.
     let mut group = c.benchmark_group("parallel_crossover");
@@ -210,8 +209,8 @@ fn bench_unary_map(c: &mut Criterion) {
     });
 
     // Typed scalar-add into caller-owned output. Bandwidth-bound, so the
-    // intensity-aware gate must keep a 64k `f64` fill (1 MB working set) serial
-    // rather than parallelizing it into a slowdown (cf. the raw `map_into` above,
+    // intensity-aware gate must keep a 64k  fill (1 MB working set) serial
+    // rather than parallelizing it into a slowdown (cf. the raw  above,
     // which stays eager as a compute-bound default).
     group.bench_function("scalar_add_into_64k", |bencher| {
         bencher.iter_batched(
@@ -341,17 +340,15 @@ fn bench_zip(c: &mut Criterion) {
     group.finish();
 }
 
+/// Leto-only matmul and reverse-reduction baselines (removed external comparison).
 fn bench_oracle_compare(c: &mut Criterion) {
     let mut group = c.benchmark_group("oracle_compare");
 
-    // Leto vs ndarray only (nalgebra removed).
     for &n in &[64usize, 128, 256] {
         let lhs_values = pinned_values(n * n, 1.0e-3);
         let rhs_values = pinned_values(n * n, 2.0e-3);
-        let leto_lhs = Array::from_shape_vec([n, n], lhs_values.clone()).unwrap();
-        let leto_rhs = Array::from_shape_vec([n, n], rhs_values.clone()).unwrap();
-        let ndarray_lhs = NdArray2::from_shape_vec((n, n), lhs_values.clone()).unwrap();
-        let ndarray_rhs = NdArray2::from_shape_vec((n, n), rhs_values.clone()).unwrap();
+        let leto_lhs = Array::from_shape_vec([n, n], lhs_values).unwrap();
+        let leto_rhs = Array::from_shape_vec([n, n], rhs_values).unwrap();
 
         group.bench_function(format!("matmul_leto_{n}x{n}"), |bencher| {
             bencher.iter_batched(
@@ -368,57 +365,36 @@ fn bench_oracle_compare(c: &mut Criterion) {
                 BatchSize::LargeInput,
             );
         });
-        group.bench_function(format!("matmul_ndarray_{n}x{n}"), |bencher| {
-            bencher.iter(|| black_box(&ndarray_lhs).dot(black_box(&ndarray_rhs)));
-        });
     }
 
     let reduce_n = 256usize;
     let reduce_values = pinned_values(reduce_n * reduce_n, 1.0);
-    let leto_reduce = Array::from_shape_vec([reduce_n, reduce_n], reduce_values.clone()).unwrap();
+    let leto_reduce = Array::from_shape_vec([reduce_n, reduce_n], reduce_values).unwrap();
     let leto_reversed = leto_reduce
         .view()
         .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
         .unwrap();
-    let ndarray_reduce = NdArray2::from_shape_vec((reduce_n, reduce_n), reduce_values).unwrap();
-    let ndarray_reversed = ndarray_reduce.slice(ndarray::s![.., ..;-1]);
 
     group.bench_function("sum_reverse_leto_256x256", |bencher| {
         bencher.iter(|| sum(black_box(&leto_reversed)));
     });
-    group.bench_function("sum_reverse_ndarray_256x256", |bencher| {
-        bencher.iter(|| black_box(&ndarray_reversed).sum());
-    });
     group.bench_function("norm_l2_reverse_leto_256x256", |bencher| {
         bencher.iter(|| norm_l2(black_box(&leto_reversed)).unwrap());
-    });
-    group.bench_function("norm_l2_reverse_ndarray_256x256", |bencher| {
-        bencher.iter(|| {
-            black_box(&ndarray_reversed)
-                .iter()
-                .map(|value| value * value)
-                .sum::<f64>()
-                .sqrt()
-        });
     });
     group.finish();
 }
 
-/// Broad leto-vs-ndarray oracle comparison across the elementwise, unary,
-/// reduction, and vector-dot families (the completeness-harness performance
-/// companion to `bench_oracle_compare`, which owns matmul and reverse
-/// reductions). Same pinned f64 inputs feed both sides; criterion reports
-/// median + CI per side so the ratio is a recorded empirical comparison.
+/// Leto-only parity baselines across the elementwise, unary, reduction, and
+/// vector-dot families (removed external comparison). Same pinned f64 inputs feed
+/// the leto side; criterion reports median + CI per side.
 fn bench_parity_oracle(c: &mut Criterion) {
     let mut group = c.benchmark_group("parity_oracle");
     let len = 1usize << 16;
     let a_values = pinned_values(len, 1.0);
     let b_values = pinned_values(len, 0.5);
 
-    let leto_a = Array::from_shape_vec([len], a_values.clone()).unwrap();
-    let leto_b = Array::from_shape_vec([len], b_values.clone()).unwrap();
-    let nd_a = NdArray1::from_vec(a_values.clone());
-    let nd_b = NdArray1::from_vec(b_values.clone());
+    let leto_a = Array::from_shape_vec([len], a_values).unwrap();
+    let leto_b = Array::from_shape_vec([len], b_values).unwrap();
 
     group.bench_function("add_leto_64k", |bencher| {
         bencher.iter_batched(
@@ -435,37 +411,21 @@ fn bench_parity_oracle(c: &mut Criterion) {
             BatchSize::LargeInput,
         );
     });
-    group.bench_function("add_ndarray_64k", |bencher| {
-        bencher.iter(|| black_box(&nd_a) + black_box(&nd_b));
-    });
 
     group.bench_function("exp_leto_64k", |bencher| {
         bencher.iter(|| unary_map(ExpOp, black_box(&leto_a.view())).unwrap());
-    });
-    group.bench_function("exp_ndarray_64k", |bencher| {
-        bencher.iter(|| black_box(&nd_a).mapv(f64::exp));
     });
 
     group.bench_function("sum_leto_64k", |bencher| {
         bencher.iter(|| sum(black_box(&leto_a.view())));
     });
-    group.bench_function("sum_ndarray_64k", |bencher| {
-        bencher.iter(|| black_box(&nd_a).sum());
-    });
 
     group.bench_function("dot_leto_64k", |bencher| {
         bencher.iter(|| dot(black_box(&leto_a.view()), black_box(&leto_b.view())).unwrap());
     });
-    group.bench_function("dot_ndarray_64k", |bencher| {
-        bencher.iter(|| black_box(&nd_a).dot(black_box(&nd_b)));
-    });
 
-    // Seeded random constructors
+    // Seeded random constructors (leto-native).
     use leto_ops::{normal_with_seed, uniform_with_seed};
-    use ndarray_rand::rand_distr::{Normal, Uniform};
-    use ndarray_rand::RandomExt;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
     group.bench_function("uniform_leto_64k", |bencher| {
         bencher.iter(|| {
@@ -476,12 +436,6 @@ fn bench_parity_oracle(c: &mut Criterion) {
                 black_box(42),
             )
             .unwrap()
-        });
-    });
-    group.bench_function("uniform_ndarray_64k", |bencher| {
-        bencher.iter(|| {
-            let mut rng = ChaCha8Rng::seed_from_u64(42);
-            NdArray1::random_using(black_box(len), black_box(Uniform::new(-2.0, 5.0)), &mut rng)
         });
     });
 
@@ -496,16 +450,6 @@ fn bench_parity_oracle(c: &mut Criterion) {
             .unwrap()
         });
     });
-    group.bench_function("normal_ndarray_64k", |bencher| {
-        bencher.iter(|| {
-            let mut rng = ChaCha8Rng::seed_from_u64(42);
-            NdArray1::random_using(
-                black_box(len),
-                black_box(Normal::new(1.0, 2.0).unwrap()),
-                &mut rng,
-            )
-        });
-    });
 
     group.finish();
 }
@@ -513,7 +457,7 @@ fn bench_parity_oracle(c: &mut Criterion) {
 fn bench_linalg_compare(c: &mut Criterion) {
     let mut group = c.benchmark_group("linalg_compare");
 
-    // Leto-only benchmarks (removed nalgebra comparison).
+    // Leto-only benchmarks (removed external comparison).
     for &n in &[32usize, 64] {
         let values = pinned_values(n * n, 1.0e-3);
         let leto_mat = Array::from_shape_vec([n, n], values.clone()).unwrap();
@@ -539,7 +483,7 @@ fn bench_linalg_compare(c: &mut Criterion) {
     group.finish();
 }
 
-/// Leto-only decomposition baselines (removed nalgebra comparison).
+/// Leto-only decomposition baselines (removed external comparison).
 fn bench_decomposition_compare(c: &mut Criterion) {
     let mut group = c.benchmark_group("decomposition_compare");
 
@@ -596,9 +540,9 @@ fn bench_decomposition_compare(c: &mut Criterion) {
 }
 
 /// Sparse vs dense matrix product on a deliberately sparse operand: with the
-/// matrix ~5% dense, the CSR `spmm` does `O(nnz·k)` work where dense `matmul`
-/// does `O(n²·k)`, so the sparse path is expected ~order-of-magnitude faster.
-/// The one-time `from_dense` compression is excluded from the timed region (the
+/// matrix ~5% dense, the CSR  does  work where dense 
+/// does , so the sparse path is expected ~order-of-magnitude faster.
+/// The one-time  compression is excluded from the timed region (the
 /// sparse workflow compresses once and reuses); the dense matmul is the baseline.
 fn bench_sparse_compare(c: &mut Criterion) {
     let mut group = c.benchmark_group("sparse_compare");
@@ -643,7 +587,7 @@ fn bench_sparse_compare(c: &mut Criterion) {
 /// update; on a large-L3 host it stays cache-resident (and fast) until the
 /// working set exceeds the LLC (n ≈ 1200 at 36 MiB), so a blocked (BLAS-3)
 /// rewrite only pays past that size — an investigated but not-yet-shipped
-/// optimization (gap_audit `2026-07-20 Blocked LU cache-resident regression`).
+/// optimization (gap_audit ).
 fn bench_lu_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("lu_scaling");
     for &n in &[128usize, 256, 512] {
@@ -655,7 +599,7 @@ fn bench_lu_scaling(c: &mut Criterion) {
     group.finish();
 }
 
-/// Banded CSR matrix with `2·half_bw + 1` nonzeros per interior row — the
+/// Banded CSR matrix with  nonzeros per interior row — the
 /// structure of a 1-D stencil / discretized-PDE operator, the canonical Krylov
 /// SpMV workload. Column indices are strictly increasing within each row (CSR
 /// invariant); the diagonal is heavy so the operand is well-scaled.
@@ -680,10 +624,10 @@ fn banded_csr(n: usize, half_bw: usize) -> CsrMatrix<f64> {
     CsrMatrix::from_parts(values, col_indices, row_ptr, n, n).expect("banded CSR is valid")
 }
 
-/// SpMV `y = A·x` scaling instrument. `A` is a 7-point-stencil banded operator
-/// (the per-iteration kernel of every Krylov solve). `4096` stays L2-resident
-/// (isolates per-nonzero instruction overhead); `1<<20` spills past the LLC
-/// (memory-bandwidth-bound). `spmv_into` is timed with a reused output buffer so
+/// SpMV  scaling instrument.  is a 7-point-stencil banded operator
+/// (the per-iteration kernel of every Krylov solve).  stays L2-resident
+/// (isolates per-nonzero instruction overhead);  spills past the LLC
+/// (memory-bandwidth-bound).  is timed with a reused output buffer so
 /// the measurement is the kernel, not allocation.
 fn bench_spmv(c: &mut Criterion) {
     let mut group = c.benchmark_group("spmv");
@@ -705,7 +649,7 @@ fn bench_spmv(c: &mut Criterion) {
     group.finish();
 }
 
-/// Banded CSC matrix — the column-major analogue of [`banded_csr`], same 1-D
+/// Banded CSC matrix — the column-major analogue of banded_csr, same 1-D
 /// stencil structure (row indices strictly increasing within each column).
 fn banded_csc(n: usize, half_bw: usize) -> CscMatrix<f64> {
     let mut values = Vec::new();
@@ -728,8 +672,8 @@ fn banded_csc(n: usize, half_bw: usize) -> CscMatrix<f64> {
     CscMatrix::from_parts(values, row_indices, col_ptr, n, n).expect("banded CSC is valid")
 }
 
-/// CSC SpMV `y = A·x` scaling instrument — the scatter-add, column-major
-/// analogue of [`bench_spmv`] across the same L2/L3/DRAM size ladder.
+/// CSC SpMV  scaling instrument — the scatter-add, column-major
+/// analogue of bench_spmv across the same L2/L3/DRAM size ladder.
 fn bench_csc_spmv(c: &mut Criterion) {
     let mut group = c.benchmark_group("csc_spmv");
     for &n in &[4096usize, 65536, 1 << 20] {
@@ -750,7 +694,7 @@ fn bench_csc_spmv(c: &mut Criterion) {
     group.finish();
 }
 
-/// Row-major SPD matrix `AᵀA + nI` (well-conditioned, positive-definite), the
+/// Row-major SPD matrix  (well-conditioned, positive-definite), the
 /// input Cholesky requires.
 fn spd_values(n: usize) -> Vec<f64> {
     let values = pinned_values(n * n, 1.0e-3);
@@ -767,7 +711,7 @@ fn spd_values(n: usize) -> Vec<f64> {
     spd
 }
 
-/// Cholesky scaling instrument. The `O(n³/3)` factorization is dominated by the
+/// Cholesky scaling instrument. The  factorization is dominated by the
 /// Cholesky–Crout inner-product reduction; these cache-resident sizes isolate
 /// that reduction's throughput (scalar vs SIMD-dispatched).
 fn bench_cholesky_scaling(c: &mut Criterion) {
@@ -782,8 +726,8 @@ fn bench_cholesky_scaling(c: &mut Criterion) {
 }
 
 /// QR scaling instrument. The Householder panel reflector's rank-1 apply
-/// (`w += vᵀ·A`; `A −= v·w`) dominates `qr_decompose` at O(m·n²). Square sizes
-/// below `BLOCK_MIN_ROWS` (256) run the *entire* apply through the within-panel
+/// dominates at O(m·n²). Square sizes
+/// below  (256) run the *entire* apply through the within-panel
 /// scalar loops; n=256 crosses into the blocked compact-WY path, so the
 /// SIMD-dispatch win concentrates at n<256.
 fn bench_qr_scaling(c: &mut Criterion) {
@@ -797,9 +741,9 @@ fn bench_qr_scaling(c: &mut Criterion) {
     group.finish();
 }
 
-/// SVD factor-path scaling instrument. `svd_via_bidiagonal` accumulates the U/V
+/// SVD factor-path scaling instrument.  accumulates the U/V
 /// orthogonal factors by applying the bidiagonalization reflectors — a per-row
-/// `dot` (reduction) + axpy over full-dimension contiguous slices, O(dim³) total.
+///  (reduction) + axpy over full-dimension contiguous slices, O(dim³) total.
 fn bench_svd_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("svd_scaling");
     for &n in &[64usize, 128, 192] {
@@ -812,8 +756,8 @@ fn bench_svd_scaling(c: &mut Criterion) {
 }
 
 /// UDUᵀ scaling instrument. The symmetric-indefinite factorization's inner work
-/// is a per-entry weighted dot `Σ_{k>j} u[i][k]·u[j][k]·d[k]`; `u[j][k]·d[k]` is
-/// loop-invariant across the `i`-loop, so hoisting it and reducing via `dot_slice`
+/// is a per-entry weighted dot ;  is
+/// loop-invariant across the -loop, so hoisting it and reducing via 
 /// is both an algorithmic (O(n³) recompute) and a SIMD win. SPD input is a safe
 /// symmetric subset (no zero pivots).
 fn bench_udu_scaling(c: &mut Criterion) {

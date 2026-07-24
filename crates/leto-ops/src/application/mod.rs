@@ -14,6 +14,8 @@ pub mod reduction;
 pub mod scan;
 /// Sparse matrices (CSR) and sparsity-exploiting kernels.
 pub mod sparse;
+/// Special mathematical functions (sinc, erf, Bessel).
+pub mod special;
 /// Cartesian finite-difference stencil operations.
 pub mod stencil;
 /// Unary map operations.

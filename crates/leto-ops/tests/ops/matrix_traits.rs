@@ -4,11 +4,10 @@
 //! authoritative free-function kernel it delegates to and (b) oracle-independent
 //! identities (Moore-Penrose conditions, normal-equations solution, analytical
 //! values). A transposed-receiver case proves arbitrary-layout support flows
-//! through the `AsMatrixView` bridge unchanged.
+//! through the  bridge unchanged.
 
 use leto::{Array, Array2, Storage};
 use leto_ops::{det, matmul, norm_l2, MatrixDecompose, MatrixNorm, MatrixProduct, MatrixSolve};
-use ndarray::Array2 as NdArray2;
 
 const EPS: f64 = 1.0e-9;
 
@@ -62,7 +61,7 @@ fn pinv_method_matches_moore_penrose_conditions() {
 }
 
 #[test]
-fn matmul_method_matches_kernel_and_ndarray() {
+fn matmul_method_matches_kernel_and_reference() {
     let (m, k, n) = (4usize, 3, 5);
     let a_vals: Vec<f64> = (0..m * k).map(|i| i as f64 * 0.3 + 1.0).collect();
     let b_vals: Vec<f64> = (0..k * n).map(|i| i as f64 * 0.2 - 1.0).collect();
@@ -76,13 +75,20 @@ fn matmul_method_matches_kernel_and_ndarray() {
     let mut kernel_out = Array2::from_shape_vec([m, n], vec![0.0; m * n]).unwrap();
     matmul(&a.view(), &b.view(), &mut kernel_out.view_mut()).unwrap();
 
-    // ndarray oracle.
-    let nd = NdArray2::from_shape_vec((m, k), a_vals)
-        .unwrap()
-        .dot(&NdArray2::from_shape_vec((k, n), b_vals).unwrap());
+    // Reference matmul: C[i,j] = sum_k A[i,k] * B[k,j].
+    let mut expected = vec![0.0f64; m * n];
+    for i in 0..m {
+        for j in 0..n {
+            let mut acc = 0.0f64;
+            for kk in 0..k {
+                acc += a_vals[i * k + kk] * b_vals[kk * n + j];
+            }
+            expected[i * n + j] = acc;
+        }
+    }
 
     assert_close_slice(fluent.storage().as_slice(), kernel_out.storage().as_slice());
-    assert_close_slice(fluent.storage().as_slice(), nd.as_slice().unwrap());
+    assert_close_slice(fluent.storage().as_slice(), &expected);
 }
 
 #[test]

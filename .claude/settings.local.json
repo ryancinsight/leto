@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"D:\\\\atlas\\\\repos\\\\\" | head -20)",
+      "Bash(ls -la \"D:\\\\atlas\\\\repos\\\\apollo\\\\crates\")"
+    ]
+  }
+}

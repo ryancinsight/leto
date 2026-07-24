@@ -33,7 +33,18 @@ pub use application::linalg::{
     MatrixDecompose, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties, MatrixSolve,
     NormKind, NormL1, NormL2, NormMax, QrDecomposition, RealSchur, SvdDecomposition,
     SymmetricEigenDecomposition, UduDecomposition,
+    // ── Iterative solvers (SSOT) ──────────────────────────────────────────────
+    BiCGSTAB, Configurable, ConvergenceMonitor, ConjugateGradient, IdentityPreconditioner,
+    ILUPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
+    LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason,
+    Preconditioner, GMRES,
+    // ── Complex linear algebra ────────────────────────────────────────────────
+    complex_inv, complex_solve,
+    // ── Hermitian eigensolvers ─────────────────────────────────────────────────
+    hermitian_eigen_jacobi, hermitian_eigen_qr, HermitianEigenConfig, HermitianEigenResult,
 };
+/// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ).
+pub use application::special::{erf, j0, j1, jn, sinc};
 pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
     MulOp, SubOp,

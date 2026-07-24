@@ -3,7 +3,6 @@ use leto_ops::{
     cholesky_decompose, det, inv, norm_l1, norm_l2, norm_max, singular_values, solve,
     symmetric_eigenvalues_jacobi,
 };
-use ndarray::{s, Array2 as NdArray2};
 
 const EPS: f64 = 1.0e-9;
 
@@ -126,27 +125,33 @@ fn singular_values_analytical() {
 }
 
 #[test]
-fn reverse_row_reductions_match_ndarray() {
+fn reverse_row_reductions_match_reference() {
     let values: Vec<f64> = (0..16).map(|index| index as f64 - 7.5).collect();
     let a = Array2::from_shape_vec([4, 4], values.clone()).unwrap();
     let reversed = a
         .view()
         .slice_with::<2>(&[SliceArg::All, SliceArg::range(None, None, -1)])
         .unwrap();
-    let ndarray = NdArray2::from_shape_vec((4, 4), values).unwrap();
-    let expected = ndarray.slice(s![.., ..;-1]);
 
-    assert_close(leto_ops::sum(&reversed), expected.sum());
+    // Reference: reverse last axis of each row.
+    let reversed_values: Vec<f64> = (0..4)
+        .flat_map(|r| {
+            let values = &values;
+            (0..4).rev().map(move |c| values[r * 4 + c])
+        })
+        .collect();
+
+    assert_close(leto_ops::sum(&reversed), reversed_values.iter().sum());
     assert_close(
         norm_l1(&reversed).unwrap(),
-        expected.iter().map(|x| x.abs()).sum(),
+        reversed_values.iter().map(|x| x.abs()).sum(),
     );
     assert_close(
         norm_l2(&reversed).unwrap(),
-        expected.iter().map(|x| x * x).sum::<f64>().sqrt(),
+        reversed_values.iter().map(|x| x * x).sum::<f64>().sqrt(),
     );
     assert_close(
         norm_max(&reversed).unwrap(),
-        expected.iter().map(|x| x.abs()).fold(0.0, f64::max),
+        reversed_values.iter().map(|x| x.abs()).fold(0.0, f64::max),
     );
 }
