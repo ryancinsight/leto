@@ -75,7 +75,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     }
 
     /// Iterator over the view's elements in logical row-major order
-    /// (ndarray `iter` parity). The iterator borrows the view's data for `'a`,
+    /// (leto `iter` parity). The iterator borrows the view's data for `'a`,
     /// so it outlives a temporary view produced by `array.view().iter()`.
     #[inline]
     pub fn iter(&self) -> ElementIter<'a, T, N> {
@@ -83,14 +83,14 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     }
 
     /// Iterator over `(multi-index, &element)` pairs in logical row-major order
-    /// (ndarray `indexed_iter` parity).
+    /// (leto `indexed_iter` parity).
     #[inline]
     pub fn indexed_iter(&self) -> IndexedIter<'a, T, N> {
         IndexedIter::new(self)
     }
 
     /// Zero-copy iterator over non-overlapping chunks of `chunk_shape`
-    /// (ndarray `exact_chunks` parity). Each yielded view shares this view's
+    /// (leto `exact_chunks` parity). Each yielded view shares this view's
     /// strides and backing storage.
     ///
     /// # Errors
@@ -101,7 +101,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
         ExactChunks::new(self, chunk_shape)
     }
 
-    /// Zero-copy iterator over chunks along `axis` (ndarray
+    /// Zero-copy iterator over chunks along `axis` (leto
     /// `axis_chunks_iter` parity). The final yielded view carries the
     /// remainder when present.
     ///
@@ -113,7 +113,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     }
 
     /// Zero-copy iterator over every sliding window of shape `window_shape`
-    /// (ndarray `windows` parity). Each yielded view shares this view's strides
+    /// (leto `windows` parity). Each yielded view shares this view's strides
     /// and backing storage.
     ///
     /// # Errors
@@ -145,7 +145,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
         Ok(ArrayView::new(sliced_layout, self.data))
     }
 
-    /// Slice the view with ndarray-style arguments.
+    /// Slice the view with leto-style arguments.
     #[inline]
     pub fn slice_with<const M: usize>(&self, args: &[SliceArg]) -> Result<ArrayView<'a, T, M>> {
         let sliced_layout = self.layout.slice_with(args)?;
@@ -273,7 +273,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
 
     /// Expose the underlying slice if the elements form a dense block in some
     /// memory order (C or F), independent of offset. The returned slice is in
-    /// physical memory order, matching `ndarray::as_slice_memory_order`.
+    /// physical memory order, matching `leto::as_slice_memory_order`.
     #[inline]
     pub fn as_slice_memory_order(&self) -> Option<&'a [T]> {
         if self.layout.is_contiguous() {
@@ -304,7 +304,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     }
 
     /// Return an iterator yielding read-only 1-D lane views *along* `axis`
-    /// (ndarray `lanes` parity; `M = N - 1` is the complement rank). Dual of
+    /// (leto `lanes` parity; `M = N - 1` is the complement rank). Dual of
     /// [`axis_iter`](Self::axis_iter): one lane per complement coordinate.
     ///
     /// # Errors
@@ -375,7 +375,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         }
     }
 
-    /// Borrow this mutable view as an immutable [`ArrayView`] (ndarray `.view()`
+    /// Borrow this mutable view as an immutable [`ArrayView`] (leto `.view()`
     /// parity), sharing the same layout and backing memory.
     #[inline]
     pub fn as_view(&self) -> ArrayView<'_, T, N> {
@@ -430,7 +430,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     }
 
     /// Iterator over `(multi-index, &mut element)` pairs in logical row-major
-    /// order (ndarray `indexed_iter_mut` parity).
+    /// order (leto `indexed_iter_mut` parity).
     ///
     /// # Errors
     /// Returns [`LetoError`] if the layout is out of bounds or cannot prove
@@ -479,7 +479,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         unsafe { Ok(&mut *self.ptr.as_ptr().add(offset)) }
     }
 
-    /// Set every element of the view to a clone of `value` (ndarray `fill`
+    /// Set every element of the view to a clone of `value` (leto `fill`
     /// parity). Walks the view in logical row-major order, so it is correct for
     /// any strides.
     pub fn fill(&mut self, value: T)
@@ -519,7 +519,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         })
     }
 
-    /// Slice the mutable view with ndarray-style arguments.
+    /// Slice the mutable view with leto-style arguments.
     #[inline]
     pub fn slice_with_mut<const M: usize>(
         self,
@@ -699,7 +699,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
 
     /// Expose the underlying mutable slice if the elements form a dense block
     /// in some memory order (C or F), independent of offset. This is the
-    /// `ndarray::as_slice_memory_order_mut` analogue Apollo's in-place FFT
+    /// `leto::as_slice_memory_order_mut` analogue Apollo's in-place FFT
     /// butterfly kernels require.
     #[inline]
     pub fn as_mut_slice_memory_order(&mut self) -> Option<&mut [T]> {
@@ -741,7 +741,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     }
 
     /// Return an iterator yielding mutable 1-D lane views *along* `axis`
-    /// (ndarray `lanes_mut` parity; `M = N - 1` is the complement rank).
+    /// (leto `lanes_mut` parity; `M = N - 1` is the complement rank).
     ///
     /// # Errors
     /// [`LetoError`] if `axis >= N`, the layout does not fit its storage, or the
@@ -765,7 +765,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         )
     }
 
-    /// Copy elements from `rhs` into this mutable view (ndarray `assign` parity).
+    /// Copy elements from `rhs` into this mutable view (leto `assign` parity).
     ///
     /// Walks both views in logical row-major order, so it is correct for any
     /// strides. Panics when shapes differ.
@@ -798,7 +798,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
 
 // ── Index / IndexMut for ArrayView and ArrayViewMut ──────────────────────────
 
-/// Enable `view[[i, j, k]]` syntax, matching `ndarray::ArrayView` ergonomics.
+/// Enable `view[[i, j, k]]` syntax, matching `leto::ArrayView` ergonomics.
 impl<'a, T, const N: usize> std::ops::Index<[usize; N]> for ArrayView<'a, T, N> {
     type Output = T;
     #[inline]
@@ -838,7 +838,7 @@ impl<'a, T, const N: usize> std::ops::IndexMut<[usize; N]> for ArrayViewMut<'a, 
     }
 }
 
-/// Enable `view[i]` (usize) syntax for 1-D views (ndarray `ArrayView1` parity).
+/// Enable `view[i]` (usize) syntax for 1-D views (leto `ArrayView1` parity).
 impl<'a, T> std::ops::Index<usize> for ArrayView<'a, T, 1> {
     type Output = T;
     #[inline]

@@ -1,4 +1,4 @@
-//! Variance and standard-deviation reductions (ndarray-stats parity).
+//! Variance and standard-deviation reductions (leto-stats parity).
 
 use eunomia::FloatElement;
 

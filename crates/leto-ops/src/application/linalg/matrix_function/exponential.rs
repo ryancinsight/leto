@@ -29,7 +29,7 @@ const MAX_SCALE: u32 = 1023;
 /// of Matrices*, and selects `s` so `‖B‖_∞ = ‖A/2ˢ‖_∞ ≤ 1/2`.
 ///
 /// Evidence tier: analytical identity for scaling/squaring plus value-semantic
-/// closed-form and nalgebra differential tests. This is not a machine-checked
+/// closed-form and leto differential tests. This is not a machine-checked
 /// proof of the Padé truncation bound.
 ///
 /// Reuses the caller-owned [`matmul`](crate::matmul) and the partial-pivot LU

@@ -1,6 +1,6 @@
 //! Element-wise transforms over an [`Array`]: by-value map to a new array
 //! ([`mapv`](Array::mapv)) and reduction ([`fold`](Array::fold)), matching the
-//! `ndarray` methods of the same name.
+//! `leto` methods of the same name.
 //!
 //! Both iterate in logical row-major order, so they are correct for any
 //! layout (a C-contiguous array or an arbitrarily strided view alike), and
@@ -18,7 +18,7 @@ where
     T: Copy,
 {
     /// Apply `f` to each element **by value**, returning a new owned array of
-    /// the same shape (ndarray `mapv` parity). The result is C-contiguous.
+    /// the same shape (leto `mapv` parity). The result is C-contiguous.
     #[must_use = "mapv returns a new array; use mapv_inplace to mutate in place"]
     pub fn mapv<U, F>(&self, mut f: F) -> Array<U, VecStorage<U>, N>
     where
@@ -29,7 +29,7 @@ where
             .expect("invariant: mapv preserves the element count and shape")
     }
 
-    /// Collect the elements into a `Vec` in logical row-major order (ndarray
+    /// Collect the elements into a `Vec` in logical row-major order (leto
     /// `to_vec` parity); correct for any strides.
     #[must_use]
     pub fn to_vec(&self) -> Vec<T> {
@@ -37,7 +37,7 @@ where
     }
 
     /// Fold the elements in logical row-major order, threading `init` through
-    /// `f` (ndarray `fold` parity).
+    /// `f` (leto `fold` parity).
     pub fn fold<B, F>(&self, init: B, mut f: F) -> B
     where
         F: FnMut(B, T) -> B,
@@ -46,7 +46,7 @@ where
     }
 
     /// Apply `f` to each pair of co-located elements **by value**, returning a
-    /// new owned array of the same shape (ndarray `Zip::from(a).and(b).
+    /// new owned array of the same shape (leto `Zip::from(a).and(b).
     /// map_collect(f)` parity). The result is C-contiguous.
     ///
     /// Both arrays are traversed in logical row-major order, so the pairing is
@@ -88,7 +88,7 @@ where
     S: StorageMut<T>,
     T: Copy,
 {
-    /// Replace each element with `f(element)` **in place** (ndarray
+    /// Replace each element with `f(element)` **in place** (leto
     /// `mapv_inplace` parity).
     ///
     /// A C-contiguous array (the result of every owned-array constructor) takes
@@ -130,7 +130,7 @@ where
         }
     }
 
-    /// Set every element to `value` (ndarray `fill` parity).
+    /// Set every element to `value` (leto `fill` parity).
     ///
     /// Traverses in logical order, so it is correct for any layout; a
     /// C-contiguous array takes the contiguous fast path.
@@ -139,7 +139,7 @@ where
     }
 
     /// Copy every element of `src` into `self` in logical row-major order
-    /// (ndarray `assign` parity). Both arrays are traversed logically, so the
+    /// (leto `assign` parity). Both arrays are traversed logically, so the
     /// copy is correct regardless of either side's strides.
     ///
     /// # Panics

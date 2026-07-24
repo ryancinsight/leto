@@ -11,7 +11,7 @@ use leto::{Array1, Array2, ArrayView1, ArrayView2, ArrayViewMut1, LetoError, Res
 /// Generic over `T: RealScalar`; elimination runs in the native precision of
 /// `T` per the `Scalar` contract (no hidden widening — a caller needing a
 /// wider working precision converts the input explicitly). Driver: CFDrs
-/// `cfd-math` dense solver paths (nalgebra replacement Stage A1).
+/// `cfd-math` dense solver paths (leto replacement Stage A1).
 #[derive(Debug, Clone)]
 pub struct LuDecomposition<T> {
     factors: Array2<T>,

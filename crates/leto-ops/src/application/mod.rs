@@ -10,6 +10,10 @@ pub mod linalg;
 pub mod map;
 /// Matrix multiplication operations.
 pub mod matrix;
+/// Non-linear solvers (Anderson Acceleration).
+pub mod nonlinear;
+/// Numerical optimisation utilities.
+pub mod optimization;
 /// Numerical quadrature (integration) rules.
 pub mod quadrature;
 /// Deterministic seeded random array constructors.
@@ -18,6 +22,10 @@ pub mod random;
 pub mod reduction;
 /// Prefix/suffix scan operations.
 pub mod scan;
+/// Signal-processing mathematical primitives (window functions, phase wrapping).
+pub mod signal;
+/// Statistical quality metrics and distribution summaries.
+pub mod statistics;
 /// Sparse matrices (CSR) and sparsity-exploiting kernels.
 pub mod sparse;
 /// Special mathematical functions (sinc, erf, Bessel).
@@ -45,6 +53,7 @@ pub use map::{
     MulOp, SubOp,
 };
 pub use matrix::{batched_matmul, matmul};
+pub use optimization::{minimize, LbfgsConfig, LbfgsMemory, LbfgsResult};
 pub use random::{
     normal_with_seed, normal_with_seed_into, uniform_with_seed, uniform_with_seed_into,
 };
@@ -55,6 +64,10 @@ pub use reduction::{
 };
 pub use scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
+};
+pub use statistics::{
+    nrmse, normalized_rmse, pearson, percentile_range, phase_error_degrees_for_correlation,
+    phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,
 };
 pub use sparse::{spgemm, spmm, spmm_into, spmv, spmv_into, CsrMatrix};
 pub use stencil::laplacian_2d_into;

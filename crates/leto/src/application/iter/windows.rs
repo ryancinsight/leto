@@ -1,4 +1,4 @@
-//! Sliding-window iteration over array views (ndarray `windows` parity).
+//! Sliding-window iteration over array views (leto `windows` parity).
 //!
 //! A *window* of shape `w` is a contiguous-in-logical-index `N`-dimensional
 //! subview; [`Windows`] yields every window obtained by sliding `w` one step at

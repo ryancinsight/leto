@@ -5,11 +5,11 @@
 //! - chunks — [`AxisChunks`], [`ExactChunks`]: non-overlapping zero-copy block
 //!   streaming.
 //! - element — [`ElementIter`], [`IndexedIter`], [`IndexedIterMut`]:
-//!   logical-order element and `(index, element)` iteration (ndarray `iter` /
+//!   logical-order element and `(index, element)` iteration (leto `iter` /
 //!   `indexed_iter` / `indexed_iter_mut` parity).
-//! - lanes — [`Lanes`], [`LanesMut`]: 1-D views along one axis (ndarray
+//! - lanes — [`Lanes`], [`LanesMut`]: 1-D views along one axis (leto
 //!   `lanes` / `lanes_mut` parity).
-//! - windows — [`Windows`]: zero-copy sliding-window subviews (ndarray
+//! - windows — [`Windows`]: zero-copy sliding-window subviews (leto
 //!   `windows` parity).
 
 pub mod axis;

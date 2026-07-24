@@ -1,6 +1,6 @@
 //! Fluent rank-2 linear-algebra trait surface (ADR 0003).
 //!
-//! These traits layer a nalgebra-style method surface (`m.lu()`, `m.solve(&b)`,
+//! These traits layer a leto-style method surface (`m.lu()`, `m.solve(&b)`,
 //! `m.det()`, `m.matmul(&b)`) onto Leto's existing strided matrix
 //! (`Array2`/`ArrayView2`) without a second buffer type. Each method is a thin,
 //! monomorphized delegator to the authoritative free-function kernel in this
@@ -436,7 +436,7 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixProperties<T> for M {
     }
 }
 
-/// Fluent matrix functions (nalgebra `pow` / `exp` parity): integer power and
+/// Fluent matrix functions (leto `pow` / `exp` parity): integer power and
 /// exponential as methods on any rank-2 receiver. Each method is a zero-cost
 /// delegator to the free [`matpow`](crate::matpow) / [`matexp`](crate::matexp)
 /// kernel.

@@ -39,7 +39,7 @@ fn test_slicing() {
 }
 
 #[test]
-fn test_ndarray_style_slice_with_negative_bounds_and_reverse_stride() {
+fn test_leto_style_slice_with_negative_bounds_and_reverse_stride() {
     let layout = Layout::c_contiguous([5, 4]).unwrap();
     let storage = VecStorage::new((0..20).collect());
     let array = Array::new(layout, storage).unwrap();
@@ -61,7 +61,7 @@ fn test_ndarray_style_slice_with_negative_bounds_and_reverse_stride() {
 }
 
 #[test]
-fn test_ndarray_style_slice_drops_indexed_axis_and_adds_new_axis() {
+fn test_leto_style_slice_drops_indexed_axis_and_adds_new_axis() {
     let layout = Layout::c_contiguous([2, 3, 4]).unwrap();
     let storage = VecStorage::new((0..24).collect());
     let array = Array::new(layout, storage).unwrap();
@@ -83,7 +83,7 @@ fn test_ndarray_style_slice_drops_indexed_axis_and_adds_new_axis() {
 }
 
 #[test]
-fn test_ndarray_style_slice_ellipsis_and_implicit_trailing_axes() {
+fn test_leto_style_slice_ellipsis_and_implicit_trailing_axes() {
     let layout = Layout::c_contiguous([2, 3, 4]).unwrap();
     let storage = VecStorage::new((0..24).collect());
     let array = Array::new(layout, storage).unwrap();

@@ -1,4 +1,4 @@
-//! Logical-order element iteration over array views (ndarray `iter` /
+//! Logical-order element iteration over array views (leto `iter` /
 //! `indexed_iter` / `indexed_iter_mut` parity).
 //!
 //! Both iterators walk every logical element of a view in row-major order,

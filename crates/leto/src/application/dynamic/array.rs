@@ -1,6 +1,6 @@
 //! `ArrayD<T, S>`: a runtime-rank array **boundary carrier** (ADR 0007).
 //!
-//! `ArrayD` holds data whose rank is known only at run time (PyO3 `numpy`
+//! `ArrayD` holds data whose rank is known only at run time (PyO3 `leto`
 //! arrays, generic I/O). It supports the rank-agnostic operations — construct,
 //! inspect, index, reshape, materialize — and **nothing else**: all numeric
 //! computation is performed after recovering a typed
@@ -154,7 +154,7 @@ impl<T> ArrayD<T, VecStorage<T>> {
         Self::new(layout, VecStorage::fill(size, T::default()))
     }
 
-    /// Construct a C-contiguous array filled with `value` (ndarray `from_elem` parity).
+    /// Construct a C-contiguous array filled with `value` (leto `from_elem` parity).
     ///
     /// # Errors
     /// [`LetoError::Overflow`] if the shape's element count overflows.
@@ -167,7 +167,7 @@ impl<T> ArrayD<T, VecStorage<T>> {
         Self::new(layout, VecStorage::fill(size, value))
     }
 
-    /// Iterator over the logical row-major elements (ndarray `iter` parity).
+    /// Iterator over the logical row-major elements (leto `iter` parity).
     ///
     /// The backing `VecStorage` is always contiguous, so this is a slice
     /// iterator — O(1) construction and no extra allocation.
@@ -176,7 +176,7 @@ impl<T> ArrayD<T, VecStorage<T>> {
     }
 
     /// Mutable iterator over the logical row-major elements
-    /// (ndarray `iter_mut` parity, contiguous VecStorage only).
+    /// (leto `iter_mut` parity, contiguous VecStorage only).
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         self.storage.as_mut_slice().iter_mut()
     }

@@ -1,5 +1,5 @@
 //! Real Schur decomposition `A = Q T Qᵀ` via the Francis double-shift QR
-//! algorithm (nalgebra `Schur` parity).
+//! algorithm (leto `Schur` parity).
 //!
 //! Unlike [`eigenvalues`](fn@crate::eigenvalues) — which promotes to complex and
 //! returns only the spectrum — this routine stays in **real arithmetic** and
@@ -36,7 +36,7 @@
 //! Evidence tier: theorem/proof sketch in rustdoc plus value-semantic tests for
 //! the exact reconstruction `A = Q T Qᵀ`, `Q` orthogonality, quasi-triangular
 //! structure (2×2 blocks only for complex pairs), and eigenvalue agreement with
-//! both [`eigenvalues`](fn@crate::eigenvalues) and nalgebra across real and complex
+//! both [`eigenvalues`](fn@crate::eigenvalues) and leto across real and complex
 //! spectra.
 
 mod francis;

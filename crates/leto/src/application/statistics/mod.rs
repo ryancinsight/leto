@@ -1,6 +1,6 @@
 //! Multivariate summary statistics over a `v × n` observation matrix.
 //!
-//! These operations consume a rank-2 array under the ndarray-stats / numpy
+//! These operations consume a rank-2 array under the leto-stats / leto
 //! `rowvar = true` convention — **each row is a variable, each column an
 //! observation** — and produce a `v × v` summary matrix.
 //!

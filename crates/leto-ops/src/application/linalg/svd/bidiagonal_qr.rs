@@ -86,7 +86,7 @@ fn transpose_to_owned<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array
 /// Returns the rotated lead component `r = c·a + s·b` (the 2-norm `√(a²+b²)`
 /// when `b ≠ 0`, else `a`) so the caller uses it directly instead of recomputing
 /// `c·a + s·b` — `givens` already formed `√(a²+b²)` to normalize, so re-deriving
-/// it at the call site is pure redundant arithmetic (the nalgebra `cancel_y`
+/// it at the call site is pure redundant arithmetic (the leto `cancel_y`
 /// pattern, which returns the norm alongside the rotation).
 #[inline]
 fn givens<T: RealScalar>(a: T, b: T) -> (T, T, T) {
@@ -198,7 +198,7 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
         // Peel converged singular values off the bottom, deflating the bottom
         // superdiagonal in passing (precision-exact `s + |e| == s`). Only the
         // active region near the bottom is touched — already-converged blocks
-        // above are not re-scanned each iteration (matches LAPACK/nalgebra
+        // above are not re-scanned each iteration (matches LAPACK/leto
         // `delimit_subproblem`; the prior `0..q` rescan was `O(q)` per step).
         while q > 0 {
             let scale = d[q - 1].abs().add(d[q].abs());

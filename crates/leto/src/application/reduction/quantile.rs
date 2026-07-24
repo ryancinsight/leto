@@ -1,11 +1,11 @@
-//! Quantile and median reductions (ndarray-stats / numpy parity).
+//! Quantile and median reductions (leto-stats / leto parity).
 //!
 //! A quantile generalizes the median: the `q`-quantile of a sample is the value
 //! below which a fraction `q ∈ [0, 1]` of the (sorted) data lies. Because a
 //! finite sample rarely has an element at the exact fractional rank `q·(n−1)`,
 //! an *interpolation method* selects a value between the two bracketing order
 //! statistics; [`Interpolation`] enumerates the five standard choices, matching
-//! numpy's `numpy.quantile` and `ndarray-stats`' `Quantile1dExt`.
+//! leto's `leto.quantile` and `leto-stats`' `Quantile1dExt`.
 
 use eunomia::FloatElement;
 
@@ -21,7 +21,7 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 /// fractional rank `h = q·(n−1)`.
 ///
 /// With sorted data `v₀ ≤ … ≤ vₙ₋₁`, `lo = ⌊h⌋`, and `g = h − lo`:
-/// - [`Linear`](Interpolation::Linear): `v[lo] + g·(v[lo+1] − v[lo])` — numpy's
+/// - [`Linear`](Interpolation::Linear): `v[lo] + g·(v[lo+1] − v[lo])` — leto's
 ///   default; the unique method that is continuous in `q`.
 /// - [`Lower`](Interpolation::Lower): `v[lo]`.
 /// - [`Higher`](Interpolation::Higher): `v[⌈h⌉]`.
@@ -29,7 +29,7 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 /// - [`Midpoint`](Interpolation::Midpoint): `(v[lo] + v[⌈h⌉]) / 2`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Interpolation {
-    /// Continuous linear interpolation (numpy default).
+    /// Continuous linear interpolation (leto default).
     #[default]
     Linear,
     /// Lower of the two bracketing order statistics.

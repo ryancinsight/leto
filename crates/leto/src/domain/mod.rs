@@ -8,7 +8,7 @@ pub mod insert_axis;
 pub mod layout;
 /// ZST-based compile-time rank reduction helper.
 pub mod remove_axis;
-/// ndarray-style slicing arguments and normalization.
+/// leto-style slicing arguments and normalization.
 pub mod slice;
 
 pub use dynamic::LayoutDyn;

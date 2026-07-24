@@ -1,4 +1,4 @@
-//! Matrix functions: integer power and exponential (nalgebra `pow` / `exp`
+//! Matrix functions: integer power and exponential (leto `pow` / `exp`
 //! parity).
 //!
 //! Both reduce to repeated matrix products (and, for the exponential, one

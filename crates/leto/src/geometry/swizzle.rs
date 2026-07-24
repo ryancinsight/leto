@@ -1,5 +1,5 @@
 //! Named component access (`.x`/`.y`/`.z`/`.w`) for low-dimension vectors and
-//! points, for nalgebra-style ergonomics.
+//! points, for leto-style ergonomics.
 //!
 //! Each low-dim [`Vector`]/[`Point`] `Deref`s to a `#[repr(C)]` named-field view
 //! with identical memory layout, so `v.x` reads/writes the first component with

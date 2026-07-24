@@ -69,7 +69,7 @@ fn test_cow_storage_detaches_on_mutation() {
 }
 
 #[test]
-fn test_ndarray_parity_constructors_and_into_vec() {
+fn test_leto_parity_constructors_and_into_vec() {
     let zeros = Array::<i32, VecStorage<i32>, 2>::zeros([2, 2]);
     assert_eq!(zeros.storage().as_slice(), &[0, 0, 0, 0]);
 

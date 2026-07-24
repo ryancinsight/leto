@@ -1,4 +1,4 @@
-//! Dense linear algebra (Stage A1 of the Atlas nalgebra replacement).
+//! Dense linear algebra (Stage A1 of the Atlas leto replacement).
 //!
 //! Routines are admitted with a named consumer driver, value-semantic
 //! analytical fixtures, and differential contracts where an internal reference

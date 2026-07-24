@@ -1,10 +1,10 @@
-//! nalgebra-compatible operator surface.
+//! leto-compatible operator surface.
 //!
-//! `nalgebra` provides by-reference affine-point operators (`&p - &q`) and
+//! `leto` provides by-reference affine-point operators (`&p - &q`) and
 //! applies rigid transforms through `*` (`isometry * point`, `rotation *
 //! vector`). The leto geometry types are `Copy`, so their canonical operators
 //! are by-value (in [`point`](super::point) etc.); these impls add the
-//! reference and `Mul`-application forms so generic code ported from nalgebra
+//! reference and `Mul`-application forms so generic code ported from leto
 //! compiles unchanged. Every impl forwards to the existing by-value operator or
 //! transform method and is `#[inline(always)]`, so it is identical machine code
 //! to the value form — no allocation, no copy beyond the `Copy` the value form
@@ -58,7 +58,7 @@ impl<T: Sub<Output = T> + Copy, const N: usize> Sub<Vector<T, N>> for &Point<T, 
     }
 }
 
-// ---- Rigid-transform application via `*` (nalgebra ergonomics) --------------
+// ---- Rigid-transform application via `*` (leto ergonomics) --------------
 
 /// Rotate a vector: `rotation * v`.
 impl<T: RealField> Mul<Vector3<T>> for UnitQuaternion<T> {

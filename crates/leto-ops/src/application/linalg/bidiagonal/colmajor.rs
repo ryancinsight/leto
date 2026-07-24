@@ -1,7 +1,7 @@
 //! Column-major working-buffer Golub–Kahan bidiagonal reduction, values-only
 //! (`m ≥ n`). Local to the SVD values path — leto's global array layout stays
 //! row-major; this transposes the input once into a column-major scratch so the
-//! **left (column) reflector** lives in contiguous memory, mirroring nalgebra's
+//! **left (column) reflector** lives in contiguous memory, mirroring leto's
 //! column-major locality without regressing any other operation.
 //!
 //! # Theorem (singular values preserved)

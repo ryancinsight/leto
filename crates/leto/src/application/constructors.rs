@@ -339,7 +339,7 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
 }
 
 /// Build a 1-D array from a `Vec` (its length becomes the shape), matching
-/// `ndarray::Array1::from(vec)` / `from_vec`. The vector's storage is moved in
+/// `leto::Array1::from(vec)` / `from_vec`. The vector's storage is moved in
 /// place — no copy.
 impl<T> From<Vec<T>> for Array<T, VecStorage<T>, 1> {
     #[inline]

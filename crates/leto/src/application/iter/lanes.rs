@@ -1,4 +1,4 @@
-//! Lane iteration: 1-D views *along* one axis (ndarray `lanes` / `lanes_mut`
+//! Lane iteration: 1-D views *along* one axis (leto `lanes` / `lanes_mut`
 //! parity).
 //!
 //! A *lane* along axis `a` is the 1-D slice obtained by fixing every other

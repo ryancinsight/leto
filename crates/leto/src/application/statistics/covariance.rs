@@ -1,4 +1,4 @@
-//! Covariance matrix of a set of variables (ndarray-stats `cov` parity).
+//! Covariance matrix of a set of variables (leto-stats `cov` parity).
 
 use eunomia::FloatElement;
 
@@ -10,7 +10,7 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 
 /// Covariance matrix of the `v` variables in a `v × n` observation matrix.
 ///
-/// Following the ndarray-stats / numpy `rowvar = true` convention, **each row is
+/// Following the leto-stats / leto `rowvar = true` convention, **each row is
 /// a variable** and **each column an observation**: `arr[i, k]` is the `k`-th
 /// observation of variable `i`. The result is the symmetric `v × v` matrix `C`
 /// with `C[i, j] = (1 / (n − ddof)) Σₖ (xᵢₖ − x̄ᵢ)(xⱼₖ − x̄ⱼ)`.

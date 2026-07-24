@@ -7,13 +7,13 @@
 //! broadcasting, use the `leto-ops` `binary_map` / `scalar_map` family (the
 //! performance tier) — the same two-tier split core already uses for reductions.
 //!
-//! `*` is **elementwise** (Hadamard product), matching `ndarray`. Matrix
+//! `*` is **elementwise** (Hadamard product), matching `leto`. Matrix
 //! multiplication is the explicit `MatrixProduct::matmul` method in `leto-ops`
 //! (ADR 0003), so the consolidated array type has no `*`-means-matmul ambiguity.
 //!
 //! Operators cannot return `Result`; an unequal-shape `&Array op &Array` panics
 //! with a message naming the violated invariant (the sanctioned operator
-//! exception, matching `ndarray`/`nalgebra`). Scalar operators and `Neg` never
+//! exception, matching `leto`/`leto`). Scalar operators and `Neg` never
 //! fail.
 
 use crate::application::array::Array;
@@ -29,7 +29,7 @@ mod sealed {
 /// (`&array op scalar`).
 ///
 /// Sealed: implemented only for the numeric primitives. The bound disambiguates
-/// `&Array op scalar` from `&Array op &Array` under coherence (the `ndarray`
+/// `&Array op scalar` from `&Array op &Array` under coherence (the `leto`
 /// `ScalarOperand` pattern) and prevents an array from being treated as a
 /// scalar operand.
 pub trait ScalarOperand: sealed::Sealed + Copy {}

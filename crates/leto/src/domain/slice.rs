@@ -1,7 +1,7 @@
 use crate::domain::error::{LetoError, Result};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
-/// One ndarray-style slicing element.
+/// One leto-style slicing element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SliceArg {
     /// Select the full axis.

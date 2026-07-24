@@ -71,7 +71,7 @@ proptest! {
     }
 
     #[test]
-    fn reverse_slices_preserve_ndarray_style_value_order(
+    fn reverse_slices_preserve_leto_style_value_order(
         rows in 1usize..8,
         cols in 1usize..8,
         row in 0usize..8,

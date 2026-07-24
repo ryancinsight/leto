@@ -1,6 +1,6 @@
 //! Quantile / median reductions: closed-form analytical oracles.
 //!
-//! Oracles use the numpy/ndarray-stats fractional-rank definition
+//! Oracles use the leto/leto-stats fractional-rank definition
 //! `h = q·(n−1)` with linear interpolation between bracketing order statistics;
 //! every expected value below is computed by hand from that definition.
 

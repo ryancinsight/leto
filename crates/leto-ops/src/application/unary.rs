@@ -226,7 +226,7 @@ where
     Array::new(layout, VecStorage::new(values))
 }
 
-/// Alias for `mapv` matching ndarray's borrowed-value naming.
+/// Alias for `mapv` matching leto's borrowed-value naming.
 #[inline]
 pub fn map<T, U, F, const N: usize>(
     input: &ArrayView<'_, T, N>,
@@ -242,7 +242,7 @@ where
 
 /// Apply `f` to every element of `view` in place.
 ///
-/// This is the `ndarray::mapv_inplace` analogue. Elementwise in-place mutation
+/// This is the `leto::mapv_inplace` analogue. Elementwise in-place mutation
 /// is memory-order independent, so the contiguous fast path accepts any dense
 /// block (C or F). Zero-stride write aliasing is rejected because it would
 /// apply `f` to a single physical element more than once.

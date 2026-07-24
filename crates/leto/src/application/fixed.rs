@@ -1019,7 +1019,7 @@ mod tests {
         // about their mean (q = 0 in the depressed cubic), which masks the sign of
         // the cubic's constant term. These matrices have q ≠ 0 and expose it.
 
-        // Distinct eigenvalues (oracle from numpy eigh, descending).
+        // Distinct eigenvalues (oracle from leto eigh, descending).
         let m = FixedMatrix::from_rows([[4.0, 1.0, 2.0], [1.0, 5.0, 3.0], [2.0, 3.0, 6.0]]);
         let (vals, _) = m.symmetric_eigen();
         assert!((vals[0] - 9.418_832_675_97).abs() < 1e-9);

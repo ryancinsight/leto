@@ -156,7 +156,7 @@ impl<T: Sub<Output = T> + Copy, const N: usize> SubAssign<Vector<T, N>> for Poin
     }
 }
 
-/// The origin (all coordinates zero), matching nalgebra's `Point: Default`.
+/// The origin (all coordinates zero), matching leto's `Point: Default`.
 impl<T: NumericElement, const N: usize> Default for Point<T, N> {
     #[inline]
     fn default() -> Self {

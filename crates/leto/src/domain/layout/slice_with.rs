@@ -35,7 +35,7 @@ impl<const N: usize> Layout<N> {
         self.slice_with(&args)
     }
 
-    /// Slice the layout with ndarray-style arguments.
+    /// Slice the layout with leto-style arguments.
     ///
     /// This supports full-axis ranges, optional signed bounds, negative indices,
     /// negative strides, integer indexing that removes an axis, inserted new axes,

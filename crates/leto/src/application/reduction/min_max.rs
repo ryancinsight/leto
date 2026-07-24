@@ -64,12 +64,12 @@ where
     Ok(acc)
 }
 
-/// Multi-index of the minimum element of the whole array (ndarray-stats
+/// Multi-index of the minimum element of the whole array (leto-stats
 /// `argmin` parity).
 ///
 /// Returns the N-dimensional index `[usize; N]` of the smallest element in
 /// logical row-major order. On ties the **first** (lowest row-major index)
-/// occurrence wins, matching ndarray-stats. The companion [`min_all`] returns
+/// occurrence wins, matching leto-stats. The companion [`min_all`] returns
 /// the value at this index.
 ///
 /// # Errors
@@ -82,7 +82,7 @@ where
     arg_reduce_all(arr, |best, candidate| candidate < best)
 }
 
-/// Multi-index of the maximum element of the whole array (ndarray-stats
+/// Multi-index of the maximum element of the whole array (leto-stats
 /// `argmax` parity).
 ///
 /// Returns the N-dimensional index `[usize; N]` of the largest element in

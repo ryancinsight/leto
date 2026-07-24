@@ -1,7 +1,7 @@
 //! Fixed-dimension Euclidean geometry — vectors, points, unit vectors,
 //! quaternion rotations, and rigid transforms over a real scalar field.
 //!
-//! The atlas-native replacement for nalgebra's geometry on the CPU; GPU paths
+//! The atlas-native replacement for leto's geometry on the CPU; GPU paths
 //! belong in hephaestus. Built on the eunomia scalar field SSOT
 //! ([`eunomia::RealField`]).
 

@@ -183,7 +183,7 @@ where
     }
 
     /// The elements as one contiguous slice in logical row-major order, or
-    /// `None` if the array is not C-contiguous (ndarray `as_slice` parity).
+    /// `None` if the array is not C-contiguous (leto `as_slice` parity).
     #[inline]
     pub fn as_slice(&self) -> Option<&[T]> {
         self.view().as_slice()
@@ -196,21 +196,21 @@ where
     }
 
     /// Iterator over the array's elements in logical row-major order
-    /// (ndarray `iter` parity), respecting arbitrary strides.
+    /// (leto `iter` parity), respecting arbitrary strides.
     #[inline]
     pub fn iter(&self) -> ElementIter<'_, T, N> {
         ElementIter::new(&self.view())
     }
 
     /// Iterator over `(multi-index, &element)` pairs in logical row-major order
-    /// (ndarray `indexed_iter` parity).
+    /// (leto `indexed_iter` parity).
     #[inline]
     pub fn indexed_iter(&self) -> IndexedIter<'_, T, N> {
         IndexedIter::new(&self.view())
     }
 
     /// Zero-copy iterator over non-overlapping chunks of `chunk_shape`
-    /// (ndarray `exact_chunks` parity).
+    /// (leto `exact_chunks` parity).
     ///
     /// Remainders along any axis are skipped. Each yielded view has shape
     /// `chunk_shape` and shares this array's backing storage.
@@ -223,7 +223,7 @@ where
         ExactChunks::new(&self.view(), chunk_shape)
     }
 
-    /// Zero-copy iterator over chunks along `axis` (ndarray
+    /// Zero-copy iterator over chunks along `axis` (leto
     /// `axis_chunks_iter` parity).
     ///
     /// The final yielded view carries the remainder when `shape[axis]` is not
@@ -237,7 +237,7 @@ where
     }
 
     /// Zero-copy iterator over every sliding window of shape `window_shape`
-    /// (ndarray `windows` parity).
+    /// (leto `windows` parity).
     ///
     /// # Errors
     /// [`LetoError`] if any `window_shape[i]` is `0` or exceeds
@@ -248,7 +248,7 @@ where
     }
 
     /// Zero-copy iterator over the read-only 1-D lanes along `axis`
-    /// (ndarray `lanes` parity; `M = N - 1`).
+    /// (leto `lanes` parity; `M = N - 1`).
     ///
     /// # Errors
     /// [`LetoError`] if `axis >= N` or the layout does not fit
@@ -272,14 +272,14 @@ where
         Ok(ArrayView::new(sliced_layout, self.storage.as_slice()))
     }
 
-    /// Slice the array with ndarray-style arguments, returning a read-only view.
+    /// Slice the array with leto-style arguments, returning a read-only view.
     #[inline]
     pub fn slice_with<const M: usize>(&self, args: &[SliceArg]) -> Result<ArrayView<'_, T, M>> {
         let sliced_layout = self.layout.slice_with(args)?;
         Ok(ArrayView::new(sliced_layout, self.storage.as_slice()))
     }
 
-    /// Fix one axis at `index`, reducing the rank by 1 (ndarray `index_axis` parity).
+    /// Fix one axis at `index`, reducing the rank by 1 (leto `index_axis` parity).
     ///
     /// `M` must equal `N - 1`; a mismatch returns `LetoError` from `slice_with`.
     /// The caller expresses the output rank explicitly, for example:
@@ -446,7 +446,7 @@ where
     }
 
     /// Iterator over the array's elements as mutable references, in logical
-    /// row-major order (`ndarray iter_mut` parity).
+    /// row-major order (`leto iter_mut` parity).
     ///
     /// # Panics
     /// Panics if the layout is not C-contiguous.
@@ -458,7 +458,7 @@ where
     }
 
     /// Iterator over `(multi-index, &mut element)` pairs in logical row-major
-    /// order (ndarray `indexed_iter_mut` parity).
+    /// order (leto `indexed_iter_mut` parity).
     ///
     /// # Errors
     /// Returns [`LetoError`] if the layout is out of bounds or cannot prove
@@ -469,7 +469,7 @@ where
     }
 
     /// The elements as one mutable contiguous slice in logical row-major order,
-    /// or `None` if the array is not C-contiguous (ndarray `as_slice_mut`
+    /// or `None` if the array is not C-contiguous (leto `as_slice_mut`
     /// parity). The safe basis for in-place element iteration: `if let Some(s) =
     /// a.as_slice_mut() { for x in s.iter_mut() { … } }`.
     #[inline]
@@ -496,7 +496,7 @@ where
     }
 
     /// Zero-copy iterator over the mutable 1-D lanes along `axis`
-    /// (ndarray `lanes_mut` parity; `M = N - 1`).
+    /// (leto `lanes_mut` parity; `M = N - 1`).
     ///
     /// # Errors
     /// [`LetoError`] if `axis >= N`, the layout does not fit
@@ -526,7 +526,7 @@ where
         ))
     }
 
-    /// Slice the array with ndarray-style arguments, returning a mutable view.
+    /// Slice the array with leto-style arguments, returning a mutable view.
     #[inline]
     pub fn slice_with_mut<const M: usize>(
         &mut self,
@@ -539,7 +539,7 @@ where
         ))
     }
 
-    /// Fix one axis at `index`, reducing the rank by 1 (ndarray `index_axis_mut` parity).
+    /// Fix one axis at `index`, reducing the rank by 1 (leto `index_axis_mut` parity).
     ///
     /// `M` must equal `N - 1`; a mismatch returns `LetoError` from `slice_with_mut`.
     #[inline]
@@ -802,7 +802,7 @@ mod slice_access_tests {
 }
 
 /// Logical element-wise equality: two arrays are equal iff they have the same
-/// shape and the same elements in logical row-major order (ndarray parity).
+/// shape and the same elements in logical row-major order (leto parity).
 /// Correct across differing strides/storage, unlike a derived `PartialEq`.
 impl<T, S1, S2, const N: usize> PartialEq<Array<T, S2, N>> for Array<T, S1, N>
 where

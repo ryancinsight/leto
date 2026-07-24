@@ -26,7 +26,7 @@ use leto::{ArrayView2, Result};
 /// Exact rank is discontinuous under round-off, so the numerical rank counts
 /// `σᵢ > τ · σ_max` for a *relative* tolerance `τ`: any singular value below the
 /// noise floor of the largest is treated as structurally zero. This is the same
-/// SVD-truncation criterion nalgebra's `rank` uses.
+/// SVD-truncation criterion leto's `rank` uses.
 ///
 /// Single source of truth: the spectrum is computed by
 /// [`singular_values`](crate::singular_values) (which already returns zeros for

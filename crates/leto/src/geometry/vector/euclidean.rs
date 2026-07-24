@@ -39,7 +39,7 @@ impl<T: RealField, const N: usize> Vector<T, N> {
 
     /// Unit vector in the same direction, `self / ‖self‖`.
     ///
-    /// Matches `nalgebra::normalize`: a zero-length input yields a non-finite
+    /// Matches `leto::normalize`: a zero-length input yields a non-finite
     /// result rather than panicking.
     #[inline]
     pub fn normalize(self) -> Self {

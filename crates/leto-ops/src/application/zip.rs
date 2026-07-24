@@ -583,7 +583,7 @@ where
 
 /// Mutably zip-map elements in place with the logical row-major index.
 ///
-/// This is the indexed analogue of [`zip_mut_with`] (`ndarray`'s
+/// This is the indexed analogue of [`zip_mut_with`] (`leto`'s
 /// `Zip::indexed`). The closure receives the logical index before the mutable
 /// and read-only operands, so Apollo/Coeus call sites can derive position-aware
 /// scaling, phase, or layout metadata without allocating an index array.
@@ -642,7 +642,7 @@ where
 
 /// Mutably zip-map a view with elements from two read-only views in place.
 ///
-/// The three-operand analogue of [`zip_mut_with`] (`ndarray`'s
+/// The three-operand analogue of [`zip_mut_with`] (`leto`'s
 /// `Zip::from(out).and(a).and(b)`). `lhs` owns mutation; `a` and `b` are
 /// read-only. All three views must share the same logical shape. Strided inputs
 /// are traversed by logical row-major index, independent of backing layout.
@@ -718,7 +718,7 @@ where
 
 /// Mutably zip-map a view with elements from three read-only views in place.
 ///
-/// This is the four-operand analogue of [`zip_mut_with`] (`ndarray`'s
+/// This is the four-operand analogue of [`zip_mut_with`] (`leto`'s
 /// `Zip::from(out).and(a).and(b).and(c)`). `lhs` owns mutation; `a`, `b`, and
 /// `c` are read-only. All four views must share the same logical shape.
 /// Strided inputs are traversed by logical row-major index, independent of

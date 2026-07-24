@@ -1,7 +1,7 @@
 //! Covariance / correlation: closed-form oracles + variance cross-checks.
 //!
-//! Convention: rows are variables, columns observations (ndarray-stats /
-//! numpy `rowvar = true`). Expected values are derived by hand from
+//! Convention: rows are variables, columns observations (leto-stats /
+//! leto `rowvar = true`). Expected values are derived by hand from
 //! `C[i,j] = (1/(n−ddof)) Σₖ (xᵢₖ−x̄ᵢ)(xⱼₖ−x̄ⱼ)`.
 
 use leto::application::reduction::var_axis;

@@ -1,4 +1,4 @@
-//! Pearson correlation matrix (ndarray-stats `pearson_correlation` parity).
+//! Pearson correlation matrix (leto-stats `pearson_correlation` parity).
 
 use eunomia::FloatElement;
 
@@ -24,7 +24,7 @@ use crate::infrastructure::storage::{Storage, VecStorage};
 ///
 /// # Special values
 /// A constant variable has zero variance, so its correlations are `0 / 0 = NaN`
-/// (matching `numpy.corrcoef`); correlation is genuinely undefined there.
+/// (matching `leto.corrcoef`); correlation is genuinely undefined there.
 ///
 /// # Errors
 /// [`LetoError`](crate::LetoError) if either dimension is zero (propagated from
