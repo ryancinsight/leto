@@ -1,7 +1,7 @@
 use leto::{Array, Layout, SliceArg, Storage, VecStorage};
 use leto_ops::{
-    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, sum, sum_axis,
-    sum_axis_into,
+    max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, product_axis,
+    product_axis_into, sum, sum_axis, sum_axis_into,
 };
 
 #[test]
@@ -43,16 +43,19 @@ fn test_axis_reductions_keep_reduced_dimension() {
     let mut row_mean = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
     let mut row_min = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
     let mut row_max = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
+    let mut row_product = Array::new(row_layout, VecStorage::fill(2, 0.0f32)).unwrap();
 
     sum_axis_into(&input.view(), 1, &mut row_sum.view_mut()).unwrap();
     mean_axis_into(&input.view(), 1, &mut row_mean.view_mut()).unwrap();
     min_axis_into(&input.view(), 1, &mut row_min.view_mut()).unwrap();
     max_axis_into(&input.view(), 1, &mut row_max.view_mut()).unwrap();
+    product_axis_into(&input.view(), 1, &mut row_product.view_mut()).unwrap();
 
     assert_eq!(row_sum.storage().as_slice(), &[2.0, 3.0]);
     assert_eq!(row_mean.storage().as_slice(), &[2.0 / 3.0, 1.0]);
     assert_eq!(row_min.storage().as_slice(), &[-2.0, -6.0]);
     assert_eq!(row_max.storage().as_slice(), &[3.0, 5.0]);
+    assert_eq!(row_product.storage().as_slice(), &[-6.0, -120.0]);
 
     let col_layout = Layout::c_contiguous([1, 3]).unwrap();
     let mut col_sum = Array::new(col_layout, VecStorage::fill(3, 0.0f32)).unwrap();
@@ -73,6 +76,7 @@ fn test_allocating_axis_reductions_keep_reduced_dimension() {
     let row_mean = mean_axis(&input.view(), 1).unwrap();
     let row_min = min_axis(&input.view(), 1).unwrap();
     let row_max = max_axis(&input.view(), 1).unwrap();
+    let row_product = product_axis(&input.view(), 1).unwrap();
 
     assert_eq!(row_sum.shape(), [2, 1]);
     assert!(row_sum.layout().is_c_contiguous());
@@ -80,6 +84,8 @@ fn test_allocating_axis_reductions_keep_reduced_dimension() {
     assert_eq!(row_mean.storage().as_slice(), &[2.0 / 3.0, 1.0]);
     assert_eq!(row_min.storage().as_slice(), &[-2.0, -6.0]);
     assert_eq!(row_max.storage().as_slice(), &[3.0, 5.0]);
+    assert_eq!(row_product.shape(), [2, 1]);
+    assert_eq!(row_product.storage().as_slice(), &[-6.0, -120.0]);
 
     let col_sum = sum_axis(&input.view(), 0).unwrap();
     assert_eq!(col_sum.shape(), [1, 3]);
@@ -153,10 +159,13 @@ fn test_empty_axis_sum_is_zero_and_mean_is_rejected() {
     let input = Array::new(layout, VecStorage::new(Vec::<f32>::new())).unwrap();
     let out_layout = Layout::c_contiguous([2, 1]).unwrap();
     let mut sum_out = Array::new(out_layout, VecStorage::fill(2, 1.0f32)).unwrap();
+    let mut product_out = Array::new(out_layout, VecStorage::fill(2, 0.0f32)).unwrap();
     let mut mean_out = Array::new(out_layout, VecStorage::fill(2, 1.0f32)).unwrap();
 
     sum_axis_into(&input.view(), 1, &mut sum_out.view_mut()).unwrap();
+    product_axis_into(&input.view(), 1, &mut product_out.view_mut()).unwrap();
     assert_eq!(sum_out.storage().as_slice(), &[0.0, 0.0]);
+    assert_eq!(product_out.storage().as_slice(), &[1.0, 1.0]);
 
     let result = mean_axis_into(&input.view(), 1, &mut mean_out.view_mut());
     assert!(matches!(result, Err(leto::LetoError::StorageError { .. })));
