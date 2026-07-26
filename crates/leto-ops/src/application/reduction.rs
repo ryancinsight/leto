@@ -1,4 +1,4 @@
-use crate::application::index::{index_from_flat, unit_stride_row_slice, RowMajorTraversal};
+use crate::application::index::{RowMajorTraversal, index_from_flat, unit_stride_row_slice};
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
@@ -43,6 +43,10 @@ pub trait AxisReduction<T: Scalar>: sealed::Sealed + Copy + Send + Sync + 'stati
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SumAxis;
 
+/// Product axis-reduction marker.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ProductAxis;
+
 /// Mean axis-reduction marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MeanAxis;
@@ -56,6 +60,7 @@ pub struct MinAxis;
 pub struct MaxAxis;
 
 impl sealed::Sealed for SumAxis {}
+impl sealed::Sealed for ProductAxis {}
 impl sealed::Sealed for MeanAxis {}
 impl sealed::Sealed for MinAxis {}
 impl sealed::Sealed for MaxAxis {}
@@ -82,6 +87,36 @@ impl<T: Scalar> AxisReduction<T> for SumAxis {
     #[inline(always)]
     fn reduce_slice(slice: &[T]) -> Option<T> {
         Some(T::sum_slice(slice))
+    }
+}
+
+impl<T: Scalar> AxisReduction<T> for ProductAxis {
+    #[inline(always)]
+    fn initial(first: T) -> T {
+        first
+    }
+
+    #[inline(always)]
+    fn fold(acc: T, value: T) -> T {
+        acc.mul(value)
+    }
+
+    #[inline(always)]
+    fn finalize(acc: T, _axis_len: usize) -> T {
+        acc
+    }
+
+    const ALLOW_EMPTY: bool = true;
+    const EMPTY: T = T::ONE;
+
+    #[inline(always)]
+    fn reduce_slice(slice: &[T]) -> Option<T> {
+        Some(
+            slice
+                .iter()
+                .copied()
+                .fold(T::ONE, |acc, value| acc.mul(value)),
+        )
     }
 }
 
@@ -118,11 +153,7 @@ impl<T: Scalar> AxisReduction<T> for MinAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value < acc {
-            value
-        } else {
-            acc
-        }
+        if value < acc { value } else { acc }
     }
 
     #[inline(always)]
@@ -147,11 +178,7 @@ impl<T: Scalar> AxisReduction<T> for MaxAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value > acc {
-            value
-        } else {
-            acc
-        }
+        if value > acc { value } else { acc }
     }
 
     #[inline(always)]
@@ -520,6 +547,25 @@ pub fn sum_axis<T: Scalar, const N: usize>(
     axis: usize,
 ) -> Result<Array<T, VecStorage<T>, N>> {
     reduce_axis::<SumAxis, T, N>(input, axis)
+}
+
+/// Product-reduce `input` along `axis`, keeping the reduced axis as length one.
+#[inline]
+pub fn product_axis_into<T: Scalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+    output: &mut ArrayViewMut<'_, T, N>,
+) -> Result<()> {
+    reduce_axis_into::<ProductAxis, T, N>(input, axis, output)
+}
+
+/// Product-reduce `input` along `axis` into newly allocated C-contiguous output storage.
+#[inline]
+pub fn product_axis<T: Scalar, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+) -> Result<Array<T, VecStorage<T>, N>> {
+    reduce_axis::<ProductAxis, T, N>(input, axis)
 }
 
 /// Mean-reduce `input` along `axis`, keeping the reduced axis as length one.
