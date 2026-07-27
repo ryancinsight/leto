@@ -37,7 +37,7 @@ pub use application::linalg::{
     BiCGSTAB, Configurable, ConvergenceMonitor, ConjugateGradient, IdentityPreconditioner,
     ILUPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
     LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason,
-    Preconditioner, GMRES,
+    Preconditioner, SORPreconditioner, SSORPreconditioner, GMRES,
     // ── Complex linear algebra ────────────────────────────────────────────────
     complex_inv, complex_solve,
     // ── Hermitian eigensolvers ─────────────────────────────────────────────────

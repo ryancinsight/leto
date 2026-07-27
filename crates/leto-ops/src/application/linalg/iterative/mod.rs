@@ -17,6 +17,8 @@
 //! | Identity (no-op) | [`IdentityPreconditioner`] |
 //! | Jacobi (diagonal) | [`JacobiPreconditioner`] |
 //! | ILU(0) | [`ILUPreconditioner`] |
+//! | SOR (forward sweep) | [`SORPreconditioner`] |
+//! | SSOR (symmetric sweep) | [`SSORPreconditioner`] |
 //!
 //! ## Core traits
 //!
@@ -50,7 +52,10 @@ pub use config::IterativeSolverConfig;
 pub use convergence::ConvergenceMonitor;
 pub use gmres::GMRES;
 pub use lsqr::{LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason};
-pub use preconditioners::{IdentityPreconditioner, ILUPreconditioner, JacobiPreconditioner};
+pub use preconditioners::{
+    IdentityPreconditioner, ILUPreconditioner, JacobiPreconditioner, SORPreconditioner,
+    SSORPreconditioner,
+};
 pub use traits::{
     Configurable, IterativeLinearSolver, LinearOperator, LinearSolver, Preconditioner,
 };
