@@ -48,11 +48,38 @@ impl<T: RealField + FloatElement + Copy + LetoScalar> JacobiPreconditioner<T> {
         }
     }
 
+    /// Construct from matrix diagonal while treating near-zero entries as identity rows.
+    ///
+    /// This variant maps near-zero or missing diagonal entries to an inverse scale of `1`
+    /// instead of `1/epsilon`, which keeps those rows effectively unpreconditioned.
+    pub fn from_matrix_identity_on_zero(matrix: &CsrMatrix<T>) -> Self {
+        let diag = matrix.diagonal();
+        let mut inv_diag = Array1::zeros([diag.len()]);
+        let zero_tol = diagonal_epsilon::<T>();
+        for i in 0..diag.len() {
+            let val = diag[i];
+            inv_diag[i] = if val.abs() < zero_tol {
+                <T as NumericElement>::ONE
+            } else {
+                <T as NumericElement>::ONE / val
+            };
+        }
+
+        Self {
+            inv_diagonal: inv_diag,
+        }
+    }
+
     /// Construct from an explicit inverse-diagonal vector (zero-copy path).
     pub fn from_inv_diagonal(inv_diag: Array1<T>) -> Self {
         Self {
             inv_diagonal: inv_diag,
         }
+    }
+
+    /// Number of rows this preconditioner was built for.
+    pub fn nrows(&self) -> usize {
+        self.inv_diagonal.shape()[0]
     }
 }
 

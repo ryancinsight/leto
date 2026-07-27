@@ -24,12 +24,12 @@ pub mod reduction;
 pub mod scan;
 /// Signal-processing mathematical primitives (window functions, phase wrapping).
 pub mod signal;
-/// Statistical quality metrics and distribution summaries.
-pub mod statistics;
 /// Sparse matrices (CSR) and sparsity-exploiting kernels.
 pub mod sparse;
 /// Special mathematical functions (sinc, erf, Bessel).
 pub mod special;
+/// Statistical quality metrics and distribution summaries.
+pub mod statistics;
 /// Cartesian finite-difference stencil operations.
 pub mod stencil;
 /// Unary map operations.
@@ -65,11 +65,11 @@ pub use reduction::{
 pub use scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
 };
+pub use sparse::{spgemm, spmm, spmm_into, spmv, spmv_into, CsrMatrix};
 pub use statistics::{
-    nrmse, normalized_rmse, pearson, percentile_range, phase_error_degrees_for_correlation,
+    normalized_rmse, nrmse, pearson, percentile_range, phase_error_degrees_for_correlation,
     phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,
 };
-pub use sparse::{spgemm, spmm, spmm_into, spmv, spmv_into, CsrMatrix};
 pub use stencil::laplacian_2d_into;
 pub use unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ExpOp, LnOp, NegOp,

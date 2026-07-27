@@ -21,6 +21,8 @@
 
 pub mod finite_difference;
 mod schemes;
+pub mod three_dimensional;
 
 pub use finite_difference::FiniteDifference;
 pub use schemes::FiniteDifferenceScheme;
+pub use three_dimensional::{FiniteDifference3D, FiniteDifference3DScheme};

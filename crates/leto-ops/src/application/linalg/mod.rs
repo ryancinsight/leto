@@ -94,7 +94,7 @@ pub use iterative::{
     BiCGSTAB, Configurable, ConjugateGradient, ConvergenceMonitor, ILUPreconditioner,
     IdentityPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
     LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason,
-    Preconditioner, GMRES,
+    Preconditioner, SORPreconditioner, SSORPreconditioner, GMRES,
 };
 
 /// Complex linear algebra (re-export).

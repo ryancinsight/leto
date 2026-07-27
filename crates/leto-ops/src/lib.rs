@@ -106,6 +106,8 @@ pub use application::linalg::{
     Preconditioner,
     QrDecomposition,
     RealSchur,
+    SORPreconditioner,
+    SSORPreconditioner,
     SvdDecomposition,
     SymmetricEigenDecomposition,
     UduDecomposition,
@@ -130,10 +132,6 @@ pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
 };
 pub use application::signal::{blackman, hamming, hann, tukey, wrap_to_pi};
-pub use application::statistics::{
-    nrmse, normalized_rmse, pearson, percentile_range, phase_error_degrees_for_correlation,
-    phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,
-};
 pub use application::sparse::{
     csc_spmv, csc_spmv_into, csr_to_dense, sparse_lu_solve, spgemm, spmm, spmm_into, spmv,
     spmv_into, CooMatrix, CscColumn, CscMatrix, CsrMatrix, CsrRow, SparseLuSolver,
@@ -141,6 +139,10 @@ pub use application::sparse::{
 };
 /// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ).
 pub use application::special::{erf, j0, j1, jn, sinc};
+pub use application::statistics::{
+    normalized_rmse, nrmse, pearson, percentile_range, phase_error_degrees_for_correlation,
+    phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,
+};
 pub use application::stencil::laplacian_2d_into;
 pub use application::unary::{
     map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ErfOp, ErfcOp,
@@ -163,6 +165,9 @@ pub use application::interpolation::{
 // ── Finite-difference differentiation (SSOT) ─────────────────────────────────
 /// Generic 1-D finite-difference operator.
 pub use application::diff::{FiniteDifference, FiniteDifferenceScheme};
+/// Generic 3-D finite-difference operator (provider-SSOT for kwavers/CFDrs/helios
+/// first-derivative kernels: central 2nd/4th/6th + Yee staggered forward/backward).
+pub use application::diff::{FiniteDifference3D, FiniteDifference3DScheme};
 
 // ── Quadrature (SSOT) ─────────────────────────────────────────────────────────
 /// Numerical quadrature (integration) rules.

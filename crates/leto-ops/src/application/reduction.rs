@@ -1,4 +1,4 @@
-use crate::application::index::{RowMajorTraversal, index_from_flat, unit_stride_row_slice};
+use crate::application::index::{index_from_flat, unit_stride_row_slice, RowMajorTraversal};
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
@@ -153,7 +153,11 @@ impl<T: Scalar> AxisReduction<T> for MinAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value < acc { value } else { acc }
+        if value < acc {
+            value
+        } else {
+            acc
+        }
     }
 
     #[inline(always)]
@@ -178,7 +182,11 @@ impl<T: Scalar> AxisReduction<T> for MaxAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value > acc { value } else { acc }
+        if value > acc {
+            value
+        } else {
+            acc
+        }
     }
 
     #[inline(always)]

@@ -33,25 +33,6 @@ pub(crate) fn dot<T: NumericElement>(lhs: &Array1<T>, rhs: &Array1<T>) -> T {
 }
 
 #[inline]
-pub(crate) fn norm<T: NumericElement>(vector: &Array1<T>) -> T {
-    NumericElement::sqrt(dot(vector, vector))
-}
-
-#[inline]
-pub(crate) fn add<T: NumericElement>(lhs: &Array1<T>, rhs: &Array1<T>) -> Array1<T> {
-    assert_eq!(
-        vector_len(lhs),
-        vector_len(rhs),
-        "invariant: vector addition requires equal lengths"
-    );
-    vector_from_vec(
-        (0..vector_len(lhs))
-            .map(|idx| lhs[idx] + rhs[idx])
-            .collect(),
-    )
-}
-
-#[inline]
 pub(crate) fn sub<T: NumericElement>(lhs: &Array1<T>, rhs: &Array1<T>) -> Array1<T> {
     assert_eq!(
         vector_len(lhs),
@@ -100,24 +81,10 @@ pub(crate) fn add_scaled_in_place<T: NumericElement>(
 }
 
 #[inline]
-pub(crate) fn sub_in_place_scaled<T: NumericElement>(
-    lhs: &mut Array1<T>,
-    rhs: &Array1<T>,
-    scale: T,
-) {
-    add_scaled_in_place(lhs, rhs, T::ZERO - scale);
-}
-
-#[inline]
 pub(crate) fn scale<T: NumericElement>(vector: &Array1<T>, factor: T) -> Array1<T> {
     vector_from_vec(
         (0..vector_len(vector))
             .map(|idx| vector[idx] * factor)
             .collect(),
     )
-}
-
-#[inline]
-pub(crate) fn neg<T: NumericElement>(vector: &Array1<T>) -> Array1<T> {
-    scale(vector, T::ZERO - T::ONE)
 }
