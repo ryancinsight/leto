@@ -46,6 +46,18 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference<T> {
         Self::new(FiniteDifferenceScheme::Backward, spacing)
     }
 
+    /// Return the active finite-difference scheme.
+    #[must_use]
+    pub fn scheme(&self) -> FiniteDifferenceScheme {
+        self.scheme
+    }
+
+    /// Return the grid spacing.
+    #[must_use]
+    pub fn spacing(&self) -> T {
+        self.spacing
+    }
+
     /// Compute the first derivative `f'` of `values`.
     ///
     /// # Errors
