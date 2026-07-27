@@ -137,8 +137,9 @@ pub use application::sparse::{
     spmv_into, CooMatrix, CscColumn, CscMatrix, CsrMatrix, CsrRow, SparseLuSolver,
     DENSE_LIMIT_DEFAULT,
 };
-/// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ).
+/// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ, Legendre polynomials).
 pub use application::special::{erf, j0, j1, jn, sinc};
+pub use application::special_legendre::{legendre_poly, legendre_poly_and_deriv};
 pub use application::statistics::{
     normalized_rmse, nrmse, pearson, percentile_range, phase_error_degrees_for_correlation,
     phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,

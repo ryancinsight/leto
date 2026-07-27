@@ -26,8 +26,9 @@ pub mod scan;
 pub mod signal;
 /// Sparse matrices (CSR) and sparsity-exploiting kernels.
 pub mod sparse;
-/// Special mathematical functions (sinc, erf, Bessel).
+/// Special mathematical functions (sinc, erf, Bessel, Legendre).
 pub mod special;
+pub mod special_legendre;
 /// Statistical quality metrics and distribution summaries.
 pub mod statistics;
 /// Cartesian finite-difference stencil operations.

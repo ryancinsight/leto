@@ -109,13 +109,16 @@ pub fn j1(x: f64) -> f64 {
         let y = z * z;
         let xx = ax - 3.0 * PI / 4.0;
         let p = 1.0
-            + y * (0.183105e-2
-                + y * (-3.516396496e-5 + y * (2.457520174e-5 - y * 2.400505341e-7)));
+            + y * (0.183105e-2 + y * (-3.516396496e-5 + y * (2.457520174e-5 - y * 2.400505341e-7)));
         let q = 0.04687499995_f64
             + y * (-0.2002690873e-3
                 + y * (8.449199096e-5 + y * (-8.8228987e-5 + y * 1.050343160e-6)));
         let r = (2.0 / (PI * ax)).sqrt() * (p * xx.cos() - z * q * xx.sin());
-        if x < 0.0 { -r } else { r }
+        if x < 0.0 {
+            -r
+        } else {
+            r
+        }
     }
 }
 
@@ -179,6 +182,46 @@ pub fn jn(n: usize, x: f64) -> f64 {
     }
 }
 
+/// Modified Bessel function of the second kind, order zero: `K₀(x)` for `x > 0`.
+///
+/// # Approximation
+///
+/// Abramowitz & Stegun 9.8.5 for `0 < x ≤ 2`, and 9.8.6 for `x > 2`. Both
+/// polynomial forms carry an absolute error below `1e-7` on their stated
+/// domains. `K₀` diverges at the origin and is undefined for `x ≤ 0`, so
+/// non-positive and non-finite arguments return `NaN`.
+#[must_use]
+pub fn bessel_k0(x: f64) -> f64 {
+    if !(x.is_finite() && x > 0.0) {
+        return f64::NAN;
+    }
+    if x <= 2.0 {
+        // A&S 9.8.5: K₀(x) = −ln(x/2)·I₀(x) + Σ cₙ (x/2)^{2n}.
+        let t1 = (x / 3.75) * (x / 3.75);
+        let i0 = 1.0
+            + t1 * (3.515_622_9
+                + t1 * (3.089_942_4
+                    + t1 * (1.206_749_2
+                        + t1 * (0.265_973_2 + t1 * (0.036_076_8 + t1 * 0.004_581_3)))));
+        let t2 = (x * 0.5) * (x * 0.5);
+        let correction = -0.577_215_66
+            + t2 * (0.422_784_20
+                + t2 * (0.230_697_56
+                    + t2 * (0.034_885_90
+                        + t2 * (0.002_626_98 + t2 * (0.000_107_50 + t2 * 7.4e-6)))));
+        (x * 0.5).ln().mul_add(-i0, correction)
+    } else {
+        // A&S 9.8.6: K₀(x) = e^{-x}/√x · Σ dₙ (2/x)^n.
+        let t = 2.0 / x;
+        let series = 1.253_314_14
+            + t * (-0.078_323_58
+                + t * (0.021_895_68
+                    + t * (-0.010_624_46
+                        + t * (0.005_878_72 + t * (-0.002_515_40 + t * 0.000_532_08)))));
+        (-x).exp() / x.sqrt() * series
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,6 +229,49 @@ mod tests {
     #[test]
     fn sinc_at_zero() {
         assert_eq!(sinc(0.0), 1.0);
+    }
+
+    #[test]
+    fn bessel_k0_matches_reference_values() {
+        // Reference values: DLMF 10.32 / A&S Table 9.8.
+        //
+        // Tolerances follow the quoted error bounds of the two branches:
+        // 9.8.5 bounds the absolute error of the small-argument form by 1e-8,
+        // and 9.8.6 bounds the error of x^{1/2}·e^{x}·K₀(x) by 1.9e-7, i.e. a
+        // relative error near 1.5e-7 on K₀ itself.
+        for &(x, expected) in &[(0.1_f64, 2.427_069_0_f64), (1.0, 0.421_024_4), (2.0, 0.113_893_9)]
+        {
+            let error = (bessel_k0(x) - expected).abs();
+            assert!(error < 1e-6, "K0({x}) absolute error {error}");
+        }
+        for &(x, expected) in &[
+            (3.0_f64, 0.034_739_504_2_f64),
+            (5.0, 0.003_691_098_3),
+            (10.0, 1.778_006_23e-5),
+        ] {
+            let error = ((bessel_k0(x) - expected) / expected).abs();
+            assert!(error < 2e-7, "K0({x}) relative error {error}");
+        }
+    }
+
+    #[test]
+    fn bessel_k0_rejects_non_positive_arguments() {
+        assert!(bessel_k0(0.0).is_nan());
+        assert!(bessel_k0(-1.0).is_nan());
+        assert!(bessel_k0(f64::NAN).is_nan());
+        assert!(bessel_k0(f64::INFINITY).is_nan());
+    }
+
+    #[test]
+    fn bessel_k0_is_positive_and_decreasing() {
+        let mut previous = f64::INFINITY;
+        for step in 1..60 {
+            let x = f64::from(step) * 0.25;
+            let value = bessel_k0(x);
+            assert!(value.is_finite() && value > 0.0, "K0({x}) = {value}");
+            assert!(value < previous, "K0 must decrease at x = {x}");
+            previous = value;
+        }
     }
 
     #[test]
@@ -221,10 +307,18 @@ mod tests {
         eprintln!("j1(10.0) = {v10:.12}");
         eprintln!("j1(15.0) = {v15:.12}");
         // kwavers-validated reference: J_1(10) ≈ 0.0434727462 (tolerance 1e-5).
-        assert!((v10 - 0.043_472_746_2).abs() < 1e-5, "j1(10) off by {}", (v10 - 0.043_472_746_2).abs());
+        assert!(
+            (v10 - 0.043_472_746_2).abs() < 1e-5,
+            "j1(10) off by {}",
+            (v10 - 0.043_472_746_2).abs()
+        );
         // J_1(15) is positive (between zeros 13.32 and 16.47); the NR asymptotic
         // approximation has ≲2e-3 error at this argument.
-        assert!((v15 - 0.205_104_107_9).abs() < 1e-3, "j1(15) off by {}", (v15 - 0.205_104_107_9).abs());
+        assert!(
+            (v15 - 0.205_104_107_9).abs() < 1e-3,
+            "j1(15) off by {}",
+            (v15 - 0.205_104_107_9).abs()
+        );
     }
 
     #[test]
@@ -239,7 +333,11 @@ mod tests {
         assert!((v21 - 0.114_903_484_9).abs() < 1e-8, "jn(2,1) off");
         assert!((v32 - 0.128_943_249_8).abs() < 1e-8, "jn(3,2) off");
         // The two-buffer normalization algorithm has bounded error for moderate n/x.
-        assert!((v53 - 0.043_028_434_7).abs() < 1e-5, "jn(5,3) off by {}", (v53 - 0.043_028_434_7).abs());
+        assert!(
+            (v53 - 0.043_028_434_7).abs() < 1e-5,
+            "jn(5,3) off by {}",
+            (v53 - 0.043_028_434_7).abs()
+        );
         assert_eq!(jn(0, 0.0), 1.0);
         assert_eq!(jn(5, 0.0), 0.0);
     }
