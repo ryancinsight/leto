@@ -36,7 +36,7 @@ pub use linalg::{
 };
 pub use map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
-    MulOp, SubOp,
+    EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
 };
 pub use matrix::{batched_matmul, matmul};
 pub use random::{

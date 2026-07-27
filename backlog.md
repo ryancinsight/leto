@@ -1,5 +1,22 @@
 # Leto Work Backlog
 
+## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
+
+**Owner:** Codex
+
+**Scope:** `leto-ops` sealed `BinaryOp` markers for equality and ordering
+comparisons, root re-exports, and broadcast elementwise regression coverage.
+
+**Acceptance:** `EqOp`, `NeOp`, `LtOp`, `GtOp`, `LeOp`, and `GeOp` produce
+zero-or-one masks through the existing broadcast-aware `binary_map` traversal
+for every `Scalar` implementation; downstream consumers can use the public
+markers without defining local operation adapters.
+
+**Evidence:** `cargo check --locked -p leto-ops`, focused Nextest
+`elementwise` (19/19), warning-denied all-target Clippy, and `cargo test
+--locked -p leto-ops --doc` (10/10) pass. `cargo doc --no-deps` completes with
+18 pre-existing unrelated link warnings.
+
 ## LETO-SPARSE-LU-VIEW-1 — Preserve native RHS views at the sparse-LU seam [minor, complete]
 
 **Owner:** Codex `/root`

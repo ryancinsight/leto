@@ -1,7 +1,8 @@
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
     add, binary_map, div, indexed_zip2_mut_with, indexed_zip_mut_with, map, map_into, mapv, mul,
-    scalar_map, sub, unary_map, zip_mut_with, AddOp, ErfOp, ErfcOp, LgammaOp, MulOp,
+    scalar_map, sub, unary_map, zip_mut_with, AddOp, EqOp, ErfOp, ErfcOp, GeOp, GtOp, LeOp,
+    LgammaOp, LtOp, MulOp, NeOp,
 };
 
 fn assert_scalar_supertrait<T>()
@@ -139,6 +140,27 @@ fn test_binary_map_broadcasts_inputs_to_output_shape() {
     add(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
 
     assert_eq!(out.storage().as_slice(), &[3.0, 4.0, 5.0, 12.0, 13.0, 14.0]);
+}
+
+#[test]
+fn test_binary_comparisons_broadcast_inputs_to_output_shape() {
+    let lhs = Array::from_shape_vec([2, 1], vec![1.0f32, 10.0]).unwrap();
+    let rhs = Array::from_shape_vec([1, 3], vec![1.0f32, 3.0, 10.0]).unwrap();
+
+    macro_rules! assert_comparison {
+        ($operation:ty, $expected:expr) => {
+            let mut out = Array::zeros([2, 3]);
+            binary_map::<$operation, _, 2>(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+            assert_eq!(out.storage().as_slice(), $expected);
+        };
+    }
+
+    assert_comparison!(EqOp, &[1.0, 0.0, 0.0, 0.0, 0.0, 1.0]);
+    assert_comparison!(NeOp, &[0.0, 1.0, 1.0, 1.0, 1.0, 0.0]);
+    assert_comparison!(LtOp, &[0.0, 1.0, 1.0, 0.0, 0.0, 0.0]);
+    assert_comparison!(GtOp, &[0.0, 0.0, 0.0, 1.0, 1.0, 0.0]);
+    assert_comparison!(LeOp, &[1.0, 1.0, 1.0, 0.0, 0.0, 1.0]);
+    assert_comparison!(GeOp, &[1.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
 }
 
 #[test]

@@ -2,6 +2,16 @@
 
 **Target version: 0.40.0** · **Phase: Closure**
 
+## LETO-COMPARISON-OPS-1 [minor] — Owner: Codex
+
+- [x] Add sealed `leto-ops` comparison markers for equality and ordering,
+      re-export them at the application and crate roots, and cover broadcast
+      masks through the canonical `binary_map` traversal.
+- [x] Verify `cargo check --locked -p leto-ops`, focused Nextest
+      `elementwise` (19/19), warning-denied all-target Clippy, and Leto
+      doctests (10/10). Rustdoc completes with 18 pre-existing unrelated link
+      warnings.
+
 ## LETO-KERNEL-BENCHMARKS-1 [patch] — Owner: Codex `/root`
 
 - [x] Extend the canonical `leto-ops` Criterion harness so elementwise,
