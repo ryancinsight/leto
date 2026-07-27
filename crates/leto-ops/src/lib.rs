@@ -47,7 +47,7 @@ pub use application::linalg::{
 pub use application::special::{erf, j0, j1, jn, sinc};
 pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
-    MulOp, SubOp,
+    EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
 };
 pub use application::matrix::{batched_matmul, matmul, matmul_accumulate};
 pub use application::random::{
