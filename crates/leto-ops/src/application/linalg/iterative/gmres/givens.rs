@@ -1,80 +1,110 @@
 //! Givens rotation helpers for GMRES.
+//!
+//! The Hessenberg matrix is stored transposed — row `k` of the backing array
+//! holds column `k` of `H̄` — so a rotation sweep, which walks one column,
+//! traverses contiguous memory.
 
 use eunomia::{NumericElement, RealField};
-use leto::{Array1, Array2, LetoError, Result};
+use leto::{LetoError, Result};
 
-/// Apply all previously accumulated Givens rotations to the new column `k` of H.
-pub fn apply_previous_rotations<T: RealField + Copy>(
-    h: &mut Array2<T>,
-    c: &Array1<T>,
-    s: &Array1<T>,
+/// Apply the accumulated rotations `0..k` to the freshly built column `k`.
+pub(super) fn apply_previous_rotations<T: RealField + Copy>(
+    column: &mut [T],
+    cosines: &[T],
+    sines: &[T],
     k: usize,
 ) {
     for i in 0..k {
-        let hi = h[[i, k]];
-        let hi1 = h[[i + 1, k]];
-        h[[i, k]] = c[i] * hi + s[i] * hi1;
-        h[[i + 1, k]] = -s[i] * hi + c[i] * hi1;
+        let upper = column[i];
+        let lower = column[i + 1];
+        column[i] = cosines[i] * upper + sines[i] * lower;
+        column[i + 1] = -sines[i] * upper + cosines[i] * lower;
     }
 }
 
-/// Compute the Givens rotation coefficients `(c, s)` that zero `h[k+1, k]`.
-pub fn compute_rotation<T: RealField + Copy>(h_kk: T, h_kp1_k: T) -> (T, T) {
-    let zero = <T as NumericElement>::ZERO;
-    let one = <T as NumericElement>::ONE;
-    if h_kp1_k == zero {
-        (one, zero)
-    } else if h_kk.abs() > h_kp1_k.abs() {
-        let t = h_kp1_k / h_kk;
-        let c = one / (one + t * t).sqrt();
-        (c, c * t)
-    } else {
-        let t = h_kk / h_kp1_k;
-        let s = one / (one + t * t).sqrt();
-        (s * t, s)
-    }
-}
-
-/// Apply the new Givens rotation to column `k` of H and the RHS vector `g`.
-pub fn apply_new_rotation<T: RealField + Copy>(
-    h: &mut Array2<T>,
-    g: &mut Array1<T>,
-    c: T,
-    s: T,
-    k: usize,
-) {
-    let hkk = h[[k, k]];
-    let hkp1k = h[[k + 1, k]];
-    h[[k, k]] = c * hkk + s * hkp1k;
-    h[[k + 1, k]] = <T as NumericElement>::ZERO;
-    let gk = g[k];
-    let gk1 = g[k + 1];
-    g[k] = c * gk + s * gk1;
-    g[k + 1] = -s * gk + c * gk1;
-}
-
-/// Solve the upper triangular system H[0..k, 0..k] · y = g[0..k].
+/// Compute the rotation `(c, s)` that annihilates `lower` against `upper`.
+///
+/// The tangent form divides the smaller magnitude by the larger, so `|t| ≤ 1`
+/// and `√(1 + t²) ∈ [1, √2]`: no intermediate overflow or underflow for any
+/// finite input, unlike the direct `√(upper² + lower²)` hypotenuse used by both
+/// reference implementations. Finite inputs therefore yield finite output.
 ///
 /// # Errors
-/// Returns [`LetoError::NumericalBreakdown`] when a diagonal entry is ≤ ε.
-pub fn solve_upper_triangular<T: RealField + Copy>(
-    h: &Array2<T>,
-    g: &Array1<T>,
+/// Returns [`LetoError::NumericalBreakdown`] if either input is non-finite.
+pub(super) fn compute_rotation<T: RealField + Copy>(upper: T, lower: T) -> Result<(T, T)> {
+    if !upper.is_finite() || !lower.is_finite() {
+        return Err(LetoError::NumericalBreakdown(
+            "GMRES: non-finite Hessenberg entry in Givens rotation".into(),
+        ));
+    }
+    let zero = <T as NumericElement>::ZERO;
+    let one = <T as NumericElement>::ONE;
+    if lower == zero {
+        return Ok((one, zero));
+    }
+    if upper.abs() > lower.abs() {
+        let tangent = lower / upper;
+        let cosine = one / (one + tangent * tangent).sqrt();
+        Ok((cosine, cosine * tangent))
+    } else {
+        let tangent = upper / lower;
+        let sine = one / (one + tangent * tangent).sqrt();
+        Ok((sine * tangent, sine))
+    }
+}
+
+/// Apply the new rotation to column `k` of `H̄` and to the transformed
+/// right-hand side `g`, so that `|g[k+1]|` is the minimised residual norm over
+/// the current Krylov subspace.
+pub(super) fn apply_new_rotation<T: RealField + Copy>(
+    column: &mut [T],
+    g: &mut [T],
+    cosine: T,
+    sine: T,
     k: usize,
-) -> Result<Array1<T>> {
-    let mut y = Array1::from_elem([k], <T as NumericElement>::ZERO);
-    for i in (0..k).rev() {
-        let d = h[[i, i]];
-        if d.abs() <= <T as RealField>::EPSILON {
+) {
+    let upper = column[k];
+    let lower = column[k + 1];
+    column[k] = cosine * upper + sine * lower;
+    column[k + 1] = <T as NumericElement>::ZERO;
+    let transformed = g[k];
+    g[k] = cosine * transformed;
+    g[k + 1] = -sine * transformed;
+}
+
+/// Solve `R·y = g` for the leading `k × k` block, writing into `y`.
+///
+/// `hessenberg` is the transposed store: `H̄(row, column)` lives at
+/// `hessenberg[column · stride + row]`.
+///
+/// # Errors
+/// Returns [`LetoError::NumericalBreakdown`] on a vanishing or non-finite
+/// diagonal entry, which means the rotations failed to produce a full-rank
+/// triangular factor.
+pub(super) fn solve_upper_triangular<T: RealField + Copy>(
+    hessenberg: &[T],
+    stride: usize,
+    g: &[T],
+    y: &mut [T],
+    k: usize,
+) -> Result<()> {
+    for row in (0..k).rev() {
+        let mut sum = g[row];
+        for column in row + 1..k {
+            sum -= hessenberg[column * stride + row] * y[column];
+        }
+        let diagonal = hessenberg[row * stride + row];
+        if !sum.is_finite() || !diagonal.is_finite() || diagonal == <T as NumericElement>::ZERO {
             return Err(LetoError::NumericalBreakdown(format!(
-                "GMRES: zero diagonal in triangular solve at position {i}"
+                "GMRES: singular or non-finite triangular factor at row {row}"
             )));
         }
-        let mut sum = g[i];
-        for j in i + 1..k {
-            sum -= h[[i, j]] * y[j];
+        y[row] = sum / diagonal;
+        if !y[row].is_finite() {
+            return Err(LetoError::NumericalBreakdown(format!(
+                "GMRES: non-finite least-squares coefficient at row {row}"
+            )));
         }
-        y[i] = sum / d;
     }
-    Ok(y)
+    Ok(())
 }
