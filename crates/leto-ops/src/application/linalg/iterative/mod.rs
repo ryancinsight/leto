@@ -42,6 +42,7 @@ pub mod config;
 pub mod convergence;
 pub mod gmres;
 pub mod lsqr;
+mod operators;
 pub(super) mod ops;
 pub mod preconditioners;
 pub mod traits;

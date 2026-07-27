@@ -1,24 +1,38 @@
 //! GMRES(m) solver with Arnoldi iteration and Givens rotations.
 //!
 //! Solves general non-symmetric linear systems `A·x = b` using the
-//! Generalized Minimal Residual method with restarts.
+//! Generalized Minimal Residual method with restarts and left preconditioning.
 //!
 //! ## Algorithm sketch
 //!
-//! 1. Build orthonormal Krylov basis `V_m` via Arnoldi / modified Gram-Schmidt.
+//! 1. Build an orthonormal Krylov basis `V_m` of `K_m(M⁻¹A, M⁻¹r₀)` via
+//!    Arnoldi / modified Gram-Schmidt.
 //! 2. Maintain the least-squares problem `min ‖β e₁ − H̄_m y‖` incrementally
-//!    through Givens rotations applied to the growing Hessenberg matrix.
-//! 3. When the restart dimension `m` is reached (or convergence), update `x`.
-//! 4. Restart from the new residual.
+//!    through Givens rotations applied to the growing Hessenberg matrix, so
+//!    `|g[k+1]|` is the minimised residual norm at every step.
+//! 3. When the restart dimension `m` is reached, or the estimate meets the
+//!    threshold, form `x ← x + V_k y` and recompute the true residual.
+//! 4. Restart from that residual.
 //!
-//! ## Optimality theorem (Saad & Schultz 1986)
+//! ## Convergence criterion
+//!
+//! Termination is decided on the **true, unpreconditioned** residual
+//! `‖b − A·x‖₂` against [`IterativeSolverConfig::threshold`]. The Arnoldi
+//! recurrence only yields `‖M⁻¹(b − A·x)‖₂`, which differs from the true
+//! residual by up to `κ(M)`; accepting the preconditioned estimate as proof of
+//! convergence would report success on an unconverged solution whenever `M` is
+//! ill-conditioned. The estimate ends a cycle early, it never declares
+//! convergence.
+//!
+//! ## Optimality theorem (Saad and Schultz 1986)
 //!
 //! GMRES minimises ‖r_k‖₂ over `x₀ + K_k(A, r₀)`, i.e. it is the best
 //! Krylov method without restarts.
 //!
 //! ## References
-//! - Saad & Schultz (1986). *GMRES: A generalized minimal residual algorithm.*
+//! - Saad and Schultz (1986). *GMRES: A generalized minimal residual algorithm.*
 //!   SIAM J. Sci. Stat. Comput. 7(3), 856–869.
+//! - Saad (2003). *Iterative Methods for Sparse Linear Systems*, 2nd ed., §6.5.
 
 use super::super::config::IterativeSolverConfig;
 use super::super::convergence::ConvergenceMonitor;
@@ -26,73 +40,74 @@ use super::super::preconditioners::IdentityPreconditioner;
 use super::super::traits::{
     Configurable, IterativeLinearSolver, LinearOperator, LinearSolver, Preconditioner,
 };
-use super::{arnoldi, givens};
+use super::arnoldi::{self, ArnoldiOutcome};
+use super::{flat, flat2, flat2_mut, flat_mut, givens};
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{Array1, Array2, LetoError, Result};
 use std::fmt::Debug;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
+/// Solver scratch space, retained across solves so that a steady time-stepping
+/// loop performs no allocation after the first call.
 struct Workspace<T: RealField + Copy> {
-    v: Array2<T>,
-    h: Array2<T>,
+    /// `m + 1` Krylov vectors, packed row-contiguously (see [`arnoldi`]).
+    basis: Array2<T>,
+    /// Transposed Hessenberg store: row `k` is column `k` of `H̄`.
+    hessenberg: Array2<T>,
+    /// Rotated right-hand side `Qᵀ β e₁`.
     g: Array1<T>,
-    c: Array1<T>,
-    s: Array1<T>,
+    cosines: Array1<T>,
+    sines: Array1<T>,
+    /// Least-squares coefficients `y`.
+    coefficients: Array1<T>,
     basis_work: Array1<T>,
     work: Array1<T>,
     precond_work: Array1<T>,
     ax: Array1<T>,
+    residual: Array1<T>,
+    update: Array1<T>,
 }
 
-/// GMRES(m) solver with optional restart and left preconditioning.
+impl<T: RealField + Copy> Workspace<T> {
+    fn new(n: usize, m: usize) -> Self {
+        Self {
+            basis: Array2::zeros([m + 1, n]),
+            hessenberg: Array2::zeros([m, m + 1]),
+            g: Array1::zeros([m + 1]),
+            cosines: Array1::zeros([m]),
+            sines: Array1::zeros([m]),
+            coefficients: Array1::zeros([m]),
+            basis_work: Array1::zeros([n]),
+            work: Array1::zeros([n]),
+            precond_work: Array1::zeros([n]),
+            ax: Array1::zeros([n]),
+            residual: Array1::zeros([n]),
+            update: Array1::zeros([n]),
+        }
+    }
+
+    fn matches(&self, n: usize, m: usize) -> bool {
+        self.basis.shape() == [m + 1, n]
+    }
+}
+
+/// GMRES(m) solver with restarts and optional left preconditioning.
 ///
-/// `restart_dim` (default: 30) controls the maximum Krylov subspace size
-/// between restarts.  Larger values reduce restarts at the cost of O(n·m)
-/// memory.
+/// `restart_dim` (default: 30) bounds the Krylov subspace size between
+/// restarts; larger values reduce restarts at the cost of `O(n·m)` memory and
+/// `O(n·m²)` orthogonalisation work per cycle.
 pub struct GMRES<T: RealField + Copy> {
     config: IterativeSolverConfig<T>,
     restart_dim: usize,
     workspace: Mutex<Option<Workspace<T>>>,
 }
 
-#[inline]
-fn fill_vec<T: Copy>(v: &mut Array1<T>, val: T) {
-    for i in 0..v.shape()[0] {
-        v[i] = val;
-    }
-}
-
-#[inline]
-fn fill_mat<T: Copy>(m: &mut Array2<T>, val: T) {
-    let [r, c] = m.shape();
-    for i in 0..r {
-        for j in 0..c {
-            m[[i, j]] = val;
-        }
-    }
-}
-
-#[inline]
-fn vec_norm<T: NumericElement>(v: &Array1<T>) -> T {
-    let mut s = T::ZERO;
-    for i in 0..v.shape()[0] {
-        s += v[i] * v[i];
-    }
-    s.sqrt()
-}
-
-#[inline]
-fn sub_assign<T: NumericElement>(tgt: &mut Array1<T>, rhs: &Array1<T>) {
-    for i in 0..tgt.shape()[0] {
-        tgt[i] -= rhs[i];
-    }
-}
-
 impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
     /// Create with explicit configuration and restart dimension.
     ///
     /// # Panics
-    /// Panics if `restart_dim == 0`.
+    /// Panics if `restart_dim == 0`, which is a construction-time programmer
+    /// error: GMRES(0) builds no Krylov subspace and can never make progress.
     pub fn new(config: IterativeSolverConfig<T>, restart_dim: usize) -> Self {
         assert!(restart_dim > 0, "GMRES restart dimension must be positive");
         Self {
@@ -110,6 +125,12 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
     }
 
     /// Solve with an explicit preconditioner.
+    ///
+    /// # Errors
+    /// Returns [`LetoError::InvalidInput`] on a dimension mismatch,
+    /// [`LetoError::NumericalBreakdown`] when the recurrence produces a
+    /// non-finite or singular state, and [`LetoError::ConvergenceError`] when
+    /// the iteration budget is exhausted before the residual threshold is met.
     pub fn solve_preconditioned<Op: LinearOperator<T> + ?Sized, P: Preconditioner<T>>(
         &self,
         a: &Op,
@@ -121,158 +142,210 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
         let a_size = a.size();
         if a_size != 0 && a_size != n {
             return Err(LetoError::InvalidInput(format!(
-                "Operator size ({a_size}) doesn't match RHS ({n})"
+                "Operator size ({a_size}) does not match RHS ({n})"
+            )));
+        }
+        if x.shape()[0] != n {
+            return Err(LetoError::InvalidInput(format!(
+                "Solution length ({}) does not match RHS ({n})",
+                x.shape()[0]
             )));
         }
 
         let m = self.restart_dim;
-        let mut guard = self.workspace.lock().unwrap();
-        if guard.as_ref().is_none_or(|ws| ws.v.shape() != [n, m + 1]) {
-            *guard = Some(Workspace {
-                v: Array2::zeros([n, m + 1]),
-                h: Array2::zeros([m + 1, m]),
-                g: Array1::zeros([m + 1]),
-                c: Array1::zeros([m]),
-                s: Array1::zeros([m]),
-                basis_work: Array1::zeros([n]),
-                work: Array1::zeros([n]),
-                precond_work: Array1::zeros([n]),
-                ax: Array1::zeros([n]),
-            });
+        // Workspace poisoning carries no meaning here: the buffers are pure
+        // scratch, fully overwritten before every read, so a panic in an
+        // earlier solve leaves nothing to salvage or corrupt.
+        let mut guard = self
+            .workspace
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if guard.as_ref().is_none_or(|ws| !ws.matches(n, m)) {
+            *guard = Some(Workspace::new(n, m));
         }
-        let ws = guard.as_mut().unwrap();
+        let Some(ws) = guard.as_mut() else {
+            unreachable!("invariant: the workspace was just installed")
+        };
 
-        // Initial residual.
-        a.apply(x, &mut ws.ax)?;
-        let mut r0 = b.clone();
-        sub_assign(&mut r0, &ws.ax);
-
-        // Preconditioned initial residual.
-        precond.apply_to(&r0, &mut ws.work)?;
-        let beta = vec_norm(&ws.work);
-
-        let r0_norm = vec_norm(&r0);
-        if r0_norm < self.config.tolerance {
-            return Ok(ConvergenceMonitor::new(r0_norm));
-        }
-        if beta <= <T as RealField>::EPSILON {
+        let threshold = self.config.threshold(norm_of(b));
+        let mut residual_norm = recompute_residual(a, b, x, &mut ws.ax, &mut ws.residual)?;
+        if !residual_norm.is_finite() {
             return Err(LetoError::NumericalBreakdown(
-                "GMRES: preconditioned initial residual is numerically zero".into(),
+                "GMRES: initial residual is not finite".into(),
             ));
         }
+        let mut monitor = ConvergenceMonitor::new(residual_norm);
+        if residual_norm <= threshold {
+            return Ok(monitor);
+        }
 
-        let mut monitor = ConvergenceMonitor::new(beta);
-        let mut iters_used = 0usize;
-        let mut first_restart = true;
-
-        while iters_used < self.config.max_iterations {
-            let beta_cur = if first_restart {
-                beta
-            } else {
-                a.apply(x, &mut ws.ax)?;
-                let mut r_restart = b.clone();
-                sub_assign(&mut r_restart, &ws.ax);
-                precond.apply_to(&r_restart, &mut ws.work)?;
-                vec_norm(&ws.work)
-            };
-
-            if beta_cur <= <T as RealField>::EPSILON {
+        let mut iterations = 0usize;
+        while iterations < self.config.max_iterations {
+            // The preconditioned residual seeds the Krylov basis.
+            precond.apply_to(&ws.residual, &mut ws.work)?;
+            let beta = norm_of(&ws.work);
+            if !beta.is_finite() {
                 return Err(LetoError::NumericalBreakdown(
-                    "GMRES: restart residual is numerically zero".into(),
+                    "GMRES: preconditioned residual is not finite".into(),
+                ));
+            }
+            if beta == <T as NumericElement>::ZERO {
+                return Err(LetoError::NumericalBreakdown(
+                    "GMRES: preconditioner maps a non-zero residual to zero (singular M)".into(),
                 ));
             }
 
-            // Normalize first basis vector.
-            let inv_beta = <T as NumericElement>::ONE / beta_cur;
-            for row in 0..n {
-                ws.v[[row, 0]] = ws.work[row] * inv_beta;
+            {
+                let inverse_beta = <T as NumericElement>::ONE / beta;
+                let source = flat("work vector", &ws.work);
+                let basis = flat2_mut("Krylov basis", &mut ws.basis);
+                for (target, &value) in basis[..n].iter_mut().zip(source.iter()) {
+                    *target = value * inverse_beta;
+                }
             }
+            fill(flat2_mut("Hessenberg", &mut ws.hessenberg));
+            fill(flat_mut("cosines", &mut ws.cosines));
+            fill(flat_mut("sines", &mut ws.sines));
+            let g = flat_mut("rotated RHS", &mut ws.g);
+            fill(g);
+            g[0] = beta;
 
-            fill_mat(&mut ws.h, <T as NumericElement>::ZERO);
-            fill_vec(&mut ws.g, <T as NumericElement>::ZERO);
-            fill_vec(&mut ws.c, <T as NumericElement>::ZERO);
-            fill_vec(&mut ws.s, <T as NumericElement>::ZERO);
-            ws.g[0] = beta_cur;
+            let cycle_limit = m.min(self.config.max_iterations - iterations);
+            let mut vectors_used = 0usize;
+            let mut happy_breakdown = false;
 
-            let remaining = self.config.max_iterations - iters_used;
-            let inner = m.min(remaining);
-            let mut converged_at = None;
-
-            for k in 0..inner {
-                // Split mutable borrows: pass only what Arnoldi needs.
+            for k in 0..cycle_limit {
+                let stride = m + 1;
                 let Workspace {
-                    v,
-                    h,
+                    basis,
+                    hessenberg,
+                    g,
+                    cosines,
+                    sines,
                     basis_work,
                     work,
                     precond_work,
                     ..
                 } = ws;
-                arnoldi::arnoldi_step(
+                let basis = flat2_mut("Krylov basis", basis);
+                let hessenberg = flat2_mut("Hessenberg", hessenberg);
+                let (before, column) = hessenberg.split_at_mut(k * stride);
+                debug_assert!(before.len() == k * stride, "invariant: Hessenberg is packed");
+                let column = &mut column[..stride];
+
+                let outcome = arnoldi::arnoldi_step(
                     a,
-                    v,
-                    h,
+                    precond,
+                    basis,
+                    column,
                     k,
                     n,
                     basis_work,
                     work,
-                    Some(precond),
-                    Some(precond_work),
+                    precond_work,
                 )?;
-                iters_used += 1;
+                iterations += 1;
+                vectors_used = k + 1;
+                match outcome {
+                    ArnoldiOutcome::NonFinite => {
+                        return Err(LetoError::NumericalBreakdown(
+                            "GMRES: Arnoldi recurrence produced a non-finite value".into(),
+                        ));
+                    }
+                    ArnoldiOutcome::HappyBreakdown => happy_breakdown = true,
+                    ArnoldiOutcome::Extended(_) => {}
+                }
 
-                givens::apply_previous_rotations(&mut ws.h, &ws.c, &ws.s, k);
-                let (ck, sk) = givens::compute_rotation(ws.h[[k, k]], ws.h[[k + 1, k]]);
-                ws.c[k] = ck;
-                ws.s[k] = sk;
-                givens::apply_new_rotation(&mut ws.h, &mut ws.g, ck, sk, k);
+                let cosines = flat_mut("cosines", cosines);
+                let sines = flat_mut("sines", sines);
+                let g = flat_mut("rotated RHS", g);
+                givens::apply_previous_rotations(column, cosines, sines, k);
+                let (cosine, sine) = givens::compute_rotation(column[k], column[k + 1])?;
+                cosines[k] = cosine;
+                sines[k] = sine;
+                givens::apply_new_rotation(column, g, cosine, sine, k);
 
-                let res_est = NumericElement::abs(ws.g[k + 1]);
-                monitor.record_residual(res_est);
-                if res_est < self.config.tolerance {
-                    converged_at = Some(k + 1);
+                let estimate = NumericElement::abs(g[k + 1]);
+                if !estimate.is_finite() {
+                    return Err(LetoError::NumericalBreakdown(
+                        "GMRES: residual estimate is not finite".into(),
+                    ));
+                }
+                monitor.record_residual(estimate);
+                if estimate <= threshold || happy_breakdown {
                     break;
                 }
             }
 
-            let k_final = converged_at.unwrap_or(inner);
-            if k_final == 0 {
+            if vectors_used == 0 {
                 break;
             }
-            let y = givens::solve_upper_triangular(&ws.h, &ws.g, k_final)?;
-            for i in 0..k_final {
-                for row in 0..n {
-                    x[row] += y[i] * ws.v[[row, i]];
+
+            {
+                let stride = m + 1;
+                let Workspace {
+                    hessenberg,
+                    g,
+                    coefficients,
+                    basis,
+                    update,
+                    ..
+                } = ws;
+                let hessenberg = flat2("Hessenberg", hessenberg);
+                let g = flat("rotated RHS", g);
+                let coefficients = flat_mut("coefficients", coefficients);
+                givens::solve_upper_triangular(hessenberg, stride, g, coefficients, vectors_used)?;
+
+                // Accumulate `V_k · y` in a contiguous buffer, then fold it into
+                // the caller-owned `x` in one pass: the `O(n·k)` work stays
+                // unit-stride while `x` keeps whatever layout the caller chose.
+                let basis = flat2("Krylov basis", basis);
+                let update = flat_mut("solution update", update);
+                fill(update);
+                for (i, &coefficient) in coefficients[..vectors_used].iter().enumerate() {
+                    let basis_i = &basis[i * n..(i + 1) * n];
+                    for (target, &value) in update.iter_mut().zip(basis_i.iter()) {
+                        *target += coefficient * value;
+                    }
                 }
             }
-
-            // Check true residual.
-            a.apply(x, &mut ws.ax)?;
-            let mut r_check = b.clone();
-            sub_assign(&mut r_check, &ws.ax);
-            if vec_norm(&r_check) < self.config.tolerance {
-                return Ok(monitor);
+            for i in 0..n {
+                x[i] += ws.update[i];
             }
 
-            if converged_at.is_some() {
+            // One operator application per cycle serves both the convergence
+            // test and the next cycle Krylov seed.
+            residual_norm = recompute_residual(a, b, x, &mut ws.ax, &mut ws.residual)?;
+            if !residual_norm.is_finite() {
+                return Err(LetoError::NumericalBreakdown(
+                    "GMRES: residual is not finite".into(),
+                ));
+            }
+            if residual_norm <= threshold {
                 return Ok(monitor);
             }
-            first_restart = false;
+            if happy_breakdown {
+                // The subspace is invariant under M⁻¹A, so no further Krylov
+                // vector exists and restarting would reproduce this cycle.
+                return Err(LetoError::NumericalBreakdown(format!(
+                    "GMRES: Krylov subspace exhausted at residual {} above threshold {}",
+                    NumericElement::to_f64(residual_norm),
+                    NumericElement::to_f64(threshold)
+                )));
+            }
         }
 
         Err(LetoError::ConvergenceError {
             max_iters: self.config.max_iterations,
-            residual: NumericElement::to_f64(
-                *monitor
-                    .residual_history
-                    .last()
-                    .unwrap_or(&<T as NumericElement>::ZERO),
-            ),
-            tol: NumericElement::to_f64(self.config.tolerance),
+            residual: NumericElement::to_f64(residual_norm),
+            tol: NumericElement::to_f64(threshold),
         })
     }
 
     /// Solve without preconditioning.
+    ///
+    /// # Errors
+    /// See [`Self::solve_preconditioned`].
     pub fn solve_unpreconditioned<Op: LinearOperator<T> + ?Sized>(
         &self,
         a: &Op,
@@ -281,6 +354,42 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
     ) -> Result<ConvergenceMonitor<T>> {
         self.solve_preconditioned(a, b, &IdentityPreconditioner, x)
     }
+}
+
+#[inline]
+fn fill<T: NumericElement>(target: &mut [T]) {
+    target.fill(T::ZERO);
+}
+
+#[inline]
+fn norm_of<T: NumericElement>(v: &Array1<T>) -> T {
+    let mut sum = T::ZERO;
+    for i in 0..v.shape()[0] {
+        sum += v[i] * v[i];
+    }
+    sum.sqrt()
+}
+
+/// `residual ← b − A·x`, returning `‖residual‖₂`.
+fn recompute_residual<T, Op>(
+    a: &Op,
+    b: &Array1<T>,
+    x: &Array1<T>,
+    ax: &mut Array1<T>,
+    residual: &mut Array1<T>,
+) -> Result<T>
+where
+    T: RealField + Copy,
+    Op: LinearOperator<T> + ?Sized,
+{
+    a.apply(x, ax)?;
+    let mut sum = <T as NumericElement>::ZERO;
+    for i in 0..b.shape()[0] {
+        let value = b[i] - ax[i];
+        residual[i] = value;
+        sum += value * value;
+    }
+    Ok(sum.sqrt())
 }
 
 impl<T: RealField + Copy + FloatElement + Debug> Configurable<T> for GMRES<T> {
