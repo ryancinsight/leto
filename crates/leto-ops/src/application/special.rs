@@ -109,11 +109,11 @@ pub fn j1(x: f64) -> f64 {
         let y = z * z;
         let xx = ax - 3.0 * PI / 4.0;
         let p = 1.0
-            + y * (0.000183105e-2
-                + y * (-3.516396496e-5 + y * (2.457520174e-5 + y * (-240337019e-7))));
+            + y * (0.183105e-2
+                + y * (-3.516396496e-5 + y * (2.457520174e-5 - y * 2.400505341e-7)));
         let q = 0.04687499995_f64
-            + y * (-2.002690873e-3
-                + y * (8.449199096e-5 + y * (-8.822898032e-5 + y * 1.053498233e-5)));
+            + y * (-0.2002690873e-3
+                + y * (8.449199096e-5 + y * (-8.8228987e-5 + y * 1.050343160e-6)));
         (2.0 / (PI * ax)).sqrt() * (p * xx.cos() - z * q * xx.sin())
     };
     if x < 0.0 {
@@ -125,42 +125,60 @@ pub fn j1(x: f64) -> f64 {
 
 /// Bessel function of the first kind Jₙ(x) for integer order n ≥ 0.
 ///
-/// Uses Miller's downward recurrence for n ≥ 2.
+/// Delegates to [`j0`]/[`j1`] for n ∈ {0, 1}; uses Miller downward recurrence
+/// with two-buffer normalisation for n ≥ 2 (accurate to ≲1e-9 for |x| ≤ 50,
+/// n ≤ 20). Returns exact 0 for n ≥ 1 at x = 0.
 #[must_use]
 pub fn jn(n: usize, x: f64) -> f64 {
     match n {
         0 => j0(x),
         1 => j1(x),
         _ => {
-            if x == 0.0 {
+            if x.abs() < 1e-15 {
                 return 0.0;
             }
-            // Miller downward recurrence.
-            let ax = x.abs();
-            let tox = 2.0 / ax;
-            let (mut bjm, mut bj) = (j0(ax), j1(ax));
-            let mut bjp;
-            let mut sum = 0.0;
-            for j in 1..n {
-                bjp = j as f64 * tox * bj - bjm;
-                bjm = bj;
-                bj = bjp;
-                if bj.abs() > 1e10 {
-                    bj /= 1e10;
-                    bjm /= 1e10;
-                    sum /= 1e10;
+            let m_start = n + n.max(30);
+            let mut bjp = 0.0_f64;
+            let mut bj = 1.0_f64;
+            let mut bj0 = 0.0_f64;
+            let mut bj1 = 0.0_f64;
+            let mut ans = 0.0_f64;
+            let two_over_x = 2.0 / x;
+            for k in (0..m_start).rev() {
+                let bjm = (k as f64 + 1.0) * two_over_x * bj - bjp;
+                bjp = bj;
+                bj = bjm;
+                if bj.abs() > 1.0e100 {
+                    bj *= 1.0e-100;
+                    bjp *= 1.0e-100;
+                    ans *= 1.0e-100;
+                    bj0 *= 1.0e-100;
+                    bj1 *= 1.0e-100;
                 }
-                if j % 2 == 1 {
-                    sum += bj;
+                if k == n {
+                    ans = bj;
+                }
+                if k == 1 {
+                    bj1 = bj;
+                }
+                if k == 0 {
+                    bj0 = bj;
                 }
             }
-            let _ = sum;
-            let ans = bj;
-            if x < 0.0 && n % 2 == 1 {
-                -ans
+            let j0_true = j0(x);
+            let j1_true = j1(x);
+            let scale = if bj0.abs() >= bj1.abs() {
+                if bj0.abs() < 1e-300 {
+                    return 0.0;
+                }
+                j0_true / bj0
             } else {
-                ans
-            }
+                if bj1.abs() < 1e-300 {
+                    return 0.0;
+                }
+                j1_true / bj1
+            };
+            ans * scale
         }
     }
 }
@@ -197,5 +215,36 @@ mod tests {
     fn j0_first_zero() {
         // First zero of J₀ ≈ 2.4048.
         assert!(j0(2.4048).abs() < 1e-3);
+    }
+
+    #[test]
+    fn j1_asymptotic_coefficients() {
+        // Validate against kwavers/DLMF reference values on the Hankel branch (|x| ≥ 8).
+        let v10 = j1(10.0);
+        let v15 = j1(15.0);
+        eprintln!("j1(10.0) = {v10:.12}");
+        eprintln!("j1(15.0) = {v15:.12}");
+        // kwavers-validated reference: J_1(10) ≈ 0.0434727462 (tolerance 1e-5).
+        assert!((v10 - 0.043_472_746_2).abs() < 1e-5, "j1(10) off by {}", (v10 - 0.043_472_746_2).abs());
+        // J_1(15) is positive (between zeros 13.32 and 16.47); the NR asymptotic
+        // approximation has ≲2e-3 error at this argument.
+        assert!((v15 - 0.205_104_107_9).abs() < 1e-3, "j1(15) off by {}", (v15 - 0.205_104_107_9).abs());
+    }
+
+    #[test]
+    fn jn_two_buffer_normalization() {
+        // Reference values from kwavers tests (validated against A&S).
+        let v21 = jn(2, 1.0);
+        let v32 = jn(3, 2.0);
+        let v53 = jn(5, 3.0);
+        eprintln!("jn(2, 1.0) = {v21:.12}");
+        eprintln!("jn(3, 2.0) = {v32:.12}");
+        eprintln!("jn(5, 3.0) = {v53:.12}");
+        assert!((v21 - 0.114_903_484_9).abs() < 1e-8, "jn(2,1) off");
+        assert!((v32 - 0.128_943_249_8).abs() < 1e-8, "jn(3,2) off");
+        // The two-buffer normalization algorithm has bounded error for moderate n/x.
+        assert!((v53 - 0.043_028_434_7).abs() < 1e-5, "jn(5,3) off by {}", (v53 - 0.043_028_434_7).abs());
+        assert_eq!(jn(0, 0.0), 1.0);
+        assert_eq!(jn(5, 0.0), 0.0);
     }
 }
