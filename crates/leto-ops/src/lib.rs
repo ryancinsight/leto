@@ -114,8 +114,8 @@ pub use application::linalg::{
     GMRES,
 };
 pub use application::map::{
-    add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp,
-    MulOp, SubOp,
+    add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp, EqOp,
+    GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
 };
 pub use application::matrix::{batched_matmul, matmul, matmul_accumulate};
 pub use application::nonlinear::{AndersonAccelerator, AndersonConfig, AndersonMethod};

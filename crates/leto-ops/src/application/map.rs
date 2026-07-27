@@ -70,6 +70,41 @@ impl sealed::Sealed for SubOp {}
 impl sealed::Sealed for MulOp {}
 impl sealed::Sealed for DivOp {}
 
+macro_rules! define_comparison_op {
+    ($name:ident, $comparison:tt) => {
+        #[doc = concat!(stringify!($name), " applies the ", stringify!($comparison), " comparison and writes a zero-or-one mask.")]
+        #[derive(Clone, Copy, Debug, Default)]
+        pub struct $name;
+
+        impl sealed::Sealed for $name {}
+
+        impl<T: Scalar> BinaryOp<T> for $name {
+            #[inline(always)]
+            fn apply(lhs: T, rhs: T) -> T {
+                if lhs $comparison rhs {
+                    T::ONE
+                } else {
+                    T::ZERO
+                }
+            }
+
+            #[inline(always)]
+            fn apply_slice(lhs: &[T], rhs: &[T], out: &mut [T]) {
+                for ((out, lhs), rhs) in out.iter_mut().zip(lhs).zip(rhs) {
+                    *out = Self::apply(*lhs, *rhs);
+                }
+            }
+        }
+    };
+}
+
+define_comparison_op!(EqOp, ==);
+define_comparison_op!(NeOp, !=);
+define_comparison_op!(LtOp, <);
+define_comparison_op!(GtOp, >);
+define_comparison_op!(LeOp, <=);
+define_comparison_op!(GeOp, >=);
+
 impl<T: Scalar> BinaryOp<T> for AddOp {
     #[inline(always)]
     fn apply(lhs: T, rhs: T) -> T {
