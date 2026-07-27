@@ -35,7 +35,11 @@ where
     /// [`Self::ncols`] without tripping the square-system dimension guard.
     fn size(&self) -> usize {
         let (rows, columns) = self.shape();
-        if rows == columns { rows } else { 0 }
+        if rows == columns {
+            rows
+        } else {
+            0
+        }
     }
 
     fn nrows(&self) -> usize {

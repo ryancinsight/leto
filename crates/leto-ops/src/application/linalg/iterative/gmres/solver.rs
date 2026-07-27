@@ -230,7 +230,10 @@ impl<T: RealField + Copy + FloatElement + Debug> GMRES<T> {
                 let basis = flat2_mut("Krylov basis", basis);
                 let hessenberg = flat2_mut("Hessenberg", hessenberg);
                 let (before, column) = hessenberg.split_at_mut(k * stride);
-                debug_assert!(before.len() == k * stride, "invariant: Hessenberg is packed");
+                debug_assert!(
+                    before.len() == k * stride,
+                    "invariant: Hessenberg is packed"
+                );
                 let column = &mut column[..stride];
 
                 let outcome = arnoldi::arnoldi_step(
