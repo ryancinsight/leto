@@ -1,7 +1,7 @@
 //! Typed contracts shared by CPU and accelerator finite-difference stencils.
 
 use aequitas::systems::si::{quantities::Length, units::Meter};
-use eunomia::{FloatElement, NumericElement};
+use eunomia::{FloatElement, NumericElement, UnitScalar};
 use thiserror::Error;
 
 /// Boundary condition applied by a Cartesian finite-difference stencil.
@@ -97,7 +97,7 @@ pub struct Laplacian2D<T> {
 
 impl<T> Laplacian2D<T>
 where
-    T: FloatElement,
+    T: FloatElement + UnitScalar,
 {
     /// Validate a uniform endpoint-inclusive Cartesian grid.
     ///
