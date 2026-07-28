@@ -109,6 +109,40 @@ impl<T: RealField + FloatElement + Copy> Quadrature<T> for GaussLegendre2 {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GaussLegendre3;
 
+// ── Pre-computed GL3 constant tables (nodes on [-1,1] and [0,1]) ──────────────
+
+/// 3-point GL nodes on [−1, 1]: {−√(3/5), 0, √(3/5)}.
+pub const GL3_NODES: [f64; 3] = [
+    -0.774_596_669_241_483, // −√(3/5)
+    0.000_000_000_000_000,  // 0
+    0.774_596_669_241_483,  // +√(3/5)
+];
+
+/// 3-point GL weights on [−1, 1]: {5/9, 8/9, 5/9} (sum = 2).
+pub const GL3_WEIGHTS: [f64; 3] = [
+    0.555_555_555_555_556, // 5/9
+    0.888_888_888_888_889, // 8/9
+    0.555_555_555_555_556, // 5/9
+];
+
+/// 3-point GL nodes mapped to [0, 1]: {(1−√(3/5))/2, 1/2, (1+√(3/5))/2}.
+///
+/// Use this for integrals over unit-interval domains (e.g. Duffy-transformed BEM).
+pub const GL3_NODES_UNIT: [f64; 3] = [
+    0.112_701_665_379_258, // (1 − √(3/5))/2
+    0.500_000_000_000_000, // 1/2
+    0.887_298_334_620_742, // (1 + √(3/5))/2
+];
+
+/// 3-point GL weights on [0, 1]: {5/18, 4/9, 5/18} (sum = 1).
+///
+/// Corresponding weights for [`GL3_NODES_UNIT`].
+pub const GL3_WEIGHTS_UNIT: [f64; 3] = [
+    0.277_777_777_777_778, // 5/18
+    0.444_444_444_444_444, // 4/9
+    0.277_777_777_777_778, // 5/18
+];
+
 impl<T: RealField + FloatElement + Copy> Quadrature<T> for GaussLegendre3 {
     fn integrate<F: Fn(T) -> T>(&self, g: F, a: T, b: T) -> T {
         const XI: f64 = 0.774_596_669_241_483; // √(3/5)

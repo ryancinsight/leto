@@ -175,4 +175,5 @@ pub use application::diff::{FiniteDifference3D, FiniteDifference3DScheme};
 pub use application::quadrature::{
     gauss_legendre_nodes_weights, CompositeQuadrature, GaussLegendre2, GaussLegendre3,
     GaussLegendre5, GaussLegendreN, Quadrature, SimpsonsRule, TrapezoidalRule,
+    GL3_NODES, GL3_NODES_UNIT, GL3_WEIGHTS, GL3_WEIGHTS_UNIT,
 };
