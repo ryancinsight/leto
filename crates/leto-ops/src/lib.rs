@@ -173,6 +173,6 @@ pub use application::diff::{FiniteDifference3D, FiniteDifference3DScheme};
 // ── Quadrature (SSOT) ─────────────────────────────────────────────────────────
 /// Numerical quadrature (integration) rules.
 pub use application::quadrature::{
-    CompositeQuadrature, GaussLegendre2, GaussLegendre3, GaussLegendre5, Quadrature, SimpsonsRule,
-    TrapezoidalRule,
+    gauss_legendre_nodes_weights, CompositeQuadrature, GaussLegendre2, GaussLegendre3,
+    GaussLegendre5, GaussLegendreN, Quadrature, SimpsonsRule, TrapezoidalRule,
 };
