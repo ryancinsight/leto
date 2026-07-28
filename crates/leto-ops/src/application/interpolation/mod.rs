@@ -26,10 +26,13 @@ pub mod cubic_spline;
 pub mod lagrange;
 pub mod linear;
 mod utils;
+/// 2-D and 3-D spatial interpolation (bilinear, trilinear).
+pub mod spatial;
 
 pub use cubic_spline::CubicSplineInterpolation;
 pub use lagrange::LagrangeInterpolation;
 pub use linear::LinearInterpolation;
+pub use spatial::{bilinear, bilinear_index_space, trilinear, trilinear_index_space};
 
 use eunomia::RealField;
 use leto::{LetoError, Result};

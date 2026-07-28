@@ -162,6 +162,10 @@ pub use application::zip::{
 pub use application::interpolation::{
     CubicSplineInterpolation, Interpolation1D, LagrangeInterpolation, LinearInterpolation,
 };
+/// 2-D and 3-D spatial interpolation (bilinear, trilinear) in index space.
+pub use application::interpolation::{
+    bilinear, bilinear_index_space, trilinear, trilinear_index_space,
+};
 
 // ── Finite-difference differentiation (SSOT) ─────────────────────────────────
 /// Generic 1-D finite-difference operator.
