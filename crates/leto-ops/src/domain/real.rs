@@ -1,5 +1,5 @@
 use crate::domain::scalar::Scalar;
-use eunomia::{Bf16, FloatElement, NumericElement, F16};
+use eunomia::{Bf16, FloatElement, NumericElement, UnitScalar, F16};
 
 /// Floating-point scalars that provide the real math surface required by Leto
 /// operations.
@@ -8,7 +8,7 @@ use eunomia::{Bf16, FloatElement, NumericElement, F16};
 /// only adds Leto's operation-local dense norm-reduction kernels. Arithmetic
 /// and reductions still execute in the selected scalar precision; no hidden
 /// wider compute path is introduced here.
-pub trait RealScalar: Scalar + FloatElement + core::ops::Neg<Output = Self> {
+pub trait RealScalar: Scalar + FloatElement + UnitScalar + core::ops::Neg<Output = Self> {
     /// `sum |x|` over a dense slice (L1-norm accumulator).
     ///
     /// Default: scalar fold in the precision of `Self`. Native impls override
