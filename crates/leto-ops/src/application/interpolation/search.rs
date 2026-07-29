@@ -1,4 +1,4 @@
-//! Internal search helpers for interpolation.
+//! Interval search helpers for interpolation.
 
 use std::cmp::Ordering;
 

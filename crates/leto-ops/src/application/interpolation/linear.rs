@@ -9,7 +9,7 @@
 //! ## Reference
 //! Burden & Faires, *Numerical Analysis*, §3.1.
 
-use super::{check_bounds, utils::find_interval, validate_nodes, Interpolation1D};
+use super::{check_bounds, search::find_interval, validate_nodes, Interpolation1D};
 use eunomia::RealField;
 use leto::{LetoError, Result};
 
