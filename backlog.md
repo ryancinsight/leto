@@ -1,5 +1,30 @@
 # Leto Work Backlog
 
+## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [minor, in progress]
+
+**Owner:** Codex on `codex/leto-convolution-provider`
+
+**Driver:** Coeus ADR-0046 requires CPU backend selection to execute directly
+through Leto before Coeus can delete its transposed-convolution host default
+and make `ConvOps` fallible.
+
+**Scope:** one generic, scalar-preserving regular and transposed-convolution
+operation family under `leto-ops`; validating shape/stride/padding/dilation
+contracts; allocation-reusing output APIs; generic conformance and analytical
+value tests; Rustdoc, changelog, gap audit, and this item. Accelerator kernels,
+Coeus call-site migration, and unrelated linear algebra are non-goals.
+
+**Acceptance:** 1-D, 2-D, and 3-D regular forward/backward plus 1-D and 2-D
+transposed forward operations execute through one dimension-parameterized
+implementation family; invalid contracts return typed errors without partial
+output mutation; every supported scalar instantiates the same value-semantic
+suite; format, warning-denied Clippy, configured Nextest, doctests, Rustdoc,
+and SemVer classification pass.
+
+**Claimed files:** `crates/leto-ops/src/application/convolution/`,
+`crates/leto-ops/src/{application/mod.rs,lib.rs}`, focused `leto-ops` tests,
+`CHANGELOG.md`, `gap_audit.md`, `backlog.md`, and the governing ADR/index.
+
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 
 **Owner:** Codex
