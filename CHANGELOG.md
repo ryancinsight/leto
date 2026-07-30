@@ -9,10 +9,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 ### Added
 
 - [minor] Add `ConvolutionParameters` and
-  `convolution_forward_into`, one scalar- and rank-generic N-dimensional CPU
-  cross-correlation kernel over borrowed Leto views and caller-owned output.
-  Validation is failure-atomic and the successful path performs no heap
-  allocation.
+  `convolution_forward_into` plus `convolution_backward_accumulate`, one
+  scalar- and rank-generic N-dimensional CPU convolution family over borrowed
+  Leto views and caller-owned outputs. Validation is failure-atomic and the
+  successful paths perform no heap allocation.
 - [minor] Add `SparseLuSolver::solve_view`, which accepts a native Leto
   `ArrayView1` and returns an owned `Array1` solution. Consumers can preserve
   their existing array storage across the sparse-LU boundary without staging

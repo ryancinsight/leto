@@ -4,16 +4,16 @@
 
 - **Finding:** Coeus cannot delete its CPU convolution kernels until Leto owns
   regular forward/backward and transposed convolution contracts.
-- **Current resolution:** Leto now owns the regular N-dimensional forward
-  cross-correlation leaf, with checked preflight validation, borrowed inputs,
-  caller-owned output, and one monomorphized implementation across scalar and
-  rank dimensions.
-- **Evidence:** focused Nextest passes five exact value-semantic and
+- **Current resolution:** Leto now owns regular N-dimensional forward and
+  additive-backward leaves, with checked preflight validation, borrowed inputs,
+  caller-owned outputs, and one monomorphized implementation per operation
+  across scalar and rank dimensions.
+- **Evidence:** focused Nextest passes seven exact value-semantic and
   failure-atomicity contracts across f32, f64, F16, and Bf16; package test
   targets compile on Rust 1.97 GNU.
-- **Residual:** regular backward and transposed forward remain provider gaps.
-  Clippy collection is blocked by mixed MSYS2/rustup artifacts in the shared
-  target cache, not by a Leto diagnostic.
+- **Residual:** transposed forward remains a provider gap. Clippy collection is
+  blocked by mixed MSYS2/rustup artifacts in the shared target cache, not by a
+  Leto diagnostic.
 
 ## 2026-07-23 Oracle ownership reconciliation
 

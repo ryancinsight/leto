@@ -46,11 +46,17 @@ impl<const D: usize> ConvolutionParameters<D> {
 }
 
 pub(super) struct ConvolutionPlan<const D: usize> {
+    pub(super) batch: usize,
     pub(super) input_channels: usize,
+    pub(super) output_channels: usize,
     pub(super) input_spatial: [usize; D],
     pub(super) kernel_spatial: [usize; D],
+    pub(super) output_spatial: [usize; D],
     pub(super) parameters: ConvolutionParameters<D>,
+    pub(super) input_elements: usize,
+    pub(super) weight_elements: usize,
     pub(super) output_elements: usize,
+    pub(super) output_spatial_elements: usize,
     pub(super) kernel_elements: usize,
 }
 
@@ -62,6 +68,67 @@ impl<const D: usize> ConvolutionPlan<D> {
         parameters: ConvolutionParameters<D>,
         output: &ArrayViewMut<'_, T, R>,
     ) -> Result<Self> {
+        output.layout().validate_storage_len(output.data().len())?;
+        if output.layout().has_zero_stride_aliasing() {
+            return Err(LetoError::StorageError {
+                reason: "convolution output layout must not contain zero-stride aliasing"
+                    .to_string(),
+            });
+        }
+        Self::validate_readonly(input, weight, bias, parameters, &output.as_view())
+    }
+
+    pub(super) fn validate_backward<T, const R: usize>(
+        input: &ArrayView<'_, T, R>,
+        weight: &ArrayView<'_, T, R>,
+        grad_output: &ArrayView<'_, T, R>,
+        parameters: ConvolutionParameters<D>,
+        grad_input: Option<&ArrayViewMut<'_, T, R>>,
+        grad_weight: Option<&ArrayViewMut<'_, T, R>>,
+        grad_bias: Option<&ArrayViewMut<'_, T, 1>>,
+    ) -> Result<Self> {
+        if grad_input.is_none() && grad_weight.is_none() && grad_bias.is_none() {
+            return Err(LetoError::InvalidInput(
+                "convolution backward requires at least one gradient target".to_string(),
+            ));
+        }
+
+        let plan = Self::validate_readonly(input, weight, None, parameters, grad_output)?;
+        if let Some(target) = grad_input {
+            validate_gradient_target(target, input.shape(), "input")?;
+        }
+        if let Some(target) = grad_weight {
+            validate_gradient_target(target, weight.shape(), "weight")?;
+        }
+        if let Some(target) = grad_bias {
+            validate_gradient_target(target, [plan.output_channels], "bias")?;
+        }
+        Ok(plan)
+    }
+
+    fn validate_readonly<T, const R: usize>(
+        input: &ArrayView<'_, T, R>,
+        weight: &ArrayView<'_, T, R>,
+        bias: Option<&ArrayView<'_, T, 1>>,
+        parameters: ConvolutionParameters<D>,
+        output: &ArrayView<'_, T, R>,
+    ) -> Result<Self> {
+        input.layout().validate_storage_len(input.data().len())?;
+        weight.layout().validate_storage_len(weight.data().len())?;
+        output.layout().validate_storage_len(output.data().len())?;
+        if let Some(bias) = bias {
+            bias.layout().validate_storage_len(bias.data().len())?;
+        }
+        Self::validate_shapes(input, weight, bias, parameters, output.shape())
+    }
+
+    fn validate_shapes<T, const R: usize>(
+        input: &ArrayView<'_, T, R>,
+        weight: &ArrayView<'_, T, R>,
+        bias: Option<&ArrayView<'_, T, 1>>,
+        parameters: ConvolutionParameters<D>,
+        output_shape: [usize; R],
+    ) -> Result<Self> {
         let expected_rank = D.checked_add(2).ok_or(LetoError::Overflow {
             reason: "convolution tensor rank",
         })?;
@@ -71,22 +138,8 @@ impl<const D: usize> ConvolutionPlan<D> {
             )));
         }
 
-        input.layout().validate_storage_len(input.data().len())?;
-        weight.layout().validate_storage_len(weight.data().len())?;
-        output.layout().validate_storage_len(output.data().len())?;
-        if output.layout().has_zero_stride_aliasing() {
-            return Err(LetoError::StorageError {
-                reason: "convolution output layout must not contain zero-stride aliasing"
-                    .to_string(),
-            });
-        }
-        if let Some(bias) = bias {
-            bias.layout().validate_storage_len(bias.data().len())?;
-        }
-
         let input_shape = input.shape();
         let weight_shape = weight.shape();
-        let output_shape = output.shape();
         let batch = input_shape[0];
         let input_channels = input_shape[1];
         let output_channels = weight_shape[0];
@@ -151,24 +204,57 @@ impl<const D: usize> ConvolutionPlan<D> {
             });
         }
 
-        let output_elements = output_shape.iter().try_fold(1usize, |count, &extent| {
-            count.checked_mul(extent).ok_or(LetoError::Overflow {
-                reason: "convolution output element count",
-            })
-        })?;
-        let kernel_elements = kernel_spatial.iter().try_fold(1usize, |count, &extent| {
-            count.checked_mul(extent).ok_or(LetoError::Overflow {
-                reason: "convolution kernel element count",
-            })
-        })?;
+        let input_elements = checked_elements(&input_shape, "convolution input element count")?;
+        let weight_elements = checked_elements(&weight_shape, "convolution weight element count")?;
+        let output_elements = checked_elements(&output_shape, "convolution output element count")?;
+        let output_spatial_elements =
+            checked_elements(&output_spatial, "convolution output spatial element count")?;
+        let kernel_elements =
+            checked_elements(&kernel_spatial, "convolution kernel element count")?;
 
         Ok(Self {
+            batch,
             input_channels,
+            output_channels,
             input_spatial,
             kernel_spatial,
+            output_spatial,
             parameters,
+            input_elements,
+            weight_elements,
             output_elements,
+            output_spatial_elements,
             kernel_elements,
         })
     }
+}
+
+fn validate_gradient_target<T, const R: usize>(
+    target: &ArrayViewMut<'_, T, R>,
+    expected_shape: [usize; R],
+    target_name: &str,
+) -> Result<()> {
+    target.layout().validate_storage_len(target.data().len())?;
+    if target.layout().has_zero_stride_aliasing() {
+        return Err(LetoError::StorageError {
+            reason: format!(
+                "convolution {target_name} gradient layout must not contain zero-stride aliasing"
+            ),
+        });
+    }
+    if target.shape() != expected_shape {
+        return Err(LetoError::ShapeMismatch {
+            lhs: target.shape().to_vec(),
+            rhs: expected_shape.to_vec(),
+        });
+    }
+    Ok(())
+}
+
+fn checked_elements(shape: &[usize], reason: &'static str) -> Result<usize> {
+    shape.iter().try_fold(1usize, |count, &extent| {
+        count
+            .checked_mul(extent)
+            .ok_or(LetoError::Overflow { reason })
+    })
 }

@@ -1,3 +1,4 @@
+use super::coordinates::decode_index;
 use super::plan::{ConvolutionParameters, ConvolutionPlan};
 use crate::domain::scalar::Scalar;
 use leto::{ArrayView, ArrayViewMut, Result};
@@ -37,7 +38,7 @@ pub fn convolution_forward_into<T: Scalar, const R: usize, const D: usize>(
     let mut kernel_spatial = [0; D];
 
     for flat_output in 0..plan.output_elements {
-        decode_index(flat_output, output.shape(), &mut output_index);
+        decode_index(flat_output, &output.shape(), &mut output_index);
         output_spatial.copy_from_slice(&output_index[2..]);
         let batch = output_index[0];
         let output_channel = output_index[1];
@@ -45,7 +46,7 @@ pub fn convolution_forward_into<T: Scalar, const R: usize, const D: usize>(
 
         for input_channel in 0..plan.input_channels {
             for flat_kernel in 0..plan.kernel_elements {
-                decode_index(flat_kernel, plan.kernel_spatial, &mut kernel_spatial);
+                decode_index(flat_kernel, &plan.kernel_spatial, &mut kernel_spatial);
                 let mut inside = true;
                 for axis in 0..D {
                     // Validation proves the largest padded position is at most
@@ -76,17 +77,4 @@ pub fn convolution_forward_into<T: Scalar, const R: usize, const D: usize>(
         output[output_index] = sum;
     }
     Ok(())
-}
-
-#[inline]
-fn decode_index<const N: usize>(mut flat: usize, shape: [usize; N], index: &mut [usize; N]) {
-    for axis in (0..N).rev() {
-        let extent = shape[axis];
-        if extent == 0 {
-            index[axis] = 0;
-        } else {
-            index[axis] = flat % extent;
-            flat /= extent;
-        }
-    }
 }

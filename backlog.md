@@ -25,13 +25,14 @@ and SemVer classification pass.
 `crates/leto-ops/src/{application/mod.rs,lib.rs}`, focused `leto-ops` tests,
 `CHANGELOG.md`, `gap_audit.md`, `backlog.md`, and the governing ADR/index.
 
-**Current evidence:** the allocation-reusing N-dimensional forward
-cross-correlation kernel validates ranks, shapes, storage, and checked
-dimension arithmetic before mutation. Generic f32/f64/F16/Bf16 conformance,
-2-D padding+dilation, 3-D identity, exact typed-error, and failure-atomicity
-tests pass under focused Nextest (5/5). Package test targets compile on Rust
-1.97 GNU. Warning-denied Clippy is blocked by mixed MSYS2/rustup artifacts in
-the shared build cache; backward and transposed contracts remain open.
+**Current evidence:** the allocation-reusing N-dimensional forward and
+additive-backward kernels validate ranks, shapes, storage, all requested
+gradient targets, and checked dimension arithmetic before mutation. Generic
+f32/f64/F16/Bf16 conformance, 2-D padding+dilation, 3-D identity, exact
+typed-error, and failure-atomicity tests pass under focused Nextest (7/7).
+Package test targets compile on Rust 1.97 GNU. Warning-denied Clippy remains
+blocked by mixed MSYS2/rustup artifacts in the shared build cache; transposed
+contracts remain open.
 
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 
