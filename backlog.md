@@ -2,7 +2,7 @@
 
 ## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [minor, in progress]
 
-**Owner:** Codex on `codex/leto-convolution-provider`
+**Owner:** Codex on `codex/leto-transposed-backward`
 
 **Driver:** Coeus ADR-0046 requires CPU backend selection to execute directly
 through Leto before Coeus can delete its transposed-convolution host default
@@ -15,7 +15,7 @@ value tests; Rustdoc, changelog, gap audit, and this item. Accelerator kernels,
 Coeus call-site migration, and unrelated linear algebra are non-goals.
 
 **Acceptance:** 1-D, 2-D, and 3-D regular forward/backward plus 1-D, 2-D, and 3-D
-transposed forward operations execute through one dimension-parameterized
+transposed forward/backward operations execute through one dimension-parameterized
 implementation family; invalid contracts return typed errors without partial
 output mutation; every supported scalar instantiates the same value-semantic
 suite; format, warning-denied Clippy, configured Nextest, doctests, Rustdoc,
@@ -37,6 +37,12 @@ ignored case; and all 196 applicable minor-release SemVer checks pass.
 Warning-denied Clippy collection remains blocked by mixed MSYS2/rustup
 artifacts in the shared build cache. Rustdoc emits 33 pre-existing broken-link
 warnings. ADR 0019 records the provider contract.
+
+The Coeus consumer-closure audit found that transposed autograd still owns
+host-side 1-D, 2-D, and 3-D backward loops. The active follow-up adds the
+missing provider-owned transposed backward contract, generic scalar/rank
+coverage, and failure-atomic gradient validation before the Hephaestus
+accelerator seam is introduced.
 
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 
