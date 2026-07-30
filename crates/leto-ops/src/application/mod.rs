@@ -1,3 +1,5 @@
+/// N-dimensional convolution operations.
+pub mod convolution;
 /// 1-D finite-difference differentiation operators.
 pub mod diff;
 /// Shared logical-index conversion helpers.

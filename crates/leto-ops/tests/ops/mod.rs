@@ -1,6 +1,7 @@
 pub mod bidiagonal;
 pub mod bunch_kaufman;
 pub mod col_piv_qr;
+pub mod convolution;
 pub mod differential;
 pub mod eigen;
 pub mod eigenvalues;
