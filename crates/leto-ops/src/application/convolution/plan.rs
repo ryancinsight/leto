@@ -32,15 +32,21 @@ impl<const D: usize> ConvolutionParameters<D> {
         })
     }
 
-    pub(super) const fn stride(&self) -> &[usize; D] {
+    /// Return the per-axis traversal stride.
+    #[must_use]
+    pub const fn stride(&self) -> &[usize; D] {
         &self.stride
     }
 
-    pub(super) const fn padding(&self) -> &[usize; D] {
+    /// Return the symmetric per-axis padding.
+    #[must_use]
+    pub const fn padding(&self) -> &[usize; D] {
         &self.padding
     }
 
-    pub(super) const fn dilation(&self) -> &[usize; D] {
+    /// Return the per-axis kernel dilation.
+    #[must_use]
+    pub const fn dilation(&self) -> &[usize; D] {
         &self.dilation
     }
 }
