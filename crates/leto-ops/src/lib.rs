@@ -20,7 +20,8 @@ pub use domain::strategy::SimdStrategy;
 pub use domain::strategy::ParallelStrategy;
 
 pub use application::convolution::{
-    ConvolutionParameters, convolution_backward_accumulate, convolution_forward_into,
+    ConvolutionParameters, TransposedConvolutionParameters, convolution_backward_accumulate,
+    convolution_forward_into, convolution_transposed_forward_into,
 };
 pub use application::linalg::{
     bidiagonalize,

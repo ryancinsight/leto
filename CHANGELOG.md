@@ -13,6 +13,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   scalar- and rank-generic N-dimensional CPU convolution family over borrowed
   Leto views and caller-owned outputs. Validation is failure-atomic and the
   successful paths perform no heap allocation.
+- [minor] Add `TransposedConvolutionParameters` and
+  `convolution_transposed_forward_into`, the matching scalar- and rank-generic
+  transposed-convolution provider contract. It preserves the canonical
+  `[input_channels, output_channels, kernel...]` weight layout and treats
+  output padding as a shape parameter only.
 - [minor] Add `SparseLuSolver::solve_view`, which accepts a native Leto
   `ArrayView1` and returns an owned `Array1` solution. Consumers can preserve
   their existing array storage across the sparse-LU boundary without staging

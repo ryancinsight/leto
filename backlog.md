@@ -14,7 +14,7 @@ contracts; allocation-reusing output APIs; generic conformance and analytical
 value tests; Rustdoc, changelog, gap audit, and this item. Accelerator kernels,
 Coeus call-site migration, and unrelated linear algebra are non-goals.
 
-**Acceptance:** 1-D, 2-D, and 3-D regular forward/backward plus 1-D and 2-D
+**Acceptance:** 1-D, 2-D, and 3-D regular forward/backward plus 1-D, 2-D, and 3-D
 transposed forward operations execute through one dimension-parameterized
 implementation family; invalid contracts return typed errors without partial
 output mutation; every supported scalar instantiates the same value-semantic
@@ -25,14 +25,18 @@ and SemVer classification pass.
 `crates/leto-ops/src/{application/mod.rs,lib.rs}`, focused `leto-ops` tests,
 `CHANGELOG.md`, `gap_audit.md`, `backlog.md`, and the governing ADR/index.
 
-**Current evidence:** the allocation-reusing N-dimensional forward and
-additive-backward kernels validate ranks, shapes, storage, all requested
-gradient targets, and checked dimension arithmetic before mutation. Generic
-f32/f64/F16/Bf16 conformance, 2-D padding+dilation, 3-D identity, exact
-typed-error, and failure-atomicity tests pass under focused Nextest (7/7).
-Package test targets compile on Rust 1.97 GNU. Warning-denied Clippy remains
-blocked by mixed MSYS2/rustup artifacts in the shared build cache; transposed
-contracts remain open.
+**Current evidence:** the allocation-reusing N-dimensional regular forward,
+additive backward, and transposed forward kernels validate ranks, shapes,
+storage, all requested gradient targets, and checked dimension arithmetic
+before mutation. Generic f32/f64/F16/Bf16 conformance; 1-D, 2-D, and 3-D
+transposed semantics; output-padding shape behavior; exact typed errors; and
+failure atomicity, including strided input/weight/output views, pass under
+focused Nextest (13/13). Package test targets
+compile warning-free on Rust 1.97 GNU; doctests pass 11/11 with one existing
+ignored case; and all 196 applicable minor-release SemVer checks pass.
+Warning-denied Clippy collection remains blocked by mixed MSYS2/rustup
+artifacts in the shared build cache. Rustdoc emits 33 pre-existing broken-link
+warnings. ADR 0019 records the provider contract.
 
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 
