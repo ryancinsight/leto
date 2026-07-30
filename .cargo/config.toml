@@ -1,5 +1,19 @@
-[build]
-rustflags = ["-C", "target-cpu=native"]
+# `-C target-cpu=native` is deliberately absent.
+#
+# Rustflags are part of Cargo's fingerprint and every Atlas repository shares
+# one CARGO_TARGET_DIR, so a repo-local rustflag forks the shared cache: each
+# dependency this workspace has in common with its siblings is compiled a
+# second time, and switching between repositories invalidates the other's
+# artifacts. Leto sits near the bottom of the stack, so that fork propagates
+# through nearly everything built above it.
+#
+# It is also the wrong layer for the decision: Leto is consumed as a library,
+# and CPU feature selection belongs at runtime — detect the available vector
+# features and dispatch to the widest profitable monomorphised kernel — rather
+# than in a build flag that silently makes the artifact non-portable.
+#
+# For a local, non-distributed measurement run, pass the flag on the command
+# line rather than reinstating it here.
 
 [env]
 PYO3_USE_ABI3_FORWARD_COMPATIBILITY = "1"
