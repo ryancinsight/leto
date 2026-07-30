@@ -23,9 +23,9 @@ pub fn pearson<T: RealField>(a: &[T], b: &[T]) -> T {
     for (&av, &bv) in a.iter().zip(b) {
         let xa = av - ma;
         let xb = bv - mb;
-        num = num + xa * xb;
-        da = da + xa * xa;
-        db = db + xb * xb;
+        num += xa * xb;
+        da += xa * xa;
+        db += xb * xb;
     }
     if da > T::ZERO && db > T::ZERO {
         num / (da.sqrt() * db.sqrt())
@@ -42,18 +42,14 @@ pub fn pearson<T: RealField>(a: &[T], b: &[T]) -> T {
 /// # Errors
 ///
 /// Returns an error when any phase value is non-finite.
-pub fn phase_shift_correlation_curve<T: RealField>(
-    phase_rad: &[T],
-) -> Result<Vec<T>, String> {
+pub fn phase_shift_correlation_curve<T: RealField>(phase_rad: &[T]) -> Result<Vec<T>, String> {
     if let Some((index, value)) = phase_rad
         .iter()
         .copied()
         .enumerate()
         .find(|(_, value)| !value.is_finite())
     {
-        return Err(format!(
-            "phase_rad[{index}] must be finite, got {value:?}"
-        ));
+        return Err(format!("phase_rad[{index}] must be finite, got {value:?}"));
     }
 
     Ok(phase_rad.iter().copied().map(|phase| phase.cos()).collect())
@@ -114,11 +110,7 @@ pub fn validation_psnr_from_relative_rmse<T: RealField>(
 /// Returns `T::ZERO` when `a` is the zero vector.
 #[must_use]
 pub fn normalized_rmse<T: RealField>(a: &[T], b: &[T]) -> T {
-    let norm = a
-        .iter()
-        .copied()
-        .fold(T::ZERO, |acc, v| acc + v * v)
-        .sqrt();
+    let norm = a.iter().copied().fold(T::ZERO, |acc, v| acc + v * v).sqrt();
     if norm == T::ZERO {
         return T::ZERO;
     }
@@ -195,7 +187,10 @@ pub fn psnr<T: RealField>(a: &[T], b: &[T]) -> T {
     if a.len() != b.len() || a.is_empty() {
         return T::ZERO;
     }
-    let max_b = b.iter().copied().fold(T::ZERO, |m, v| m.max_scalar(v.abs()));
+    let max_b = b
+        .iter()
+        .copied()
+        .fold(T::ZERO, |m, v| m.max_scalar(v.abs()));
     if max_b <= T::ZERO {
         return T::ZERO;
     }

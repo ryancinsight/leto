@@ -264,7 +264,7 @@ pub fn gauss_legendre_nodes_weights(n: usize) -> Result<(Vec<f64>, Vec<f64>), St
     }
     let mut nodes = vec![0.0_f64; n];
     let mut weights = vec![0.0_f64; n];
-    let half = (n + 1) / 2;
+    let half = n.div_ceil(2);
     const MAX_ITER: usize = 64;
     const TOL: f64 = 8.0 * f64::EPSILON;
 
@@ -430,7 +430,11 @@ mod tests {
             let max_exact = 2 * n - 1;
             for d in 0..=max_exact {
                 // ∫_{-1}^{1} x^d dx = 2/(d+1) for even d, 0 for odd d.
-                let exact = if d % 2 == 0 { 2.0 / (d as f64 + 1.0) } else { 0.0 };
+                let exact = if d % 2 == 0 {
+                    2.0 / (d as f64 + 1.0)
+                } else {
+                    0.0
+                };
                 let computed = rule.integrate(|x: f64| x.powi(d as i32), -1.0, 1.0);
                 assert!(
                     (computed - exact).abs() < 1e-11,
@@ -445,6 +449,9 @@ mod tests {
         // 3-point GaussLegendreN must match GaussLegendre3 for sin.
         let fixed: f64 = GaussLegendre3.integrate(|x: f64| x.sin(), 0.0, 1.0);
         let dynamic: f64 = GaussLegendreN::new(3).integrate(|x: f64| x.sin(), 0.0, 1.0);
-        assert!((fixed - dynamic).abs() < 1e-13, "fixed={fixed} dynamic={dynamic}");
+        assert!(
+            (fixed - dynamic).abs() < 1e-13,
+            "fixed={fixed} dynamic={dynamic}"
+        );
     }
 }

@@ -1,5 +1,27 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-07-29 Coeus convolution provider gap
+
+- **Finding:** Coeus cannot delete its CPU convolution kernels until Leto owns
+  regular and transposed forward/backward convolution contracts.
+- **Resolution:** Leto owns regular and transposed N-dimensional
+  forward/additive-backward leaves, with checked preflight validation,
+  borrowed inputs, caller-owned outputs, and one monomorphized implementation
+  per operation across scalar and rank dimensions. The lightweight `leto`
+  domain owns parameter vocabulary shared with accelerator planners; ADR 0019
+  owns the contract.
+- **Evidence:** focused Nextest passes 21 exact value-semantic and
+  failure-atomicity contracts across f32, f64, F16, and Bf16, including 1-D,
+  2-D, and 3-D transposed forward/backward convolution, strided views, and
+  output-padding gradient semantics; package test targets compile warning-free
+  on Rust 1.97 GNU;
+  doctests pass 11/11 with one existing ignored case; and all 196 applicable
+  minor-release SemVer checks pass.
+- **Residual:** Coeus has not yet cut CPU dispatch over to these APIs.
+  Warning-denied Clippy collection is blocked by mixed MSYS2/rustup artifacts
+  in the shared target cache, not by a Leto diagnostic. Rustdoc completes but
+  reports 33 pre-existing broken-link warnings.
+
 ## 2026-07-23 Oracle ownership reconciliation
 
 - **Finding:** the backlog still claimed that legacy `ndarray`/`nalgebra`

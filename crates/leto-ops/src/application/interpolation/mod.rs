@@ -25,9 +25,9 @@
 pub mod cubic_spline;
 pub mod lagrange;
 pub mod linear;
+mod search;
 /// 2-D and 3-D spatial interpolation (bilinear, trilinear).
 pub mod spatial;
-mod search;
 
 pub use cubic_spline::CubicSplineInterpolation;
 pub use lagrange::LagrangeInterpolation;

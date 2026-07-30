@@ -1,5 +1,53 @@
 # Leto Work Backlog
 
+## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [major, arch, in progress]
+
+**Owner:** Codex on `codex/leto-convolution-parameters-core`
+
+**Driver:** Coeus ADR-0046 requires CPU backend selection to execute directly
+through Leto before Coeus can delete its transposed-convolution host default
+and make `ConvOps` fallible.
+
+**Scope:** one generic, scalar-preserving regular and transposed-convolution
+operation family under `leto-ops`; validating shape/stride/padding/dilation
+contracts; allocation-reusing output APIs; generic conformance and analytical
+value tests; Rustdoc, changelog, gap audit, and this item. Accelerator kernels,
+Coeus call-site migration, and unrelated linear algebra are non-goals.
+
+**Acceptance:** 1-D, 2-D, and 3-D regular forward/backward plus 1-D, 2-D, and 3-D
+transposed forward/backward operations execute through one dimension-parameterized
+implementation family; invalid contracts return typed errors without partial
+output mutation; every supported scalar instantiates the same value-semantic
+suite; format, warning-denied Clippy, configured Nextest, doctests, Rustdoc,
+and SemVer classification pass.
+
+**Claimed files:** `crates/leto-ops/src/application/convolution/`,
+`crates/leto-ops/src/{application/mod.rs,lib.rs}`, focused `leto-ops` tests,
+`CHANGELOG.md`, `gap_audit.md`, `backlog.md`, and the governing ADR/index.
+
+**Current evidence:** the allocation-reusing N-dimensional regular and
+transposed forward/additive-backward kernels validate ranks, shapes, storage,
+all requested gradient targets, and checked dimension arithmetic before
+mutation. Generic f32/f64/F16/Bf16 conformance; 1-D, 2-D, and 3-D transposed
+semantics; output-padding gradient behavior; exact typed errors; and failure
+atomicity, including strided input/weight/output/gradient views, pass under
+focused Nextest (18/18). Package test targets
+compile warning-free on Rust 1.97 GNU; doctests pass 11/11 with one existing
+ignored case; and all 196 applicable minor-release SemVer checks pass.
+Warning-denied Clippy collection remains blocked by mixed MSYS2/rustup
+artifacts in the shared build cache. Rustdoc emits 33 pre-existing broken-link
+warnings. ADR 0019 records the provider contract.
+
+The Coeus consumer-closure audit found that transposed autograd still owns
+host-side 1-D, 2-D, and 3-D backward loops. The provider now exposes the
+missing transposed backward contract and public parameter accessors required
+by the Hephaestus accelerator seam. The active dependency-direction follow-up
+promotes the parameter vocabulary into lightweight `leto`, allowing
+`hephaestus-core` to share the SSOT without depending on the full CPU
+operations crate. Focused Leto/Leto Ops Nextest passes 21/21. SemVer checks
+pass 196/196 for the additive `leto` surface and classify the canonical
+`leto-ops` struct-identity move as major; ADR 0019 records the migration.
+
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 
 **Owner:** Codex

@@ -8,6 +8,26 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [major] Promote validated regular and transposed convolution parameters into
+  the lightweight `leto` domain. CPU operations retain the same curated
+  `leto-ops` exports while accelerator planners can share the parameter SSOT
+  without depending on SIMD or execution-runtime infrastructure. This changes
+  canonical item identity; generated API metadata consumers migrate those
+  identities from `leto-ops` to `leto`.
+- [minor] Add `ConvolutionParameters` and
+  `convolution_forward_into` plus `convolution_backward_accumulate`, one
+  scalar- and rank-generic N-dimensional CPU convolution family over borrowed
+  Leto views and caller-owned outputs. Validation is failure-atomic and the
+  successful paths perform no heap allocation.
+- [minor] Add `TransposedConvolutionParameters` and
+  `convolution_transposed_forward_into`, the matching scalar- and rank-generic
+  transposed-convolution provider contract. It preserves the canonical
+  `[input_channels, output_channels, kernel...]` weight layout and treats
+  output padding as a shape parameter only.
+- [minor] Add `convolution_transposed_backward_accumulate` with an explicit
+  `TransposedConvolutionGradients` target bundle. The provider validates every
+  selected gradient before mutation and supports strided 1-D, 2-D, and 3-D
+  input, weight, output-gradient, and destination layouts.
 - [minor] Add `SparseLuSolver::solve_view`, which accepts a native Leto
   `ArrayView1` and returns an owned `Array1` solution. Consumers can preserve
   their existing array storage across the sparse-LU boundary without staging
