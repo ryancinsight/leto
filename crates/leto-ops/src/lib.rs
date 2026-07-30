@@ -19,6 +19,10 @@ pub use domain::strategy::SimdStrategy;
 #[cfg(feature = "parallel")]
 pub use domain::strategy::ParallelStrategy;
 
+pub use application::convolution::{
+    ConvolutionParameters, TransposedConvolutionParameters, convolution_backward_accumulate,
+    convolution_forward_into, convolution_transposed_forward_into,
+};
 pub use application::linalg::{
     bidiagonalize,
     bunch_kaufman,
