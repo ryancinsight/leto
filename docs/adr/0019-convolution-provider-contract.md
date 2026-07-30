@@ -27,6 +27,8 @@ changes the derived output shape without adding values to the output.
 - `convolution_backward_accumulate` adds input, weight, and bias gradients.
 - `convolution_transposed_forward_into` scatters an N-dimensional transposed
   convolution.
+- `convolution_transposed_backward_accumulate` adds selected input, weight,
+  and bias gradients without consumer-owned host logic.
 
 Validated parameter types carry stride, padding, dilation, and, for the
 transposed contract, output padding. A preflight plan validates tensor rank,
@@ -63,9 +65,10 @@ and layout; no cross-backend bitwise-equivalence claim is made.
 
 The generic conformance suite instantiates all supported scalar types.
 Analytical tests cover regular forward/backward, 1-D/2-D/3-D transposed
-convolution, padding, dilation, output-padding shape behavior, typed errors,
-and failure atomicity. Package check, configured Nextest, doctests, Rustdoc,
-warning-denied Clippy, and SemVer classification form the delivery gate.
+forward/backward convolution, padding, dilation, output-padding gradient
+behavior, typed errors, strided views, and failure atomicity. Package check,
+configured Nextest, doctests, Rustdoc, warning-denied Clippy, and SemVer
+classification form the delivery gate.
 
 ## References
 

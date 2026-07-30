@@ -25,13 +25,13 @@ and SemVer classification pass.
 `crates/leto-ops/src/{application/mod.rs,lib.rs}`, focused `leto-ops` tests,
 `CHANGELOG.md`, `gap_audit.md`, `backlog.md`, and the governing ADR/index.
 
-**Current evidence:** the allocation-reusing N-dimensional regular forward,
-additive backward, and transposed forward kernels validate ranks, shapes,
-storage, all requested gradient targets, and checked dimension arithmetic
-before mutation. Generic f32/f64/F16/Bf16 conformance; 1-D, 2-D, and 3-D
-transposed semantics; output-padding shape behavior; exact typed errors; and
-failure atomicity, including strided input/weight/output views, pass under
-focused Nextest (13/13). Package test targets
+**Current evidence:** the allocation-reusing N-dimensional regular and
+transposed forward/additive-backward kernels validate ranks, shapes, storage,
+all requested gradient targets, and checked dimension arithmetic before
+mutation. Generic f32/f64/F16/Bf16 conformance; 1-D, 2-D, and 3-D transposed
+semantics; output-padding gradient behavior; exact typed errors; and failure
+atomicity, including strided input/weight/output/gradient views, pass under
+focused Nextest (18/18). Package test targets
 compile warning-free on Rust 1.97 GNU; doctests pass 11/11 with one existing
 ignored case; and all 196 applicable minor-release SemVer checks pass.
 Warning-denied Clippy collection remains blocked by mixed MSYS2/rustup
@@ -39,10 +39,9 @@ artifacts in the shared build cache. Rustdoc emits 33 pre-existing broken-link
 warnings. ADR 0019 records the provider contract.
 
 The Coeus consumer-closure audit found that transposed autograd still owns
-host-side 1-D, 2-D, and 3-D backward loops. The active follow-up adds the
-missing provider-owned transposed backward contract, generic scalar/rank
-coverage, and failure-atomic gradient validation before the Hephaestus
-accelerator seam is introduced.
+host-side 1-D, 2-D, and 3-D backward loops. The provider now exposes the
+missing transposed backward contract and public parameter accessors required
+by the Hephaestus accelerator seam.
 
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 

@@ -3,15 +3,16 @@
 ## 2026-07-29 Coeus convolution provider gap
 
 - **Finding:** Coeus cannot delete its CPU convolution kernels until Leto owns
-  regular forward/backward and transposed convolution contracts.
-- **Resolution:** Leto owns regular N-dimensional forward/additive-backward and
-  transposed-forward leaves, with checked preflight validation, borrowed
-  inputs, caller-owned outputs, and one monomorphized implementation per
-  operation across scalar and rank dimensions. ADR 0019 owns the contract.
-- **Evidence:** focused Nextest passes 13 exact value-semantic and
+  regular and transposed forward/backward convolution contracts.
+- **Resolution:** Leto owns regular and transposed N-dimensional
+  forward/additive-backward leaves, with checked preflight validation,
+  borrowed inputs, caller-owned outputs, and one monomorphized implementation
+  per operation across scalar and rank dimensions. ADR 0019 owns the contract.
+- **Evidence:** focused Nextest passes 18 exact value-semantic and
   failure-atomicity contracts across f32, f64, F16, and Bf16, including 1-D,
-  2-D, and 3-D transposed convolution, strided views, and output-padding
-  semantics; package test targets compile warning-free on Rust 1.97 GNU;
+  2-D, and 3-D transposed forward/backward convolution, strided views, and
+  output-padding gradient semantics; package test targets compile warning-free
+  on Rust 1.97 GNU;
   doctests pass 11/11 with one existing ignored case; and all 196 applicable
   minor-release SemVer checks pass.
 - **Residual:** Coeus has not yet cut CPU dispatch over to these APIs.

@@ -18,6 +18,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   transposed-convolution provider contract. It preserves the canonical
   `[input_channels, output_channels, kernel...]` weight layout and treats
   output padding as a shape parameter only.
+- [minor] Add `convolution_transposed_backward_accumulate` with an explicit
+  `TransposedConvolutionGradients` target bundle. The provider validates every
+  selected gradient before mutation and supports strided 1-D, 2-D, and 3-D
+  input, weight, output-gradient, and destination layouts.
 - [minor] Add `SparseLuSolver::solve_view`, which accepts a native Leto
   `ArrayView1` and returns an owned `Array1` solution. Consumers can preserve
   their existing array storage across the sparse-LU boundary without staging
