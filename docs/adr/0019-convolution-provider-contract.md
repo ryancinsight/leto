@@ -4,6 +4,9 @@
 - **Date:** 2026-07-30
 - **Backlog:** `LETO-CONVOLUTION-PROVIDER-1`
 - **Cross-repository driver:** Coeus ADR 0046
+- **Revision 2026-07-30:** promoted parameter type identity into `leto` after
+  Hephaestus dependency analysis; cargo-semver-checks classifies the canonical
+  identity move as major even though `leto-ops` retains curated re-exports.
 
 ## Context
 
@@ -30,12 +33,14 @@ changes the derived output shape without adding values to the output.
 - `convolution_transposed_backward_accumulate` adds selected input, weight,
   and bias gradients without consumer-owned host logic.
 
-Validated parameter types carry stride, padding, dilation, and, for the
-transposed contract, output padding. A preflight plan validates tensor rank,
-shape, storage reachability, writable-layout aliasing, and checked dimension
-arithmetic before any output mutation. Kernels borrow input views, mutate
-caller-provided views, and use fixed-size coordinate arrays. Scalar and spatial
-rank parameters monomorphize the loop bodies; no dynamic dispatch or
+The lightweight `leto` domain owns validated parameter vocabulary carrying
+stride, padding, dilation, and, for the transposed contract, output padding.
+This lets CPU operations and accelerator planners share one contract without
+an infrastructure-to-operations dependency. A preflight plan validates tensor
+rank, shape, storage reachability, writable-layout aliasing, and checked
+dimension arithmetic before any output mutation. Kernels borrow input views,
+mutate caller-provided views, and use fixed-size coordinate arrays. Scalar and
+spatial rank parameters monomorphize the loop bodies; no dynamic dispatch or
 per-element allocation is present.
 
 Regular and transposed contracts remain separate leaves because their weight
@@ -60,6 +65,14 @@ writable layouts, and arithmetic overflow return typed `LetoError` values.
 Validation precedes mutation, so failure leaves every supplied output
 unchanged. Floating-point reduction order is deterministic for a fixed rank
 and layout; no cross-backend bitwise-equivalence claim is made.
+
+## Migration
+
+Consumers that need the parameter vocabulary without CPU operations import
+`leto::{ConvolutionParameters, TransposedConvolutionParameters}`. Existing
+`leto_ops` imports remain curated exports, but code that records canonical
+item identity in generated API metadata must update it from `leto-ops` to
+`leto`. No compatibility wrapper or duplicate parameter type is retained.
 
 ## Verification
 

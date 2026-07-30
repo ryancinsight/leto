@@ -1,8 +1,8 @@
 # Leto Work Backlog
 
-## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [minor, in progress]
+## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [major, arch, in progress]
 
-**Owner:** Codex on `codex/leto-transposed-backward`
+**Owner:** Codex on `codex/leto-convolution-parameters-core`
 
 **Driver:** Coeus ADR-0046 requires CPU backend selection to execute directly
 through Leto before Coeus can delete its transposed-convolution host default
@@ -41,7 +41,12 @@ warnings. ADR 0019 records the provider contract.
 The Coeus consumer-closure audit found that transposed autograd still owns
 host-side 1-D, 2-D, and 3-D backward loops. The provider now exposes the
 missing transposed backward contract and public parameter accessors required
-by the Hephaestus accelerator seam.
+by the Hephaestus accelerator seam. The active dependency-direction follow-up
+promotes the parameter vocabulary into lightweight `leto`, allowing
+`hephaestus-core` to share the SSOT without depending on the full CPU
+operations crate. Focused Leto/Leto Ops Nextest passes 21/21. SemVer checks
+pass 196/196 for the additive `leto` surface and classify the canonical
+`leto-ops` struct-identity move as major; ADR 0019 records the migration.
 
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 

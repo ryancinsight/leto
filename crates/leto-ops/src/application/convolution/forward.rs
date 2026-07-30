@@ -1,7 +1,7 @@
 use super::coordinates::decode_index;
-use super::plan::{ConvolutionParameters, ConvolutionPlan};
+use super::plan::ConvolutionPlan;
 use crate::domain::scalar::Scalar;
-use leto::{ArrayView, ArrayViewMut, Result};
+use leto::{ArrayView, ArrayViewMut, ConvolutionParameters, Result};
 
 /// Compute an N-dimensional cross-correlation into caller-owned storage.
 ///

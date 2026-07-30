@@ -8,8 +8,8 @@ mod transposed;
 
 pub use backward::convolution_backward_accumulate;
 pub use forward::convolution_forward_into;
-pub use plan::ConvolutionParameters;
+pub use leto::{ConvolutionParameters, TransposedConvolutionParameters};
 pub use transposed::{
-    TransposedConvolutionGradients, TransposedConvolutionParameters,
     convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
+    TransposedConvolutionGradients,
 };

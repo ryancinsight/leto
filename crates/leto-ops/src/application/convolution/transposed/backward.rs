@@ -1,8 +1,7 @@
-use super::parameters::TransposedConvolutionParameters;
 use super::plan::TransposedConvolutionPlan;
 use crate::application::convolution::coordinates::decode_index;
 use crate::domain::scalar::Scalar;
-use leto::{ArrayView, ArrayViewMut, Result};
+use leto::{ArrayView, ArrayViewMut, Result, TransposedConvolutionParameters};
 
 /// Mutable targets selected for a transposed-convolution backward pass.
 ///
