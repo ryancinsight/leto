@@ -8,6 +8,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [major] Promote validated regular and transposed convolution parameters into
+  the lightweight `leto` domain. CPU operations retain the same curated
+  `leto-ops` exports while accelerator planners can share the parameter SSOT
+  without depending on SIMD or execution-runtime infrastructure. This changes
+  canonical item identity; generated API metadata consumers migrate those
+  identities from `leto-ops` to `leto`.
 - [minor] Add `ConvolutionParameters` and
   `convolution_forward_into` plus `convolution_backward_accumulate`, one
   scalar- and rank-generic N-dimensional CPU convolution family over borrowed

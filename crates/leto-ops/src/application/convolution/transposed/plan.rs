@@ -1,5 +1,4 @@
-use super::parameters::TransposedConvolutionParameters;
-use leto::{ArrayView, ArrayViewMut, LetoError, Result};
+use leto::{ArrayView, ArrayViewMut, LetoError, Result, TransposedConvolutionParameters};
 
 pub(super) struct TransposedConvolutionPlan<const D: usize> {
     pub(super) batch: usize,

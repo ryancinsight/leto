@@ -11,6 +11,7 @@ pub mod geometry;
 pub mod infrastructure;
 
 // Re-exports
+pub use domain::convolution::{ConvolutionParameters, TransposedConvolutionParameters};
 pub use domain::dynamic::LayoutDyn;
 pub use domain::error::{LetoError, Result};
 pub use domain::insert_axis::InsertAxis;
