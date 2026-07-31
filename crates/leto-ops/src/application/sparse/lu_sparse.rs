@@ -49,13 +49,13 @@
 //! (`LetoError::ShapeMismatch`, `LetoError::StorageError`) so consumers'
 //! error-handling is unchanged.
 
-use crate::application::linalg::lu::lu_decompose;
+use crate::application::linalg::lu::{lu_decompose, LuDecomposition};
 use crate::application::sparse::csc::CscMatrix;
 use crate::application::sparse::csr::CsrMatrix;
-use crate::application::sparse::lu_numeric::factor_numeric;
+use crate::application::sparse::lu_numeric::{factor_numeric, triangular_solve_into};
 use crate::application::sparse::lu_symbolic::{factor_symbolic, SymbolicLu};
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, ArrayView1, LetoError, Result};
+use leto::{Array1, Array2, ArrayView1, ArrayViewMut1, LetoError, Result};
 
 /// Default maximum order for which a direct solve is attempted.
 /// Systems above this size return [`LetoError::StorageError`] directing
@@ -126,7 +126,7 @@ impl SparseLuSolver {
         size <= self.max_size
     }
 
-    fn validate<T: RealScalar>(&self, matrix: &CsrMatrix<T>, rhs_len: usize) -> Result<usize> {
+    fn validate_matrix<T: RealScalar>(&self, matrix: &CsrMatrix<T>) -> Result<usize> {
         let n = matrix.nrows();
         if matrix.ncols() != n {
             return Err(LetoError::StorageError {
@@ -137,19 +137,24 @@ impl SparseLuSolver {
                 ),
             });
         }
-        if rhs_len != n {
-            return Err(LetoError::StorageError {
-                reason: format!(
-                    "SparseLuSolver: RHS length {rhs_len} does not match matrix order {n}"
-                ),
-            });
-        }
         if n > self.max_size {
             return Err(LetoError::StorageError {
                 reason: format!(
                     "SparseLuSolver: system order {n} exceeds max_size {}; \
                      use an iterative solver (BiCGSTAB, CG) for large sparse systems",
                     self.max_size
+                ),
+            });
+        }
+        Ok(n)
+    }
+
+    fn validate<T: RealScalar>(&self, matrix: &CsrMatrix<T>, rhs_len: usize) -> Result<usize> {
+        let n = self.validate_matrix(matrix)?;
+        if rhs_len != n {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "SparseLuSolver: RHS length {rhs_len} does not match matrix order {n}"
                 ),
             });
         }
@@ -250,6 +255,171 @@ impl SparseLuSolver {
             self.solve_sparse_path(matrix, &rhs_array.view())?
         };
         Ok(x.iter().copied().collect())
+    }
+
+    /// Factor `matrix` once for repeated solves, reusing a precomputed
+    /// symbolic analysis of its sparsity pattern.
+    ///
+    /// The factor-phase analogue of [`Self::solve_view`]: the same dispatch
+    /// criteria route small or near-dense matrices through the dense
+    /// partial-pivoting LU, and a sparse factorization that reports
+    /// pivoting-required falls back to the dense path — so the returned
+    /// factor is defined for any nonsingular input within `max_size`.
+    /// Callers with an unchanged pattern amortize [`factor_symbolic`]
+    /// across refactorizations (the CFDrs block-preconditioner cache is
+    /// the driving consumer); `symbolic` is consulted only on the sparse
+    /// arm and must describe `matrix`'s pattern.
+    ///
+    /// # Errors
+    ///
+    /// - [`LetoError::ShapeMismatch`] when `symbolic.n()` differs from the
+    ///   matrix order.
+    /// - [`LetoError::StorageError`] when the matrix is non-square, exceeds
+    ///   `max_size`, or is singular to working precision.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use leto_ops::application::sparse::{CooMatrix, factor_symbolic, CscMatrix, SparseLuSolver};
+    /// use leto::Array1;
+    ///
+    /// let mut coo = CooMatrix::new(2, 2);
+    /// coo.push(0, 0, 4.0_f64);
+    /// coo.push(0, 1, 1.0_f64);
+    /// coo.push(1, 0, 1.0_f64);
+    /// coo.push(1, 1, 3.0_f64);
+    /// let csr = coo.to_csr();
+    /// let symbolic = factor_symbolic(&CscMatrix::from_csr(&csr));
+    /// let factor = SparseLuSolver::default()
+    ///     .factor_sparse_with_symbolic(&csr, &symbolic)
+    ///     .expect("2x2 SPD factors");
+    ///
+    /// let b = Array1::from_shape_vec([2], vec![11.0_f64, 11.0]).expect("b shape");
+    /// let mut x = Array1::from_shape_vec([2], vec![0.0_f64; 2]).expect("x shape");
+    /// factor.solve_into(&b.view(), &mut x.view_mut()).expect("solve");
+    /// assert!((x[0] - 2.0_f64).abs() < 1e-10);
+    /// assert!((x[1] - 3.0_f64).abs() < 1e-10);
+    /// ```
+    pub fn factor_sparse_with_symbolic<T: RealScalar>(
+        &self,
+        matrix: &CsrMatrix<T>,
+        symbolic: &SymbolicLu,
+    ) -> Result<OwnedNumericLu<T>> {
+        let n = self.validate_matrix(matrix)?;
+        if symbolic.n() != n {
+            return Err(LetoError::ShapeMismatch {
+                lhs: vec![symbolic.n()],
+                rhs: vec![n],
+            });
+        }
+        if self.use_dense_path(n, matrix.nnz()) {
+            return Self::factor_dense(matrix);
+        }
+        let csc = CscMatrix::from_csr(matrix);
+        match factor_numeric(&csc, symbolic, self.pivot_tolerance) {
+            Ok(lu) => {
+                let (l_values, u_values, row_perm) = lu.into_parts();
+                Ok(OwnedNumericLu {
+                    repr: OwnedLuRepr::Sparse {
+                        symbolic: symbolic.clone(),
+                        l_values,
+                        u_values,
+                        row_perm,
+                    },
+                })
+            }
+            // Partial pivoting needed; the sparse value-storage convention
+            // cannot represent it (see factor_numeric) — factor dense.
+            Err(LetoError::NumericalBreakdown(_)) => Self::factor_dense(matrix),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn factor_dense<T: RealScalar>(matrix: &CsrMatrix<T>) -> Result<OwnedNumericLu<T>> {
+        Ok(OwnedNumericLu {
+            repr: OwnedLuRepr::Dense(lu_decompose(&csr_to_dense(matrix).view())?),
+        })
+    }
+}
+
+/// Owned, reusable numeric factorization produced by
+/// [`SparseLuSolver::factor_sparse_with_symbolic`].
+///
+/// Stores everything the triangular solves need — no borrow of the
+/// symbolic analysis — so factors can be cached across solver iterations
+/// (a preconditioner factoring each momentum block once and applying it
+/// every Krylov iteration) while the caller separately caches the
+/// [`SymbolicLu`] for refactorization on unchanged patterns.
+///
+/// Two representations mirror the solver's dispatch contract: pivoting-free
+/// matrices hold the sparse L/U value buffers; matrices that need partial
+/// pivoting, or that the dispatch criteria route dense, hold the dense
+/// partial-pivoting factorization. Both arms solve to the same values up
+/// to IEEE 754 rounding (differential-tested below).
+#[derive(Debug, Clone)]
+#[must_use = "OwnedNumericLu carries the factorization consumed by solve"]
+pub struct OwnedNumericLu<T: RealScalar> {
+    repr: OwnedLuRepr<T>,
+}
+
+#[derive(Debug, Clone)]
+enum OwnedLuRepr<T: RealScalar> {
+    Sparse {
+        symbolic: SymbolicLu,
+        l_values: Vec<T>,
+        u_values: Vec<T>,
+        row_perm: Vec<usize>,
+    },
+    Dense(LuDecomposition<T>),
+}
+
+impl<T: RealScalar> OwnedNumericLu<T> {
+    /// Matrix order `n`.
+    #[must_use]
+    #[inline]
+    pub fn n(&self) -> usize {
+        match &self.repr {
+            OwnedLuRepr::Sparse { symbolic, .. } => symbolic.n(),
+            OwnedLuRepr::Dense(lu) => lu.dim(),
+        }
+    }
+
+    /// Solve `A · x = rhs` directly into a caller-owned view `out`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::ShapeMismatch`] when `rhs` or `out` length
+    /// differs from the matrix order `n`.
+    pub fn solve_into(
+        &self,
+        rhs: &ArrayView1<'_, T>,
+        out: &mut ArrayViewMut1<'_, T>,
+    ) -> Result<()> {
+        match &self.repr {
+            OwnedLuRepr::Sparse {
+                symbolic,
+                l_values,
+                u_values,
+                row_perm,
+            } => triangular_solve_into(symbolic, l_values, u_values, row_perm, rhs, out),
+            OwnedLuRepr::Dense(lu) => lu.solve_into(rhs, out),
+        }
+    }
+
+    /// Solve `A · x = rhs`, returning a freshly-owned solution.
+    ///
+    /// # Errors
+    ///
+    /// Forwards from [`Self::solve_into`].
+    pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+        let n = self.n();
+        let mut x = Array1::from_shape_vec([n], vec![T::ZERO; n]).map_err(|e| {
+            LetoError::StorageError {
+                reason: format!("OwnedNumericLu::solve internal shape error: {e}"),
+            }
+        })?;
+        self.solve_into(rhs, &mut x.view_mut())?;
+        Ok(x)
     }
 }
 
@@ -509,6 +679,180 @@ mod tests {
         for i in 0..4 {
             assert!((x[i] - x_known[i]).abs() < 1e-10, "x[{i}] = {}", x[i]);
         }
+    }
+
+    /// The tridiagonal Poisson-Laplacian used by the owned-factor tests:
+    /// n=64, density ≈ 0.047 < 0.1 and n > small_switch, so the sparse
+    /// arm is dispatched. `diag` scales the main diagonal so two matrices
+    /// share one pattern with different values.
+    fn tridiagonal_csr(n: usize, diag: f64) -> CsrMatrix<f64> {
+        let mut coo = CooMatrix::new(n, n);
+        for i in 0..n {
+            coo.push(i, i, diag);
+            if i > 0 {
+                coo.push(i, i - 1, -1.0_f64);
+            }
+            if i + 1 < n {
+                coo.push(i, i + 1, -1.0_f64);
+            }
+        }
+        coo.to_csr()
+    }
+
+    /// `‖A x - b‖∞` computed directly from the CSR nonzeros.
+    fn csr_residual_inf(a: &CsrMatrix<f64>, x: &Array1<f64>, b: &[f64]) -> f64 {
+        let mut max_residual = 0.0_f64;
+        for row in 0..a.nrows() {
+            let mut ax = 0.0_f64;
+            for (&col, &value) in a.row(row).col_indices().iter().zip(a.row(row).values()) {
+                ax += value * x[col];
+            }
+            let d = (ax - b[row]).abs();
+            if d > max_residual {
+                max_residual = d;
+            }
+        }
+        max_residual
+    }
+
+    #[test]
+    fn owned_factor_reuses_symbolic_across_value_changes() {
+        // The CFDrs block-preconditioner pattern: one symbolic analysis,
+        // several numeric factors over matrices sharing the pattern.
+        let n = 64usize;
+        let solver = SparseLuSolver::default();
+        let a1 = tridiagonal_csr(n, 2.0);
+        let symbolic = factor_symbolic(&CscMatrix::from_csr(&a1));
+        let b: Vec<f64> = (1..=n).map(|k| k as f64).collect();
+        let b_arr = Array1::from_shape_vec([n], b.clone()).expect("b shape");
+
+        for diag in [2.0_f64, 4.0] {
+            let a = tridiagonal_csr(n, diag);
+            let factor = solver
+                .factor_sparse_with_symbolic(&a, &symbolic)
+                .expect("pivoting-free factorization");
+            assert_eq!(factor.n(), n);
+            let mut x = Array1::from_shape_vec([n], vec![0.0_f64; n]).expect("x shape");
+            factor
+                .solve_into(&b_arr.view(), &mut x.view_mut())
+                .expect("solve_into");
+            let residual = csr_residual_inf(&a, &x, &b);
+            assert!(residual < 1e-8, "diag={diag}: residual = {residual}");
+        }
+    }
+
+    #[test]
+    fn owned_factor_matches_solve_view() {
+        // Value-semantic differential: the cached factor and the one-shot
+        // dispatcher must produce the same solution on the sparse arm.
+        let n = 64usize;
+        let solver = SparseLuSolver::default();
+        let a = tridiagonal_csr(n, 2.0);
+        assert!(!solver.use_dense_path(n, a.nnz()), "sparse arm expected");
+        let b: Vec<f64> = (0..n).map(|k| (k as f64) * 0.25 - 3.0).collect();
+        let b_arr = Array1::from_shape_vec([n], b).expect("b shape");
+
+        let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+        let factor = solver
+            .factor_sparse_with_symbolic(&a, &symbolic)
+            .expect("factor");
+        let x_factor = factor.solve(&b_arr.view()).expect("factor solve");
+        let x_direct = solver.solve_view(&a, &b_arr.view()).expect("direct solve");
+        for i in 0..n {
+            let d = (x_factor[i] - x_direct[i]).abs();
+            assert!(d < 1e-12, "x[{i}] differs by {d}");
+        }
+    }
+
+    #[test]
+    fn owned_factor_falls_back_to_dense_when_pivoting_required() {
+        // Zero the leading diagonal entry so column 0's pivot must come
+        // from row 1 — the sparse convention reports NumericalBreakdown and
+        // the owned factor must transparently hold the dense factorization.
+        let n = 64usize;
+        let mut coo = CooMatrix::new(n, n);
+        for i in 0..n {
+            if i != 0 {
+                coo.push(i, i, 4.0_f64);
+            }
+            if i > 0 {
+                coo.push(i, i - 1, -1.0_f64);
+            }
+            if i + 1 < n {
+                coo.push(i, i + 1, -1.0_f64);
+            }
+        }
+        let a = coo.to_csr();
+        let solver = SparseLuSolver::default();
+        assert!(!solver.use_dense_path(n, a.nnz()), "sparse arm expected");
+
+        let x_known: Vec<f64> = (0..n).map(|i| 1.0_f64 / (i as f64 + 1.0)).collect();
+        let mut b = vec![0.0_f64; n];
+        for row in 0..n {
+            for (&col, &value) in a.row(row).col_indices().iter().zip(a.row(row).values()) {
+                b[row] += value * x_known[col];
+            }
+        }
+        let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+        let factor = solver
+            .factor_sparse_with_symbolic(&a, &symbolic)
+            .expect("dense fallback factors the pivot-requiring matrix");
+        let b_arr = Array1::from_shape_vec([n], b.clone()).expect("b shape");
+        let x = factor.solve(&b_arr.view()).expect("solve");
+        for i in 0..n {
+            let d = (x[i] - x_known[i]).abs();
+            assert!(d < 1e-8, "x[{i}] = {} expected {}", x[i], x_known[i]);
+        }
+    }
+
+    #[test]
+    fn owned_factor_small_matrix_routes_dense() {
+        // n=2 ≤ small_switch: dispatch takes the dense arm outright.
+        let a = make_csr(2, 2, &[(0, 0, 3.0), (0, 1, 1.0), (1, 0, 1.0), (1, 1, 2.0)]);
+        let solver = SparseLuSolver::default();
+        let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+        let factor = solver
+            .factor_sparse_with_symbolic(&a, &symbolic)
+            .expect("dense-arm factor");
+        let b = Array1::from_shape_vec([2], vec![9.0_f64, 8.0]).expect("b shape");
+        let x = factor.solve(&b.view()).expect("solve");
+        assert!((x[0] - 2.0).abs() < 1e-10, "x[0] = {}", x[0]);
+        assert!((x[1] - 3.0).abs() < 1e-10, "x[1] = {}", x[1]);
+    }
+
+    #[test]
+    fn owned_factor_solve_into_rejects_wrong_lengths() {
+        let n = 64usize;
+        let a = tridiagonal_csr(n, 2.0);
+        let solver = SparseLuSolver::default();
+        let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+        let factor = solver
+            .factor_sparse_with_symbolic(&a, &symbolic)
+            .expect("factor");
+
+        let short_rhs = Array1::from_shape_vec([n - 1], vec![1.0_f64; n - 1]).expect("rhs");
+        let mut out = Array1::from_shape_vec([n], vec![0.0_f64; n]).expect("out");
+        let err = factor
+            .solve_into(&short_rhs.view(), &mut out.view_mut())
+            .expect_err("short RHS must be rejected");
+        assert!(matches!(err, LetoError::ShapeMismatch { .. }), "{err:?}");
+
+        let rhs = Array1::from_shape_vec([n], vec![1.0_f64; n]).expect("rhs");
+        let mut short_out = Array1::from_shape_vec([n - 1], vec![0.0_f64; n - 1]).expect("out");
+        let err = factor
+            .solve_into(&rhs.view(), &mut short_out.view_mut())
+            .expect_err("short output must be rejected");
+        assert!(matches!(err, LetoError::ShapeMismatch { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn owned_factor_rejects_symbolic_order_mismatch() {
+        let a = tridiagonal_csr(64, 2.0);
+        let wrong = factor_symbolic(&CscMatrix::from_csr(&tridiagonal_csr(32, 2.0)));
+        let err = SparseLuSolver::default()
+            .factor_sparse_with_symbolic(&a, &wrong)
+            .expect_err("order mismatch must be rejected");
+        assert!(matches!(err, LetoError::ShapeMismatch { .. }), "{err:?}");
     }
 
     #[test]

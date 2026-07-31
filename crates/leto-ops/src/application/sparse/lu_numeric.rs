@@ -53,7 +53,7 @@
 use super::lu_symbolic::SymbolicLu;
 use super::CscMatrix;
 use crate::domain::real::RealScalar;
-use leto::{Array1, ArrayView1, LetoError, Result};
+use leto::{Array1, ArrayView1, ArrayViewMut1, LetoError, Result};
 
 /// Numeric LU factorization: `P · A = L · U` with partial pivoting.
 ///
@@ -106,88 +106,147 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
     /// Returns [`LetoError::ShapeMismatch`] if `rhs.len() != n`.
     pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
         let n = self.n();
-        if rhs.shape()[0] != n {
-            return Err(LetoError::ShapeMismatch {
-                lhs: vec![rhs.shape()[0]],
-                rhs: vec![n],
-            });
-        }
-        let mut y = vec![T::ZERO; n];
-
-        // Step 1: y = P · b  (permute RHS into slot order)
-        for (slot, &orig_row) in self.row_perm.iter().enumerate() {
-            y[slot] = rhs.get([orig_row]).copied().unwrap_or(T::ZERO);
-        }
-
-        // Precompute inverse permutation: row_inv[orig_row] = slot.
-        let mut row_inv = vec![0usize; n];
-        for (slot, &orig) in self.row_perm.iter().enumerate() {
-            row_inv[orig] = slot;
-        }
-
-        // Step 2: Forward-substitute L · z = y.
-        // L is unit lower triangular; l_row_indices stores ORIGINAL row
-        // indices i > j (in unpermuted order). Map i → slot via row_inv
-        // so the update lands in the permuted y buffer.
-        let l_col_ptr = &self.symbolic.l_col_ptr;
-        let l_row_indices = &self.symbolic.l_row_indices;
-        for j in 0..n {
-            let yj = y[j];
-            for (p, &orig_i) in l_row_indices
-                .iter()
-                .enumerate()
-                .take(l_col_ptr[j + 1])
-                .skip(l_col_ptr[j])
-            {
-                let slot_i = row_inv[orig_i];
-                y[slot_i] -= self.l_values[p] * yj;
+        let mut x = Array1::from_shape_vec([n], vec![T::ZERO; n]).map_err(|e| {
+            LetoError::StorageError {
+                reason: format!("NumericLu::solve internal shape error: {e}"),
             }
-        }
-
-        // Step 3: Back-substitute U · x = y.
-        // U is stored in CSC format with ORIGINAL row indices.  The diagonal
-        // entries satisfy u_row_indices[p] == j (slot == original for pivots).
-        // Off-diagonal entries at original row i < j are at slot row_inv[i].
-        let u_col_ptr = &self.symbolic.u_col_ptr;
-        let u_row_indices = &self.symbolic.u_row_indices;
-        let mut x = y; // reuse buffer; overwritten column by column
-        for j in (0..n).rev() {
-            // Divide by diagonal U[j,j]  (u_row_indices[p] == j is slot j).
-            let u_diag = u_row_indices
-                .iter()
-                .enumerate()
-                .take(u_col_ptr[j + 1])
-                .skip(u_col_ptr[j])
-                .find(|(_, &r)| r == j)
-                .map(|(p, _)| p);
-            if let Some(p) = u_diag {
-                x[j] = x[j] / self.u_values[p];
-            }
-            // Propagate: x[slot_i] -= U[orig_i, j] · x[j] for orig_i < j.
-            let xj = x[j];
-            for (p, &orig_i) in u_row_indices
-                .iter()
-                .enumerate()
-                .take(u_col_ptr[j + 1])
-                .skip(u_col_ptr[j])
-            {
-                if orig_i < j {
-                    let slot_i = row_inv[orig_i];
-                    x[slot_i] -= self.u_values[p] * xj;
-                }
-            }
-        }
-
-        // Step 4: Unscramble — x is in slot order; scatter back to original
-        // row order.  row_perm[slot] is the original row at that slot.
-        let mut x_out = vec![T::ZERO; n];
-        for (slot, &orig_row) in self.row_perm.iter().enumerate() {
-            x_out[orig_row] = x[slot];
-        }
-        Array1::from_shape_vec([n], x_out).map_err(|e| LetoError::StorageError {
-            reason: format!("NumericLu::solve internal shape error: {e}"),
-        })
+        })?;
+        self.solve_into(rhs, &mut x.view_mut())?;
+        Ok(x)
     }
+
+    /// Solve `A · x = b` directly into a caller-owned view `out`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::ShapeMismatch`] if `rhs` or `out` length
+    /// differs from the matrix order `n`.
+    pub fn solve_into(
+        &self,
+        rhs: &ArrayView1<'_, T>,
+        out: &mut ArrayViewMut1<'_, T>,
+    ) -> Result<()> {
+        triangular_solve_into(
+            self.symbolic,
+            &self.l_values,
+            &self.u_values,
+            &self.row_perm,
+            rhs,
+            out,
+        )
+    }
+
+    /// Decompose into the owned value/permutation buffers, releasing the
+    /// symbolic borrow. The caller pairs them with a clone of the pattern
+    /// (see `lu_sparse::OwnedNumericLu`).
+    pub(super) fn into_parts(self) -> (Vec<T>, Vec<T>, Vec<usize>) {
+        (self.l_values, self.u_values, self.row_perm)
+    }
+}
+
+/// Shared triangular-solve core: `y = P · rhs`, forward-substitute
+/// `L · z = y`, back-substitute `U · x = z`, scatter `x` back to original
+/// row order into `out`.
+///
+/// One implementation serves both the borrowing [`NumericLu`] and the
+/// owning `lu_sparse::OwnedNumericLu`; the storage convention (original-row
+/// indices in the symbolic patterns, slot mapping via the inverse
+/// permutation) is stated here once.
+pub(super) fn triangular_solve_into<T: RealScalar>(
+    symbolic: &SymbolicLu,
+    l_values: &[T],
+    u_values: &[T],
+    row_perm: &[usize],
+    rhs: &ArrayView1<'_, T>,
+    out: &mut ArrayViewMut1<'_, T>,
+) -> Result<()> {
+    let n = symbolic.n();
+    if rhs.shape()[0] != n {
+        return Err(LetoError::ShapeMismatch {
+            lhs: vec![rhs.shape()[0]],
+            rhs: vec![n],
+        });
+    }
+    if out.shape()[0] != n {
+        return Err(LetoError::ShapeMismatch {
+            lhs: vec![out.shape()[0]],
+            rhs: vec![n],
+        });
+    }
+    let mut y = vec![T::ZERO; n];
+
+    // Step 1: y = P · b  (permute RHS into slot order)
+    for (slot, &orig_row) in row_perm.iter().enumerate() {
+        y[slot] = rhs.get([orig_row]).copied().unwrap_or(T::ZERO);
+    }
+
+    // Precompute inverse permutation: row_inv[orig_row] = slot.
+    let mut row_inv = vec![0usize; n];
+    for (slot, &orig) in row_perm.iter().enumerate() {
+        row_inv[orig] = slot;
+    }
+
+    // Step 2: Forward-substitute L · z = y.
+    // L is unit lower triangular; l_row_indices stores ORIGINAL row
+    // indices i > j (in unpermuted order). Map i → slot via row_inv
+    // so the update lands in the permuted y buffer.
+    let l_col_ptr = &symbolic.l_col_ptr;
+    let l_row_indices = &symbolic.l_row_indices;
+    for j in 0..n {
+        let yj = y[j];
+        for (p, &orig_i) in l_row_indices
+            .iter()
+            .enumerate()
+            .take(l_col_ptr[j + 1])
+            .skip(l_col_ptr[j])
+        {
+            let slot_i = row_inv[orig_i];
+            y[slot_i] -= l_values[p] * yj;
+        }
+    }
+
+    // Step 3: Back-substitute U · x = y.
+    // U is stored in CSC format with ORIGINAL row indices.  The diagonal
+    // entries satisfy u_row_indices[p] == j (slot == original for pivots).
+    // Off-diagonal entries at original row i < j are at slot row_inv[i].
+    let u_col_ptr = &symbolic.u_col_ptr;
+    let u_row_indices = &symbolic.u_row_indices;
+    let mut x = y; // reuse buffer; overwritten column by column
+    for j in (0..n).rev() {
+        // Divide by diagonal U[j,j]  (u_row_indices[p] == j is slot j).
+        let u_diag = u_row_indices
+            .iter()
+            .enumerate()
+            .take(u_col_ptr[j + 1])
+            .skip(u_col_ptr[j])
+            .find(|(_, &r)| r == j)
+            .map(|(p, _)| p);
+        if let Some(p) = u_diag {
+            x[j] = x[j] / u_values[p];
+        }
+        // Propagate: x[slot_i] -= U[orig_i, j] · x[j] for orig_i < j.
+        let xj = x[j];
+        for (p, &orig_i) in u_row_indices
+            .iter()
+            .enumerate()
+            .take(u_col_ptr[j + 1])
+            .skip(u_col_ptr[j])
+        {
+            if orig_i < j {
+                let slot_i = row_inv[orig_i];
+                x[slot_i] -= u_values[p] * xj;
+            }
+        }
+    }
+
+    // Step 4: Unscramble — x is in slot order; scatter back to original
+    // row order.  row_perm[slot] is the original row at that slot.
+    for (slot, &orig_row) in row_perm.iter().enumerate() {
+        *out
+            .get_mut([orig_row])
+            .expect("invariant: orig_row < n and out length checked above") = x[slot];
+    }
+    Ok(())
 }
 
 /// Compute the numeric LU factorization of `A` over a precomputed symbolic
@@ -364,25 +423,22 @@ pub fn factor_numeric<'a, T: RealScalar>(
         // After all prior columns are eliminated: the surviving part of
         // column j in work is work[j..n], representing the unreduced column
         // remaining at step j. Pick the pivot row as the largest-magnitude
-        // entry in work[j..n].
-        //
-        // Re-scan to include freshly added rows after elimination.
+        // entry in work[j..n] (true partial pivoting — magnitudes, not raw
+        // signed values, so a negative candidate is selectable).
         let mut pivot_slot = j;
         let mut pivot_mag = work[j].abs();
-        let mut max_in_col = pivot_mag;
-        for (slot, &mag) in work.iter().enumerate().take(n).skip(j + 1) {
+        for (slot, &value) in work.iter().enumerate().take(n).skip(j + 1) {
+            let mag = value.abs();
             if mag > pivot_mag {
                 pivot_mag = mag;
                 pivot_slot = slot;
             }
-            if mag > max_in_col {
-                max_in_col = mag;
-            }
         }
-        if max_in_col > pivot_mag {
-            // recompute max if the pivot swap eliminated the prior max
-            max_in_col = pivot_mag;
-        }
+        // Under true partial pivoting the pivot IS the column max, so the
+        // relative threshold below fires only at an exactly zero column for
+        // tol < 1; the form is kept literal to honor the documented
+        // `pivot_tolerance` contract.
+        let max_in_col = pivot_mag;
 
         // Singularity check: pivot magnitude below tol * max_in_col.
         if max_in_col == T::ZERO || pivot_mag < tol * max_in_col {

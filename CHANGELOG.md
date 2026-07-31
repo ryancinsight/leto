@@ -16,6 +16,17 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] Add `OwnedNumericLu` and `SparseLuSolver::factor_sparse_with_symbolic`
+  for factor-once/solve-many consumers (CFDrs block preconditioners): the owned
+  factor stores the symbolic pattern inline and transparently holds the dense
+  partial-pivoting factorization when the dispatch criteria or a
+  pivoting-required report route dense. Add `NumericLu::solve_into` writing
+  into a caller-owned view.
+- [minor] Add scalar-preserving scaled dot-product attention forward and
+  additive backward operations over borrowed rank-3 views. The CPU provider
+  supports causal and broadcast keep masks without materialization, arbitrary
+  strides, caller-owned outputs, typed failure-atomic validation, and optional
+  gradient destinations. See ADR 0002.
 - [major] Promote validated regular and transposed convolution parameters into
   the lightweight `leto` domain. CPU operations retain the same curated
   `leto-ops` exports while accelerator planners can share the parameter SSOT
@@ -40,6 +51,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   `ArrayView1` and returns an owned `Array1` solution. Consumers can preserve
   their existing array storage across the sparse-LU boundary without staging
   the right-hand side or copying the returned solution through `Vec`.
+
+### Fixed
+
+- [patch] `factor_numeric` partial-pivot selection now compares magnitudes
+  rather than raw signed values; columns whose only viable pivot is negative
+  were misreported as singular instead of falling back to the dense path.
 
 ## 0.40.0 - 2026-07-21
 
