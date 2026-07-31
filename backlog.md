@@ -24,7 +24,7 @@ value-matches `solve_view` differentially; pivot-requiring and small matrices
 route through the dense arm; shape mismatches are typed errors; full leto-ops
 Nextest + doctests green.
 
-## LETO-ATTENTION-PROVIDER-1 — Scaled dot-product attention [major, arch, in progress]
+## LETO-ATTENTION-PROVIDER-1 — Scaled dot-product attention [major, arch, complete]
 
 **Owner:** Codex on `codex/leto-attention-provider`; last-update: 2026-07-31.
 
@@ -59,7 +59,7 @@ passing against `origin/main`. Warning-denied Rustdoc reaches the unchanged
 repository baseline of 36 unrelated broken/private-link diagnostics; the new
 attention Rustdoc produces none. Three independent falsification passes found
 and closed arithmetic overflow, probability validation, optional-workspace,
-mask-aware preflight, and extreme finite-output defects. Delivery remains.
+mask-aware preflight, and extreme finite-output defects. Delivered by PR #82.
 
 ## LETO-GENERIC-ZIP-SOURCES-1 — Generic tuple source sets for multi-input zips [major, arch, complete]
 

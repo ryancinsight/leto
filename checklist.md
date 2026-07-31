@@ -9,7 +9,7 @@
 - [x] Instantiate one value-semantic suite for f32/f64, broadcast masks,
       strided views, finite-difference gradients, and exact typed failures.
 - [x] Revise ADR 0002, public exports, Rustdoc, changelog, and active PM state.
-- [ ] Complete independent review, reconcile findings, and merge.
+- [x] Complete independent review, reconcile findings, and merge through PR #82.
 
 **Evidence:** format, warning-denied library Clippy, focused attention Nextest
 15/15, full `leto-ops` Nextest 469/469, doctests 16/16 runnable, and
