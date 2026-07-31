@@ -1,5 +1,66 @@
 # Leto Work Backlog
 
+## LETO-SPARSE-OWNED-FACTOR-1 — Owned sparse LU factor for preconditioner caching [minor, complete]
+
+**Owner:** Claude (atlas session 0161539d); last-update: 2026-07-31.
+
+**Driver:** CFDrs `cfd-math` commit 63e49604 landed `ComponentBlockPreconditioner`
+against a leto surface that was never built (`OwnedNumericLu`,
+`SparseLuSolver::factor_sparse_with_symbolic`), leaving the CFDrs workspace
+uncompilable. Upstream ownership: the capability lands here, not downstream.
+
+**Scope:** `leto-ops` sparse module only (`lu_numeric.rs`, `lu_sparse.rs`,
+`sparse/mod.rs`) — disjoint from LETO-ATTENTION-PROVIDER-1's claimed files.
+`OwnedNumericLu<T>` (owned symbolic + values, dense `LuDecomposition` arm via
+the solver's existing dispatch/pivot-fallback contract), `NumericLu::solve_into`,
+shared `triangular_solve_into` core (SSOT), and a partial-pivot-scan magnitude
+fix in `factor_numeric` (raw-value comparison misreported negative-pivot
+columns as singular). Root `lib.rs` re-export deferred: the file is held dirty
+by the attention item; sweep it into the root export list when that lands
+(re-open trigger). CFDrs imports via `leto_ops::application::sparse` meanwhile.
+
+**Acceptance:** cfd-math compiles against local leto; owned factor
+value-matches `solve_view` differentially; pivot-requiring and small matrices
+route through the dense arm; shape mismatches are typed errors; full leto-ops
+Nextest + doctests green.
+
+## LETO-ATTENTION-PROVIDER-1 — Scaled dot-product attention [major, arch, complete]
+
+**Owner:** Codex on `codex/leto-attention-provider`; last-update: 2026-07-31.
+
+**Driver:** Coeus must dispatch CPU attention through Leto and accelerator
+attention through Hephaestus without consumer-owned kernels, host fallback, or
+erased provider errors.
+
+**Scope:** one scalar-preserving rank-3 scaled dot-product attention family in
+`leto-ops`; borrowed strided query/key/value/mask views; caller-owned output and
+weights; additive optional query/key/value gradient targets; typed validation;
+generic f32/f64 contracts; ADR 0002, exports, Rustdoc, changelog, and active PM
+artifacts. Accelerator kernels and the downstream Coeus cutover are non-goals.
+
+**Acceptance:** forward and backward validate every operand before mutation;
+unmasked, causal, broadcast-mask, and causal-plus-mask modes preserve value
+semantics for contiguous and strided views; prefilled selected gradients are
+accumulated rather than overwritten; failures are typed and atomic; focused
+format, check, warning-denied Clippy, Nextest, doctest, Rustdoc, and SemVer
+classification pass.
+
+**Risk/change class:** `[major][arch]`; revises ADR 0002's CPU-kernel ownership
+boundary while preserving its const-rank and monomorphized dispatch decision.
+
+**Evidence (2026-07-31):** focused attention Nextest 15/15 and full `leto-ops`
+Nextest 469/469 pass; f32/f64 closed-form forward, negative and positive
+strides, exact injective/aliased mutable-layout validation, broadcast/causal
+masks, fully masked rows, finite-difference backward,
+optional additive targets, non-finite input, and typed failure atomicity are
+covered. Format, all-target warning-denied Clippy, and 16/16 runnable doctests
+pass. `cargo-semver-checks` reports 196/196 applicable minor-release checks
+passing against `origin/main`. Warning-denied Rustdoc reaches the unchanged
+repository baseline of 36 unrelated broken/private-link diagnostics; the new
+attention Rustdoc produces none. Three independent falsification passes found
+and closed arithmetic overflow, probability validation, optional-workspace,
+mask-aware preflight, and extreme finite-output defects. Delivered by PR #82.
+
 ## LETO-GENERIC-ZIP-SOURCES-1 — Generic tuple source sets for multi-input zips [major, arch, complete]
 
 **Owner:** Codex on `codex/leto-real-sparse-lu`
@@ -845,7 +906,11 @@ no unmeasured "optimization" per performance_engineering.
 - [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 
 ## Phase 6: Coeus Backend Consolidation [arch]
-Source: `gap_audit.md` §C. Coeus (the Atlas burn replacement) carries a duplicate non-differentiable array layer (`coeus-tensor`/`coeus-core` layout, storage, COW, traversal) over the same Mnemosyne/Moirai substrate as Leto. Structural-duplication rule: consolidate to Leto. Coeus keeps `ComputeBackend`, autodiff, NN kernels (conv/pool/attention), optimizers, higher sparse formats/backends, and GPU backends; Leto owns narrow CPU sparse parity kernels such as CSR SpMV/SpMM.
+Source: `gap_audit.md` §C. Coeus delegates non-differentiable CPU array
+operations to Leto while retaining its autodiff-integrated tensor/COW wrapper.
+Coeus owns backend selection, autodiff, NN orchestration, optimizers, and higher
+sparse formats; Leto owns CPU attention and narrow CPU sparse parity kernels,
+while Hephaestus owns accelerator attention.
 - [x] [major] Decide the const-rank vs dynamic-rank boundary: resolved in `docs/adr/0002-coeus-rank-boundary.md` — const-generic dispatch shim at the Coeus boundary; Leto stays const-rank; the shim lives in Coeus (consumer-owned). Phase 6 leto-side capabilities are authored const-rank.
 - [x] [minor] Add a named unary math-op suite as ZST ops through the existing traversal kernel: `ExpOp`, `LnOp`, `SinOp`, `CosOp`, `SqrtOp`, `AbsOp`, `NegOp`, `RecipOp`, `PowfOp` via the `UnaryOp` trait and `unary_map`/`unary_map_into`, on the segregated `RealScalar` trait. Coeus's 17 activation/gradient `UnaryOp` variants compose from these in Coeus, not in Leto.
 - [x] [minor] Add broadcast-aware binary ops that write through caller-owned output layouts. `binary_map`/`add`/`sub`/`mul`/`div` now broadcast each input layout to the caller-owned output shape when compatible, preserve the contiguous equal-shape fast path, reject aliased mutable output layouts, and cover Coeus `[N,1]`/`[1,C]` elementwise paths. Verification: value tests for dense and strided broadcast inputs plus ndarray differential broadcast add.

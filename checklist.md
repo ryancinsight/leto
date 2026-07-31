@@ -1,5 +1,24 @@
 # Leto Development Checklist
 
+## LETO-ATTENTION-PROVIDER-1 [major, arch] — Owner: Codex
+
+- [x] Define typed masking, operand, gradient-target, and failure-atomicity
+      contracts under the rank-3 Leto attention hierarchy.
+- [x] Implement caller-output forward and additive backward over borrowed
+      arbitrary-stride views without mask materialization.
+- [x] Instantiate one value-semantic suite for f32/f64, broadcast masks,
+      strided views, finite-difference gradients, and exact typed failures.
+- [x] Revise ADR 0002, public exports, Rustdoc, changelog, and active PM state.
+- [x] Complete independent review, reconcile findings, and merge through PR #82.
+
+**Evidence:** format, warning-denied library Clippy, focused attention Nextest
+15/15, full `leto-ops` Nextest 469/469, doctests 16/16 runnable, and
+SemVer 196/196 applicable checks pass. Warning-denied Rustdoc retains the
+existing 36 unrelated broken/private-link diagnostics recorded on this board;
+the attention hierarchy adds none. All-target Clippy passes after correcting
+the two diagnostics in the concurrently landed sparse-LU test slice. Three
+independent attention review passes have no unresolved finding.
+
 ## LETO-GENERIC-ZIP-SOURCES-1 [major, arch] — Owner: Codex
 
 - [x] Replace duplicated multi-input zip bodies with sealed tuple source sets
@@ -979,11 +998,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   layer to retire — it is the autodiff-integrated `Tensor`/COW wrapper over
   coeus-core's dynamic-rank layout, with CPU compute delegated to leto. The
   array-primitive duplication is what was retired (routed to coeus-leto); the
-  tensor/autograd wrapper legitimately remains coeus-owned. coeus-specific NN
-  kernels (conv/pool/attention/optimizers) and higher sparse formats/backends
-  stay in coeus by the layer boundary; Leto owns narrow CPU sparse parity
-  kernels such as CSR SpMV/SpMM. No leto-side capability gap remains for the CPU
-  re-base.
+  tensor/autograd wrapper legitimately remains coeus-owned. Coeus keeps NN
+  orchestration, optimizers, and higher sparse formats; Leto owns CPU attention
+  and narrow CPU sparse parity kernels, while Hephaestus owns accelerator
+  attention. No Leto-side capability gap remains for the CPU re-base.
 - [x] [minor] Apollo internal FFT-kernel migration off ndarray using Leto's
   memory-order slice access. Apollo commit `324f380` exposes native Leto arrays
   across its transform families; its manifests and resolved Rust graph contain

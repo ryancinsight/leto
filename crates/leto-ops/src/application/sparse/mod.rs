@@ -65,7 +65,9 @@ pub use csc::{CscColumn, CscMatrix};
 pub use csc_spmv::{csc_spmv, csc_spmv_into};
 pub use csr::{CsrMatrix, CsrRow};
 pub use lu_numeric::{factor_numeric, NumericLu};
-pub use lu_sparse::{csr_to_dense, sparse_lu_solve, SparseLuSolver, DENSE_LIMIT_DEFAULT};
+pub use lu_sparse::{
+    csr_to_dense, sparse_lu_solve, OwnedNumericLu, SparseLuSolver, DENSE_LIMIT_DEFAULT,
+};
 pub use lu_symbolic::{factor_symbolic, SymbolicLu};
 pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into};

@@ -3,7 +3,7 @@
 | ADR | Title | Status |
 | --- | --- | --- |
 | [0001](0001-elementwise-operator-overloading.md) | Elementwise operator overloading on `Array` | — |
-| [0002](0002-coeus-rank-boundary.md) | Const-rank vs dynamic-rank boundary for Coeus integration | — |
+| [0002](0002-coeus-rank-boundary.md) | Const-rank Coeus provider boundary | Accepted |
 | [0003](0003-matrix-linalg-trait-layer.md) | Fluent rank-2 linear-algebra trait layer | — |
 | [0004](0004-array-elementwise-operators.md) | Elementwise operator overloading on `Array` | — |
 | [0005](0005-rank-revealing-svd.md) | Rank-revealing SVD via one-sided Jacobi | — |

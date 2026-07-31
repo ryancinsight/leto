@@ -92,6 +92,89 @@ impl<const N: usize> Layout<N> {
     }
 }
 
+impl Layout<3> {
+    /// Returns whether distinct logical indices address distinct elements.
+    ///
+    /// The separated-stride case completes in constant time. Ambiguous rank-3
+    /// layouts use an exact bounded integer-difference search, so valid
+    /// transposed and padded layouts are accepted while every colliding layout
+    /// is rejected. Empty and single-element layouts are injective.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::Overflow`] when the span proof exceeds `u128`.
+    pub fn is_injective(&self) -> Result<bool> {
+        if self.checked_size()? <= 1 {
+            return Ok(true);
+        }
+
+        let mut axes = [(0_u128, 0_usize); 3];
+        let mut axis_count = 0;
+        for (&dimension, &stride) in self.shape.iter().zip(self.strides.iter()) {
+            if dimension <= 1 {
+                continue;
+            }
+            let magnitude = stride.unsigned_abs() as u128;
+            if magnitude == 0 {
+                return Ok(false);
+            }
+            axes[axis_count] = (magnitude, dimension);
+            axis_count += 1;
+        }
+        axes[..axis_count].sort_unstable_by_key(|&(stride, _)| stride);
+
+        let mut covered_span = 0_u128;
+        let mut separated = true;
+        for &(stride, dimension) in &axes[..axis_count] {
+            if stride <= covered_span {
+                separated = false;
+                break;
+            }
+            covered_span = covered_span
+                .checked_add((dimension - 1) as u128 * stride)
+                .ok_or(LetoError::Overflow {
+                    reason: "rank-3 layout injectivity span",
+                })?;
+        }
+        if separated {
+            return Ok(true);
+        }
+
+        // A collision exists exactly when a bounded, non-zero index-difference
+        // vector has zero stride dot product. Solve the largest-range axis and
+        // enumerate the other two dimensions.
+        let bounds = self
+            .shape
+            .map(|dimension| (dimension.saturating_sub(1)) as i128);
+        let strides = self.strides.map(|stride| stride as i128);
+        let solve_axis = bounds
+            .iter()
+            .enumerate()
+            .max_by_key(|&(_, bound)| bound)
+            .map_or(0, |(axis, _)| axis);
+        let pair = match solve_axis {
+            0 => [1, 2],
+            1 => [0, 2],
+            _ => [0, 1],
+        };
+        let solve_stride = strides[solve_axis];
+        for first in -bounds[pair[0]]..=bounds[pair[0]] {
+            for second in -bounds[pair[1]]..=bounds[pair[1]] {
+                let residual = first * strides[pair[0]] + second * strides[pair[1]];
+                if residual % solve_stride != 0 {
+                    continue;
+                }
+                let solved = -residual / solve_stride;
+                if solved.abs() <= bounds[solve_axis] && (first != 0 || second != 0 || solved != 0)
+                {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Layout;
@@ -146,5 +229,17 @@ mod tests {
         let layout = Layout::<3>::new([3, 1, 0], [0, 0, 1], 0);
         assert_eq!(layout.size(), 0);
         assert!(!layout.has_zero_stride_aliasing());
+    }
+
+    #[test]
+    fn rank_three_injectivity_accepts_ambiguous_non_overlapping_layout() {
+        let layout = Layout::<3>::new([1, 3, 2], [6, 2, 3], 0);
+        assert!(layout.is_injective().expect("injectivity proof"));
+    }
+
+    #[test]
+    fn rank_three_injectivity_rejects_nonzero_stride_collision() {
+        let layout = Layout::<3>::new([1, 3, 2], [6, 2, 4], 0);
+        assert!(!layout.is_injective().expect("injectivity proof"));
     }
 }

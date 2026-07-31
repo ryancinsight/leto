@@ -2,17 +2,26 @@
 
 - Status: Accepted
 - Date: 2026-06-10
-- Class: [major] (blocks backlog Phase 6 implementation)
+- Revised: 2026-07-31
+- Class: [major, arch]
+
+Revision 2026-07-31: CPU operation families over Leto views belong in Leto,
+including convolution and scaled dot-product attention. Coeus retains autodiff,
+NN orchestration, and backend selection; accelerator implementations belong in
+Hephaestus. This replaces the earlier statement that Coeus owns attention
+kernels. The const-rank boundary decision is unchanged.
 
 ## Context
 
 Coeus (the Atlas `burn` replacement) carries its own non-differentiable array
 layer (`coeus-tensor`/`coeus-core`: layout, storage, COW, traversal) built over
 the same Mnemosyne + Moirai substrate as Leto. The structural-duplication rule
-requires consolidating that layer into Leto, with Coeus retaining
-`ComputeBackend`, autodiff, NN kernels, optimizers, higher sparse
-formats/backends, and GPU backends. Leto may own narrow CPU sparse kernels when
-they are part of ndarray/nalgebra parity, such as CSR SpMV/SpMM.
+requires consolidating that layer into Leto. Leto owns CPU array-operation
+families expressed over its views, including convolution and scaled dot-product
+attention. Coeus retains `ComputeBackend`, autodiff graphs, NN orchestration,
+optimizers, higher sparse formats, and runtime backend selection. Hephaestus
+owns accelerator kernels. Leto may also own narrow CPU sparse kernels when they
+are part of ndarray/nalgebra parity, such as CSR SpMV/SpMM.
 
 The blocking mismatch: Coeus's `Layout` is **runtime-rank** (rank carried as a
 `Vec`/dynamic dimension), while Leto's `Layout<const N: usize>` is
@@ -44,17 +53,25 @@ Rationale:
   Apollo transforms ≤ rank 4–6 in practice). A `match` over a closed rank set
   monomorphizes each arm and adds one branch at the boundary, off the hot inner
   loops.
-- Keeps the duplication consolidation one-directional: Coeus depends on Leto;
-  Leto gains nothing Coeus-specific.
+- Keeps the duplication consolidation one-directional: Coeus depends on Leto
+  for CPU operations and Hephaestus for accelerator operations; Leto gains
+  nothing Coeus-specific.
 
 ## Consequences
 
 - Phase 6 leto-side capabilities (broadcast-aware binary into output layouts,
   unary math suite, reshape/permute/to_contiguous, concat/pad/split, batched
-  matmul, cumsum, seeded RNG) are authored const-rank.
+  matmul, convolution, scaled dot-product attention, cumsum, seeded RNG) are
+  authored const-rank.
 - The shim itself lives in Coeus (the consumer), not in Leto, per the upstream-
   ownership rule: Leto owns the const-rank kernels; Coeus owns the adaptation of
   its dynamic rank onto them. A Coeus-side backlog item names Leto as provider.
 - A rank cap (the largest `const N` the shim dispatches) must be stated
   explicitly in Coeus; ranks beyond it are a logged error, not silent
   truncation.
+- Leto attention accepts borrowed rank-3 views, caller-owned outputs, and
+  additive optional gradient targets. Validation is typed and completes before
+  mutation; masks broadcast as views and are never materialized.
+- Coeus must propagate Leto and Hephaestus failures through a fallible attention
+  contract. Unsupported layouts, devices, scalars, compilation, and launches
+  never change execution provider.
