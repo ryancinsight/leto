@@ -157,9 +157,8 @@ pub use application::unary::{
 pub use application::vector::{dot, hamming_distance, jaccard_distance, matvec};
 pub use application::zip::{
     coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold,
-    indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip2_mut_with,
-    indexed_zip4_mut_with, indexed_zip_mut_with, zip2_mut_with, zip3_mut_with, zip5_mut_with,
-    zip_fold, zip_mut_with, CoordinateMapPlan,
+    indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip_many_mut_with,
+    indexed_zip_mut_with, zip_fold, zip_many_mut_with, zip_mut_with, CoordinateMapPlan, ZipSources,
 };
 
 // ── Interpolation (SSOT) ──────────────────────────────────────────────────────

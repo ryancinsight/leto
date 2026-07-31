@@ -22,4 +22,5 @@
 | [0017](0017-retire-ndarray-compatibility.md) | Retire public ndarray compatibility | — |
 | [0018](0018-finite-difference-3d-extension.md) | Adopt the typed Cartesian 3-D finite-difference provider in leto-ops | — |
 | [0019](0019-convolution-provider-contract.md) | Own CPU convolution in leto-ops | Accepted |
+| [0020](0020-generic-zip-sources.md) | Generic tuple source sets for multi-input zips | Accepted |
 | [—](sparse-support-design.md) | Sparse array support in Leto and Hephaestus | Accepted |

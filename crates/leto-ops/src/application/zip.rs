@@ -640,450 +640,322 @@ where
     Ok(())
 }
 
-/// Mutably zip-map a view with elements from two read-only views in place.
-///
-/// The three-operand analogue of [`zip_mut_with`] (`leto`'s
-/// `Zip::from(out).and(a).and(b)`). `lhs` owns mutation; `a` and `b` are
-/// read-only. All three views must share the same logical shape. Strided inputs
-/// are traversed by logical row-major index, independent of backing layout.
-pub fn zip2_mut_with<T, A, B, F, const N: usize>(
-    lhs: &mut ArrayViewMut<'_, T, N>,
-    a: &ArrayView<'_, A, N>,
-    b: &ArrayView<'_, B, N>,
-    mut f: F,
-) -> Result<()>
-where
-    F: FnMut(&mut T, &A, &B),
-{
-    if lhs.shape() != a.shape() || lhs.shape() != b.shape() {
-        return Err(LetoError::ShapeMismatch {
-            lhs: lhs.shape().to_vec(),
-            rhs: a.shape().to_vec(),
-        });
-    }
-
-    lhs.layout().validate_storage_len(lhs.data().len())?;
-    a.layout().validate_storage_len(a.data().len())?;
-    b.layout().validate_storage_len(b.data().len())?;
-    if lhs.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
-
-    if let (Some(lhs_slice), Some(a_slice), Some(b_slice)) =
-        (lhs.as_mut_slice(), a.as_slice(), b.as_slice())
-    {
-        for ((left, av), bv) in lhs_slice.iter_mut().zip(a_slice.iter()).zip(b_slice.iter()) {
-            f(left, av, bv);
-        }
-        return Ok(());
-    }
-
-    let size = lhs.layout().checked_size()?;
-    let shape = lhs.shape();
-    let lhs_layout = lhs.layout();
-    let a_layout = a.layout();
-    let b_layout = b.layout();
-    let lhs_data = lhs.data_mut();
-    let a_data = a.data();
-    let b_data = b.data();
-
-    // Row-walk traversal over all three layouts (see zip_mut_with).
-    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
-        return Ok(());
-    };
-    let lhs_step = traversal.last_axis_stride(lhs_layout);
-    let a_step = traversal.last_axis_stride(a_layout);
-    let b_step = traversal.last_axis_stride(b_layout);
-    for row in 0..traversal.rows() {
-        let base = traversal.base_index(row);
-        let mut lhs_offset = lhs_layout.offset_of(base)? as isize;
-        let mut a_offset = a_layout.offset_of(base)? as isize;
-        let mut b_offset = b_layout.offset_of(base)? as isize;
-        for _ in 0..traversal.inner() {
-            f(
-                &mut lhs_data[lhs_offset as usize],
-                &a_data[a_offset as usize],
-                &b_data[b_offset as usize],
-            );
-            lhs_offset += lhs_step;
-            a_offset += a_step;
-            b_offset += b_step;
-        }
-    }
-
-    Ok(())
+mod sealed {
+    pub trait ZipSources<const N: usize> {}
 }
 
-/// Mutably zip-map a view with elements from three read-only views in place.
+/// A statically typed set of read-only views for a multi-input zip.
 ///
-/// This is the four-operand analogue of [`zip_mut_with`] (`leto`'s
-/// `Zip::from(out).and(a).and(b).and(c)`). `lhs` owns mutation; `a`, `b`, and
-/// `c` are read-only. All four views must share the same logical shape.
-/// Strided inputs are traversed by logical row-major index, independent of
-/// backing layout.
-pub fn zip3_mut_with<T, A, B, C, F, const N: usize>(
-    lhs: &mut ArrayViewMut<'_, T, N>,
-    a: &ArrayView<'_, A, N>,
-    b: &ArrayView<'_, B, N>,
-    c: &ArrayView<'_, C, N>,
-    mut f: F,
-) -> Result<()>
-where
-    F: FnMut(&mut T, &A, &B, &C),
-{
-    if lhs.shape() != a.shape() || lhs.shape() != b.shape() || lhs.shape() != c.shape() {
-        return Err(LetoError::ShapeMismatch {
-            lhs: lhs.shape().to_vec(),
-            rhs: a.shape().to_vec(),
-        });
+/// Implementations are provided for read-only ArrayView references and
+/// tuples containing them. Tuple values are passed to the closure as one
+/// nested value, so heterogeneous element types remain statically dispatched
+/// without allocating a type-erased source list.
+pub trait ZipSources<const N: usize>: sealed::ZipSources<N> {
+    /// Values borrowed from the source set at one logical element.
+    type Values;
+
+    /// Physical offsets for the source set at one logical element.
+    type Offsets: Copy;
+
+    /// Contiguous source slices used by the dense traversal fast path.
+    type Contiguous: Copy;
+
+    /// Validate source storage and require the expected logical shape.
+    fn validate(&self, expected_shape: [usize; N]) -> Result<()>;
+
+    /// Compute physical source offsets for one logical index.
+    fn offsets_at(&self, index: [usize; N]) -> Result<Self::Offsets>;
+
+    /// Return the last-axis stride for each source.
+    fn steps(&self) -> Self::Offsets;
+
+    /// Advance all source offsets by one logical element.
+    fn advance(&self, offsets: &mut Self::Offsets, steps: Self::Offsets);
+
+    /// Return dense row-major slices when every source is contiguous.
+    fn contiguous(&self) -> Option<Self::Contiguous>;
+
+    /// Borrow source values from dense slices at one logical position.
+    fn contiguous_values(sources: Self::Contiguous, index: usize) -> Self::Values;
+
+    /// Borrow source values from strided storage at the given offsets.
+    fn values(&self, offsets: Self::Offsets) -> Self::Values;
+}
+
+#[inline]
+fn zip_offset<const N: usize>(layout: Layout<N>, index: [usize; N]) -> Result<isize> {
+    isize::try_from(layout.offset_of(index)?).map_err(|_| LetoError::StorageError {
+        reason: "zip layout offset exceeds isize range".to_string(),
+    })
+}
+
+impl<'data, T, const N: usize> sealed::ZipSources<N> for &ArrayView<'data, T, N> {}
+
+impl<'data, T, const N: usize> ZipSources<N> for &ArrayView<'data, T, N> {
+    type Values = &'data T;
+    type Offsets = isize;
+    type Contiguous = &'data [T];
+
+    #[inline]
+    fn validate(&self, expected_shape: [usize; N]) -> Result<()> {
+        let view = *self;
+        if view.shape() != expected_shape {
+            return Err(LetoError::ShapeMismatch {
+                lhs: expected_shape.to_vec(),
+                rhs: view.shape().to_vec(),
+            });
+        }
+        view.layout().validate_storage_len(view.data().len())
     }
 
-    lhs.layout().validate_storage_len(lhs.data().len())?;
-    a.layout().validate_storage_len(a.data().len())?;
-    b.layout().validate_storage_len(b.data().len())?;
-    c.layout().validate_storage_len(c.data().len())?;
-    if lhs.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
-        });
+    #[inline]
+    fn offsets_at(&self, index: [usize; N]) -> Result<Self::Offsets> {
+        zip_offset((*self).layout(), index)
     }
 
-    if let (Some(lhs_slice), Some(a_slice), Some(b_slice), Some(c_slice)) =
-        (lhs.as_mut_slice(), a.as_slice(), b.as_slice(), c.as_slice())
-    {
-        for (((left, av), bv), cv) in lhs_slice
-            .iter_mut()
-            .zip(a_slice.iter())
-            .zip(b_slice.iter())
-            .zip(c_slice.iter())
+    #[inline]
+    fn steps(&self) -> Self::Offsets {
+        if N == 0 {
+            0
+        } else {
+            (*self).layout().strides[N - 1]
+        }
+    }
+
+    #[inline]
+    fn advance(&self, offsets: &mut Self::Offsets, steps: Self::Offsets) {
+        *offsets += steps;
+    }
+
+    #[inline]
+    fn contiguous(&self) -> Option<Self::Contiguous> {
+        (*self).as_slice()
+    }
+
+    #[inline]
+    fn contiguous_values(sources: Self::Contiguous, index: usize) -> Self::Values {
+        &sources[index]
+    }
+
+    #[inline]
+    fn values(&self, offsets: Self::Offsets) -> Self::Values {
+        let view = *self;
+        let offset =
+            usize::try_from(offsets).expect("invariant: validated zip offset is non-negative");
+        &view.data()[offset]
+    }
+}
+
+macro_rules! impl_zip_sources_for_tuple {
+    ($($source:ident : $index:tt),+ $(,)?) => {
+        impl<$($source,)+ const N: usize> sealed::ZipSources<N> for ($($source,)+)
+        where
+            $($source: ZipSources<N>,)+
         {
-            f(left, av, bv, cv);
         }
-        return Ok(());
-    }
 
-    let size = lhs.layout().checked_size()?;
-    let shape = lhs.shape();
-    let lhs_layout = lhs.layout();
-    let a_layout = a.layout();
-    let b_layout = b.layout();
-    let c_layout = c.layout();
-    let lhs_data = lhs.data_mut();
-    let a_data = a.data();
-    let b_data = b.data();
-    let c_data = c.data();
-
-    // Row-walk traversal over all four layouts (see zip_mut_with).
-    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
-        return Ok(());
-    };
-    let lhs_step = traversal.last_axis_stride(lhs_layout);
-    let a_step = traversal.last_axis_stride(a_layout);
-    let b_step = traversal.last_axis_stride(b_layout);
-    let c_step = traversal.last_axis_stride(c_layout);
-    for row in 0..traversal.rows() {
-        let base = traversal.base_index(row);
-        let mut lhs_offset = lhs_layout.offset_of(base)? as isize;
-        let mut a_offset = a_layout.offset_of(base)? as isize;
-        let mut b_offset = b_layout.offset_of(base)? as isize;
-        let mut c_offset = c_layout.offset_of(base)? as isize;
-        for _ in 0..traversal.inner() {
-            f(
-                &mut lhs_data[lhs_offset as usize],
-                &a_data[a_offset as usize],
-                &b_data[b_offset as usize],
-                &c_data[c_offset as usize],
-            );
-            lhs_offset += lhs_step;
-            a_offset += a_step;
-            b_offset += b_step;
-            c_offset += c_step;
-        }
-    }
-
-    Ok(())
-}
-
-/// Mutably zip-map a view with elements from five read-only views in place.
-///
-/// This is the six-operand analogue of [`zip_mut_with`]. `lhs` owns mutation;
-/// `a` through `e` are read-only. All six views must share the same logical
-/// shape. Strided inputs are traversed by logical row-major index, independent
-/// of backing layout.
-pub fn zip5_mut_with<T, A, B, C, D, E, F, const N: usize>(
-    lhs: &mut ArrayViewMut<'_, T, N>,
-    a: &ArrayView<'_, A, N>,
-    b: &ArrayView<'_, B, N>,
-    c: &ArrayView<'_, C, N>,
-    d: &ArrayView<'_, D, N>,
-    e: &ArrayView<'_, E, N>,
-    mut f: F,
-) -> Result<()>
-where
-    F: FnMut(&mut T, &A, &B, &C, &D, &E),
-{
-    if lhs.shape() != a.shape()
-        || lhs.shape() != b.shape()
-        || lhs.shape() != c.shape()
-        || lhs.shape() != d.shape()
-        || lhs.shape() != e.shape()
-    {
-        return Err(LetoError::ShapeMismatch {
-            lhs: lhs.shape().to_vec(),
-            rhs: a.shape().to_vec(),
-        });
-    }
-
-    lhs.layout().validate_storage_len(lhs.data().len())?;
-    a.layout().validate_storage_len(a.data().len())?;
-    b.layout().validate_storage_len(b.data().len())?;
-    c.layout().validate_storage_len(c.data().len())?;
-    d.layout().validate_storage_len(d.data().len())?;
-    e.layout().validate_storage_len(e.data().len())?;
-    if lhs.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
-
-    if let (
-        Some(lhs_slice),
-        Some(a_slice),
-        Some(b_slice),
-        Some(c_slice),
-        Some(d_slice),
-        Some(e_slice),
-    ) = (
-        lhs.as_mut_slice(),
-        a.as_slice(),
-        b.as_slice(),
-        c.as_slice(),
-        d.as_slice(),
-        e.as_slice(),
-    ) {
-        for (((((left, av), bv), cv), dv), ev) in lhs_slice
-            .iter_mut()
-            .zip(a_slice.iter())
-            .zip(b_slice.iter())
-            .zip(c_slice.iter())
-            .zip(d_slice.iter())
-            .zip(e_slice.iter())
+        impl<$($source,)+ const N: usize> ZipSources<N> for ($($source,)+)
+        where
+            $($source: ZipSources<N>,)+
         {
-            f(left, av, bv, cv, dv, ev);
+            type Values = ($($source::Values,)+);
+            type Offsets = ($($source::Offsets,)+);
+            type Contiguous = ($($source::Contiguous,)+);
+
+            #[inline]
+            fn validate(&self, expected_shape: [usize; N]) -> Result<()> {
+                $(self.$index.validate(expected_shape)?;)+
+                Ok(())
+            }
+
+            #[inline]
+            fn offsets_at(&self, index: [usize; N]) -> Result<Self::Offsets> {
+                Ok(($(self.$index.offsets_at(index)?,)+))
+            }
+
+            #[inline]
+            fn steps(&self) -> Self::Offsets {
+                ($(self.$index.steps(),)+)
+            }
+
+            #[inline]
+            fn advance(&self, offsets: &mut Self::Offsets, steps: Self::Offsets) {
+                $(self.$index.advance(&mut offsets.$index, steps.$index);)+
+            }
+
+            #[inline]
+            fn contiguous(&self) -> Option<Self::Contiguous> {
+                Some(($(self.$index.contiguous()?,)+))
+            }
+
+            #[inline]
+            fn contiguous_values(sources: Self::Contiguous, index: usize) -> Self::Values {
+                ($(<$source as ZipSources<N>>::contiguous_values(
+                    sources.$index,
+                    index,
+                ),)+)
+            }
+
+            #[inline]
+            fn values(&self, offsets: Self::Offsets) -> Self::Values {
+                ($(self.$index.values(offsets.$index),)+)
+            }
         }
-        return Ok(());
+    };
+}
+
+impl_zip_sources_for_tuple!(A: 0, B: 1);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10);
+impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11);
+
+#[inline]
+fn validate_zip_sources<T, S, const N: usize>(
+    lhs: &ArrayViewMut<'_, T, N>,
+    sources: &S,
+) -> Result<()>
+where
+    S: ZipSources<N>,
+{
+    lhs.layout().validate_storage_len(lhs.data().len())?;
+    if lhs.layout().has_zero_stride_aliasing() {
+        return Err(LetoError::StorageError {
+            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
+        });
+    }
+    sources.validate(lhs.shape())
+}
+
+fn zip_many_mut_impl<T, S, F, const N: usize>(
+    lhs: &mut ArrayViewMut<'_, T, N>,
+    sources: &S,
+    mut f: F,
+) -> Result<()>
+where
+    S: ZipSources<N>,
+    F: FnMut(&mut T, S::Values),
+{
+    validate_zip_sources(lhs, sources)?;
+
+    if let Some(lhs_slice) = lhs.as_mut_slice() {
+        if let Some(source_slices) = sources.contiguous() {
+            for (index, left) in lhs_slice.iter_mut().enumerate() {
+                f(left, S::contiguous_values(source_slices, index));
+            }
+            return Ok(());
+        }
     }
 
     let size = lhs.layout().checked_size()?;
     let shape = lhs.shape();
     let lhs_layout = lhs.layout();
-    let a_layout = a.layout();
-    let b_layout = b.layout();
-    let c_layout = c.layout();
-    let d_layout = d.layout();
-    let e_layout = e.layout();
     let lhs_data = lhs.data_mut();
-    let a_data = a.data();
-    let b_data = b.data();
-    let c_data = c.data();
-    let d_data = d.data();
-    let e_data = e.data();
-
     let Some(traversal) = RowMajorTraversal::new(size, shape) else {
         return Ok(());
     };
     let lhs_step = traversal.last_axis_stride(lhs_layout);
-    let a_step = traversal.last_axis_stride(a_layout);
-    let b_step = traversal.last_axis_stride(b_layout);
-    let c_step = traversal.last_axis_stride(c_layout);
-    let d_step = traversal.last_axis_stride(d_layout);
-    let e_step = traversal.last_axis_stride(e_layout);
+    let source_steps = sources.steps();
+
     for row in 0..traversal.rows() {
         let base = traversal.base_index(row);
-        let mut lhs_offset = lhs_layout.offset_of(base)? as isize;
-        let mut a_offset = a_layout.offset_of(base)? as isize;
-        let mut b_offset = b_layout.offset_of(base)? as isize;
-        let mut c_offset = c_layout.offset_of(base)? as isize;
-        let mut d_offset = d_layout.offset_of(base)? as isize;
-        let mut e_offset = e_layout.offset_of(base)? as isize;
+        let mut lhs_offset = zip_offset(lhs_layout, base)?;
+        let mut source_offsets = sources.offsets_at(base)?;
         for _ in 0..traversal.inner() {
-            f(
-                &mut lhs_data[lhs_offset as usize],
-                &a_data[a_offset as usize],
-                &b_data[b_offset as usize],
-                &c_data[c_offset as usize],
-                &d_data[d_offset as usize],
-                &e_data[e_offset as usize],
-            );
+            let lhs_index = usize::try_from(lhs_offset)
+                .expect("invariant: validated zip output offset is non-negative");
+            f(&mut lhs_data[lhs_index], sources.values(source_offsets));
             lhs_offset += lhs_step;
-            a_offset += a_step;
-            b_offset += b_step;
-            c_offset += c_step;
-            d_offset += d_step;
-            e_offset += e_step;
+            sources.advance(&mut source_offsets, source_steps);
         }
     }
 
     Ok(())
 }
 
-/// Mutably zip-map a view with two read-only operands and the logical index.
-///
-/// This combines [`zip2_mut_with`] with `Zip::indexed`-style logical coordinate
-/// access while preserving the same shape and storage validation contract.
-pub fn indexed_zip2_mut_with<T, A, B, F, const N: usize>(
+fn zip_many_indexed_impl<T, S, F, const N: usize>(
     lhs: &mut ArrayViewMut<'_, T, N>,
-    a: &ArrayView<'_, A, N>,
-    b: &ArrayView<'_, B, N>,
+    sources: &S,
     mut f: F,
 ) -> Result<()>
 where
-    F: FnMut([usize; N], &mut T, &A, &B),
+    S: ZipSources<N>,
+    F: FnMut([usize; N], &mut T, S::Values),
 {
-    if lhs.shape() != a.shape() || lhs.shape() != b.shape() {
-        return Err(LetoError::ShapeMismatch {
-            lhs: lhs.shape().to_vec(),
-            rhs: a.shape().to_vec(),
-        });
-    }
-
-    lhs.layout().validate_storage_len(lhs.data().len())?;
-    a.layout().validate_storage_len(a.data().len())?;
-    b.layout().validate_storage_len(b.data().len())?;
-    if lhs.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_zip_sources(lhs, sources)?;
 
     let size = lhs.layout().checked_size()?;
     let shape = lhs.shape();
     let lhs_layout = lhs.layout();
-    let a_layout = a.layout();
-    let b_layout = b.layout();
     let lhs_data = lhs.data_mut();
-    let a_data = a.data();
-    let b_data = b.data();
-
-    // Row-walk with an incrementally updated last coordinate (see
-    // indexed_zip_mut_with).
     let Some(traversal) = RowMajorTraversal::new(size, shape) else {
         return Ok(());
     };
     let lhs_step = traversal.last_axis_stride(lhs_layout);
-    let a_step = traversal.last_axis_stride(a_layout);
-    let b_step = traversal.last_axis_stride(b_layout);
+    let source_steps = sources.steps();
+
     for row in 0..traversal.rows() {
         let mut index = traversal.base_index(row);
-        let mut lhs_offset = lhs_layout.offset_of(index)? as isize;
-        let mut a_offset = a_layout.offset_of(index)? as isize;
-        let mut b_offset = b_layout.offset_of(index)? as isize;
+        let mut lhs_offset = zip_offset(lhs_layout, index)?;
+        let mut source_offsets = sources.offsets_at(index)?;
         for k in 0..traversal.inner() {
             if N > 0 {
                 index[N - 1] = k;
             }
+            let lhs_index = usize::try_from(lhs_offset)
+                .expect("invariant: validated zip output offset is non-negative");
             f(
                 index,
-                &mut lhs_data[lhs_offset as usize],
-                &a_data[a_offset as usize],
-                &b_data[b_offset as usize],
+                &mut lhs_data[lhs_index],
+                sources.values(source_offsets),
             );
             lhs_offset += lhs_step;
-            a_offset += a_step;
-            b_offset += b_step;
+            sources.advance(&mut source_offsets, source_steps);
         }
     }
 
     Ok(())
 }
 
-/// Mutably zip-map a view with four read-only operands and the logical index.
+/// Mutably zip-map a view with multiple read-only views in place.
 ///
-/// This is the indexed analogue of a five-operand mutable zip. It is intended
-/// for kernels where the logical coordinate participates in the expression
-/// without allocating an index array.
-pub fn indexed_zip4_mut_with<T, A, B, C, D, F, const N: usize>(
+/// lhs owns mutation and sources is a tuple of read-only views. The
+/// closure receives the source values as one tuple, preserving heterogeneous
+/// element types while keeping the complete traversal statically dispatched.
+/// All views must have identical logical shapes. The dense path uses direct
+/// slices; strided paths use one row offset computation followed by
+/// stride increments.
+pub fn zip_many_mut_with<T, S, F, const N: usize>(
     lhs: &mut ArrayViewMut<'_, T, N>,
-    a: &ArrayView<'_, A, N>,
-    b: &ArrayView<'_, B, N>,
-    c: &ArrayView<'_, C, N>,
-    d: &ArrayView<'_, D, N>,
-    mut f: F,
+    sources: S,
+    f: F,
 ) -> Result<()>
 where
-    F: FnMut([usize; N], &mut T, &A, &B, &C, &D),
+    S: ZipSources<N>,
+    F: FnMut(&mut T, S::Values),
 {
-    if lhs.shape() != a.shape()
-        || lhs.shape() != b.shape()
-        || lhs.shape() != c.shape()
-        || lhs.shape() != d.shape()
-    {
-        return Err(LetoError::ShapeMismatch {
-            lhs: lhs.shape().to_vec(),
-            rhs: a.shape().to_vec(),
-        });
-    }
+    zip_many_mut_impl(lhs, &sources, f)
+}
 
-    lhs.layout().validate_storage_len(lhs.data().len())?;
-    a.layout().validate_storage_len(a.data().len())?;
-    b.layout().validate_storage_len(b.data().len())?;
-    c.layout().validate_storage_len(c.data().len())?;
-    d.layout().validate_storage_len(d.data().len())?;
-    if lhs.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
-
-    let size = lhs.layout().checked_size()?;
-    let shape = lhs.shape();
-    let lhs_layout = lhs.layout();
-    let a_layout = a.layout();
-    let b_layout = b.layout();
-    let c_layout = c.layout();
-    let d_layout = d.layout();
-    let lhs_data = lhs.data_mut();
-    let a_data = a.data();
-    let b_data = b.data();
-    let c_data = c.data();
-    let d_data = d.data();
-
-    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
-        return Ok(());
-    };
-    let lhs_step = traversal.last_axis_stride(lhs_layout);
-    let a_step = traversal.last_axis_stride(a_layout);
-    let b_step = traversal.last_axis_stride(b_layout);
-    let c_step = traversal.last_axis_stride(c_layout);
-    let d_step = traversal.last_axis_stride(d_layout);
-    for row in 0..traversal.rows() {
-        let mut index = traversal.base_index(row);
-        let mut lhs_offset = lhs_layout.offset_of(index)? as isize;
-        let mut a_offset = a_layout.offset_of(index)? as isize;
-        let mut b_offset = b_layout.offset_of(index)? as isize;
-        let mut c_offset = c_layout.offset_of(index)? as isize;
-        let mut d_offset = d_layout.offset_of(index)? as isize;
-        for k in 0..traversal.inner() {
-            if N > 0 {
-                index[N - 1] = k;
-            }
-            f(
-                index,
-                &mut lhs_data[lhs_offset as usize],
-                &a_data[a_offset as usize],
-                &b_data[b_offset as usize],
-                &c_data[c_offset as usize],
-                &d_data[d_offset as usize],
-            );
-            lhs_offset += lhs_step;
-            a_offset += a_step;
-            b_offset += b_step;
-            c_offset += c_step;
-            d_offset += d_step;
-        }
-    }
-
-    Ok(())
+/// Mutably zip-map multiple read-only views in place with logical indices.
+///
+/// The closure receives the logical row-major index, the mutable output, and
+/// the source values as one tuple. Strided inputs are traversed without
+/// allocating an index array or source list.
+pub fn indexed_zip_many_mut_with<T, S, F, const N: usize>(
+    lhs: &mut ArrayViewMut<'_, T, N>,
+    sources: S,
+    f: F,
+) -> Result<()>
+where
+    S: ZipSources<N>,
+    F: FnMut([usize; N], &mut T, S::Values),
+{
+    zip_many_indexed_impl(lhs, &sources, f)
 }
