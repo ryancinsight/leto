@@ -29,6 +29,12 @@ functions. `cargo check --locked` remains blocked by the pre-existing stale
 lockfile versus the active stack patch overlay; this change does not modify
 `Cargo.lock`.
 
+**Delivery watchpoint:** PR [#81](https://github.com/ryancinsight/leto/pull/81)
+is pushed and ready for review. The repository exposes no Actions workflow for
+this branch; merge state is currently `UNSTABLE` because the external
+`recurseml/analysis` status reports `Error occurred during analysis
+(4c584e3a..4a836cd8)`, while CodeRabbit review remains pending.
+
 ## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [major, arch, in progress]
 
 **Owner:** Codex on `codex/leto-convolution-parameters-core`
