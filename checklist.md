@@ -1,5 +1,17 @@
 # Leto Development Checklist
 
+## LETO-ATTENTION-GROUPED-MASK-001 [minor, arch] — Owner: Codex
+
+- [ ] Add a borrowed grouped keep-mask policy with a nonzero heads-per-group
+      contract to the canonical rank-3 attention API.
+- [ ] Validate the complete grouped request before output mutation and map each
+      execution batch to its mask group without materialization.
+- [ ] Add value-semantic grouped, causal-grouped, and failure-atomic coverage.
+- [ ] Update ADR-0002 and pass focused warning-denied and Nextest gates.
+
+Status: in progress on `codex/leto-grouped-attention-mask`; driven by the Coeus
+provider cutover's repeated-head mask contract.
+
 ## LETO-ATTENTION-PROVIDER-1 [major, arch] — Owner: Codex
 
 - [x] Define typed masking, operand, gradient-target, and failure-atomicity
