@@ -22,6 +22,7 @@ pub use domain::strategy::ParallelStrategy;
 pub use application::attention::{
     scaled_dot_product_attention_backward_accumulate, scaled_dot_product_attention_into,
     AttentionError, AttentionGradients, AttentionMask, AttentionOperand, AttentionResult,
+    GroupedKeepMask,
 };
 pub use application::convolution::{
     convolution_backward_accumulate, convolution_forward_into,

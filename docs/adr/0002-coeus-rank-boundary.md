@@ -71,7 +71,10 @@ Rationale:
   truncation.
 - Leto attention accepts borrowed rank-3 views, caller-owned outputs, and
   additive optional gradient targets. Validation is typed and completes before
-  mutation; masks broadcast as views and are never materialized.
+  mutation; masks broadcast as views and are never materialized. Repeated-head
+  consumers pass a borrowed rank-2 grouped mask plus a nonzero batches-per-group
+  width, preserving one complete provider preflight without mask expansion or
+  per-group partial commits.
 - Coeus must propagate Leto and Hephaestus failures through a fallible attention
   contract. Unsupported layouts, devices, scalars, compilation, and launches
   never change execution provider.

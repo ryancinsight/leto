@@ -24,9 +24,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   into a caller-owned view.
 - [minor] Add scalar-preserving scaled dot-product attention forward and
   additive backward operations over borrowed rank-3 views. The CPU provider
-  supports causal and broadcast keep masks without materialization, arbitrary
-  strides, caller-owned outputs, typed failure-atomic validation, and optional
-  gradient destinations. See ADR 0002.
+  supports causal, broadcast, and repeated-head grouped keep masks without
+  materialization, arbitrary strides, caller-owned outputs, typed
+  failure-atomic validation, and optional gradient destinations. See ADR 0002.
 - [major] Promote validated regular and transposed convolution parameters into
   the lightweight `leto` domain. CPU operations retain the same curated
   `leto-ops` exports while accelerator planners can share the parameter SSOT

@@ -85,6 +85,21 @@ fn validate_mask<T: RealScalar>(
     mask: AttentionMask<'_, T>,
     target: [usize; 3],
 ) -> AttentionResult<()> {
+    if let Some(grouped) = mask.grouped() {
+        validate_view(AttentionOperand::Mask, &grouped.view)?;
+        validate_finite(AttentionOperand::Mask, &grouped.view)?;
+        let actual = grouped.view.shape();
+        let Some(grouped_batches) = actual[0].checked_mul(grouped.batches_per_group.get()) else {
+            return Err(AttentionError::WorkspaceOverflow);
+        };
+        if grouped_batches != target[0] || actual[1] != target[2] {
+            return Err(AttentionError::MaskShape {
+                actual: [actual[0], 1, actual[1]],
+                target,
+            });
+        }
+        return Ok(());
+    }
     let Some(mask_view) = mask.view() else {
         return Ok(());
     };
@@ -115,6 +130,14 @@ pub(super) fn mask_is_active<T: RealScalar>(
 ) -> bool {
     if mask.is_causal() && key > query {
         return false;
+    }
+    if let Some(grouped) = mask.grouped() {
+        let group = batch / grouped.batches_per_group.get();
+        return *grouped
+            .view
+            .get([group, key])
+            .expect("invariant: validated grouped attention mask index is in bounds")
+            != <T as NumericElement>::ZERO;
     }
     let Some(mask_view) = mask.view() else {
         return true;

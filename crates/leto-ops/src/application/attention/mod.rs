@@ -5,6 +5,7 @@ mod error;
 mod forward;
 mod validation;
 
+use core::num::NonZeroUsize;
 use leto::{ArrayView, ArrayViewMut};
 
 pub use backward::scaled_dot_product_attention_backward_accumulate;
@@ -22,18 +23,54 @@ pub enum AttentionMask<'a, T> {
     Keep(ArrayView<'a, T, 3>),
     /// Applies both causal and broadcast keep-mask constraints.
     CausalKeep(ArrayView<'a, T, 3>),
+    /// A rank-two `[group, key]` keep mask repeated over a fixed number of
+    /// consecutive execution batches per group.
+    GroupedKeep(GroupedKeepMask<'a, T>),
+    /// Applies causal masking and a grouped keep mask.
+    CausalGroupedKeep(GroupedKeepMask<'a, T>),
 }
 
 impl<'a, T> AttentionMask<'a, T> {
     pub(super) const fn view(self) -> Option<ArrayView<'a, T, 3>> {
         match self {
-            Self::Unmasked | Self::Causal => None,
+            Self::Unmasked | Self::Causal | Self::GroupedKeep(_) | Self::CausalGroupedKeep(_) => {
+                None
+            }
             Self::Keep(view) | Self::CausalKeep(view) => Some(view),
         }
     }
 
+    pub(super) const fn grouped(self) -> Option<GroupedKeepMask<'a, T>> {
+        match self {
+            Self::GroupedKeep(mask) | Self::CausalGroupedKeep(mask) => Some(mask),
+            Self::Unmasked | Self::Causal | Self::Keep(_) | Self::CausalKeep(_) => None,
+        }
+    }
+
     pub(super) const fn is_causal(&self) -> bool {
-        matches!(self, Self::Causal | Self::CausalKeep(_))
+        matches!(
+            self,
+            Self::Causal | Self::CausalKeep(_) | Self::CausalGroupedKeep(_)
+        )
+    }
+}
+
+/// Borrowed rank-two keep mask shared by consecutive attention batches.
+#[derive(Clone, Copy)]
+pub struct GroupedKeepMask<'a, T> {
+    pub(super) view: ArrayView<'a, T, 2>,
+    pub(super) batches_per_group: NonZeroUsize,
+}
+
+impl<'a, T> GroupedKeepMask<'a, T> {
+    /// Creates a grouped mask from `[group, key]` values and the nonzero number
+    /// of consecutive execution batches represented by each group.
+    #[must_use]
+    pub const fn new(view: ArrayView<'a, T, 2>, batches_per_group: NonZeroUsize) -> Self {
+        Self {
+            view,
+            batches_per_group,
+        }
     }
 }
 
