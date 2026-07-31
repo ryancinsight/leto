@@ -413,11 +413,10 @@ impl<T: RealScalar> OwnedNumericLu<T> {
     /// Forwards from [`Self::solve_into`].
     pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
         let n = self.n();
-        let mut x = Array1::from_shape_vec([n], vec![T::ZERO; n]).map_err(|e| {
-            LetoError::StorageError {
+        let mut x =
+            Array1::from_shape_vec([n], vec![T::ZERO; n]).map_err(|e| LetoError::StorageError {
                 reason: format!("OwnedNumericLu::solve internal shape error: {e}"),
-            }
-        })?;
+            })?;
         self.solve_into(rhs, &mut x.view_mut())?;
         Ok(x)
     }
@@ -702,12 +701,12 @@ mod tests {
     /// `‖A x - b‖∞` computed directly from the CSR nonzeros.
     fn csr_residual_inf(a: &CsrMatrix<f64>, x: &Array1<f64>, b: &[f64]) -> f64 {
         let mut max_residual = 0.0_f64;
-        for row in 0..a.nrows() {
+        for (row, &rhs) in b.iter().enumerate().take(a.nrows()) {
             let mut ax = 0.0_f64;
             for (&col, &value) in a.row(row).col_indices().iter().zip(a.row(row).values()) {
                 ax += value * x[col];
             }
-            let d = (ax - b[row]).abs();
+            let d = (ax - rhs).abs();
             if d > max_residual {
                 max_residual = d;
             }
@@ -788,9 +787,9 @@ mod tests {
 
         let x_known: Vec<f64> = (0..n).map(|i| 1.0_f64 / (i as f64 + 1.0)).collect();
         let mut b = vec![0.0_f64; n];
-        for row in 0..n {
+        for (row, rhs) in b.iter_mut().enumerate() {
             for (&col, &value) in a.row(row).col_indices().iter().zip(a.row(row).values()) {
-                b[row] += value * x_known[col];
+                *rhs += value * x_known[col];
             }
         }
         let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));

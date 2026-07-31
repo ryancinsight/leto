@@ -106,11 +106,10 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
     /// Returns [`LetoError::ShapeMismatch`] if `rhs.len() != n`.
     pub fn solve(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
         let n = self.n();
-        let mut x = Array1::from_shape_vec([n], vec![T::ZERO; n]).map_err(|e| {
-            LetoError::StorageError {
+        let mut x =
+            Array1::from_shape_vec([n], vec![T::ZERO; n]).map_err(|e| LetoError::StorageError {
                 reason: format!("NumericLu::solve internal shape error: {e}"),
-            }
-        })?;
+            })?;
         self.solve_into(rhs, &mut x.view_mut())?;
         Ok(x)
     }
@@ -242,8 +241,7 @@ pub(super) fn triangular_solve_into<T: RealScalar>(
     // Step 4: Unscramble — x is in slot order; scatter back to original
     // row order.  row_perm[slot] is the original row at that slot.
     for (slot, &orig_row) in row_perm.iter().enumerate() {
-        *out
-            .get_mut([orig_row])
+        *out.get_mut([orig_row])
             .expect("invariant: orig_row < n and out length checked above") = x[slot];
     }
     Ok(())
