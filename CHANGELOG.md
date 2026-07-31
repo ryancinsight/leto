@@ -8,10 +8,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Breaking
 
-- [major] Replace the arity-specific `leto-ops` multi-input zip functions with
-  the statically dispatched tuple-source APIs `zip_many_mut_with` and
-  `indexed_zip_many_mut_with`. Migrate callers by passing read-only views as a
-  tuple and destructuring that tuple in the closure. See ADR 0020.
+- [major] Generalize the existing `leto-ops` `zip_mut_with` and
+  `indexed_zip_mut_with` entry points to accept one source view or a
+  statically dispatched heterogeneous tuple. Remove the arity-specific
+  multi-input functions; migrate tuple callers by destructuring the source
+  tuple in the closure. See ADR 0020.
 
 ### Added
 

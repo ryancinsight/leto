@@ -32,7 +32,7 @@ iterator/slicing surface, companion crates) to a complete count.
 | Unary math (exp/ln/sin/cos/sqrt/abs/neg/recip/powf) | `mapv(f)` | `unary_map`+ZST ops | Complete | parity.rs, kernels.rs `exp_*` |
 | map/mapv/map_into | `map`/`mapv` | `map`/`mapv`/`map_into` | Verified | differential.rs; `ndarray_parity.rs` runnable `mapv` differential |
 | map_inplace | `mapv_inplace` | `map_inplace` | Verified | unary_math |
-| Multi-array zip (3+), indexed zip | `Zip`, `Zip::indexed` | `zip_many_mut_with`, `indexed_zip_many_mut_with` | Verified | ops tests |
+| Multi-array zip (3+), indexed zip | `Zip`, `Zip::indexed` | `zip_mut_with`, `indexed_zip_mut_with` | Verified | ops tests |
 | sum / mean / min / max (all) | `.sum/.mean/...` | `sum`, leto `*_all` | Complete (sum) | parity.rs, kernels.rs `sum_*`; `ndarray_parity.rs` runnable sum differential with `γₙ` bound |
 | sum/mean/min/max axis (keep-dim) | `sum_axis(Axis)` | `sum_axis`/`mean_axis`/… | Verified | parity.rs |
 | argmin / argmax (axis index-array + whole-array multi-index) | ndarray-stats | `argmin`/`argmax` (axis) + `argmin_all`/`argmax_all` (`[usize; N]`) | Verified | core reductions — axis variants + whole-array multi-index; first-occurrence tie-break; value-agrees-with-`min_all`/`max_all` cross-check |

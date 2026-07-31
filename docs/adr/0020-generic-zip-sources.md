@@ -6,39 +6,40 @@
 
 ## Context
 
-`leto-ops` had separate mutable zip implementations for two, three, and five
-read-only inputs, plus separate indexed implementations for two and four
-inputs. Each function repeated shape validation, storage validation, dense
-slice handling, and strided row traversal. The repeated arity-specific bodies
-made the traversal contract harder to extend and increased the number of
-public symbols without adding a distinct operation.
+`leto-ops` had one optimized binary mutable zip implementation plus separate
+mutable zip implementations for two, three, and five read-only inputs and
+separate indexed implementations for two and four inputs. Each multi-input
+function repeated shape validation, storage validation, dense slice handling,
+and strided row traversal. The repeated arity-specific bodies made the
+traversal contract harder to extend and increased the number of public symbols
+without adding a distinct operation.
 
 ## Decision
 
-Use one sealed `ZipSources<N>` source-set contract for multi-input zips.
-Implement it for read-only `ArrayView` references and statically typed tuples
-of two through twelve sources. The source set supplies its associated value,
-offset, and dense-slice types; one generic traversal kernel handles validation,
-the contiguous fast path, and strided row walking.
+Use one sealed `ZipSources<N>` source-set contract for zips with one or more
+read-only inputs. Implement it for read-only `ArrayView` references and
+statically typed tuples of two through twelve sources. The source set supplies
+its associated value, offset, and dense-slice types; one generic traversal
+kernel handles validation, the contiguous fast path, and strided row walking.
 
 Expose:
 
-- `zip_many_mut_with(lhs, sources, closure)` for non-indexed traversal.
-- `indexed_zip_many_mut_with(lhs, sources, closure)` for logical-index
-  traversal.
+- `zip_mut_with(lhs, sources, closure)` for non-indexed traversal.
+- `indexed_zip_mut_with(lhs, sources, closure)` for logical-index traversal.
 
-The closure receives the source values as one tuple, for example
-`|output, (&a, &b, &c)| ...`. Tuple element types remain statically known, so
-the source set and closure monomorphize without dynamic dispatch or a
-per-element allocation. The existing optimized single-source
-`zip_mut_with` and `indexed_zip_mut_with` contracts remain unchanged.
+For one source, the closure receives that source value and existing binary
+call sites retain their shape. For a tuple, the closure receives the source
+values as one tuple, for example `|output, (&a, &b, &c)| ...`. Tuple element
+types remain statically known, so the source set and closure monomorphize
+without dynamic dispatch or a per-element allocation.
 
 ## Migration
 
-Replace `zip2_mut_with`, `zip3_mut_with`, and `zip5_mut_with` with
-`zip_many_mut_with` and pass the read-only views as one tuple. Replace
+Keep existing one-source `zip_mut_with` and `indexed_zip_mut_with` calls
+unchanged. Replace `zip2_mut_with`, `zip3_mut_with`, and `zip5_mut_with` with
+`zip_mut_with` and pass the read-only views as one tuple. Replace
 `indexed_zip2_mut_with` and `indexed_zip4_mut_with` with
-`indexed_zip_many_mut_with`. Destructure the tuple in the closure. The old
+`indexed_zip_mut_with`. Destructure the tuple in the closure. The old
 arity-specific functions are removed; no forwarding wrappers or aliases are
 retained.
 

@@ -140,7 +140,7 @@ item listed below.
 - A benchmark-shape trade-off: the kwavers-side `CentralDifference2`
   used a `for_each_chunk_mut_enumerated_with::<Adaptive, _, _>`
   standard-layout fast path through `traversal.rs`. The leto-side
-  impl uses `zip_many_mut_with` on the leto slice-pair, achieving the same
+  impl uses `zip_mut_with` on the leto slice-pair, achieving the same
   density without a separate traversal helper.
 
 ## Verification
@@ -194,7 +194,7 @@ item listed below.
     sequential write body, marked it `#[inline]` so LLVM can hoist bounds and
     fuse the closure with surrounding scalar math, and dropped the dead
     `if { return Ok(()) }` short-circuits in the staggered half. The leto-side
-    `zip_many_mut_with` slice-pair path remains as the non-C-contiguous
+    `zip_mut_with` slice-pair path remains as the non-C-contiguous
     fallback.
     The function retires when the staggered half SSOT sweep migrates
     `StaggeredForward` / `StaggeredBackward` to `let_ops::FiniteDifference3D<f64>`.

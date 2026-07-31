@@ -2,8 +2,8 @@ use leto::{Array, Layout, LetoError, SliceArg, Storage, VecStorage};
 use leto_ops::{
     batched_matmul, coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace,
     cumsum, indexed_fold, indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace,
-    indexed_zip_many_mut_with, max as reduce_max, min as reduce_min, normal_with_seed, scan_axis,
-    uniform_with_seed, zip_fold, zip_many_mut_with, CumProdOp, ScanDirection,
+    indexed_zip_mut_with, max as reduce_max, min as reduce_min, normal_with_seed, scan_axis,
+    uniform_with_seed, zip_fold, zip_mut_with, CumProdOp, ScanDirection,
 };
 
 fn arr<const N: usize>(shape: [usize; N], data: Vec<f64>) -> Array<f64, VecStorage<f64>, N> {
@@ -116,12 +116,12 @@ fn test_scan_reverse_and_cumprod() {
 }
 
 #[test]
-fn test_zip_many_mut_with_fused_multiply_add() {
+fn test_zip_mut_with_fused_multiply_add() {
     // out = out + a * b, three-operand fused update.
     let mut out = arr([2, 2], vec![1.0, 1.0, 1.0, 1.0]);
     let a = arr([2, 2], vec![2.0, 3.0, 4.0, 5.0]);
     let b = arr([2, 2], vec![10.0, 10.0, 10.0, 10.0]);
-    zip_many_mut_with(
+    zip_mut_with(
         &mut out.view_mut(),
         (&a.view(), &b.view()),
         |o, (&x, &y)| {
@@ -133,13 +133,13 @@ fn test_zip_many_mut_with_fused_multiply_add() {
 }
 
 #[test]
-fn test_zip_many_mut_with_strided_input() {
+fn test_zip_mut_with_strided_input() {
     // a is a transposed (strided) view; traversal must follow logical order.
     let mut out = arr([3, 2], vec![0.0; 6]);
     let a_src = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let a = a_src.transpose([1, 0]).unwrap(); // logical [[1,4],[2,5],[3,6]]
     let b = arr([3, 2], vec![100.0, 100.0, 100.0, 100.0, 100.0, 100.0]);
-    zip_many_mut_with(&mut out.view_mut(), (&a, &b.view()), |o, (&x, &y)| {
+    zip_mut_with(&mut out.view_mut(), (&a, &b.view()), |o, (&x, &y)| {
         *o = x + y;
     })
     .unwrap();
@@ -150,13 +150,13 @@ fn test_zip_many_mut_with_strided_input() {
 }
 
 #[test]
-fn test_zip_many_mut_with_three_inputs() {
+fn test_zip_mut_with_three_inputs() {
     let mut out = arr([2, 2], vec![0.0; 4]);
     let prev = arr([2, 2], vec![1.0, 4.0, 9.0, 16.0]);
     let curr = arr([2, 2], vec![2.0, 5.0, 10.0, 17.0]);
     let next = arr([2, 2], vec![4.0, 8.0, 14.0, 22.0]);
 
-    zip_many_mut_with(
+    zip_mut_with(
         &mut out.view_mut(),
         (&prev.view(), &curr.view(), &next.view()),
         |d, (&p0, &p1, &p2)| {
@@ -169,7 +169,7 @@ fn test_zip_many_mut_with_three_inputs() {
 }
 
 #[test]
-fn test_zip_many_mut_with_three_strided_inputs_follow_logical_order() {
+fn test_zip_mut_with_three_strided_inputs_follow_logical_order() {
     let mut out = arr([3, 2], vec![0.0; 6]);
     let prev_src = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let curr_src = arr([2, 3], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
@@ -178,7 +178,7 @@ fn test_zip_many_mut_with_three_strided_inputs_follow_logical_order() {
     let curr = curr_src.transpose([1, 0]).unwrap();
     let next = next_src.transpose([1, 0]).unwrap();
 
-    zip_many_mut_with(
+    zip_mut_with(
         &mut out.view_mut(),
         (&prev, &curr, &next),
         |d, (&a, &b, &c)| {
@@ -194,7 +194,7 @@ fn test_zip_many_mut_with_three_strided_inputs_follow_logical_order() {
 }
 
 #[test]
-fn test_zip_many_mut_with_five_inputs() {
+fn test_zip_mut_with_five_inputs() {
     let mut out = arr([2, 2], vec![0.0; 4]);
     let a = arr([2, 2], vec![1.0, 2.0, 3.0, 4.0]);
     let b = arr([2, 2], vec![10.0, 20.0, 30.0, 40.0]);
@@ -202,7 +202,7 @@ fn test_zip_many_mut_with_five_inputs() {
     let d = arr([2, 2], vec![1.0, 1.0, 1.0, 1.0]);
     let e = arr([2, 2], vec![2.0, 2.0, 2.0, 2.0]);
 
-    zip_many_mut_with(
+    zip_mut_with(
         &mut out.view_mut(),
         (&a.view(), &b.view(), &c.view(), &d.view(), &e.view()),
         |o, (&av, &bv, &cv, &dv, &ev)| *o = av + bv - cv + dv * ev,
@@ -213,7 +213,7 @@ fn test_zip_many_mut_with_five_inputs() {
 }
 
 #[test]
-fn test_zip_many_mut_with_five_strided_inputs_follow_logical_order() {
+fn test_zip_mut_with_five_strided_inputs_follow_logical_order() {
     let mut out = arr([3, 2], vec![0.0; 6]);
     let a_src = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let b_src = arr([2, 3], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
@@ -226,7 +226,7 @@ fn test_zip_many_mut_with_five_strided_inputs_follow_logical_order() {
     let d = d_src.transpose([1, 0]).unwrap();
     let e = e_src.transpose([1, 0]).unwrap();
 
-    zip_many_mut_with(
+    zip_mut_with(
         &mut out.view_mut(),
         (&a, &b, &c, &d, &e),
         |o, (&av, &bv, &cv, &dv, &ev)| {
@@ -242,12 +242,12 @@ fn test_zip_many_mut_with_five_strided_inputs_follow_logical_order() {
 }
 
 #[test]
-fn test_zip_many_mut_with_preserves_heterogeneous_source_types() {
+fn test_zip_mut_with_preserves_heterogeneous_source_types() {
     let mut out = arr([2, 2], vec![0.0; 4]);
     let integer = Array::from_shape_vec([2, 2], vec![1_i32, 2, 3, 4]).unwrap();
     let scale = arr([2, 2], vec![0.5, 1.5, 2.5, 3.5]);
 
-    zip_many_mut_with(
+    zip_mut_with(
         &mut out.view_mut(),
         (&integer.view(), &scale.view()),
         |value, (&integer, &scale)| *value = f64::from(integer) + scale,
@@ -258,14 +258,14 @@ fn test_zip_many_mut_with_preserves_heterogeneous_source_types() {
 }
 
 #[test]
-fn test_indexed_zip_many_mut_with_uses_logical_index() {
+fn test_indexed_zip_mut_with_uses_logical_index() {
     let mut out = arr([2, 2], vec![0.0; 4]);
     let a = arr([2, 2], vec![1.0, 2.0, 3.0, 4.0]);
     let b = arr([2, 2], vec![10.0, 20.0, 30.0, 40.0]);
     let c = arr([2, 2], vec![100.0, 200.0, 300.0, 400.0]);
     let d = arr([2, 2], vec![1000.0, 2000.0, 3000.0, 4000.0]);
 
-    indexed_zip_many_mut_with(
+    indexed_zip_mut_with(
         &mut out.view_mut(),
         (&a.view(), &b.view(), &c.view(), &d.view()),
         |[i, j], o, (&av, &bv, &cv, &dv)| {

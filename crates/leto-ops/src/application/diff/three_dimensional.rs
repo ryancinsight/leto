@@ -29,7 +29,7 @@
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{Array3, ArrayView3, LetoError, Result};
 
-use crate::application::zip::zip_many_mut_with;
+use crate::application::zip::zip_mut_with;
 
 #[inline]
 fn f<T: FloatElement>(v: f64) -> T {
@@ -270,7 +270,7 @@ where
     let field_lo = field
         .slice(&[(0, nx - 2, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_2h
     })
     .unwrap();
@@ -279,7 +279,7 @@ where
     let mut dst_left = dst.slice_mut(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     let field_hi_left = field.slice(&[(1, 2, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     let field_lo_left = field.slice(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_left,
         (&field_hi_left, &field_lo_left),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -294,7 +294,7 @@ where
     let field_lo_right = field
         .slice(&[(nx - 2, nx - 1, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_right,
         (&field_hi_right, &field_lo_right),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -330,14 +330,14 @@ where
     let field_lo = field
         .slice(&[(0, nx, 1), (0, ny - 2, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_2h
     })
     .unwrap();
     let mut dst_bot = dst.slice_mut(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
     let field_hi_bot = field.slice(&[(0, nx, 1), (1, 2, 1), (0, nz, 1)]).unwrap();
     let field_lo_bot = field.slice(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_bot,
         (&field_hi_bot, &field_lo_bot),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -352,7 +352,7 @@ where
     let field_lo_top = field
         .slice(&[(0, nx, 1), (ny - 2, ny - 1, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_top,
         (&field_hi_top, &field_lo_top),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -388,14 +388,14 @@ where
     let field_lo = field
         .slice(&[(0, nx, 1), (0, ny, 1), (0, nz - 2, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_2h
     })
     .unwrap();
     let mut dst_near = dst.slice_mut(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
     let field_hi_near = field.slice(&[(0, nx, 1), (0, ny, 1), (1, 2, 1)]).unwrap();
     let field_lo_near = field.slice(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_near,
         (&field_hi_near, &field_lo_near),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -410,7 +410,7 @@ where
     let field_lo_far = field
         .slice(&[(0, nx, 1), (0, ny, 1), (nz - 2, nz - 1, 1)])
         .unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_far,
         (&field_hi_far, &field_lo_far),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -786,7 +786,7 @@ where
     let field_lo = field
         .slice(&[(0, nx - 1, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_slice, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_slice, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_h
     })
     .unwrap();
@@ -817,7 +817,7 @@ where
     let field_lo = field
         .slice(&[(0, nx, 1), (0, ny - 1, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_slice, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_slice, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_h
     })
     .unwrap();
@@ -848,7 +848,7 @@ where
     let field_lo = field
         .slice(&[(0, nx, 1), (0, ny, 1), (0, nz - 1, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_slice, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_slice, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_h
     })
     .unwrap();
@@ -883,7 +883,7 @@ where
     let field_lo = field
         .slice(&[(0, nx - 1, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_h
     })
     .unwrap();
@@ -891,7 +891,7 @@ where
     let mut dst_left = dst.slice_mut(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     let field_hi_left = field.slice(&[(1, 2, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     let field_lo_left = field.slice(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_left,
         (&field_hi_left, &field_lo_left),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -925,14 +925,14 @@ where
     let field_lo = field
         .slice(&[(0, nx, 1), (0, ny - 1, 1), (0, nz, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_h
     })
     .unwrap();
     let mut dst_bot = dst.slice_mut(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
     let field_hi_bot = field.slice(&[(0, nx, 1), (1, 2, 1), (0, nz, 1)]).unwrap();
     let field_lo_bot = field.slice(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_bot,
         (&field_hi_bot, &field_lo_bot),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
@@ -966,14 +966,14 @@ where
     let field_lo = field
         .slice(&[(0, nx, 1), (0, ny, 1), (0, nz - 1, 1)])
         .unwrap();
-    zip_many_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
+    zip_mut_with(&mut dst_int, (&field_hi, &field_lo), |r, (&hi, &lo)| {
         *r = (hi - lo) * inv_h
     })
     .unwrap();
     let mut dst_near = dst.slice_mut(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
     let field_hi_near = field.slice(&[(0, nx, 1), (0, ny, 1), (1, 2, 1)]).unwrap();
     let field_lo_near = field.slice(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
-    zip_many_mut_with(
+    zip_mut_with(
         &mut dst_near,
         (&field_hi_near, &field_lo_near),
         |r, (&hi, &lo)| *r = (hi - lo) * inv_h,
