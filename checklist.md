@@ -2,15 +2,19 @@
 
 ## LETO-ATTENTION-GROUPED-MASK-001 [minor, arch] — Owner: Codex
 
-- [ ] Add a borrowed grouped keep-mask policy with a nonzero heads-per-group
+- [x] Add a borrowed grouped keep-mask policy with a nonzero heads-per-group
       contract to the canonical rank-3 attention API.
-- [ ] Validate the complete grouped request before output mutation and map each
+- [x] Validate the complete grouped request before output mutation and map each
       execution batch to its mask group without materialization.
-- [ ] Add value-semantic grouped, causal-grouped, and failure-atomic coverage.
-- [ ] Update ADR-0002 and pass focused warning-denied and Nextest gates.
+- [x] Add value-semantic grouped, causal-grouped, and failure-atomic coverage.
+- [x] Update ADR-0002 and pass focused warning-denied and Nextest gates.
 
-Status: in progress on `codex/leto-grouped-attention-mask`; driven by the Coeus
-provider cutover's repeated-head mask contract.
+**Evidence:** all-target warning-denied Clippy passes; focused attention Nextest
+passes 17/17, including grouped, causal-grouped, and later-group non-finite mask
+failure atomicity. Independent review identified and closed the original
+query-poisoned test oracle before delivery. Full-package Nextest collection was
+blocked before execution by concurrent shared-target compilation and remains a
+hosted merge gate.
 
 ## LETO-ATTENTION-PROVIDER-1 [major, arch] — Owner: Codex
 

@@ -1,11 +1,21 @@
+use core::num::NonZeroUsize;
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{Array, ArrayView, ArrayViewMut, Layout, Storage, VecStorage};
 use leto_ops::{
     scaled_dot_product_attention_backward_accumulate, scaled_dot_product_attention_into,
-    AttentionError, AttentionGradients, AttentionMask, AttentionOperand, RealScalar,
+    AttentionError, AttentionGradients, AttentionMask, AttentionOperand, GroupedKeepMask,
+    RealScalar,
 };
 
 fn array<T: Clone>(shape: [usize; 3], values: Vec<T>) -> Array<T, VecStorage<T>, 3> {
+    Array::new(
+        Layout::c_contiguous(shape).expect("test shape is representable"),
+        VecStorage::new(values),
+    )
+    .expect("test storage matches its shape")
+}
+
+fn array2<T: Clone>(shape: [usize; 2], values: Vec<T>) -> Array<T, VecStorage<T>, 2> {
     Array::new(
         Layout::c_contiguous(shape).expect("test shape is representable"),
         VecStorage::new(values),

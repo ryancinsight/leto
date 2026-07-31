@@ -79,6 +79,39 @@ fn non_finite_input_and_invalid_mask_are_typed_failures() {
 }
 
 #[test]
+fn grouped_mask_validates_the_complete_request_before_writes() {
+    let query = array([4, 1, 1], vec![1.0_f64; 4]);
+    let key = array([4, 1, 1], vec![1.0_f64; 4]);
+    let value = array([4, 1, 1], vec![2.0_f64; 4]);
+    let keep = array2([2, 1], vec![1.0_f64, f64::NAN]);
+    let grouped = GroupedKeepMask::new(
+        keep.view(),
+        NonZeroUsize::new(2).expect("test group width is nonzero"),
+    );
+    let mut output = array([4, 1, 1], vec![7.0_f64; 4]);
+    let mut weights = array([4, 1, 1], vec![8.0_f64; 4]);
+
+    let error = scaled_dot_product_attention_into(
+        &query.view(),
+        &key.view(),
+        &value.view(),
+        AttentionMask::GroupedKeep(grouped),
+        1.0,
+        &mut output.view_mut(),
+        &mut weights.view_mut(),
+    )
+    .expect_err("later grouped mask non-finite input must fail atomically");
+    assert_eq!(
+        error,
+        AttentionError::NonFinite {
+            operand: AttentionOperand::Mask,
+        }
+    );
+    assert_eq!(output.storage().as_slice(), &[7.0; 4]);
+    assert_eq!(weights.storage().as_slice(), &[8.0; 4]);
+}
+
+#[test]
 fn derived_overflow_is_typed_and_failure_atomic() {
     let query = array([1, 1, 1], vec![f32::MAX]);
     let key = array([1, 1, 1], vec![f32::MAX]);

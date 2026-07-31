@@ -77,6 +77,50 @@ fn broadcast_mask_and_causal_policy_do_not_materialize() {
 }
 
 #[test]
+fn grouped_mask_repeats_borrowed_groups_and_composes_with_causal_policy() {
+    let query = array([4, 2, 1], vec![1.0_f64; 8]);
+    let key = array([4, 2, 1], vec![1.0_f64; 8]);
+    let value = array([4, 2, 1], vec![3.0_f64, 7.0, 3.0, 7.0, 3.0, 7.0, 3.0, 7.0]);
+    let keep = array2([2, 2], vec![1.0_f64, 0.0, 0.0, 1.0]);
+    let grouped = GroupedKeepMask::new(
+        keep.view(),
+        NonZeroUsize::new(2).expect("test group width is nonzero"),
+    );
+    let mut output = array([4, 2, 1], vec![9.0_f64; 8]);
+    let mut weights = array([4, 2, 2], vec![9.0_f64; 16]);
+
+    scaled_dot_product_attention_into(
+        &query.view(),
+        &key.view(),
+        &value.view(),
+        AttentionMask::GroupedKeep(grouped),
+        1.0,
+        &mut output.view_mut(),
+        &mut weights.view_mut(),
+    )
+    .expect("grouped keep mask is valid");
+    assert_eq!(
+        output.storage().as_slice(),
+        &[3.0, 3.0, 3.0, 3.0, 7.0, 7.0, 7.0, 7.0]
+    );
+
+    scaled_dot_product_attention_into(
+        &query.view(),
+        &key.view(),
+        &value.view(),
+        AttentionMask::CausalGroupedKeep(grouped),
+        1.0,
+        &mut output.view_mut(),
+        &mut weights.view_mut(),
+    )
+    .expect("causal grouped keep mask is valid");
+    assert_eq!(
+        output.storage().as_slice(),
+        &[3.0, 3.0, 3.0, 3.0, 0.0, 7.0, 0.0, 7.0]
+    );
+}
+
+#[test]
 fn fully_masked_rows_produce_zero_output_and_weights() {
     let query = array([1, 1, 1], vec![2.0_f64]);
     let key = array([1, 2, 1], vec![1.0_f64, 3.0]);
