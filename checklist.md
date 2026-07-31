@@ -2,7 +2,7 @@
 
 ## LETO-ATTENTION-GROUPED-MASK-001 [minor, arch] — Owner: Codex
 
-- [x] Add a borrowed grouped keep-mask policy with a nonzero heads-per-group
+- [x] Add a borrowed grouped keep-mask policy with a nonzero batches-per-group
       contract to the canonical rank-3 attention API.
 - [x] Validate the complete grouped request before output mutation and map each
       execution batch to its mask group without materialization.
