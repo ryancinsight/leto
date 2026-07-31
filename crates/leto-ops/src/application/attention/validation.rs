@@ -1,7 +1,7 @@
 use super::{AttentionError, AttentionGradients, AttentionMask, AttentionOperand, AttentionResult};
 use crate::domain::real::RealScalar;
 use eunomia::{NumericElement, RealField};
-use leto::{ArrayView, ArrayViewMut, Layout, LetoError};
+use leto::{ArrayView, ArrayViewMut, LetoError};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct AttentionPlan {
@@ -30,76 +30,6 @@ fn validate_view<T, const N: usize>(
         .map_err(|source| AttentionError::Layout { operand, source })
 }
 
-fn layout_is_disjoint(layout: &Layout<3>) -> Result<bool, LetoError> {
-    if layout.checked_size()? <= 1 {
-        return Ok(true);
-    }
-
-    let mut axes = [(0_u128, 0_usize); 3];
-    let mut axis_count = 0;
-    for (&dimension, &stride) in layout.shape.iter().zip(layout.strides.iter()) {
-        if dimension <= 1 {
-            continue;
-        }
-        let magnitude = stride.unsigned_abs() as u128;
-        if magnitude == 0 {
-            return Ok(false);
-        }
-        axes[axis_count] = (magnitude, dimension);
-        axis_count += 1;
-    }
-    axes[..axis_count].sort_unstable_by_key(|&(stride, _)| stride);
-
-    let mut covered_span = 0_u128;
-    let mut separated = true;
-    for &(stride, dimension) in &axes[..axis_count] {
-        if stride <= covered_span {
-            separated = false;
-            break;
-        }
-        covered_span = covered_span
-            .checked_add((dimension - 1) as u128 * stride)
-            .ok_or(LetoError::Overflow {
-                reason: "attention mutable-view alias span",
-            })?;
-    }
-    if separated {
-        return Ok(true);
-    }
-
-    // A collision exists exactly when a bounded, non-zero index-difference
-    // vector has zero stride dot product. Solve the largest-range axis and
-    // enumerate the other two; the common separated-stride case above is O(1).
-    let bounds = layout
-        .shape
-        .map(|dimension| (dimension.saturating_sub(1)) as i128);
-    let strides = layout.strides.map(|stride| stride as i128);
-    let solve_axis = bounds
-        .iter()
-        .enumerate()
-        .max_by_key(|&(_, bound)| bound)
-        .map_or(0, |(axis, _)| axis);
-    let pair = match solve_axis {
-        0 => [1, 2],
-        1 => [0, 2],
-        _ => [0, 1],
-    };
-    let solve_stride = strides[solve_axis];
-    for first in -bounds[pair[0]]..=bounds[pair[0]] {
-        for second in -bounds[pair[1]]..=bounds[pair[1]] {
-            let residual = first * strides[pair[0]] + second * strides[pair[1]];
-            if residual % solve_stride != 0 {
-                continue;
-            }
-            let solved = -residual / solve_stride;
-            if solved.abs() <= bounds[solve_axis] && (first != 0 || second != 0 || solved != 0) {
-                return Ok(false);
-            }
-        }
-    }
-    Ok(true)
-}
-
 fn validate_mut_view<T>(
     operand: AttentionOperand,
     view: &mut ArrayViewMut<'_, T, 3>,
@@ -107,7 +37,9 @@ fn validate_mut_view<T>(
     view.layout()
         .validate_storage_len(view.data().len())
         .map_err(|source| AttentionError::Layout { operand, source })?;
-    if !layout_is_disjoint(&view.layout())
+    if !view
+        .layout()
+        .is_injective()
         .map_err(|source| AttentionError::Layout { operand, source })?
     {
         return Err(AttentionError::Layout {
