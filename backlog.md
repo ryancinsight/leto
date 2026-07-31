@@ -48,15 +48,18 @@ classification pass.
 **Risk/change class:** `[major][arch]`; revises ADR 0002's CPU-kernel ownership
 boundary while preserving its const-rank and monomorphized dispatch decision.
 
-**Evidence (2026-07-31):** focused attention Nextest 9/9 and full `leto-ops`
-Nextest 457/457 pass; f32/f64 closed-form forward, negative and positive
-strides, broadcast/causal masks, fully masked rows, finite-difference backward,
+**Evidence (2026-07-31):** focused attention Nextest 15/15 and full `leto-ops`
+Nextest 469/469 pass; f32/f64 closed-form forward, negative and positive
+strides, exact injective/aliased mutable-layout validation, broadcast/causal
+masks, fully masked rows, finite-difference backward,
 optional additive targets, non-finite input, and typed failure atomicity are
-covered. Format, all-target warning-denied Clippy, and 15/15 runnable doctests
+covered. Format, all-target warning-denied Clippy, and 16/16 runnable doctests
 pass. `cargo-semver-checks` reports 196/196 applicable minor-release checks
 passing against `origin/main`. Warning-denied Rustdoc reaches the unchanged
 repository baseline of 36 unrelated broken/private-link diagnostics; the new
-attention Rustdoc produces none. Independent merge review and delivery remain.
+attention Rustdoc produces none. Three independent falsification passes found
+and closed arithmetic overflow, probability validation, optional-workspace,
+mask-aware preflight, and extreme finite-output defects. Delivery remains.
 
 ## LETO-GENERIC-ZIP-SOURCES-1 — Generic tuple source sets for multi-input zips [major, arch, complete]
 

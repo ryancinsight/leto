@@ -641,9 +641,9 @@ Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
   from_fn/eye/arange/linspace) through the `coeus-leto` const-rank dispatch shim
   (ADR 0002) into leto/leto-ops, covered by `coeus-leto/tests/contract.rs` and
   `coeus-ops`/`coeus-tensor` `*_leto_diff.rs` suites (coeus workspace 255 tests
-  green). Coeus retains its sealed `ComputeBackend`, autodiff, NN kernels
-  (conv/pool/attention/optimizers), higher sparse formats/backends, and
-  wgpu/CUDA backends. `coeus-core` keeps a dynamic-rank `Layout` and
+  green). Coeus retains its sealed `ComputeBackend`, autodiff, NN kernel
+  orchestration, and optimizers. Leto owns CPU attention; Hephaestus owns
+  accelerator attention. `coeus-core` keeps a dynamic-rank `Layout` and
   `Storage`/`StorageMut` traits that
   `coeus-leto` converts to leto's const-rank views at the boundary — this is the
   intended ADR 0002 seam, not residual duplication.
@@ -652,11 +652,11 @@ Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
 
 Leto owns the non-differentiable array substrate: layout/strides, storage,
 views, slicing, broadcasting, elementwise binary/unary math, reductions,
-matmul (incl. batched), shape ops (concat/pad/split), dense linear algebra, and
-narrow CPU CSR sparse-dense parity kernels. Coeus owns autodiff, NN kernels (conv,
-pool, attention), optimizer fusion, higher sparse formats/backends, and device
-(GPU) backends. Apollo owns transform kernels. FFT stays in Apollo; Coeus
-already routes `fft_1d` there.
+matmul (incl. batched), shape ops (concat/pad/split), dense linear algebra,
+scaled dot-product attention on CPU, and narrow CPU CSR sparse-dense parity
+kernels. Coeus owns autodiff, NN orchestration, optimizer fusion, and backend
+selection; Hephaestus owns accelerator attention. Apollo owns transform
+kernels. FFT stays in Apollo; Coeus already routes `fft_1d` there.
 
 ## A. Gaps vs ndarray 0.16 (Apollo-facing)
 
@@ -709,9 +709,9 @@ Coeus special-functions lane.
 | Quantile / median | ndarray-stats / numpy | Array statistics parity | Closed (`quantile_all`, `median_all`, `quantile_axis`, `median_axis`; five interpolation strategies, NaN/range rejection) |
 | Correlation / covariance | ndarray-stats | Array statistics parity | Closed (`covariance`, `pearson_correlation`; rowvar, two-pass centered covariance, exact empty/ddof rejection) |
 
-Non-goals confirmed: conv/pool/attention/optimizer kernels, higher sparse
-formats/backends beyond CPU CSR SpMV/SpMM, autodiff — these stay in Coeus. GPU
-buffers stay behind Coeus's `ComputeBackend`.
+Non-goals confirmed: convolution, pooling, optimizer kernels, higher sparse
+formats/backends beyond CPU CSR SpMV/SpMM, and autodiff stay in Coeus. CPU
+attention is closed in Leto; accelerator attention belongs to Hephaestus.
 
 ## B. Gaps vs nalgebra (linear algebra)
 
@@ -760,9 +760,9 @@ The CPU array-kernel consolidation is done (verified against coeus HEAD
    shim (ADR 0002) into those kernels — the duplicated array-primitive traversal
    loops in coeus are retired. DONE, with `coeus-leto/tests/contract.rs` and
    `*_leto_diff.rs` differential suites; coeus workspace 255 tests green.
-3. Coeus keeps `ComputeBackend` ownership, wgpu/CUDA backends, autodiff, NN
-   kernels (conv/pool/attention), higher sparse formats/backends, optimizers.
-   As designed.
+3. Coeus keeps `ComputeBackend` ownership, autodiff, NN orchestration, higher
+   sparse formats/backends, and optimizers. CPU attention dispatches to Leto;
+   accelerator attention dispatches to Hephaestus. Revised by ADR 0002.
 
 Framing correction: `coeus-tensor` is **not** a duplicate of leto to delete — it
 is the autodiff-integrated `Tensor`/COW wrapper over `coeus-core`'s dynamic-rank

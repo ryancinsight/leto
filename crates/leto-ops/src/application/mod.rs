@@ -1,3 +1,5 @@
+/// Scaled dot-product attention operations.
+pub mod attention;
 /// N-dimensional convolution operations.
 pub mod convolution;
 /// 1-D finite-difference differentiation operators.
