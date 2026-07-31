@@ -1,5 +1,16 @@
 # Leto Development Checklist
 
+## LETO-ATTENTION-PROVIDER-1 [major, arch] — Owner: Codex
+
+- [ ] Define typed masking, operand, gradient-target, and failure-atomicity
+      contracts under the rank-3 Leto attention hierarchy.
+- [ ] Implement caller-output forward and additive backward over borrowed
+      arbitrary-stride views without mask materialization.
+- [ ] Instantiate one value-semantic suite for f32/f64, broadcast masks,
+      strided views, finite-difference gradients, and exact typed failures.
+- [ ] Revise ADR 0002, public exports, Rustdoc, changelog, and active PM state.
+- [ ] Run focused static, behavioral, documentation, and SemVer gates and merge.
+
 ## LETO-GENERIC-ZIP-SOURCES-1 [major, arch] — Owner: Codex
 
 - [x] Replace duplicated multi-input zip bodies with sealed tuple source sets

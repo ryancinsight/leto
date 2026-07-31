@@ -1,5 +1,29 @@
 # Leto Work Backlog
 
+## LETO-ATTENTION-PROVIDER-1 — Scaled dot-product attention [major, arch, in progress]
+
+**Owner:** Codex on `codex/leto-attention-provider`; last-update: 2026-07-31.
+
+**Driver:** Coeus must dispatch CPU attention through Leto and accelerator
+attention through Hephaestus without consumer-owned kernels, host fallback, or
+erased provider errors.
+
+**Scope:** one scalar-preserving rank-3 scaled dot-product attention family in
+`leto-ops`; borrowed strided query/key/value/mask views; caller-owned output and
+weights; additive optional query/key/value gradient targets; typed validation;
+generic f32/f64 contracts; ADR 0002, exports, Rustdoc, changelog, and active PM
+artifacts. Accelerator kernels and the downstream Coeus cutover are non-goals.
+
+**Acceptance:** forward and backward validate every operand before mutation;
+unmasked, causal, broadcast-mask, and causal-plus-mask modes preserve value
+semantics for contiguous and strided views; prefilled selected gradients are
+accumulated rather than overwritten; failures are typed and atomic; focused
+format, check, warning-denied Clippy, Nextest, doctest, Rustdoc, and SemVer
+classification pass.
+
+**Risk/change class:** `[major][arch]`; revises ADR 0002's CPU-kernel ownership
+boundary while preserving its const-rank and monomorphized dispatch decision.
+
 ## LETO-GENERIC-ZIP-SOURCES-1 — Generic tuple source sets for multi-input zips [major, arch, complete]
 
 **Owner:** Codex on `codex/leto-real-sparse-lu`
