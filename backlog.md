@@ -1,5 +1,40 @@
 # Leto Work Backlog
 
+## LETO-GENERIC-ZIP-SOURCES-1 — Generic tuple source sets for multi-input zips [major, arch, complete]
+
+**Owner:** Codex on `codex/leto-real-sparse-lu`
+
+**Scope:** Replace the duplicated `leto-ops` multi-input zip implementations
+with one sealed tuple-source contract, migrate all in-repo callers and tests,
+and synchronize ADR, changelog, and public re-exports. Non-goals: changing the
+optimized single-source zip contract or claiming a runtime improvement without
+matched measurements.
+
+**Acceptance:** Multi-input zips use one monomorphized traversal for dense and
+strided layouts; tuple element types remain heterogeneous and statically
+dispatched; indexed and non-indexed paths preserve value semantics; removed
+arity-specific names have no live residue; format, check, Nextest, doctest,
+Rustdoc, and warning-denied Clippy evidence is recorded.
+
+**Evidence:** `cargo check -p leto-ops --all-features`, format, and warning-denied
+all-target Clippy pass. The configured `cargo nextest run -p leto-ops
+--all-features` lane passes 448/448, including two-, three-, four-, and
+five-source tuple cases, heterogeneous source types, strided views, indexed
+traversal, and finite-difference callers. `cargo test --doc -p leto-ops
+--all-features` passes 13/13 runnable doctests; `cargo doc -p leto-ops
+--all-features --no-deps` builds. Warning-denied Rustdoc remains blocked by the
+36 pre-existing unrelated broken/private links listed by that command. The
+semver audit reports one expected major failure for the removed arity-specific
+functions. `cargo check --locked` remains blocked by the pre-existing stale
+lockfile versus the active stack patch overlay; this change does not modify
+`Cargo.lock`.
+
+**Delivery watchpoint:** PR [#81](https://github.com/ryancinsight/leto/pull/81)
+is pushed and ready for review. The repository exposes no Actions workflow for
+this branch; merge state is currently `UNSTABLE` because the external
+`recurseml/analysis` status reports `Error occurred during analysis
+(4c584e3a..4a836cd8)`, while CodeRabbit review remains pending.
+
 ## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [major, arch, in progress]
 
 **Owner:** Codex on `codex/leto-convolution-parameters-core`

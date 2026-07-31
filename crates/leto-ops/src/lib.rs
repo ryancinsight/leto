@@ -20,9 +20,9 @@ pub use domain::strategy::SimdStrategy;
 pub use domain::strategy::ParallelStrategy;
 
 pub use application::convolution::{
-    ConvolutionParameters, TransposedConvolutionGradients, TransposedConvolutionParameters,
     convolution_backward_accumulate, convolution_forward_into,
     convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
+    ConvolutionParameters, TransposedConvolutionGradients, TransposedConvolutionParameters,
 };
 pub use application::linalg::{
     bidiagonalize,
@@ -157,12 +157,15 @@ pub use application::unary::{
 pub use application::vector::{dot, hamming_distance, jaccard_distance, matvec};
 pub use application::zip::{
     coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold,
-    indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip2_mut_with,
-    indexed_zip4_mut_with, indexed_zip_mut_with, zip2_mut_with, zip3_mut_with, zip5_mut_with,
-    zip_fold, zip_mut_with, CoordinateMapPlan,
+    indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip_mut_with,
+    zip_fold, zip_mut_with, CoordinateMapPlan, ZipSources,
 };
 
 // ── Interpolation (SSOT) ──────────────────────────────────────────────────────
+/// 2-D and 3-D spatial interpolation (bilinear, trilinear) in index space.
+pub use application::interpolation::{
+    bilinear, bilinear_index_space, trilinear, trilinear_index_space,
+};
 /// 1-D interpolation trait and implementations.
 pub use application::interpolation::{
     CubicSplineInterpolation, Interpolation1D, LagrangeInterpolation, LinearInterpolation,
@@ -178,6 +181,7 @@ pub use application::diff::{FiniteDifference3D, FiniteDifference3DScheme};
 // ── Quadrature (SSOT) ─────────────────────────────────────────────────────────
 /// Numerical quadrature (integration) rules.
 pub use application::quadrature::{
-    CompositeQuadrature, GaussLegendre2, GaussLegendre3, GaussLegendre5, Quadrature, SimpsonsRule,
-    TrapezoidalRule,
+    gauss_legendre_nodes_weights, CompositeQuadrature, GaussLegendre2, GaussLegendre3,
+    GaussLegendre5, GaussLegendreN, Quadrature, SimpsonsRule, TrapezoidalRule, GL3_NODES,
+    GL3_NODES_UNIT, GL3_WEIGHTS, GL3_WEIGHTS_UNIT,
 };

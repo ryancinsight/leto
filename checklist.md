@@ -1,5 +1,22 @@
 # Leto Development Checklist
 
+## LETO-GENERIC-ZIP-SOURCES-1 [major, arch] — Owner: Codex
+
+- [x] Replace duplicated multi-input zip bodies with sealed tuple source sets
+      and generic dense/strided traversal kernels.
+- [x] Migrate finite-difference and test callers to tuple-valued closures;
+      cover dense, strided, indexed, and heterogeneous source types.
+- [x] Add ADR 0020, the changelog entry, public re-exports, and remove all
+      arity-specific zip names.
+- [x] Run final doctest, Rustdoc, warning-denied Clippy, and exact-tree scans;
+      record residual warnings or blockers.
+
+**Evidence:** `cargo check -p leto-ops --all-features`, format, and
+warning-denied all-target Clippy pass; configured Nextest passes 448/448;
+doctests pass 13/13 runnable cases; Rustdoc builds with 36 pre-existing
+unrelated warning-denied link failures recorded in the backlog; semver checks
+classify the removed public arity APIs as the expected major change.
+
 **Target version: 0.40.0** · **Phase: Closure**
 
 ## LETO-COMPARISON-OPS-1 [minor] — Owner: Codex

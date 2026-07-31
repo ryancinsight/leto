@@ -239,8 +239,11 @@ mod tests {
         // 9.8.5 bounds the absolute error of the small-argument form by 1e-8,
         // and 9.8.6 bounds the error of x^{1/2}·e^{x}·K₀(x) by 1.9e-7, i.e. a
         // relative error near 1.5e-7 on K₀ itself.
-        for &(x, expected) in &[(0.1_f64, 2.427_069_0_f64), (1.0, 0.421_024_4), (2.0, 0.113_893_9)]
-        {
+        for &(x, expected) in &[
+            (0.1_f64, 2.427_069_0_f64),
+            (1.0, 0.421_024_4),
+            (2.0, 0.113_893_9),
+        ] {
             let error = (bessel_k0(x) - expected).abs();
             assert!(error < 1e-6, "K0({x}) absolute error {error}");
         }

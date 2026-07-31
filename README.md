@@ -195,10 +195,9 @@ caller-owned output shape, so `[N, 1]` and `[1, C]` views write directly into
 - Deterministic seeded random constructors (`uniform_with_seed`,
   `normal_with_seed` via Box-Muller) over an `Xorshift64` PRNG produce leto
   arrays; sampling runs in native precision.
-- `zip2_mut_with` is the three-operand in-place zip (one mutable output, two
-  read inputs), the `Zip::from(out).and(a).and(b)` analogue; indexed variants
-  (`indexed_zip_mut_with`, `indexed_zip2_mut_with`) pass logical `[usize; N]`
-  coordinates into the closure for `Zip::indexed`-style call sites.
+- `zip_mut_with` is the statically dispatched in-place zip for one source view
+  or a heterogeneous tuple of source views; `indexed_zip_mut_with` additionally
+  passes logical `[usize; N]` coordinates for `Zip::indexed`-style call sites.
 - Strided output layouts that can alias mutable writes through zero strides do
   not enter parallel write paths.
 - The core `leto` crate remains independent of Hermes and Moirai; integration

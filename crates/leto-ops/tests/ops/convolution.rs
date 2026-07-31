@@ -3,9 +3,9 @@ use core::fmt::Debug;
 use eunomia::{Bf16, F16};
 use leto::{Array, Layout, LetoError, Storage, VecStorage};
 use leto_ops::{
-    ConvolutionParameters, Scalar, TransposedConvolutionGradients, TransposedConvolutionParameters,
     convolution_backward_accumulate, convolution_forward_into,
     convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
+    ConvolutionParameters, Scalar, TransposedConvolutionGradients, TransposedConvolutionParameters,
 };
 
 fn array<T: Clone, const R: usize>(

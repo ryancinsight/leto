@@ -6,6 +6,14 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Breaking
+
+- [major] Generalize the existing `leto-ops` `zip_mut_with` and
+  `indexed_zip_mut_with` entry points to accept one source view or a
+  statically dispatched heterogeneous tuple. Remove the arity-specific
+  multi-input functions; migrate tuple callers by destructuring the source
+  tuple in the closure. See ADR 0020.
+
 ### Added
 
 - [major] Promote validated regular and transposed convolution parameters into

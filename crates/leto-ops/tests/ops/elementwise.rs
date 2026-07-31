@@ -1,8 +1,8 @@
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
-    add, binary_map, div, indexed_zip2_mut_with, indexed_zip_mut_with, map, map_into, mapv, mul,
-    scalar_map, sub, unary_map, zip_mut_with, AddOp, EqOp, ErfOp, ErfcOp, GeOp, GtOp, LeOp,
-    LgammaOp, LtOp, MulOp, NeOp,
+    add, binary_map, div, indexed_zip_mut_with, map, map_into, mapv, mul, scalar_map, sub,
+    unary_map, zip_mut_with, AddOp, EqOp, ErfOp, ErfcOp, GeOp, GtOp, LeOp, LgammaOp, LtOp, MulOp,
+    NeOp,
 };
 
 fn assert_scalar_supertrait<T>()
@@ -362,7 +362,7 @@ fn test_indexed_zip_mut_with_uses_logical_indices() {
 }
 
 #[test]
-fn test_indexed_zip2_mut_with_handles_strided_transposed_views() {
+fn test_indexed_zip_mut_with_handles_strided_transposed_views() {
     let layout = Layout::c_contiguous([2, 3]).unwrap();
     let a = Array::new(layout, VecStorage::new(vec![1i32, 2, 3, 4, 5, 6])).unwrap();
     let b = Array::new(layout, VecStorage::new(vec![10i32, 20, 30, 40, 50, 60])).unwrap();
@@ -374,7 +374,7 @@ fn test_indexed_zip2_mut_with_handles_strided_transposed_views() {
     let a_t = a.transpose([1, 0]).unwrap();
     let b_t = b.transpose([1, 0]).unwrap();
 
-    indexed_zip2_mut_with(&mut out, &a_t, &b_t, |[row, col], left, av, bv| {
+    indexed_zip_mut_with(&mut out, (&a_t, &b_t), |[row, col], left, (av, bv)| {
         *left = *av + *bv + (row as i32) * 10 + (col as i32);
     })
     .unwrap();
