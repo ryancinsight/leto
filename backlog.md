@@ -23,7 +23,8 @@ independent-review gates pass.
 
 **Status:** in progress. The provider API and f32/f64 value/failure contracts
 pass full Leto/Leto Ops Nextest, warning-denied Clippy, doctest, and Rustdoc
-gates; independent re-review and exact-head hosted gates remain.
+gates; independent re-review approves the implementation, and exact-head hosted
+gates remain.
 
 ## LETO-STABLE-VECTOR-NORM-1 — Range-stable Euclidean geometry [patch, in-progress]
 
