@@ -21,10 +21,9 @@ cardinality return typed errors; f32/f64 dense and strided values match an
 independent oracle; warning-denied, Nextest, doctest, Rustdoc, SemVer, and
 independent-review gates pass.
 
-**Status:** in progress. The provider API and f32/f64 value/failure contracts
-pass full Leto/Leto Ops Nextest, warning-denied Clippy, doctest, and Rustdoc
-gates; independent re-review approves the implementation, and exact-head hosted
-gates remain.
+**Status:** complete. The provider API and f32/f64 value/failure contracts pass
+full Leto/Leto Ops Nextest, warning-denied Clippy, doctest, Rustdoc, standalone
+minimal-feature, SemVer, independent-review, and exact-head hosted gates.
 
 ## LETO-STABLE-VECTOR-NORM-1 — Range-stable Euclidean geometry [patch, in-progress]
 

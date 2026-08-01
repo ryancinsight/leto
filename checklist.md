@@ -7,7 +7,8 @@
 - [x] Implement one generic borrowed stateful-update family over mutable zip.
 - [x] Add f32/f64 dense, strided, scalar, empty rank-eight,
       guard-preservation, IEEE-special-value, and rejection conformance.
-- [ ] Pass warning-denied gates, independent review, exact-head CI, and merge.
+- [x] Pass warning-denied gates, independent review, and exact-head CI; merge is
+      the delivery transition for this completed provider slice.
 
 ## LETO-ATTENTION-GROUPED-MASK-001 [minor, arch] — Owner: Codex
 
