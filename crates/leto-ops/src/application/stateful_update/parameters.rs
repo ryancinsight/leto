@@ -15,6 +15,14 @@ fn positive<T: RealScalar>(value: T, reason: &'static str) -> Result<()> {
     }
 }
 
+fn nonnegative<T: RealScalar>(value: T, reason: &'static str) -> Result<()> {
+    if value.is_finite() && value >= <T as NumericElement>::ZERO {
+        Ok(())
+    } else {
+        Err(invalid(reason))
+    }
+}
+
 fn unit_interval<T: RealScalar>(value: T, reason: &'static str) -> Result<()> {
     if value.is_finite()
         && value >= <T as NumericElement>::ZERO
@@ -39,11 +47,11 @@ impl<T: RealScalar> SgdParameters<T> {
     /// # Errors
     ///
     /// Returns [`LetoError::InvalidInput`] unless the learning rate is finite
-    /// and positive and momentum is finite in `[0, 1)`.
+    /// and non-negative and momentum is finite in `[0, 1)`.
     pub fn new(learning_rate: T, momentum: T) -> Result<Self> {
-        positive(
+        nonnegative(
             learning_rate,
-            "SGD learning rate must be finite and positive",
+            "SGD learning rate must be finite and non-negative",
         )?;
         unit_interval(momentum, "SGD momentum must be finite in [0, 1)")?;
         Ok(Self {
@@ -69,13 +77,14 @@ impl<T: RealScalar> AdamParameters<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`LetoError::InvalidInput`] unless the learning rate and epsilon
-    /// are finite and positive, both betas are finite in `[0, 1)`, and `step`
-    /// is positive with representable positive bias corrections.
+    /// Returns [`LetoError::InvalidInput`] unless the learning rate is finite
+    /// and non-negative, epsilon is finite and positive, both betas are finite
+    /// in `[0, 1)`, and `step` is positive with representable positive bias
+    /// corrections.
     pub fn new(learning_rate: T, beta_one: T, beta_two: T, epsilon: T, step: u64) -> Result<Self> {
-        positive(
+        nonnegative(
             learning_rate,
-            "Adam learning rate must be finite and positive",
+            "Adam learning rate must be finite and non-negative",
         )?;
         unit_interval(beta_one, "Adam beta one must be finite in [0, 1)")?;
         unit_interval(beta_two, "Adam beta two must be finite in [0, 1)")?;
@@ -152,12 +161,13 @@ impl<T: RealScalar> RmsPropParameters<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`LetoError::InvalidInput`] unless learning rate and epsilon are
-    /// finite and positive and alpha is finite in `[0, 1)`.
+    /// Returns [`LetoError::InvalidInput`] unless learning rate is finite and
+    /// non-negative, epsilon is finite and positive, and alpha is finite in
+    /// `[0, 1)`.
     pub fn new(learning_rate: T, alpha: T, epsilon: T) -> Result<Self> {
-        positive(
+        nonnegative(
             learning_rate,
-            "RMSProp learning rate must be finite and positive",
+            "RMSProp learning rate must be finite and non-negative",
         )?;
         unit_interval(alpha, "RMSProp alpha must be finite in [0, 1)")?;
         positive(epsilon, "RMSProp epsilon must be finite and positive")?;
@@ -181,12 +191,12 @@ impl<T: RealScalar> AdaGradParameters<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`LetoError::InvalidInput`] unless learning rate and epsilon are
-    /// finite and positive.
+    /// Returns [`LetoError::InvalidInput`] unless learning rate is finite and
+    /// non-negative and epsilon is finite and positive.
     pub fn new(learning_rate: T, epsilon: T) -> Result<Self> {
-        positive(
+        nonnegative(
             learning_rate,
-            "AdaGrad learning rate must be finite and positive",
+            "AdaGrad learning rate must be finite and non-negative",
         )?;
         positive(epsilon, "AdaGrad epsilon must be finite and positive")?;
         Ok(Self {

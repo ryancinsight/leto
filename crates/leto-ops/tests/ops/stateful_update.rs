@@ -279,7 +279,7 @@ fn validation_is_failure_atomic() {
 
     assert_invalid(
         SgdParameters::new(f32::NAN, 0.9),
-        "SGD learning rate must be finite and positive",
+        "SGD learning rate must be finite and non-negative",
     );
     assert_invalid(
         AdamParameters::new(0.1, 0.9, 0.99, 1.0e-6, 0),
@@ -297,6 +297,15 @@ fn validation_is_failure_atomic() {
         AdaGradParameters::new(0.1, 0.0),
         "AdaGrad epsilon must be finite and positive",
     );
+}
+
+#[test]
+fn all_rules_accept_zero_learning_rate() {
+    SgdParameters::new(0.0_f32, 0.9).expect("zero-rate SGD parameters");
+    AdamParameters::new(0.0_f32, 0.9, 0.99, 1.0e-6, 1).expect("zero-rate Adam parameters");
+    AdamWParameters::new(0.0_f32, 0.9, 0.99, 1.0e-6, 0.01, 1).expect("zero-rate AdamW parameters");
+    RmsPropParameters::new(0.0_f32, 0.9, 1.0e-6).expect("zero-rate RMSProp parameters");
+    AdaGradParameters::new(0.0_f32, 1.0e-6).expect("zero-rate AdaGrad parameters");
 }
 
 fn assert_invalid<T>(result: Result<T, LetoError>, expected: &str) {

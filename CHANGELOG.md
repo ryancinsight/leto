@@ -8,6 +8,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [patch] Accept finite zero learning rates in every stateful-update rule so
+  warmup schedules preserve optimizer-state transitions without mutating the
+  parameter.
+
 - [patch] Make fixed-dimension Euclidean vector norms range-stable for finite
   representable large and small lengths without widening scalar precision.
 

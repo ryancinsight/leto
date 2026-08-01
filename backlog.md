@@ -1,5 +1,19 @@
 # Leto Work Backlog
 
+## LETO-STATEFUL-ZERO-LR-1 — Preserve warmup updates [patch, in-progress]
+
+**Owner:** Codex on `codex/leto-zero-learning-rate`; claimed 2026-08-01.
+
+**Outcome:** every stateful-update parameter contract accepts a finite zero
+learning rate while retaining strict positive epsilon and finite-domain checks.
+
+**Acceptance:** all five rules construct at zero learning rate, negative and
+non-finite rates remain rejected, focused Nextest and warning-denied Clippy
+pass, and exact-head hosted checks pass before merge.
+
+**Status:** implementation and focused local verification complete; hosted
+verification pending.
+
 ## LETO-STATEFUL-UPDATE-1 — Provider-owned CPU updates [minor, arch, in-progress]
 
 **Owner:** Codex on `codex/leto-stateful-update`; claimed 2026-08-01.
