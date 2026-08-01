@@ -349,13 +349,9 @@ fn test_indexed_zip_mut_with_uses_logical_indices() {
     let rhs = Array::from_shape_vec([2, 3], vec![10i32, 20, 30, 40, 50, 60]).unwrap();
     let mut lhs = Array::zeros([2, 3]);
 
-    indexed_zip_mut_with(
-        lhs.view_mut(),
-        &rhs.view(),
-        |[row, col], left, right| {
-            *left = *right + (row as i32) * 100 + (col as i32);
-        },
-    )
+    indexed_zip_mut_with(lhs.view_mut(), &rhs.view(), |[row, col], left, right| {
+        *left = *right + (row as i32) * 100 + (col as i32);
+    })
     .unwrap();
 
     assert_eq!(lhs.storage().as_slice(), &[10, 21, 32, 140, 151, 162]);

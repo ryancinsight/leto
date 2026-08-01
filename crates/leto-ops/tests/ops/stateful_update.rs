@@ -1,8 +1,8 @@
 use eunomia::{FloatElement, NumericElement};
 use leto::{ArrayView, ArrayViewMut, Layout, LetoError};
 use leto_ops::{
-    AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters, RealScalar, RmsProp,
-    RmsPropParameters, Sgd, SgdParameters, stateful_update,
+    stateful_update, AdaGrad, AdaGradParameters, Adam, AdamParameters, AdamW, AdamWParameters,
+    RealScalar, RmsProp, RmsPropParameters, Sgd, SgdParameters,
 };
 
 const LOGICAL: [usize; 4] = [1, 2, 4, 5];

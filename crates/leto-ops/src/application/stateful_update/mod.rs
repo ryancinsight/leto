@@ -7,4 +7,4 @@ mod validation;
 pub use parameters::{
     AdaGradParameters, AdamParameters, AdamWParameters, RmsPropParameters, SgdParameters,
 };
-pub use rules::{AdaGrad, Adam, AdamW, RmsProp, Sgd, StatefulUpdateRule, stateful_update};
+pub use rules::{stateful_update, AdaGrad, Adam, AdamW, RmsProp, Sgd, StatefulUpdateRule};

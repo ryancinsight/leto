@@ -121,13 +121,9 @@ fn test_zip_mut_with_fused_multiply_add() {
     let mut out = arr([2, 2], vec![1.0, 1.0, 1.0, 1.0]);
     let a = arr([2, 2], vec![2.0, 3.0, 4.0, 5.0]);
     let b = arr([2, 2], vec![10.0, 10.0, 10.0, 10.0]);
-    zip_mut_with(
-        out.view_mut(),
-        (&a.view(), &b.view()),
-        |o, (&x, &y)| {
-            *o += x * y;
-        },
-    )
+    zip_mut_with(out.view_mut(), (&a.view(), &b.view()), |o, (&x, &y)| {
+        *o += x * y;
+    })
     .unwrap();
     assert_eq!(out.storage().as_slice(), &[21.0, 31.0, 41.0, 51.0]);
 }
@@ -178,13 +174,9 @@ fn test_zip_mut_with_three_strided_inputs_follow_logical_order() {
     let curr = curr_src.transpose([1, 0]).unwrap();
     let next = next_src.transpose([1, 0]).unwrap();
 
-    zip_mut_with(
-        out.view_mut(),
-        (&prev, &curr, &next),
-        |d, (&a, &b, &c)| {
-            *d = a + b + c;
-        },
-    )
+    zip_mut_with(out.view_mut(), (&prev, &curr, &next), |d, (&a, &b, &c)| {
+        *d = a + b + c;
+    })
     .unwrap();
 
     assert_eq!(
