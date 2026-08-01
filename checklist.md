@@ -1,5 +1,12 @@
 # Leto Development Checklist
 
+## LETO-STATEFUL-ZERO-LR-1 [patch] — Owner: Codex
+
+- [x] Admit finite zero learning rates without relaxing epsilon or domain
+      validation.
+- [x] Cover all five parameter contracts with focused Nextest.
+- [ ] Pass warning-denied Clippy and exact-head hosted checks; merge.
+
 ## LETO-STATEFUL-UPDATE-1 [minor, arch] — Owner: Codex
 
 - [x] Record CPU ownership, scalar/rank variation, validation, and consumer
