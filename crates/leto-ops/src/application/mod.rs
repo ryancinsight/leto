@@ -33,6 +33,8 @@ pub mod sparse;
 /// Special mathematical functions (sinc, erf, Bessel, Legendre).
 pub mod special;
 pub mod special_legendre;
+/// Stateful parameter-update operations.
+pub mod stateful_update;
 /// Statistical quality metrics and distribution summaries.
 pub mod statistics;
 /// Cartesian finite-difference stencil operations.

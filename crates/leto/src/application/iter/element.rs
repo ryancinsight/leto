@@ -49,42 +49,7 @@ fn odometer_step_back<const N: usize>(
 }
 
 fn layout_may_alias_mutable_offsets<const N: usize>(layout: &Layout<N>) -> Result<bool> {
-    if layout.checked_size()? <= 1 {
-        return Ok(false);
-    }
-
-    let mut axes = Vec::with_capacity(N);
-    for (&dim, &stride) in layout.shape.iter().zip(layout.strides.iter()) {
-        if dim <= 1 {
-            continue;
-        }
-        let stride = stride.unsigned_abs();
-        if stride == 0 {
-            return Ok(true);
-        }
-        axes.push((stride, dim));
-    }
-    axes.sort_unstable_by_key(|&(stride, _)| stride);
-
-    let mut covered_span = 0usize;
-    for (stride, dim) in axes {
-        if stride <= covered_span {
-            return Ok(true);
-        }
-        let axis_span = dim
-            .checked_sub(1)
-            .and_then(|extent| extent.checked_mul(stride))
-            .ok_or(LetoError::Overflow {
-                reason: "mutable iterator alias span calculation",
-            })?;
-        covered_span = covered_span
-            .checked_add(axis_span)
-            .ok_or(LetoError::Overflow {
-                reason: "mutable iterator alias span accumulation",
-            })?;
-    }
-
-    Ok(false)
+    Ok(!layout.is_injective()?)
 }
 
 /// Iterator over every element of a view in logical row-major order.

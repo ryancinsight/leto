@@ -34,7 +34,7 @@ contracts must fail before any output changes.
    f32/f64 are initial conformance instantiations. No widen-compute-narrow path
    is admitted.
 4. Validation checks parameter domains, exact shape equality, storage spans,
-   writable-layout injectivity, and rule state cardinality before calling the
+   exact writable-layout injectivity, and rule state cardinality before calling the
    mutable traversal. Safe Rust borrowing makes cross-output aliasing
    unrepresentable; no runtime pointer comparison substitutes for ownership.
 5. Coeus CPU adapters call this API directly. Hephaestus conformance uses it as

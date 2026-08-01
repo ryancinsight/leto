@@ -21,6 +21,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] Add a sealed, scalar-preserving `stateful_update` operation family
+  for SGD, Adam, AdamW, RMSProp, and AdaGrad. Borrowed parameter, gradient, and
+  state views reuse monomorphized mutable-zip traversal without tensor-sized
+  allocation or copies; parameter, shape, storage, and writable-layout
+  validation completes before mutation. See ADR 0022.
+
 - [minor] Add `OwnedNumericLu` and `SparseLuSolver::factor_sparse_with_symbolic`
   for factor-once/solve-many consumers (CFDrs block preconditioners): the owned
   factor stores the symbolic pattern inline and transparently holds the dense
