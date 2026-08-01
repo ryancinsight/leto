@@ -1,5 +1,30 @@
 # Leto Work Backlog
 
+## LETO-STATEFUL-UPDATE-1 — Provider-owned CPU updates [minor, arch, in-progress]
+
+**Owner:** Codex on `codex/leto-stateful-update`; claimed 2026-08-01.
+
+**Driver:** Coeus currently owns CPU optimizer formulas while Hephaestus owns
+the corresponding accelerator seam. Leto must own the scalar-preserving CPU
+contract so Coeus selects a provider instead of retaining consumer formulas.
+
+**Scope:** one generic borrowed stateful-update entry point in `leto-ops`, SGD,
+Adam, AdamW, RMSProp, and AdaGrad rule markers and validated parameters,
+arbitrary injective const-rank layouts, value-semantic f32/f64 conformance,
+ADR 0022, and synchronized release records. Coeus and Hephaestus changes are
+separate dependency-ordered consumer increments.
+
+**Acceptance:** every rule monomorphizes through the existing mutable-zip
+provider with no tensor-sized allocation or copy; complete validation precedes
+mutation; invalid parameters, shape/storage/layout contracts, and state
+cardinality return typed errors; f32/f64 dense and strided values match an
+independent oracle; warning-denied, Nextest, doctest, Rustdoc, SemVer, and
+independent-review gates pass.
+
+**Status:** complete. The provider API and f32/f64 value/failure contracts pass
+full Leto/Leto Ops Nextest, warning-denied Clippy, doctest, Rustdoc, standalone
+minimal-feature, SemVer, independent-review, and exact-head hosted gates.
+
 ## LETO-STABLE-VECTOR-NORM-1 — Range-stable Euclidean geometry [patch, in-progress]
 
 **Owner:** Codex on `codex/leto-stable-vector-norm`; claimed 2026-07-31.

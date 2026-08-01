@@ -65,6 +65,56 @@ impl<const N: usize> Layout<N> {
             .any(|(&dim, &stride)| dim > 1 && stride == 0)
     }
 
+    /// Returns whether distinct logical indices address distinct elements.
+    ///
+    /// The separated-stride case completes in `O(N log N)` time without heap
+    /// allocation. Ambiguous layouts use an exact bounded integer-difference
+    /// search, preserving arbitrary injective views without allocating an
+    /// offset set. Empty and single-element layouts are injective.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::Overflow`] when exact difference arithmetic exceeds
+    /// `i128`.
+    pub fn is_injective(&self) -> Result<bool> {
+        if self.checked_size()? <= 1 {
+            return Ok(true);
+        }
+        let mut axes = [(0usize, 0usize); N];
+        let mut count = 0;
+        for (&dimension, &stride) in self.shape.iter().zip(self.strides.iter()) {
+            if dimension <= 1 {
+                continue;
+            }
+            let magnitude = stride.unsigned_abs();
+            if magnitude == 0 {
+                return Ok(false);
+            }
+            axes[count] = (magnitude, dimension);
+            count += 1;
+        }
+        axes[..count].sort_unstable_by_key(|&(stride, _)| stride);
+        let mut covered_span = 0usize;
+        for &(stride, dimension) in &axes[..count] {
+            if stride <= covered_span {
+                return exact_injectivity(&self.shape, &self.strides);
+            }
+            covered_span = covered_span
+                .checked_add(
+                    dimension
+                        .checked_sub(1)
+                        .and_then(|extent| extent.checked_mul(stride))
+                        .ok_or(LetoError::Overflow {
+                            reason: "layout injectivity axis span",
+                        })?,
+                )
+                .ok_or(LetoError::Overflow {
+                    reason: "layout injectivity covered span",
+                })?;
+        }
+        Ok(true)
+    }
+
     /// Reinterpret a dense row-major layout with a new shape.
     ///
     /// This preserves logical row-major element order and performs no
@@ -92,91 +142,69 @@ impl<const N: usize> Layout<N> {
     }
 }
 
-impl Layout<3> {
-    /// Returns whether distinct logical indices address distinct elements.
-    ///
-    /// The separated-stride case completes in constant time. Ambiguous rank-3
-    /// layouts use an exact bounded integer-difference search, so valid
-    /// transposed and padded layouts are accepted while every colliding layout
-    /// is rejected. Empty and single-element layouts are injective.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LetoError::Overflow`] when the span proof exceeds `u128`.
-    pub fn is_injective(&self) -> Result<bool> {
-        if self.checked_size()? <= 1 {
-            return Ok(true);
-        }
+fn exact_injectivity<const N: usize>(shape: &[usize; N], strides: &[isize; N]) -> Result<bool> {
+    let bounds = shape.map(|dimension| dimension.saturating_sub(1) as i128);
+    let strides = strides.map(|stride| stride as i128);
+    let solve_axis = bounds
+        .iter()
+        .enumerate()
+        .max_by_key(|&(_, bound)| bound)
+        .map_or(0, |(axis, _)| axis);
+    let search = DifferenceSearch {
+        bounds: &bounds,
+        strides: &strides,
+        solve_axis,
+        solve_stride: strides[solve_axis],
+    };
+    Ok(!search.has_collision(0, 0, false)?)
+}
 
-        let mut axes = [(0_u128, 0_usize); 3];
-        let mut axis_count = 0;
-        for (&dimension, &stride) in self.shape.iter().zip(self.strides.iter()) {
-            if dimension <= 1 {
-                continue;
-            }
-            let magnitude = stride.unsigned_abs() as u128;
-            if magnitude == 0 {
+struct DifferenceSearch<'a, const N: usize> {
+    bounds: &'a [i128; N],
+    strides: &'a [i128; N],
+    solve_axis: usize,
+    solve_stride: i128,
+}
+
+impl<const N: usize> DifferenceSearch<'_, N> {
+    fn has_collision(
+        &self,
+        axis: usize,
+        residual: i128,
+        has_nonzero_difference: bool,
+    ) -> Result<bool> {
+        if axis == N {
+            if residual % self.solve_stride != 0 {
                 return Ok(false);
             }
-            axes[axis_count] = (magnitude, dimension);
-            axis_count += 1;
+            let solved = residual.checked_neg().ok_or(LetoError::Overflow {
+                reason: "layout injectivity solved difference",
+            })? / self.solve_stride;
+            return Ok(solved.abs() <= self.bounds[self.solve_axis]
+                && (has_nonzero_difference || solved != 0));
         }
-        axes[..axis_count].sort_unstable_by_key(|&(stride, _)| stride);
-
-        let mut covered_span = 0_u128;
-        let mut separated = true;
-        for &(stride, dimension) in &axes[..axis_count] {
-            if stride <= covered_span {
-                separated = false;
-                break;
-            }
-            covered_span = covered_span
-                .checked_add((dimension - 1) as u128 * stride)
+        if axis == self.solve_axis {
+            return self.has_collision(axis + 1, residual, has_nonzero_difference);
+        }
+        for difference in -self.bounds[axis]..=self.bounds[axis] {
+            let term = difference
+                .checked_mul(self.strides[axis])
+                .and_then(|term| residual.checked_add(term))
                 .ok_or(LetoError::Overflow {
-                    reason: "rank-3 layout injectivity span",
+                    reason: "layout injectivity difference sum",
                 })?;
-        }
-        if separated {
-            return Ok(true);
-        }
-
-        // A collision exists exactly when a bounded, non-zero index-difference
-        // vector has zero stride dot product. Solve the largest-range axis and
-        // enumerate the other two dimensions.
-        let bounds = self
-            .shape
-            .map(|dimension| (dimension.saturating_sub(1)) as i128);
-        let strides = self.strides.map(|stride| stride as i128);
-        let solve_axis = bounds
-            .iter()
-            .enumerate()
-            .max_by_key(|&(_, bound)| bound)
-            .map_or(0, |(axis, _)| axis);
-        let pair = match solve_axis {
-            0 => [1, 2],
-            1 => [0, 2],
-            _ => [0, 1],
-        };
-        let solve_stride = strides[solve_axis];
-        for first in -bounds[pair[0]]..=bounds[pair[0]] {
-            for second in -bounds[pair[1]]..=bounds[pair[1]] {
-                let residual = first * strides[pair[0]] + second * strides[pair[1]];
-                if residual % solve_stride != 0 {
-                    continue;
-                }
-                let solved = -residual / solve_stride;
-                if solved.abs() <= bounds[solve_axis] && (first != 0 || second != 0 || solved != 0)
-                {
-                    return Ok(false);
-                }
+            if self.has_collision(axis + 1, term, has_nonzero_difference || difference != 0)? {
+                return Ok(true);
             }
         }
-        Ok(true)
+        Ok(false)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::Layout;
 
     /// C-contiguous stride computation collapses the leading stride to 0 when an
@@ -241,5 +269,62 @@ mod tests {
     fn rank_three_injectivity_rejects_nonzero_stride_collision() {
         let layout = Layout::<3>::new([1, 3, 2], [6, 2, 4], 0);
         assert!(!layout.is_injective().expect("injectivity proof"));
+    }
+
+    #[test]
+    fn rank_eight_separation_proves_transposed_layout_injective() {
+        let layout = Layout::<8>::new([2, 3, 1, 1, 1, 1, 1, 1], [1, 2, 0, 0, 0, 0, 0, 0], 0);
+        assert!(layout.is_injective().expect("injectivity proof"));
+    }
+
+    #[test]
+    fn generic_separation_rejects_nonzero_stride_collision() {
+        let layout = Layout::<4>::new([2, 2, 1, 1], [1, 1, 0, 0], 0);
+        assert!(!layout.is_injective().expect("injectivity proof"));
+    }
+
+    #[test]
+    fn generic_injectivity_accepts_interleaved_non_overlapping_layout() {
+        let layout = Layout::<2>::new([2, 3], [3, 2], 0);
+        assert!(layout.is_injective().expect("injectivity proof"));
+    }
+
+    #[test]
+    fn generic_injectivity_matches_exhaustive_offset_oracle() {
+        for first_dimension in 1..=3 {
+            for second_dimension in 1..=3 {
+                for third_dimension in 1..=3 {
+                    let shape = [first_dimension, second_dimension, third_dimension];
+                    for first_stride in -3..=3 {
+                        for second_stride in -3..=3 {
+                            for third_stride in -3..=3 {
+                                let strides = [first_stride, second_stride, third_stride];
+                                let mut offsets = BTreeSet::new();
+                                for first in 0..first_dimension {
+                                    for second in 0..second_dimension {
+                                        for third in 0..third_dimension {
+                                            offsets.insert(
+                                                first as isize * first_stride
+                                                    + second as isize * second_stride
+                                                    + third as isize * third_stride,
+                                            );
+                                        }
+                                    }
+                                }
+                                let expected = offsets.len()
+                                    == first_dimension * second_dimension * third_dimension;
+                                let actual = Layout::<3>::new(shape, strides, 0)
+                                    .is_injective()
+                                    .expect("small exact injectivity domain");
+                                assert_eq!(
+                                    actual, expected,
+                                    "shape={shape:?}, strides={strides:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

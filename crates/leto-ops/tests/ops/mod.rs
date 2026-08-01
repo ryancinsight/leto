@@ -22,6 +22,7 @@ pub mod qr_cholesky;
 pub mod reduction;
 pub mod schur;
 pub mod sparse;
+pub mod stateful_update;
 pub mod stencil;
 pub mod structure_ops;
 pub mod svd;

@@ -24,4 +24,5 @@
 | [0019](0019-convolution-provider-contract.md) | Own CPU convolution in leto-ops | Accepted |
 | [0020](0020-generic-zip-sources.md) | Generic tuple source sets for multi-input zips | Accepted |
 | [0021](0021-generic-mutable-zip-outputs.md) | Generic mutable zip output families | Accepted |
+| [0022](0022-provider-owned-stateful-updates.md) | Provider-owned CPU stateful updates | Accepted |
 | [—](sparse-support-design.md) | Sparse array support in Leto and Hephaestus | Accepted |
