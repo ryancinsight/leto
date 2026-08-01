@@ -122,7 +122,7 @@ fn test_zip_mut_with_fused_multiply_add() {
     let a = arr([2, 2], vec![2.0, 3.0, 4.0, 5.0]);
     let b = arr([2, 2], vec![10.0, 10.0, 10.0, 10.0]);
     zip_mut_with(
-        &mut out.view_mut(),
+        out.view_mut(),
         (&a.view(), &b.view()),
         |o, (&x, &y)| {
             *o += x * y;
@@ -139,7 +139,7 @@ fn test_zip_mut_with_strided_input() {
     let a_src = arr([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let a = a_src.transpose([1, 0]).unwrap(); // logical [[1,4],[2,5],[3,6]]
     let b = arr([3, 2], vec![100.0, 100.0, 100.0, 100.0, 100.0, 100.0]);
-    zip_mut_with(&mut out.view_mut(), (&a, &b.view()), |o, (&x, &y)| {
+    zip_mut_with(out.view_mut(), (&a, &b.view()), |o, (&x, &y)| {
         *o = x + y;
     })
     .unwrap();
@@ -157,7 +157,7 @@ fn test_zip_mut_with_three_inputs() {
     let next = arr([2, 2], vec![4.0, 8.0, 14.0, 22.0]);
 
     zip_mut_with(
-        &mut out.view_mut(),
+        out.view_mut(),
         (&prev.view(), &curr.view(), &next.view()),
         |d, (&p0, &p1, &p2)| {
             *d = 2.0f64.mul_add(-p1, p0) + p2;
@@ -179,7 +179,7 @@ fn test_zip_mut_with_three_strided_inputs_follow_logical_order() {
     let next = next_src.transpose([1, 0]).unwrap();
 
     zip_mut_with(
-        &mut out.view_mut(),
+        out.view_mut(),
         (&prev, &curr, &next),
         |d, (&a, &b, &c)| {
             *d = a + b + c;
@@ -282,7 +282,7 @@ fn test_zip_mut_with_five_inputs() {
     let e = arr([2, 2], vec![2.0, 2.0, 2.0, 2.0]);
 
     zip_mut_with(
-        &mut out.view_mut(),
+        out.view_mut(),
         (&a.view(), &b.view(), &c.view(), &d.view(), &e.view()),
         |o, (&av, &bv, &cv, &dv, &ev)| *o = av + bv - cv + dv * ev,
     )
@@ -306,7 +306,7 @@ fn test_zip_mut_with_five_strided_inputs_follow_logical_order() {
     let e = e_src.transpose([1, 0]).unwrap();
 
     zip_mut_with(
-        &mut out.view_mut(),
+        out.view_mut(),
         (&a, &b, &c, &d, &e),
         |o, (&av, &bv, &cv, &dv, &ev)| {
             *o = av + bv - cv + dv * ev;
@@ -327,7 +327,7 @@ fn test_zip_mut_with_preserves_heterogeneous_source_types() {
     let scale = arr([2, 2], vec![0.5, 1.5, 2.5, 3.5]);
 
     zip_mut_with(
-        &mut out.view_mut(),
+        out.view_mut(),
         (&integer.view(), &scale.view()),
         |value, (&integer, &scale)| *value = f64::from(integer) + scale,
     )
@@ -345,7 +345,7 @@ fn test_indexed_zip_mut_with_uses_logical_index() {
     let d = arr([2, 2], vec![1000.0, 2000.0, 3000.0, 4000.0]);
 
     indexed_zip_mut_with(
-        &mut out.view_mut(),
+        out.view_mut(),
         (&a.view(), &b.view(), &c.view(), &d.view()),
         |[i, j], o, (&av, &bv, &cv, &dv)| {
             *o = av + bv + cv + dv + (i * 10 + j) as f64;

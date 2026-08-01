@@ -331,7 +331,7 @@ fn bench_zip(c: &mut Criterion) {
             || Array::from_shape_vec([n, n], pinned_values(n * n, 1.0)).unwrap(),
             |mut out| {
                 let transposed = src.transpose([1, 0]).unwrap();
-                zip_mut_with(&mut out.view_mut(), &transposed, |o, &s| *o += s).unwrap();
+                zip_mut_with(out.view_mut(), &transposed, |o, &s| *o += s).unwrap();
                 out
             },
             BatchSize::LargeInput,

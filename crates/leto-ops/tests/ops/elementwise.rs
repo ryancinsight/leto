@@ -308,7 +308,7 @@ fn test_mapping_and_zipping() {
 
     // Zip-mapping in place
     let mut dest = Array::new(layout, VecStorage::fill(6, 100)).unwrap();
-    zip_mut_with(&mut dest.view_mut(), &arr.view(), |d, &s| {
+    zip_mut_with(dest.view_mut(), &arr.view(), |d, &s| {
         *d += s;
     })
     .unwrap();
@@ -350,7 +350,7 @@ fn test_indexed_zip_mut_with_uses_logical_indices() {
     let mut lhs = Array::zeros([2, 3]);
 
     indexed_zip_mut_with(
-        &mut lhs.view_mut(),
+        lhs.view_mut(),
         &rhs.view(),
         |[row, col], left, right| {
             *left = *right + (row as i32) * 100 + (col as i32);
