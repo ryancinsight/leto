@@ -1,5 +1,13 @@
 # Leto Development Checklist
 
+## LETO-STATEFUL-UPDATE-1 [minor, arch] — Owner: Codex
+
+- [x] Record CPU ownership, scalar/rank variation, validation, and consumer
+      migration direction in ADR 0022.
+- [ ] Implement one generic borrowed stateful-update family over mutable zip.
+- [ ] Add f32/f64 dense, strided, boundary, and rejection conformance.
+- [ ] Pass warning-denied gates, independent review, exact-head CI, and merge.
+
 ## LETO-ATTENTION-GROUPED-MASK-001 [minor, arch] — Owner: Codex
 
 - [x] Add a borrowed grouped keep-mask policy with a nonzero batches-per-group
