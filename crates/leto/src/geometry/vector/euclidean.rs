@@ -32,9 +32,35 @@ impl<T: RealField, const N: usize> Vector<T, N> {
     }
 
     /// Euclidean norm (length) `‖self‖`.
+    ///
+    /// Components are scaled by their largest magnitude before squaring. This
+    /// preserves finite representable lengths when the unscaled sum of squares
+    /// would overflow or underflow, while all arithmetic remains in `T`.
+    /// A NaN component produces NaN, including when another component is
+    /// infinite; otherwise any infinite component produces positive infinity.
     #[inline]
     pub fn norm(self) -> T {
-        self.norm_squared().sqrt()
+        let mut scale = <T as NumericElement>::ZERO;
+        for value in self.data {
+            let magnitude = value.abs();
+            if magnitude.is_nan() {
+                return <T as NumericElement>::NAN;
+            }
+            if magnitude > scale {
+                scale = magnitude;
+            }
+        }
+
+        if scale == <T as NumericElement>::ZERO || scale == <T as NumericElement>::INFINITY {
+            return scale;
+        }
+
+        let mut scaled_sum = <T as NumericElement>::ZERO;
+        for value in self.data {
+            let normalized = value / scale;
+            scaled_sum = normalized.scalar_fmadd(normalized, scaled_sum);
+        }
+        scale * scaled_sum.sqrt()
     }
 
     /// Unit vector in the same direction, `self / ‖self‖`.
@@ -136,6 +162,65 @@ impl<T: RealField> Vector<T, 3> {
 #[cfg(test)]
 mod tests {
     use crate::geometry::Vector3;
+    use eunomia::{NumericElement, RealField};
+
+    fn assert_relative_eq<T: RealField>(actual: T, expected: T) {
+        let relative_error = (actual - expected).abs() / expected.abs();
+        // Scaling, two squared terms, one addition, sqrt, and rescaling each
+        // contribute at most a small multiple of epsilon for this conditioned
+        // reference. Eight epsilons bounds those six rounded operations.
+        let bound = T::EPSILON * T::from_f64(8.0);
+        assert!(
+            relative_error <= bound,
+            "relative error {relative_error:?} exceeds {bound:?}: actual={actual:?}, expected={expected:?}"
+        );
+    }
+
+    fn assert_range_stable<T: RealField>(large: T, small: T) {
+        let zero = <T as NumericElement>::ZERO;
+        let root_two = T::SQRT_2;
+
+        let large_vector = Vector3::new(large, large, zero);
+        assert_relative_eq(large_vector.norm(), large * root_two);
+        assert_relative_eq(Vector3::zeros().distance(large_vector), large * root_two);
+
+        let small_vector = Vector3::new(small, small, zero);
+        assert_relative_eq(small_vector.norm(), small * root_two);
+        assert_relative_eq(Vector3::zeros().distance(small_vector), small * root_two);
+    }
+
+    fn assert_boundary_norms<T: RealField>(smallest_subnormal: T, maximum_finite: T) {
+        let zero = <T as NumericElement>::ZERO;
+
+        assert_eq!(
+            Vector3::new(smallest_subnormal, zero, zero).norm(),
+            smallest_subnormal
+        );
+        assert_eq!(
+            Vector3::new(maximum_finite, zero, zero).norm(),
+            maximum_finite
+        );
+
+        let half_maximum = maximum_finite / T::from_f64(2.0);
+        assert_relative_eq(
+            Vector3::new(half_maximum, half_maximum, zero).norm(),
+            half_maximum * T::SQRT_2,
+        );
+    }
+
+    fn assert_ieee_behavior<T: RealField>() {
+        let zero = <T as NumericElement>::ZERO;
+        let one = <T as NumericElement>::ONE;
+        let infinity = <T as NumericElement>::INFINITY;
+        let nan = <T as NumericElement>::NAN;
+        let origin = Vector3::new(zero, zero, zero);
+
+        assert_eq!(origin.norm(), zero);
+        assert_eq!(Vector3::new(infinity, one, zero).norm(), infinity);
+        assert!(Vector3::new(nan, infinity, zero).norm().is_nan());
+        assert!(origin.distance(Vector3::new(nan, one, zero)).is_nan());
+        assert_eq!(origin.distance(Vector3::new(infinity, one, zero)), infinity);
+    }
 
     #[test]
     fn dot_norm_normalize() {
@@ -175,5 +260,19 @@ mod tests {
         assert_eq!(a.distance(b), 3.0);
         assert_eq!((b * 2.0).data, [2.0, 4.0, 4.0]);
         assert_eq!((a - b).data, [-1.0, -2.0, -2.0]);
+    }
+
+    #[test]
+    fn norm_is_range_stable_for_supported_fields() {
+        assert_range_stable(1.0e20_f32, 1.0e-30_f32);
+        assert_range_stable(1.0e200_f64, 1.0e-200_f64);
+        assert_boundary_norms(f32::from_bits(1), f32::MAX);
+        assert_boundary_norms(f64::from_bits(1), f64::MAX);
+    }
+
+    #[test]
+    fn norm_preserves_ieee_non_finite_behavior() {
+        assert_ieee_behavior::<f32>();
+        assert_ieee_behavior::<f64>();
     }
 }

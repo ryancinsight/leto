@@ -1,5 +1,23 @@
 # Leto Work Backlog
 
+## LETO-STABLE-VECTOR-NORM-1 — Range-stable Euclidean geometry [patch, in-progress]
+
+**Owner:** Codex on `codex/leto-stable-vector-norm`; claimed 2026-07-31.
+
+**Driver:** Gaia polyline arc length delegates to `Vector::norm`, whose direct
+sum of squares overflows or underflows for finite vectors with representable
+Euclidean lengths. RITK tractography therefore cannot use the provider contract
+without losing valid physical path lengths.
+
+**Scope:** Leto Euclidean vector norm and its f32/f64 value-semantic tests.
+Other linear-algebra norm families and the active `leto-ops` changes are
+non-goals.
+
+**Acceptance:** `Vector::norm` and `distance` preserve finite representable
+large and subnormal-scale lengths without widening precision; ordinary and
+non-finite IEEE behavior remains explicit; format, focused check, warning-denied
+Clippy, Nextest, doctest, Rustdoc, and SemVer gates pass.
+
 ## LETO-SPARSE-OWNED-FACTOR-1 — Owned sparse LU factor for preconditioner caching [minor, complete]
 
 **Owner:** Claude (atlas session 0161539d); last-update: 2026-07-31.
