@@ -194,6 +194,85 @@ fn test_zip_mut_with_three_strided_inputs_follow_logical_order() {
 }
 
 #[test]
+fn test_zip_mut_with_multiple_outputs_and_no_sources() {
+    let mut first = arr([2, 2], vec![0.0; 4]);
+    let mut second = arr([2, 2], vec![0.0; 4]);
+
+    zip_mut_with(
+        (first.view_mut(), second.view_mut()),
+        (),
+        |(first, second), ()| {
+            *first = 2.0;
+            *second = 3.0;
+        },
+    )
+    .unwrap();
+
+    assert_eq!(first.storage().as_slice(), &[2.0; 4]);
+    assert_eq!(second.storage().as_slice(), &[3.0; 4]);
+}
+
+#[test]
+fn test_indexed_zip_mut_with_multiple_outputs_and_no_sources() {
+    let mut first = arr([2, 3], vec![0.0; 6]);
+    let mut second = arr([2, 3], vec![0.0; 6]);
+    let mut third = arr([2, 3], vec![0.0; 6]);
+
+    indexed_zip_mut_with(
+        (first.view_mut(), second.view_mut(), third.view_mut()),
+        (),
+        |[i, j], (first, second, third), ()| {
+            let value = (10 * i + j) as f64;
+            *first = value;
+            *second = value + 1.0;
+            *third = value + 2.0;
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        first.storage().as_slice(),
+        &[0.0, 1.0, 2.0, 10.0, 11.0, 12.0]
+    );
+    assert_eq!(
+        second.storage().as_slice(),
+        &[1.0, 2.0, 3.0, 11.0, 12.0, 13.0]
+    );
+    assert_eq!(
+        third.storage().as_slice(),
+        &[2.0, 3.0, 4.0, 12.0, 13.0, 14.0]
+    );
+}
+
+#[test]
+fn test_zip_mut_with_strided_outputs_and_tuple_sources() {
+    let mut first = arr([2, 3], vec![0.0; 6]);
+    let mut second = arr([2, 3], vec![0.0; 6]);
+    let first_source = arr([3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let second_source = arr([3, 2], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]);
+
+    {
+        let first_view = first.transpose_mut([1, 0]).unwrap();
+        let second_view = second.transpose_mut([1, 0]).unwrap();
+        zip_mut_with(
+            (first_view, second_view),
+            (&first_source.view(), &second_source.view()),
+            |(first, second), (&first_source, &second_source)| {
+                *first = first_source;
+                *second = second_source;
+            },
+        )
+        .unwrap();
+    }
+
+    assert_eq!(first.storage().as_slice(), &[1.0, 3.0, 5.0, 2.0, 4.0, 6.0]);
+    assert_eq!(
+        second.storage().as_slice(),
+        &[10.0, 30.0, 50.0, 20.0, 40.0, 60.0]
+    );
+}
+
+#[test]
 fn test_zip_mut_with_five_inputs() {
     let mut out = arr([2, 2], vec![0.0; 4]);
     let a = arr([2, 2], vec![1.0, 2.0, 3.0, 4.0]);

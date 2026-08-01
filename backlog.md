@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## LETO-MUTABLE-ZIP-PROVIDER-1 — Generalize mutable zip outputs [major, arch, in progress]
+## LETO-MUTABLE-ZIP-PROVIDER-1 — Generalize mutable zip outputs [major, arch, complete]
 
 **Owner:** Codex; claimed 2026-07-31.
 
@@ -12,14 +12,19 @@ monomorphized provider trait so consumers use `zip_mut_with` and
 
 **Scope:** `leto-ops` mutable zip output trait and tests, its public exports and
 ADR, plus the Kwavers consumers and superseded local zip wrappers. Moirai's
-execution primitives are reused through Leto's optional parallel feature; no
-new executor abstraction or domain-kernel migration is in scope.
+execution primitives remain outside the array-layout contract; no new executor
+abstraction or domain-kernel migration is in scope.
 
 **Acceptance:** one provider API covers one, two, and three mutable outputs,
 zero or more statically typed read-only sources, dense and strided layouts, and
 indexed/non-indexed traversal; Kwavers has no local `MutableZipOutputs`, zip
 wrapper, or indexed source wrapper residue; value-semantic provider and
 consumer tests, format, focused checks, and Nextest pass.
+
+**Evidence:** `leto-ops` check, warning-denied clippy, format, and diff checks
+pass; provider Nextest passes 37/37 and provider doctests pass 16/16. Kwavers
+consumer package compilation and affected package Nextest lanes pass. No
+runtime or benchmark gain is claimed without controlled measurements.
 
 ## LETO-SPARSE-OWNED-FACTOR-1 — Owned sparse LU factor for preconditioner caching [minor, complete]
 
