@@ -37,6 +37,8 @@ pub mod lu_batch;
 pub mod matrix;
 /// Matrix functions: integer power and exponential.
 pub mod matrix_function;
+/// Non-negative least squares (NNLS) — Lawson & Hanson active-set algorithm.
+pub mod nnls;
 /// Vector and matrix norms.
 pub mod norms;
 /// Structural matrix products (Kronecker product).
@@ -75,6 +77,7 @@ pub use matrix::{
     MatrixSolve,
 };
 pub use matrix_function::{matexp, matpow};
+pub use nnls::{nnls, NnlsConfig, NnlsResult};
 pub use norms::{
     l2_normalize, l2_normalize_into, norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2,
     NormMax,
