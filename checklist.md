@@ -1,5 +1,16 @@
 # Leto Development Checklist
 
+## LETO-MNEMOSYNE-PACKAGE-1 [patch] — Owner: Codex
+
+- [x] Bind `mnemosyne` to package `mnemosyne-memory` 0.6.0.
+- [x] Refresh dependency resolution and pass focused gates.
+
+## LETO-THEMIS-PACKAGE-1 [patch] — Owner: Codex
+
+- [x] Bind `themis` to package `themis-topology` 0.10.1.
+- [x] Refresh dependency resolution and pass focused gates.
+- [x] Merge before rerunning dependent Hephaestus provider CI.
+
 ## LETO-STATEFUL-ZERO-LR-1 [patch] — Owner: Codex
 
 - [x] Admit finite zero learning rates without relaxing epsilon or domain

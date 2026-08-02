@@ -1,5 +1,20 @@
 # Leto Work Backlog
 
+## LETO-MNEMOSYNE-PACKAGE-1 — Restore Mnemosyne resolution [patch, complete]
+
+**Owner:** Codex on `codex/leto-themis-package`.
+
+**Outcome:** bind the existing Rust crate alias to package `mnemosyne-memory`
+0.6.0, refresh the lockfile, and pass focused checks before Hephaestus CI.
+
+## LETO-THEMIS-PACKAGE-1 — Restore Themis resolution [patch, complete]
+
+**Owner:** Codex on `codex/leto-themis-package`.
+
+**Outcome:** bind the existing Rust crate alias to upstream package
+`themis-topology` 0.10.1, refresh the lockfile, pass focused checks, and merge
+before dependent Hephaestus provider CI is retried.
+
 ## LETO-STATEFUL-ZERO-LR-1 — Preserve warmup updates [patch, in-progress]
 
 **Owner:** Codex on `codex/leto-zero-learning-rate`; claimed 2026-08-01.

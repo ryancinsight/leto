@@ -8,6 +8,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [patch] Bind the `themis` crate alias to the renamed `themis-topology`
+  package so fresh Git dependency resolution follows the provider identity.
+- [patch] Bind the `mnemosyne` crate alias to package `mnemosyne-memory` while
+  preserving Rust imports.
+
 - [patch] Accept finite zero learning rates in every stateful-update rule so
   warmup schedules preserve optimizer-state transitions without mutating the
   parameter.
