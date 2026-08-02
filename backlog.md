@@ -1,8 +1,25 @@
 # Leto Work Backlog
 
-## LETO-MOIRAI-PACKAGE-1 — Restore Moirai resolution [patch, in-progress]
+## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, in-progress]
 
-**Owner:** Codex on `release/leto-package-aliases`; claimed 2026-08-02.
+**Owner:** Codex on `codex/leto-crates-metadata`; claimed 2026-08-02.
+
+**Outcome:** give both publishable packages precise crates.io descriptions so
+the registry accepts their already validated 0.40.0 archives.
+
+**Acceptance:** locked metadata and package dry runs pass; `leto` and
+`leto-ops` 0.40.0 are indexed; trusted-publishing-only enforcement and exact
+GitHub Releases are configured; and the dependent publication queue resumes.
+
+**Status:** crates.io rejected the first `leto` upload because its description
+was empty. Both package manifests now carry bounded-context descriptions and
+the canonical repository URL; the locked exact-source `leto` dry run passes
+without package-metadata warnings. Hosted verification, merge, and publication
+remain.
+
+## LETO-MOIRAI-PACKAGE-1 — Restore Moirai resolution [patch, complete]
+
+**Owner:** Codex on `release/leto-package-aliases`.
 
 **Outcome:** bind the existing Rust crate alias to package `moirai-runtime`
 0.4.0, refresh the lockfile, and pass focused checks before Hephaestus CI.
@@ -12,8 +29,8 @@ published facade identity, focused package gates pass, and exact-head hosted
 checks pass before merge.
 
 **Status:** the exact external graph resolves `moirai-runtime`; format,
-warning-denied Clippy, and 492/492 focused Nextest cases pass. Exact-head hosted
-verification and merge remain.
+warning-denied Clippy, and 492/492 focused Nextest cases pass. PR #89 merged as
+`a5d53ca` after exact-head hosted verification passed.
 
 ## LETO-MNEMOSYNE-PACKAGE-1 — Restore Mnemosyne resolution [patch, complete]
 
