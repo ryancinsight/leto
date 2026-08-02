@@ -1,5 +1,20 @@
 # Leto Work Backlog
 
+## LETO-MOIRAI-PACKAGE-1 — Restore Moirai resolution [patch, in-progress]
+
+**Owner:** Codex on `release/leto-package-aliases`; claimed 2026-08-02.
+
+**Outcome:** bind the existing Rust crate alias to package `moirai-runtime`
+0.4.0, refresh the lockfile, and pass focused checks before Hephaestus CI.
+
+**Acceptance:** locked metadata and package archives resolve the provider's
+published facade identity, focused package gates pass, and exact-head hosted
+checks pass before merge.
+
+**Status:** the exact external graph resolves `moirai-runtime`; format,
+warning-denied Clippy, and 492/492 focused Nextest cases pass. Exact-head hosted
+verification and merge remain.
+
 ## LETO-MNEMOSYNE-PACKAGE-1 — Restore Mnemosyne resolution [patch, complete]
 
 **Owner:** Codex on `codex/leto-themis-package`.
