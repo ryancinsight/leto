@@ -6,6 +6,14 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## Unreleased
 
+### Added
+
+- [minor] Re-export the sparse LU family (`factor_numeric`, `factor_symbolic`,
+  `NumericLu`, `OwnedNumericLu`, `SymbolicLu`) from the `leto-ops` root
+  alongside `SparseLuSolver`, completing the deferred sweep from the
+  owned-factor delivery; consumers no longer need the
+  `application::sparse` deep path.
+
 ### Fixed
 
 - [patch] Add registry descriptions for the `leto` and `leto-ops` packages so

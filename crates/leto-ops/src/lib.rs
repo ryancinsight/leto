@@ -146,9 +146,9 @@ pub use application::scan::{
 };
 pub use application::signal::{blackman, hamming, hann, tukey, wrap_to_pi};
 pub use application::sparse::{
-    csc_spmv, csc_spmv_into, csr_to_dense, sparse_lu_solve, spgemm, spmm, spmm_into, spmv,
-    spmv_into, CooMatrix, CscColumn, CscMatrix, CsrMatrix, CsrRow, SparseLuSolver,
-    DENSE_LIMIT_DEFAULT,
+    csc_spmv, csc_spmv_into, csr_to_dense, factor_numeric, factor_symbolic, sparse_lu_solve,
+    spgemm, spmm, spmm_into, spmv, spmv_into, CooMatrix, CscColumn, CscMatrix, CsrMatrix, CsrRow,
+    NumericLu, OwnedNumericLu, SparseLuSolver, SymbolicLu, DENSE_LIMIT_DEFAULT,
 };
 /// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ, Legendre polynomials).
 pub use application::special::{erf, j0, j1, jn, sinc};
