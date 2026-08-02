@@ -1,5 +1,11 @@
 # Leto Development Checklist
 
+## LETO-MOIRAI-PACKAGE-1 [patch] — Owner: Codex
+
+- [x] Bind `moirai` to package `moirai-runtime` 0.4.0.
+- [x] Refresh dependency resolution and pass focused gates.
+- [ ] Merge before rerunning dependent Hephaestus provider CI.
+
 ## LETO-MNEMOSYNE-PACKAGE-1 [patch] — Owner: Codex
 
 - [x] Bind `mnemosyne` to package `mnemosyne-memory` 0.6.0.
