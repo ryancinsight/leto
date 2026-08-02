@@ -8,6 +8,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [patch] Add registry descriptions for the `leto` and `leto-ops` packages so
+  crates.io accepts the validated 0.40.0 archives.
 - [patch] Bind the `moirai` crate alias to package `moirai-runtime` so fresh
   Git dependency resolution follows the provider's published facade identity.
 - [patch] Bind the `themis` crate alias to the renamed `themis-topology`

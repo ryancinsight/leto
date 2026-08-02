@@ -1,10 +1,16 @@
 # Leto Development Checklist
 
+## LETO-CRATES-METADATA-1 [patch] — Owner: Codex
+
+- [x] Add precise crates.io descriptions to both publishable packages.
+- [ ] Pass locked package dry runs and exact-head hosted gates; merge.
+- [ ] Publish, index, configure trusted publishing, and resume dependents.
+
 ## LETO-MOIRAI-PACKAGE-1 [patch] — Owner: Codex
 
 - [x] Bind `moirai` to package `moirai-runtime` 0.4.0.
 - [x] Refresh dependency resolution and pass focused gates.
-- [ ] Merge before rerunning dependent Hephaestus provider CI.
+- [x] Merge before rerunning dependent Hephaestus provider CI.
 
 ## LETO-MNEMOSYNE-PACKAGE-1 [patch] — Owner: Codex
 

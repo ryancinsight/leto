@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "N-dimensional strided arrays, zero-copy views, and storage backends"
 
 [dependencies]
 # ── Systems and Parallelization ──
