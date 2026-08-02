@@ -145,9 +145,12 @@ uncompilable. Upstream ownership: the capability lands here, not downstream.
 the solver's existing dispatch/pivot-fallback contract), `NumericLu::solve_into`,
 shared `triangular_solve_into` core (SSOT), and a partial-pivot-scan magnitude
 fix in `factor_numeric` (raw-value comparison misreported negative-pivot
-columns as singular). Root `lib.rs` re-export deferred: the file is held dirty
-by the attention item; sweep it into the root export list when that lands
-(re-open trigger). CFDrs imports via `leto_ops::application::sparse` meanwhile.
+columns as singular). Root `lib.rs` re-export sweep completed 2026-08-02 once
+the attention item released the file: the root sparse export list now carries
+the full LU family (`factor_numeric`, `factor_symbolic`, `NumericLu`,
+`OwnedNumericLu`, `SymbolicLu`), and CFDrs's interim
+`leto_ops::application::sparse` deep-path import reverts to the root in the
+same co-evolution unit.
 
 **Acceptance:** cfd-math compiles against local leto; owned factor
 value-matches `solve_view` differentially; pivot-requiring and small matrices
