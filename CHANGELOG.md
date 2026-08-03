@@ -8,6 +8,17 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] Implement `Scalar` for `Complex<T>`, admitting complex scalars to the
+  Leto operation contract. The canonical containers and kernels — `CsrMatrix`,
+  `CooMatrix`, `spmv`, `spmv_into`, `spgemm`, and the dense arrays — now serve
+  frequency-domain consumers (boundary-element Helmholtz operators, spectral
+  kernels) at `Complex64` without a parallel complex-only container. The SIMD
+  specializations are deliberately not taken, since Hermes lanes are
+  real-valued; complex slice work uses the element-wise defaults.
+  Ordering-dependent surfaces remain real by construction — they bind on
+  `RealScalar`, which complex does not implement because the complex field
+  admits no total order.
+
 - [minor] Re-export the sparse LU family (`factor_numeric`, `factor_symbolic`,
   `NumericLu`, `OwnedNumericLu`, `SymbolicLu`) from the `leto-ops` root
   alongside `SparseLuSolver`, completing the deferred sweep from the
