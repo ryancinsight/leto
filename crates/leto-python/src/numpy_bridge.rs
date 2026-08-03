@@ -3,7 +3,7 @@
 //! These are shared by all Python-binding modules and are `pub(crate)` so
 //! they can be imported by sibling modules without exposing them to Python.
 
-use leto::{Array, Array1, ArrayView, Layout, VecStorage};
+use leto::{Array, ArrayView, Layout, VecStorage};
 use leto_ops::RealScalar;
 use numpy::{
     PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,

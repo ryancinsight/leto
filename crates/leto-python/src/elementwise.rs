@@ -1,15 +1,15 @@
 //! Python bindings for elementwise and basic array operations.
 
 use crate::numpy_bridge::{
-    array_into_numpy1, array_into_numpy2, array_into_numpy3, output_array, output_array_3d,
-    require_contiguous_1d, require_contiguous_2d, require_contiguous_3d, view_from_numpy,
-    view_from_numpy_1d, view_from_numpy_3d,
+    array_into_numpy2, array_into_numpy3, output_array, output_array_3d, require_contiguous_1d,
+    require_contiguous_2d, require_contiguous_3d, view_from_numpy, view_from_numpy_1d,
+    view_from_numpy_3d,
 };
 use leto::{ArrayD, LayoutDyn, SliceStorage};
 use leto_ops::{add, batched_matmul, div, dot, matmul, mul, sub, sum};
 use numpy::{
-    PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3,
-    PyReadonlyArrayDyn, PyUntypedArrayMethods,
+    PyArray2, PyArray3, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3, PyReadonlyArrayDyn,
+    PyUntypedArrayMethods,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
