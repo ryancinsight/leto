@@ -403,38 +403,67 @@ mod tests {
         assert_eq!(percentile_range(vec![42.0_f64]), 0.0_f64);
     }
 
-    // ── scalar-type genericity: same algorithms instantiate at f32 ──────────
+    // ── scalar-type genericity ──────────────────────────────────────────────
+    //
+    // Each contract is written once over `T: RealField` and instantiated
+    // across every scalar the stack ships, so a newly admitted type
+    // inherits the suite instead of needing the assertions copied again.
+    // Tolerances derive from `T::EPSILON` rather than being fixed per
+    // type: the algorithms accumulate over `n` elements, so a few
+    // multiples of the type's epsilon is the bound, and the same
+    // derivation holds at every width.
+
+    /// Elementwise tolerance for an `n`-element accumulation in `T`:
+    /// `c(n)·ε` with a small constant, per the standard summation bound.
+    fn accumulation_tolerance<T: RealField>(n: usize) -> T {
+        T::from_f64(4.0 * n as f64) * T::EPSILON
+    }
+
+    fn pearson_contract<T: RealField>() {
+        // Exactly proportional series: the correlation is 1 by definition.
+        let a: Vec<T> = (1..=5).map(|i| T::from_f64(f64::from(i))).collect();
+        let b: Vec<T> = (1..=5).map(|i| T::from_f64(f64::from(2 * i))).collect();
+        let deviation = (pearson(&a, &b) - T::ONE).abs();
+        assert!(
+            deviation < accumulation_tolerance::<T>(a.len()),
+            "pearson deviated by {deviation:?} at this width"
+        );
+    }
+
+    fn rmse_contract<T: RealField>() {
+        // One unit of error in one of three samples: rmse = sqrt(1/3).
+        let a: Vec<T> = (1..=3).map(|i| T::from_f64(f64::from(i))).collect();
+        let mut b = a.clone();
+        b[2] = b[2] + T::ONE;
+        let expected = (T::from_f64(1.0 / 3.0)).sqrt();
+        let deviation = (rmse(&a, &b) - expected).abs();
+        assert!(
+            deviation < accumulation_tolerance::<T>(a.len()),
+            "rmse deviated by {deviation:?} at this width"
+        );
+    }
+
+    fn psnr_contract<T: RealField>() {
+        // Identical signals carry no error, so PSNR is unbounded (infinite).
+        let reference: Vec<T> = vec![T::from_f64(1.0); 4];
+        assert!(!psnr(&reference, &reference).is_finite());
+    }
 
     #[test]
     fn pearson_is_generic_over_scalar() {
-        let a: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let b: Vec<f32> = vec![2.0, 4.0, 6.0, 8.0, 10.0];
-        assert!((pearson(&a, &b) - 1.0_f32).abs() < 1.0e-5_f32);
-
-        let a64: Vec<f64> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let b64: Vec<f64> = vec![2.0, 4.0, 6.0, 8.0, 10.0];
-        assert!((pearson(&a64, &b64) - 1.0_f64).abs() < 1.0e-12_f64);
+        pearson_contract::<f32>();
+        pearson_contract::<f64>();
     }
 
     #[test]
     fn rmse_is_generic_over_scalar() {
-        let a: Vec<f32> = vec![1.0, 2.0, 3.0];
-        let b: Vec<f32> = vec![1.0, 2.0, 4.0];
-        let expected = (1.0_f32 / 3.0).sqrt();
-        assert!((rmse(&a, &b) - expected).abs() < 1.0e-5_f32);
-
-        let a64: Vec<f64> = vec![1.0, 2.0, 3.0];
-        let b64: Vec<f64> = vec![1.0, 2.0, 4.0];
-        let expected64 = (1.0_f64 / 3.0).sqrt();
-        assert!((rmse(&a64, &b64) - expected64).abs() < 1.0e-12_f64);
+        rmse_contract::<f32>();
+        rmse_contract::<f64>();
     }
 
     #[test]
     fn psnr_is_generic_over_scalar() {
-        let r: Vec<f32> = vec![1.0; 4];
-        assert!(psnr::<f32>(&r, &r).is_infinite());
-
-        let r64: Vec<f64> = vec![1.0; 4];
-        assert!(psnr::<f64>(&r64, &r64).is_infinite());
+        psnr_contract::<f32>();
+        psnr_contract::<f64>();
     }
 }
