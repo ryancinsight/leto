@@ -1,5 +1,5 @@
 use crate::domain::strategy::{SimdOperations, SimdStrategy};
-use eunomia::{Bf16, NumericElement, F16};
+use eunomia::{Bf16, CastFrom, Complex, NumericElement, F16};
 
 /// Leto operation scalar contract.
 ///
@@ -433,6 +433,33 @@ impl Scalar for Bf16 {
     #[inline(always)]
     fn from_usize(value: usize) -> Self {
         Self::from_f32(value as f32)
+    }
+}
+
+/// Complex scalars participate in the operation contract through the same
+/// element-wise defaults as the plain real and integer types.
+///
+/// The SIMD specializations are deliberately not taken: Hermes lanes are
+/// real-valued, so a complex slice operation lowers to the interleaved
+/// re/im arithmetic the default methods already express. Admitting complex
+/// here is what lets the canonical containers — `CsrMatrix<T>`,
+/// `CooMatrix<T>`, and the dense arrays — serve frequency-domain consumers
+/// (boundary-element Helmholtz operators, spectral kernels) without a
+/// parallel complex-only container.
+///
+/// Ordering-dependent surfaces stay real by construction: they are bound on
+/// [`RealScalar`](crate::domain::real::RealScalar), which complex does not
+/// implement because the complex field admits no total order.
+impl<T> Scalar for Complex<T>
+where
+    T: Scalar + CastFrom<i32> + core::ops::Neg<Output = T>,
+{
+    #[inline(always)]
+    fn from_usize(value: usize) -> Self {
+        Self::new(
+            <T as Scalar>::from_usize(value),
+            <T as NumericElement>::ZERO,
+        )
     }
 }
 
