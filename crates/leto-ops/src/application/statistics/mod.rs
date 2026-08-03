@@ -434,7 +434,7 @@ mod tests {
         // One unit of error in one of three samples: rmse = sqrt(1/3).
         let a: Vec<T> = (1..=3).map(|i| T::from_f64(f64::from(i))).collect();
         let mut b = a.clone();
-        b[2] = b[2] + T::ONE;
+        b[2] += T::ONE;
         let expected = (T::from_f64(1.0 / 3.0)).sqrt();
         let deviation = (rmse(&a, &b) - expected).abs();
         assert!(
