@@ -21,15 +21,15 @@ fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
 mod tests {
     use crate::elementwise::{add_py, matmul_py, sum_dyn_py, sum_py};
     use crate::linalg::{
-        bunch_kaufman_py, cholesky_py, col_piv_qr_py, det_py, inv_py, kron_py, matexp_py,
-        norm_py, qr_py, schur_py, singular_values_py, solve_py, svd_py, trace_py,
+        bunch_kaufman_py, cholesky_py, col_piv_qr_py, det_py, inv_py, kron_py, matexp_py, norm_py,
+        qr_py, schur_py, singular_values_py, solve_py, svd_py, trace_py,
     };
     use crate::numpy_bridge::{output_array, view_from_numpy};
     use leto::Storage;
     use leto_ops::matmul;
     use numpy::{
-        PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
-        PyReadonlyArrayDyn, PyUntypedArrayMethods,
+        PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArrayDyn,
+        PyUntypedArrayMethods,
     };
     use pyo3::ffi::c_str;
     use pyo3::prelude::*;
@@ -572,5 +572,4 @@ mod tests {
             assert!((trace_val - np_trace).abs() < 1e-9);
         });
     }
-
 }

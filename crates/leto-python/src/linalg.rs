@@ -136,8 +136,8 @@ pub(crate) fn col_piv_qr_py<'py>(
 )> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py
-        .allow_threads(|| col_piv_qr(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let decomp =
+        py.allow_threads(|| col_piv_qr(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let q = decomp.q();
     let r = decomp.r();
     let perm = decomp
@@ -230,7 +230,11 @@ pub(crate) fn singular_values_py<'py>(
 
 #[pyfunction]
 #[pyo3(name = "norm", signature = (a, ord=None))]
-pub(crate) fn norm_py(py: Python<'_>, a: PyReadonlyArray2<'_, f64>, ord: Option<&str>) -> PyResult<f64> {
+pub(crate) fn norm_py(
+    py: Python<'_>,
+    a: PyReadonlyArray2<'_, f64>,
+    ord: Option<&str>,
+) -> PyResult<f64> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     py.allow_threads(|| {
@@ -346,8 +350,8 @@ pub(crate) fn hessenberg_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py
-        .allow_threads(|| hessenberg(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let decomp =
+        py.allow_threads(|| hessenberg(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let q = decomp.q().clone();
     let h = decomp.h().clone();
     let q_shape = [q.shape()[0], q.shape()[1]];
