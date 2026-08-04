@@ -1,9 +1,16 @@
 //! Criterion baselines for the leto-ops hot kernels.
 //!
 //! These baselines are the prerequisite gate for cache-aware kernel work
-//! (Atlas ADR 0002 Leto slice): per , no change is
-//! labeled an optimization without a recorded baseline comparison. Inputs are
-//! pinned; report median + CI from Criterion's standard output. Each hot-kernel
+//! (Atlas ADR 0002 Leto slice): per the stack's performance-engineering rule,
+//! no change is labeled an optimization without a recorded baseline
+//! comparison. Inputs are pinned; report median + CI from Criterion's
+//! standard output.
+//!
+//! Read the CI, not just the median, and check the host is quiet first: a
+//! concurrent build elsewhere in the stack widens these intervals past the
+//! effects being measured. A run with four rustc processes alongside it put
+//! matmul/dense_64x64 at [18.5, 24.1, 30.4] us -- a +/-25% spread, wide
+//! enough to hide or invent any realistic kernel change. Each hot-kernel
 //! family includes a C-dense case and a prepared non-unit-stride view so view
 //! construction and allocation do not contaminate the timed operation.
 
