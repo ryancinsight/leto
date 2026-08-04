@@ -7,7 +7,7 @@
 - [x] Add generic contiguous, strided, invalid-input, and failure-atomic tests.
 - [x] Pass focused Nextest, warning-denied gates, doctests, SemVer checks, and
       independent review.
-- [ ] Pass exact-head CI and merge before the accelerator and consumer slices.
+- [x] Pass exact-head CI and merge before the accelerator and consumer slices.
 
 ## LETO-CRATES-METADATA-1 [patch] — Owner: Codex
 

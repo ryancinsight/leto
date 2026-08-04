@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, review]
+## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, complete]
 
 **Owner:** Codex on `codex/leto-cross-entropy-provider`; claimed 2026-08-04.
 
@@ -30,7 +30,8 @@ Eunomia 0.8 sweep through Aequitas, Mnemosyne, and Hermes. Three falsification
 passes found and closed tolerance, overflow, stride-oracle,
 allocation, API-documentation, and additive-destination preflight defects.
 Rustdoc adds no new diagnostic and retains the tracked baseline of 36 unrelated
-broken/private-link warnings. Exact-head CI and merge remain.
+broken/private-link warnings. Exact-head Rust verification passed and PR #94
+merged as `c743a60`.
 
 ## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, in-progress]
 
