@@ -1,5 +1,25 @@
 # Leto Work Backlog
 
+## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, in-progress]
+
+**Owner:** Codex on `codex/leto-cross-entropy-provider`; claimed 2026-08-04.
+
+**Outcome:** own stable mean cross-entropy forward and additive backward over
+borrowed Leto views and caller-owned outputs so CPU consumers retain no host
+formula, staging allocation, or duplicate validation.
+
+**Acceptance:** one scalar-generic contract validates rank, shape, targets,
+storage reachability, and writable aliasing before mutation; contiguous and
+strided f32/f64 value and failure-atomic contracts pass through Nextest;
+warning-denied package gates, doctests, SemVer classification, independent
+review, and exact-head CI pass before merge.
+
+**Non-goals:** accelerator kernels, a Coeus adapter, reduction variants beyond
+mean, class weights, ignored labels, or performance claims without matched
+measurement.
+
+**Status:** provider contract and implementation pending under ADR 0023.
+
 ## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, in-progress]
 
 **Owner:** Codex on `codex/leto-crates-metadata`; claimed 2026-08-02.

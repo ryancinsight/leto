@@ -1,5 +1,20 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-08-04 Provider-owned CPU cross-entropy gap
+
+- **Finding:** a downstream consumer currently owns stable softmax,
+  mean-cross-entropy, and its logit gradient because Leto exposes no borrowed
+  classification-loss contract.
+- **Impact:** CPU backend selection does not identify the implementation owner;
+  the consumer stages probabilities in an owned vector and duplicates provider
+  validation and arithmetic.
+- **Resolution in progress:** ADR 0023 assigns stable mean forward and additive
+  backward to one scalar-generic Leto operation family over borrowed views and
+  caller-owned outputs. Accelerator execution and consumer dispatch remain in
+  their owning repositories.
+- **Re-open trigger:** the provider contract, conformance evidence, and exact-head
+  merge are complete.
+
 ## 2026-07-29 Coeus convolution provider gap
 
 - **Finding:** Coeus cannot delete its CPU convolution kernels until Leto owns
