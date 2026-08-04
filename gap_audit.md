@@ -10,8 +10,8 @@
   validation and arithmetic.
 - **Resolution:** ADR 0023 assigns stable mean forward and additive backward to
   one scalar-generic Leto operation family over borrowed views and caller-owned
-  outputs. The implementation is locally verified; exact-head CI and merge
-  remain. Accelerator execution and consumer dispatch remain in their owning
+  outputs. Exact-head Rust verification passed and PR #94 merged as `c743a60`.
+  Accelerator execution and consumer dispatch remain in their owning
   repositories.
 - **Re-open trigger:** the provider contract, conformance evidence, and exact-head
   merge are complete.
