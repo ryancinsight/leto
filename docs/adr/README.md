@@ -25,5 +25,5 @@
 | [0020](0020-generic-zip-sources.md) | Generic tuple source sets for multi-input zips | Accepted |
 | [0021](0021-generic-mutable-zip-outputs.md) | Generic mutable zip output families | Accepted |
 | [0022](0022-provider-owned-stateful-updates.md) | Provider-owned CPU stateful updates | Accepted |
-| [0023](0023-provider-owned-cross-entropy.md) | Provider-owned CPU cross-entropy | Proposed |
+| [0023](0023-provider-owned-cross-entropy.md) | Provider-owned CPU cross-entropy | Accepted |
 | [—](sparse-support-design.md) | Sparse array support in Leto and Hephaestus | Accepted |

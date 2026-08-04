@@ -8,10 +8,11 @@
 - **Impact:** CPU backend selection does not identify the implementation owner;
   the consumer stages probabilities in an owned vector and duplicates provider
   validation and arithmetic.
-- **Resolution in progress:** ADR 0023 assigns stable mean forward and additive
-  backward to one scalar-generic Leto operation family over borrowed views and
-  caller-owned outputs. Accelerator execution and consumer dispatch remain in
-  their owning repositories.
+- **Resolution:** ADR 0023 assigns stable mean forward and additive backward to
+  one scalar-generic Leto operation family over borrowed views and caller-owned
+  outputs. The implementation is locally verified; exact-head CI and merge
+  remain. Accelerator execution and consumer dispatch remain in their owning
+  repositories.
 - **Re-open trigger:** the provider contract, conformance evidence, and exact-head
   merge are complete.
 

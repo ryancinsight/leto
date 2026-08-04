@@ -8,6 +8,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] Add provider-owned mean cross-entropy forward and additive backward
+  over borrowed Leto views. The scalar-generic operation retains probabilities
+  in caller-owned storage, accepts strided layouts, borrows the upstream scalar,
+  validates targets and mutable-layout uniqueness before mutation, and keeps
+  stable log-sum-exp arithmetic in the selected precision. See ADR 0023.
+
 - [minor] Implement `Scalar` for `Complex<T>`, admitting complex scalars to the
   Leto operation contract. The canonical containers and kernels — `CsrMatrix`,
   `CooMatrix`, `spmv`, `spmv_into`, `spgemm`, and the dense arrays — now serve

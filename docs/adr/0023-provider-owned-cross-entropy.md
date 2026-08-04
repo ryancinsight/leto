@@ -1,6 +1,6 @@
 # ADR 0023: Own CPU cross-entropy in leto-ops
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-04
 - **Backlog:** `LETO-CROSS-ENTROPY-PROVIDER-1`
 - **Cross-repository driver:** Coeus ADR 0052
@@ -22,7 +22,9 @@ are part of the contract.
 
 ## Decision
 
-`leto-ops::application::loss::cross_entropy` owns one scalar-generic family:
+`leto_ops::{cross_entropy_forward_into,
+cross_entropy_backward_accumulate}` exposes one scalar-generic family owned by
+`application::loss`:
 
 - forward writes normalized probabilities and one mean loss;
 - backward additively writes the logit gradient from saved probabilities,
@@ -49,10 +51,12 @@ introduced.
 ## Failure modes
 
 Invalid rank, empty dimensions, target length or range, unreachable storage,
-overlapping writable layouts, and checked-arithmetic overflow return typed
-`LetoError` values before mutation. NaN and infinity semantics follow the
-existing scalar exponential, logarithm, and comparison contracts and receive
-explicit conformance coverage.
+overlapping writable layouts, insufficient probability-sum resolution, and
+non-finite inputs or arithmetic return typed `CrossEntropyError` values before
+mutation. The operation rejects NaN and infinity explicitly. Its saved-row
+validation tolerance composes the scalar division error with the standard
+gamma bound for sequential summation and rejects class widths once that bound
+can no longer distinguish a valid normalized row.
 
 ## Verification
 
@@ -64,4 +68,4 @@ independent review, and exact-head CI gate the merge.
 
 ## References
 
-- [PyTorch cross_entropy contract](https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.cross_entropy.html)
+- [PyTorch cross_entropy contract](https://docs.pytorch.org/docs/2.13/generated/torch.nn.functional.cross_entropy.html)

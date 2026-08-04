@@ -10,6 +10,8 @@ pub(crate) mod index;
 pub mod interpolation;
 /// Dense linear algebra: eigensolver and norms.
 pub mod linalg;
+/// Classification loss operations.
+pub mod loss;
 /// Elementwise binary and aggregate map operations.
 pub mod map;
 /// Matrix multiplication operations.

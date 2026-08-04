@@ -358,8 +358,8 @@ fn dense_scalar_empty_and_rank_boundary_layouts_execute() {
         SgdParameters::new(0.1, 0.9).expect("empty parameters"),
     )
     .expect("empty update");
-    assert_eq!(empty_parameter, []);
-    assert_eq!(empty_velocity, []);
+    assert_eq!(empty_parameter, [0.0_f32; 0]);
+    assert_eq!(empty_velocity, [0.0_f32; 0]);
 }
 
 #[test]
