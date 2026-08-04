@@ -126,6 +126,10 @@ pub use application::linalg::{
     UduDecomposition,
     GMRES,
 };
+pub use application::loss::{
+    cross_entropy_backward_accumulate, cross_entropy_forward_into, CrossEntropyError,
+    CrossEntropyOperand, CrossEntropyResult,
+};
 pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp, EqOp,
     GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,

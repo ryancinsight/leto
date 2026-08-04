@@ -1,5 +1,37 @@
 # Leto Work Backlog
 
+## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, review]
+
+**Owner:** Codex on `codex/leto-cross-entropy-provider`; claimed 2026-08-04.
+
+**Outcome:** own stable mean cross-entropy forward and additive backward over
+borrowed Leto views and caller-owned outputs so CPU consumers retain no host
+formula, staging allocation, or duplicate validation.
+
+**Acceptance:** one scalar-generic contract validates rank, shape, targets,
+storage reachability, and writable aliasing before mutation; contiguous and
+strided f32/f64 value and failure-atomic contracts pass through Nextest;
+warning-denied package gates, doctests, SemVer classification, independent
+review, and exact-head CI pass before merge.
+
+**Non-goals:** accelerator kernels, a Coeus adapter, reduction variants beyond
+mean, class weights, ignored labels, or performance claims without matched
+measurement.
+
+**Evidence (2026-08-04):** ADR 0023 is accepted. Focused Nextest passes
+14/14 analytical and failure-atomic contracts, including f32/f64 parity,
+padded and permuted layouts, stable finite extremes, overflow-safe mean and
+additive backward, gamma-bounded probability validation, and non-finite
+inputs. Full `leto-ops` Nextest passes 511/511; all-target warning-denied
+Clippy passes; doctests pass 18/18 runnable cases with one existing ignored
+case; `cargo-semver-checks` passes 196/196 applicable minor-release checks.
+Standalone locked all-feature metadata resolves after the dependency-ordered
+Eunomia 0.8 sweep through Aequitas, Mnemosyne, and Hermes. Three falsification
+passes found and closed tolerance, overflow, stride-oracle,
+allocation, API-documentation, and additive-destination preflight defects.
+Rustdoc adds no new diagnostic and retains the tracked baseline of 36 unrelated
+broken/private-link warnings. Exact-head CI and merge remain.
+
 ## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, in-progress]
 
 **Owner:** Codex on `codex/leto-crates-metadata`; claimed 2026-08-02.

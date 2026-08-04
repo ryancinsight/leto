@@ -1,5 +1,14 @@
 # Leto Development Checklist
 
+## LETO-CROSS-ENTROPY-PROVIDER-1 [minor, arch] — Owner: Codex
+
+- [x] Claim the provider boundary and record ADR 0023.
+- [x] Implement stable borrowed forward and additive backward contracts.
+- [x] Add generic contiguous, strided, invalid-input, and failure-atomic tests.
+- [x] Pass focused Nextest, warning-denied gates, doctests, SemVer checks, and
+      independent review.
+- [ ] Pass exact-head CI and merge before the accelerator and consumer slices.
+
 ## LETO-CRATES-METADATA-1 [patch] — Owner: Codex
 
 - [x] Add precise crates.io descriptions to both publishable packages.

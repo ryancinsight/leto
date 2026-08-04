@@ -10,6 +10,7 @@ pub mod elementwise;
 pub mod full_piv_lu;
 pub mod hessenberg;
 pub mod iterative_gmres;
+pub mod loss;
 pub mod lu;
 pub mod matmul;
 pub mod matrix_function;

@@ -143,6 +143,11 @@ caller-owned output shape, so `[N, 1]` and `[1, C]` views write directly into
 - Allocating axis-reduction wrappers (`sum_axis`, `mean_axis`, `min_axis`, and
   `max_axis`) produce C-contiguous output by delegating to the caller-owned
   reduction core after constructing `VecStorage`.
+- Mean cross-entropy forward and additive backward operate directly over
+  borrowed rank-two logits/probabilities and caller-owned scalar/gradient
+  views. Stable log-sum-exp arithmetic, target validation, strided layouts,
+  and failure-atomic preflight are provider-owned; saved probabilities and the
+  upstream scalar require no tensor-sized staging allocation or copy.
 - Unary mapping APIs provide `map_into` for caller-owned output and `mapv` /
   `map` for allocating C-contiguous output. Precision changes are explicit in
   the caller-provided closure rather than hidden in the traversal. `map_inplace`
