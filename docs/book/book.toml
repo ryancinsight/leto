@@ -1,0 +1,19 @@
+# mdBook configuration for the leto array library book.
+[book]
+title = "leto: N-Dimensional Arrays for Atlas"
+authors = ["Ryan Clanton"]
+description = "Strided N-dimensional arrays, zero-copy views, sparse formats, and CPU linear algebra for the Atlas compute layer."
+src = "."
+language = "en"
+
+[build]
+build-dir = "../../target/book/leto"
+create-missing = false
+
+[output.html]
+no-section-label = false
+mathjax-support = true
+site-url = "/leto/"
+git-repository-url = "https://github.com/ryancinsight/leto"
+edit-url-template = "https://github.com/ryancinsight/leto/edit/main/docs/book/{path}"
+default-theme = "rust"
