@@ -28,17 +28,22 @@
 //! grows it: the pattern is structurally valid for any pivot permutation
 //! allowed by partial pivoting.
 //!
-//! # Why natural ordering for v0.40.0?
+//! # Ordering strategies
 //!
-//! Approximate Minimum Degree (AMD) ordering (Amestoy-Davis-Duff 1996) is
-//! the long-term path for fill-reducing column reordering, but its ~300-line
-//! implementation surface (with aggressive absorption + external degree
-//! updates) exceeds the bounded-increment budget for v0.40.0; a buggy AMD
-//! produces numerically-broken factorizations. For CFDrs's banded
-//! saddle-point systems natural ordering is already near-optimal — the
-//! bandwidth is small and AMD gains are modest. The AMD upgrade is tracked
-//! as a follow-up board item (see ADR 0031 Consequences).
+//! Natural column ordering is the default and shipped in v0.40.0. The
+//! Approximate Minimum Degree (AMD) ordering of Amestoy-Davis-Duff 1996 is
+//! available via [`factor_symbolic_with_ordering`] with
+//! [`OrderingStrategy::AmdApproxMinDegree`]; see the `amd` submodule for the
+//! algorithm reference and the bounded-increment simplification rationale.
+//! AMD returns a permutation that is applied symmetrically to `A` before the
+//! symbolic reach runs, so the resulting `SymbolicLu` references row/column
+//! indices in the *permuted* matrix. The numeric phase is unchanged; the
+//! `amd_col_perm: Option<Vec<usize>>` slot records the permutation so the
+//! solve can inverse-permute the column-order solution back to original
+//! row/column order.
 
+use super::amd::amd_order;
+use super::lu_sparse::OrderingStrategy;
 use super::CscMatrix;
 use crate::domain::scalar::Scalar;
 
@@ -73,6 +78,20 @@ pub struct SymbolicLu {
     pub u_col_ptr: Vec<usize>,
     /// CSC row indices for the upper-triangular part of `U`.
     pub u_row_indices: Vec<usize>,
+    /// Optional column permutation produced by a fill-reducing strategy
+    /// (currently [`OrderingStrategy::AmdApproxMinDegree`]).
+    ///
+    /// `None` means natural ordering was used. `Some(perm)` means the
+    /// symbolic pattern refers to `A_perm = A[perm, perm]`: row/column
+    /// indices in `l_row_indices`/`u_row_indices` are indices into
+    /// `A_perm`, not `A`. The numeric/solve phases consume the same
+    /// permuted matrix; the triangular solve inverse-permutes `x_perm`
+    /// back to original order via `x[perm[i]] = x_perm[i]`.
+    ///
+    /// Length `n` when `Some`; never populated for the natural-ordering
+    /// `factor_symbolic` entry point. The string convention is identical
+    /// to [`amd_order`](super::amd::amd_order)'s output.
+    pub amd_col_perm: Option<Vec<usize>>,
 }
 
 impl SymbolicLu {
@@ -228,5 +247,104 @@ pub fn factor_symbolic<T: Scalar>(csc: &CscMatrix<T>) -> SymbolicLu {
         l_row_indices,
         u_col_ptr,
         u_row_indices,
+        amd_col_perm: None,
     }
+}
+
+/// Compute the symbolic LU pattern of `A` under a chosen column-ordering
+/// strategy.
+///
+/// [`OrderingStrategy::Natural`] runs the canonical
+/// [`factor_symbolic`] on `csc` directly; the result references the
+/// original row/column indices and carries `amd_col_perm: None`.
+///
+/// [`OrderingStrategy::AmdApproxMinDegree`] computes the AMD permutation
+/// via [`crate::application::sparse::amd::amd_order`], applies it
+/// symmetrically to produce `A_perm = A[perm, perm]`, runs `factor_symbolic`
+/// on the permuted matrix, and tags the result with `amd_col_perm: Some(perm)`.
+/// The numeric and triangular-solve phases consume the same permuted CSC;
+/// the inverse-permutation to original row/column order is performed by the
+/// solve path.
+///
+/// # Panics
+///
+/// Panics if `csc` is not square (same precondition as [`factor_symbolic`]).
+///
+/// # Examples
+///
+/// ```
+/// use leto_ops::application::sparse::{
+///     CooMatrix, factor_symbolic_with_ordering, OrderingStrategy, CscMatrix,
+/// };
+///
+/// // 3×3 identity under AMD: pattern is diagonal, no fill regardless of
+/// // ordering, and the returned permutation is a 3-permutation.
+/// let mut coo = CooMatrix::new(3, 3);
+/// for i in 0..3 {
+///     coo.push(i, i, 1.0_f64);
+/// }
+/// let csc = coo.to_csc();
+/// let symbolic = factor_symbolic_with_ordering(&csc, OrderingStrategy::Natural);
+/// assert_eq!(symbolic.n(), 3);
+/// assert_eq!(symbolic.u_nnz(), 3);
+/// assert_eq!(symbolic.l_nnz(), 0);
+/// assert!(symbolic.amd_col_perm.is_none(), "Natural yields no col perm");
+///
+/// let symbolic_amd = factor_symbolic_with_ordering(&csc, OrderingStrategy::AmdApproxMinDegree);
+/// assert_eq!(symbolic_amd.n(), 3);
+/// assert!(symbolic_amd.amd_col_perm.is_some(), "AMD yields a col perm");
+/// let perm = symbolic_amd.amd_col_perm.as_ref().expect("AMD yields a perm");
+/// assert_eq!(perm.len(), 3);
+/// ```
+#[must_use = "factor_symbolic_with_ordering carries the L/U pattern consumed by factor_numeric"]
+pub fn factor_symbolic_with_ordering<T: Scalar>(
+    csc: &CscMatrix<T>,
+    strategy: OrderingStrategy,
+) -> SymbolicLu {
+    match strategy {
+        OrderingStrategy::Natural => factor_symbolic(csc),
+        OrderingStrategy::AmdApproxMinDegree => {
+            let perm = amd_order(csc);
+            let permuted_csc = apply_symmetric_perm(csc, &perm);
+            let mut symbolic = factor_symbolic(&permuted_csc);
+            symbolic.amd_col_perm = Some(perm);
+            symbolic
+        }
+    }
+}
+
+/// Apply a symmetric permutation `A_perm[i, j] = A[perm[i], perm[j]]` and
+/// return the permuted CSC.
+///
+/// Internal helper for [`factor_symbolic_with_ordering`]; also exercised by
+/// the AMD tests. The implementation walks the CSC nonzeros and scatters to
+/// the inverse-permuted `(i, j)` slots through a COO intermediary, letting
+/// `CscMatrix::to_csc` handle the sort/dedupe.
+//
+// Note: applying the permutation via a COO intermediary is intentionally
+// explicit here rather than threaded into `factor_symbolic`'s body. Keeping
+// the permutation step out of the canonical symbolic walk preserves
+// `factor_symbolic` as the natural-ordering SSOT (the existing back-compat
+// invariant for consumers that already rely on it).
+pub(super) fn apply_symmetric_perm<T: Scalar>(csc: &CscMatrix<T>, perm: &[usize]) -> CscMatrix<T> {
+    let n = csc.nrows();
+    debug_assert_eq!(csc.ncols(), n);
+    debug_assert_eq!(perm.len(), n);
+    let mut inv = vec![0usize; n];
+    for (slot, &orig) in perm.iter().enumerate() {
+        inv[orig] = slot;
+    }
+
+    let col_ptr = csc.col_ptr();
+    let row_indices = csc.row_indices();
+    let values = csc.values();
+
+    let mut coo = super::CooMatrix::new(n, n);
+    for j in 0..n {
+        for p in col_ptr[j]..col_ptr[j + 1] {
+            let i = row_indices[p];
+            coo.push(inv[i], inv[j], values[p]);
+        }
+    }
+    coo.to_csc()
 }

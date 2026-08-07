@@ -125,11 +125,26 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
         rhs: &ArrayView1<'_, T>,
         out: &mut ArrayViewMut1<'_, T>,
     ) -> Result<()> {
+        let n = self.symbolic.n;
+        // If the symbolic carries an AMD column permutation, the solve
+        // path needs it for the final inverse-scatter. For the natural
+        // case `amd_col_perm` is `None` and we materialize an identity
+        // `[0, n)` slice; the matrix inverse-scatter collapses to the
+        // identity write.
+        let identity_perm_owned;
+        let col_perm: &[usize] = match &self.symbolic.amd_col_perm {
+            Some(p) => p,
+            None => {
+                identity_perm_owned = (0..n).collect::<Vec<_>>();
+                &identity_perm_owned
+            }
+        };
         triangular_solve_into(
             self.symbolic,
             &self.l_values,
             &self.u_values,
             &self.row_perm,
+            col_perm,
             rhs,
             out,
         )
@@ -145,17 +160,31 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
 
 /// Shared triangular-solve core: `y = P · rhs`, forward-substitute
 /// `L · z = y`, back-substitute `U · x = z`, scatter `x` back to original
-/// row order into `out`.
+/// row order into `out`, then apply the column permutation inverse if one
+/// was used during symbolic factorization.
 ///
 /// One implementation serves both the borrowing [`NumericLu`] and the
 /// owning `lu_sparse::OwnedNumericLu`; the storage convention (original-row
 /// indices in the symbolic patterns, slot mapping via the inverse
 /// permutation) is stated here once.
+///
+/// # Column-permutation contract
+///
+/// `col_perm: &[usize]` is the column-order permutation applied during
+/// symbolic factorization (`perm[i]` = the original column/row that ended
+/// up at slot `i` in `A_perm`). For natural ordering it is the identity
+/// `0..n`. For AMD under [`crate::application::sparse::amd::amd_order`]
+/// it is the AMD output, and `A_perm = A[perm, perm]` was the matrix
+/// actually factorized. The slot-order solution `x_slot` produced by the
+/// triangular solves satisfies `A_perm · x_slot = rhs_perm`; the original
+/// solution is `x[perm[i]] = x_slot[i]`, computed here as a final
+/// scatter that overwrites `out` in original order.
 pub(super) fn triangular_solve_into<T: RealScalar>(
     symbolic: &SymbolicLu,
     l_values: &[T],
     u_values: &[T],
     row_perm: &[usize],
+    col_perm: &[usize],
     rhs: &ArrayView1<'_, T>,
     out: &mut ArrayViewMut1<'_, T>,
 ) -> Result<()> {
@@ -238,11 +267,40 @@ pub(super) fn triangular_solve_into<T: RealScalar>(
         }
     }
 
-    // Step 4: Unscramble — x is in slot order; scatter back to original
-    // row order.  row_perm[slot] is the original row at that slot.
-    for (slot, &orig_row) in row_perm.iter().enumerate() {
-        *out.get_mut([orig_row])
-            .expect("invariant: orig_row < n and out length checked above") = x[slot];
+    // Step 4: Unscramble — x is in slot order; scatter back to the
+    // column-permuted row order. row_perm[slot] is the (column-permuted)
+    // original row at that slot, so `slot_x[row_perm[slot]] = x[slot]`
+    // yields the solution to `A_perm · x_perm = b_perm` in `A_perm`'s
+    // row/column order.
+    //
+    // If `col_perm` is the identity (natural ordering) this is the
+    // original row order and we're done — write directly into `out`.
+    // If `col_perm` is nontrivial (AMD), the natural row order here is
+    // `A_perm`'s row order; we compose through `col_perm` to scatter into
+    // the original `A`'s row order. The two cases share one write loop:
+    // the identity `col_perm` is the no-op of the AMD scatter.
+    let natural = col_perm.iter().enumerate().all(|(i, &p)| p == i);
+    if natural {
+        for (slot, &orig_row) in row_perm.iter().enumerate() {
+            *out.get_mut([orig_row])
+                .expect("invariant: orig_row < n and out length checked above") = x[slot];
+        }
+    } else {
+        // AMD path: first scatter to slot order (col_perm-frame row view),
+        // then compose to the original-row order through `col_perm`. We
+        // reuse `row_inv` to mark the slot for each col-permuted row,
+        // then map to the original row.
+        //
+        // slot_x[col_perm-slot-row] = x[slot]; we want `out[orig_row] = x[slot]`
+        // where orig_row is the original matrix row equivalent to the
+        // AMD-permuted row at `row_perm[slot]`. Under the symmetric AMD
+        // permutation `A_perm = A[perm, perm]`, AMD-row `r` corresponds to
+        // original row `perm[r]`. So `out[perm[row_perm[slot]]] = x[slot]`.
+        for (slot, &perm_row) in row_perm.iter().enumerate() {
+            let orig_row = col_perm[perm_row];
+            *out.get_mut([orig_row])
+                .expect("invariant: orig_row < n and out length checked above") = x[slot];
+        }
     }
     Ok(())
 }

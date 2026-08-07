@@ -53,7 +53,7 @@ use crate::application::linalg::lu::{lu_decompose, LuDecomposition};
 use crate::application::sparse::csc::CscMatrix;
 use crate::application::sparse::csr::CsrMatrix;
 use crate::application::sparse::lu_numeric::{factor_numeric, triangular_solve_into};
-use crate::application::sparse::lu_symbolic::{factor_symbolic, SymbolicLu};
+use crate::application::sparse::lu_symbolic::{factor_symbolic_with_ordering, SymbolicLu};
 use crate::domain::real::RealScalar;
 use leto::{Array1, Array2, ArrayView1, ArrayViewMut1, LetoError, Result};
 
@@ -80,6 +80,31 @@ pub const SMALL_SWITCH_DEFAULT: usize = 32;
 /// path is dispatched to avoid the sparse-path tax.
 pub const DENSITY_THRESHOLD_DEFAULT: f64 = 0.1;
 
+/// Fill-reducing column-ordering strategy for the sparse LU path.
+///
+/// ZST-equivalent `Copy` enum selected at the symbolic-analysis stage.
+/// Dispatch is by exhaustive match — no vtable, no per-strategy struct.
+/// Adding a new strategy is one enum variant and one match arm in
+/// [`factor_symbolic_with_ordering`]; see [`crate::application::sparse::amd`]
+/// for the AMD implementation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[must_use = "OrderingStrategy controls fill in the sparse LU pattern"]
+pub enum OrderingStrategy {
+    /// Natural column ordering (`0, 1, …, n-1`). Default; preserves the
+    /// existing [`factor_symbolic`] convention. The right choice when the
+    /// input is already banded or pivoting-free with small bandwidth —
+    /// CFDrs's saddle-point blocks.
+    #[default]
+    Natural,
+    /// Approximate Minimum Degree ordering (Amestoy-Davis-Duff 1996).
+    /// Computes a permutation `perm` ordering the columns (and rows,
+    /// symmetrically) by minimum current degree; the symbolic pattern is
+    /// computed on `A_perm = A[perm, perm]`, and the solve inverse-permutes
+    /// the result. Recommended for unstructured sparsity where AMD's
+    /// fill-reduction beats natural ordering (see ADR 0031).
+    AmdApproxMinDegree,
+}
+
 /// Configuration for the atlas-native sparse direct solver.
 ///
 /// Drop-in replacement for `rsparse`-based `DirectSparseSolver` in `CFDrs`; exposes
@@ -105,6 +130,12 @@ pub struct SparseLuSolver {
     /// dispatched regardless of `n`. Below this and above
     /// [`Self::small_switch`], the real sparse LU runs.
     pub density_threshold: f64,
+    /// Column-ordering strategy for the sparse LU path. Defaults to
+    /// [`OrderingStrategy::Natural`] (preserves all existing behavior);
+    /// [`OrderingStrategy::AmdApproxMinDegree`] applies a fill-reducing
+    /// symmetric permutation before symbolic factorization. The dense
+    /// dispatch path ignores this knob.
+    pub ordering: OrderingStrategy,
 }
 
 impl Default for SparseLuSolver {
@@ -114,6 +145,7 @@ impl Default for SparseLuSolver {
             pivot_tolerance: 1e-12,
             small_switch: SMALL_SWITCH_DEFAULT,
             density_threshold: DENSITY_THRESHOLD_DEFAULT,
+            ordering: OrderingStrategy::default(),
         }
     }
 }
@@ -186,14 +218,46 @@ impl SparseLuSolver {
     /// Real sparse LU path: CSR → CSC → symbolic → numeric → solve.
     /// Falls back to the dense path if partial pivoting is required (the
     /// symbolic L/U convention is only correct for pivoting-free factorizations).
+    ///
+    /// When `self.ordering` is [`OrderingStrategy::AmdApproxMinDegree`],
+    /// the column-ordering permutation is applied symmetrically to the
+    /// CSC before the symbolic phase runs; the numeric solve
+    /// inverse-permutes the result back to original row/column order.
     fn solve_sparse_path<T: RealScalar>(
         &self,
         matrix: &CsrMatrix<T>,
         rhs: &ArrayView1<'_, T>,
     ) -> Result<Array1<T>> {
         let csc = CscMatrix::from_csr(matrix);
-        let symbolic: SymbolicLu = factor_symbolic(&csc);
-        match factor_numeric(&csc, &symbolic, self.pivot_tolerance) {
+        let symbolic: SymbolicLu = factor_symbolic_with_ordering(&csc, self.ordering);
+        // The numeric phase must operate on the same matrix the symbolic
+        // was built for. For AMD that matrix is `A_perm = A[perm, perm]`,
+        // so we reapply the permutation here when applicable.
+        let factor_input = match &symbolic.amd_col_perm {
+            Some(perm) => {
+                let n = symbolic.n();
+                debug_assert_eq!(perm.len(), n);
+                let mut inv = vec![0usize; n];
+                for (slot, &orig) in perm.iter().enumerate() {
+                    inv[orig] = slot;
+                }
+                // Scatter A's nonzeros into permuted CSC.
+                let src_col_ptr = csc.col_ptr();
+                let src_row_indices = csc.row_indices();
+                let src_values = csc.values();
+                // Build a COO intermediate and dedupe via to_csc.
+                let mut coo = crate::application::sparse::CooMatrix::new(n, n);
+                for j in 0..n {
+                    for p in src_col_ptr[j]..src_col_ptr[j + 1] {
+                        let i = src_row_indices[p];
+                        coo.push(inv[i], inv[j], src_values[p]);
+                    }
+                }
+                coo.to_csc()
+            }
+            None => csc,
+        };
+        match factor_numeric(&factor_input, &symbolic, self.pivot_tolerance) {
             Ok(lu) => lu.solve(rhs),
             Err(LetoError::NumericalBreakdown(_)) => {
                 // Partial pivoting needed; fall back to the dense LU path.
@@ -315,8 +379,22 @@ impl SparseLuSolver {
         if self.use_dense_path(n, matrix.nnz()) {
             return Self::factor_dense(matrix);
         }
+        // If the caller's symbolic was produced under a column-ordering
+        // strategy, the numeric phase must operate on the same
+        // permuted matrix. Otherwise we fall back to the natural input.
         let csc = CscMatrix::from_csr(matrix);
-        match factor_numeric(&csc, symbolic, self.pivot_tolerance) {
+        let (factor_input, col_perm_owned): (CscMatrix<T>, Vec<usize>) =
+            match &symbolic.amd_col_perm {
+                Some(perm) => {
+                    let permuted = super::lu_symbolic::apply_symmetric_perm(&csc, perm);
+                    (permuted, perm.clone())
+                }
+                None => {
+                    let identity: Vec<usize> = (0..n).collect();
+                    (csc, identity)
+                }
+            };
+        match factor_numeric(&factor_input, symbolic, self.pivot_tolerance) {
             Ok(lu) => {
                 let (l_values, u_values, row_perm) = lu.into_parts();
                 Ok(OwnedNumericLu {
@@ -325,6 +403,7 @@ impl SparseLuSolver {
                         l_values,
                         u_values,
                         row_perm,
+                        col_perm: col_perm_owned,
                     },
                 })
             }
@@ -369,6 +448,12 @@ enum OwnedLuRepr<T: RealScalar> {
         l_values: Vec<T>,
         u_values: Vec<T>,
         row_perm: Vec<usize>,
+        /// Column-ordering permutation applied during symbolic
+        /// factorization. Length `n`; identity `[0, n)` for natural
+        /// ordering, AMD output for `OrderingStrategy::AmdApproxMinDegree`.
+        /// The triangular solve inverse-permutes the column-order
+        /// solution back to original row order via this vector.
+        col_perm: Vec<usize>,
     },
     Dense(LuDecomposition<T>),
 }
@@ -401,7 +486,8 @@ impl<T: RealScalar> OwnedNumericLu<T> {
                 l_values,
                 u_values,
                 row_perm,
-            } => triangular_solve_into(symbolic, l_values, u_values, row_perm, rhs, out),
+                col_perm,
+            } => triangular_solve_into(symbolic, l_values, u_values, row_perm, col_perm, rhs, out),
             OwnedLuRepr::Dense(lu) => lu.solve_into(rhs, out),
         }
     }
@@ -461,6 +547,7 @@ pub fn csr_to_dense<T: RealScalar>(matrix: &CsrMatrix<T>) -> Array2<T> {
 mod tests {
     use super::*;
     use crate::application::sparse::CooMatrix;
+    use crate::application::sparse::lu_symbolic::factor_symbolic;
 
     fn make_csr(nrows: usize, ncols: usize, triplets: &[(usize, usize, f64)]) -> CsrMatrix<f64> {
         let mut coo = CooMatrix::new(nrows, ncols);
@@ -552,6 +639,7 @@ mod tests {
             pivot_tolerance: 1e-12,
             small_switch: SMALL_SWITCH_DEFAULT,
             density_threshold: DENSITY_THRESHOLD_DEFAULT,
+            ordering: OrderingStrategy::default(),
         };
         let a = make_csr(
             5,
