@@ -71,14 +71,39 @@ fn inf_norm(a: &[f64]) -> f64 {
 /// share it: the caller computes `(f, ∇f)`, asks for a search [`direction`],
 /// runs its own line search, then records the resulting pair via [`push`].
 ///
+/// # Storage layout
+///
+/// Correction pairs are kept in two flat ring buffers (`s_buf`, `y_buf`) of
+/// capacity `memory * n` plus a parallel scalar ring `rho_buf` of capacity
+/// `memory`, addressed by a single `head` index modulo `memory`. This is the
+/// CSR-shaped form of the textbook sliding window: it removes the per-row
+/// allocation of `Vec<Vec<f64>>` and the O(m) `Vec::remove(0)` eviction of the
+/// naive FIFO, replacing both with a single in-place overwrite at the ring
+/// head. Two-loop traversal reads the ring in reverse insertion order, which
+/// is the order the recursion requires anyway.
+///
 /// [`direction`]: LbfgsMemory::direction
 /// [`push`]: LbfgsMemory::push
 #[derive(Debug, Clone)]
 pub struct LbfgsMemory {
+    /// Maximum number of correction pairs (`m`).
     memory: usize,
-    s_hist: Vec<Vec<f64>>,
-    y_hist: Vec<Vec<f64>>,
-    rho_hist: Vec<f64>,
+    /// Problem dimension `n` for stored pairs; recorded on the first [`push`]
+    /// and enforced to match on subsequent pushes. `None` until the first pair.
+    dim: Option<usize>,
+    /// Flat ring buffer for `s` correction vectors, capacity `memory * n`.
+    s_buf: Vec<f64>,
+    /// Flat ring buffer for `y` correction vectors, capacity `memory * n`.
+    y_buf: Vec<f64>,
+    /// Parallel scalar ring buffer for the `rho = 1/(sᵀy)` history,
+    /// capacity `memory`.
+    rho_buf: Vec<f64>,
+    /// Index of the next write slot in `[0, memory)`; oldest pair lives at
+    /// `head` when the ring is full.
+    head: usize,
+    /// Number of populated pairs in `[0, memory]`; once it reaches `memory`,
+    /// every [`push`] evicts the oldest by overwriting `head`.
+    len: usize,
 }
 
 impl LbfgsMemory {
@@ -87,22 +112,59 @@ impl LbfgsMemory {
     pub fn new(memory: usize) -> Self {
         Self {
             memory: memory.max(1),
-            s_hist: Vec::with_capacity(memory),
-            y_hist: Vec::with_capacity(memory),
-            rho_hist: Vec::with_capacity(memory),
+            dim: None,
+            s_buf: Vec::new(),
+            y_buf: Vec::new(),
+            rho_buf: Vec::new(),
+            head: 0,
+            len: 0,
         }
     }
 
     /// Number of stored correction pairs.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.s_hist.len()
+        self.len
     }
 
     /// Whether no correction pairs are stored yet (first iteration).
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.s_hist.is_empty()
+        self.len == 0
+    }
+
+    /// Slice into the flat ring buffer for the `s` vector at logical
+    /// insertion-pair index `i` (`0` == newest, `len - 1` == oldest).
+    ///
+    /// Insertion order walks the ring backward from `head`, so the vector that
+    /// was pushed most recently lives one slot *behind* `head` (modulo
+    /// `memory`), and the oldest surviving pair lives *at* `head` when the ring
+    /// is full.
+    #[inline]
+    fn pair_slot(&self, i: usize) -> usize {
+        // `i = 0` is newest: one step behind the write `head`.
+        // `i = len - 1` is oldest: at `head` when the ring is full, or at the
+        // first slot when the ring has not yet wrapped.
+        debug_assert!(i < self.len, "pair index {i} out of range len={}", self.len);
+        (self.head + self.memory - 1 - i) % self.memory
+    }
+
+    /// `n`-element `&[f64]` view of the `s` vector at logical insertion-pair
+    /// index `i` (`0` == newest).
+    #[inline]
+    fn s_row(&self, i: usize) -> &[f64] {
+        let n = self.dim.expect("direction() called before any push()");
+        let slot = self.pair_slot(i);
+        &self.s_buf[slot * n..(slot + 1) * n]
+    }
+
+    /// `n`-element `&[f64]` view of the `y` vector at logical insertion-pair
+    /// index `i` (`0` == newest).
+    #[inline]
+    fn y_row(&self, i: usize) -> &[f64] {
+        let n = self.dim.expect("direction() called before any push()");
+        let slot = self.pair_slot(i);
+        &self.y_buf[slot * n..(slot + 1) * n]
     }
 
     /// Descent direction `d = −H·g` from the two-loop recursion, where `H` is
@@ -113,39 +175,67 @@ impl LbfgsMemory {
     /// (Nocedal & Wright, Alg. 7.4).
     #[must_use]
     pub fn direction(&self, g: &[f64]) -> Vec<f64> {
-        let k = self.s_hist.len();
+        let k = self.len;
+        if k == 0 {
+            return g.iter().map(|&gi| -gi).collect();
+        }
+        let n = self
+            .dim
+            .expect("invariant: len > 0 implies dim was recorded on first push");
+        // The caller may pass a gradient whose length differs from `n` after a
+        // hot-restart against a re-dimensioned problem; that is a contract
+        // violation (the recorded `s/y` history is meaningless for a different
+        // `n`), so reject it with the same shape contract as a fresh memory.
+        assert_eq! {
+            g.len(),
+            n,
+            "LbfgsMemory::direction: gradient length {} != stored dim {n}",
+            g.len()
+        };
         let mut q = g.to_vec();
         let mut alpha = vec![0.0_f64; k];
-        for i in (0..k).rev() {
-            let a = self.rho_hist[i] * dot(&self.s_hist[i], &q);
+        // Two-loop recursion (Nocedal & Wright, Alg. 7.5). The ring's logical
+        // index `i` runs newest (`i = 0`, one step behind `head`) to oldest
+        // (`i = k - 1`, at `head` when full). The first pass walks
+        // newest→oldest computing α; the second pass walks oldest→newest
+        // accumulating the search direction — mirror the textbook index order
+        // by reversing the loop range, not the ring indexing.
+        //
+        // "i" indexes the logical ring position (`s_row`/`y_row`/`pair_slot` all
+        // resolve the slot from it) and `alpha` in lockstep; enumerate over
+        // `alpha` would lose the logical-index contract, so each loop is a
+        // genuine range loop, not an `iter().enumerate()` candidate.
+        #[expect(
+            clippy::needless_range_loop,
+            reason = "i is the logical ring index for s_row/y_row/pair_slot, not just alpha position"
+        )]
+        for i in 0..k {
+            let s_i = self.s_row(i);
+            let y_i = self.y_row(i);
+            let rho_i = self.rho_buf[self.pair_slot(i)];
+            let a = rho_i * dot(s_i, &q);
             alpha[i] = a;
             q.iter_mut()
-                .zip(&self.y_hist[i])
+                .zip(y_i.iter())
                 .for_each(|(qj, &yj)| *qj -= a * yj);
         }
-        let gamma = if k > 0 {
-            let last = k - 1;
-            let sy = dot(&self.s_hist[last], &self.y_hist[last]);
-            let yy = dot(&self.y_hist[last], &self.y_hist[last]);
-            if yy > 0.0 {
-                sy / yy
-            } else {
-                1.0
-            }
-        } else {
-            1.0
-        };
+        // γ uses the newest pair, which is logical index 0 (one step behind head).
+        let s_newest = self.s_row(0);
+        let y_newest = self.y_row(0);
+        let sy = dot(s_newest, y_newest);
+        let yy = dot(y_newest, y_newest);
+        let gamma = if yy > 0.0 { sy / yy } else { 1.0 };
         let mut r: Vec<f64> = q.iter().map(|&qi| gamma * qi).collect();
-        for (((s_i, y_i), &rho_i), &alpha_i) in self
-            .s_hist
-            .iter()
-            .zip(&self.y_hist)
-            .zip(&self.rho_hist)
-            .zip(&alpha)
-        {
+        // Walk oldest (i = k-1) → newest (i = 0) by reversing the range.
+        for i in (0..k).rev() {
+            let s_i = self.s_row(i);
+            let y_i = self.y_row(i);
+            let rho_i = self.rho_buf[self.pair_slot(i)];
             let beta = rho_i * dot(y_i, &r);
-            let coef = alpha_i - beta;
-            r.iter_mut().zip(s_i).for_each(|(rj, &sj)| *rj += coef * sj);
+            let coef = alpha[i] - beta;
+            r.iter_mut()
+                .zip(s_i.iter())
+                .for_each(|(rj, &sj)| *rj += coef * sj);
         }
         r.iter().map(|&ri| -ri).collect()
     }
@@ -154,19 +244,44 @@ impl LbfgsMemory {
     /// stored only if the curvature condition `sᵀy > 1e-12` holds (skipping
     /// preserves positive-definiteness of the implicit inverse-Hessian); returns
     /// whether it was stored.
+    ///
+    /// The pair overwrites the slot at the current ring `head` in place — no
+    /// `Vec::remove(0)` and no per-vector realloc — and then advances `head`
+    /// modulo `memory`, so a full ring evicts by overwriting rather than by
+    /// shifting. Both vectors must share the same length; the dimension is
+    /// recorded on the first accepted push and enforced on every later one.
     pub fn push(&mut self, s: Vec<f64>, y: Vec<f64>) -> bool {
+        let n = s.len();
+        if n == 0 || n != y.len() {
+            return false;
+        }
         let sy = dot(&s, &y);
         if sy <= 1e-12 {
             return false;
         }
-        if self.s_hist.len() == self.memory {
-            self.s_hist.remove(0);
-            self.y_hist.remove(0);
-            self.rho_hist.remove(0);
+        match self.dim {
+            None => {
+                // First accepted pair: allocate the ring buffers at full capacity.
+                self.dim = Some(n);
+                self.s_buf = vec![0.0_f64; self.memory * n];
+                self.y_buf = vec![0.0_f64; self.memory * n];
+                self.rho_buf = vec![0.0_f64; self.memory];
+            }
+            Some(recorded) => {
+                debug_assert_eq!(
+                    recorded, n,
+                    "LbfgsMemory::push: pair length {n} != stored dim {recorded}"
+                );
+            }
         }
-        self.rho_hist.push(1.0 / sy);
-        self.s_hist.push(s);
-        self.y_hist.push(y);
+        let slot = self.head;
+        self.s_buf[slot * n..(slot + 1) * n].copy_from_slice(&s);
+        self.y_buf[slot * n..(slot + 1) * n].copy_from_slice(&y);
+        self.rho_buf[slot] = 1.0 / sy;
+        self.head = (self.head + 1) % self.memory;
+        if self.len < self.memory {
+            self.len += 1;
+        }
         true
     }
 }
@@ -326,5 +441,115 @@ mod tests {
         let res = minimize(vec![0.0, 0.0, 0.0], f, grad, LbfgsConfig::default());
         assert!(res.converged);
         assert_eq!(res.iterations, 0);
+    }
+
+    /// The ring evicts in strict insertion order: a `push` past `memory` is
+    /// the only case where the conversion changed externally observable
+    /// behavior (the old `Vec::remove(0)` shifted everything, the new ring
+    /// overwrites the slot).
+    ///
+    /// Sanity floor: after deliberately filling the ring past capacity, the
+    /// stored history length saturates at `memory` (LinkedIn-style eviction).
+    #[test]
+    fn ring_evicts_oldest_at_capacity() {
+        let mut mem = LbfgsMemory::new(3);
+        for k in 1..=7u32 {
+            let s = vec![k as f64, 0.0];
+            // any `y` with sᵀy > 1e-12; here `y = s` for simplicity.
+            let y = s.clone();
+            assert!(mem.push(s, y), "pair {k} should be accepted (curvature ok)");
+        }
+        assert_eq!(mem.len(), 3, "ring should saturate at capacity 3");
+    }
+
+    /// Reproducible regression test for the two-loop recursion over a wrapped
+    /// ring: rotate the correction pairs, then verify the `direction` agrees
+    /// with an independent textbook implementation that indexes history by
+    /// logical insertion order (newest == index 0). This is the
+    /// reduction-order-sensitive oracle the migration has to preserve (the
+    /// diff against the pre-conversion history-order reference).
+    #[test]
+    fn direction_preserves_two_loop_after_wrap() {
+        // Reference (jagged) implementation, written independently of the
+        // internal storage so its correctness stands on its own.
+        fn reference_inverse_dot(
+            s_hist: &[Vec<f64>],
+            y_hist: &[Vec<f64>],
+            rho_hist: &[f64],
+            g: &[f64],
+        ) -> Vec<f64> {
+            let k = s_hist.len();
+            if k == 0 {
+                return g.iter().map(|&gi| -gi).collect();
+            }
+            let mut q = g.to_vec();
+            let mut alpha = vec![0.0_f64; k];
+            // Two-loop recursion: walk newest → oldest.
+            for i in (0..k).rev() {
+                let a = rho_hist[i] * dot(&s_hist[i], &q);
+                alpha[i] = a;
+                q.iter_mut()
+                    .zip(&y_hist[i])
+                    .for_each(|(qj, &yj)| *qj -= a * yj);
+            }
+            let s_newest = &s_hist[k - 1];
+            let y_newest = &y_hist[k - 1];
+            let sy = dot(s_newest, y_newest);
+            let yy = dot(y_newest, y_newest);
+            let gamma = if yy > 0.0 { sy / yy } else { 1.0 };
+            let mut r: Vec<f64> = q.iter().map(|&qi| gamma * qi).collect();
+            for i in 0..k {
+                let s_i = &s_hist[i];
+                let y_i = &y_hist[i];
+                let beta = rho_hist[i] * dot(y_i, &r);
+                let coef = alpha[i] - beta;
+                r.iter_mut()
+                    .zip(s_i.iter())
+                    .for_each(|(rj, &sj)| *rj += coef * sj);
+            }
+            r.iter().map(|&ri| -ri).collect()
+        }
+
+        // Build a small ring big enough to wrap, then push more pairs than
+        // capacity to cross a couple of boundaries.
+        let mut mem = LbfgsMemory::new(2);
+        let pushed: Vec<(Vec<f64>, Vec<f64>)> = (1u32..=4)
+            .map(|k| {
+                let s = vec![k as f64, 2.0 * k as f64];
+                let y = vec![1.0 + k as f64 / 4.0, 0.5];
+                (s, y)
+            })
+            .collect();
+        // Build the canonical jagged history the reference expects *after*
+        // FIFO eviction: index 0 == oldest surviving pair, index k-1 == newest,
+        // exactly the convention `reference_inverse_dot` (textbook Nocedal &
+        // Wright Alg. 7.5) indexes against. The ring evicted pairs 1 and 2; the
+        // survivors are 3 (oldest) and 4 (newest), kept in age order.
+        let mut s_ref: Vec<Vec<f64>> = Vec::new();
+        let mut y_ref: Vec<Vec<f64>> = Vec::new();
+        let mut rho_ref: Vec<f64> = Vec::new();
+        for (s, y) in pushed.iter().skip(pushed.len() - 2) {
+            let sy = dot(s, y);
+            s_ref.push(s.clone());
+            y_ref.push(y.clone());
+            rho_ref.push(1.0 / sy);
+        }
+        // sanity floor for the reference construction.
+        assert_eq!(s_ref.len(), 2);
+        // Push pairs into the ring; let it wrap.
+        for (s, y) in &pushed {
+            assert!(mem.push(s.clone(), y.clone()));
+        }
+        assert_eq!(mem.len(), 2, "ring should saturate at capacity 2");
+        let g = vec![0.3, -0.7];
+        let got = mem.direction(&g);
+        let want = reference_inverse_dot(&s_ref, &y_ref, &rho_ref, &g);
+        assert_eq!(got.len(), want.len());
+        for (i, (g_, w_)) in got.iter().zip(want.iter()).enumerate() {
+            assert!(
+                (g_ - w_).abs() <= 1e-12,
+                "direction[{i}] = {g_}, reference {w_}"
+            );
+        }
     }
 }
