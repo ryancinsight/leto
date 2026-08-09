@@ -19,13 +19,13 @@ repository = "https://github.com/ryancinsight/leto.git"
 leto = { version = "0.41.0", path = "crates/leto" }
 leto-ops = { version = "0.41.0", path = "crates/leto-ops" }
 
-# ── Systems and Parallelization (local path for migration) ──
-mnemosyne = { path = "../mnemosyne/crates/mnemosyne", package = "mnemosyne-memory", features = ["eunomia"] }
-moirai = { path = "../moirai/moirai", package = "moirai-runtime", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
-hermes-simd = { path = "../hermes/crates/hermes-simd" }
-eunomia = { path = "../eunomia/crates/eunomia", package = "eunomia", default-features = false }
-aequitas = { path = "../aequitas", package = "aequitas", default-features = false }
-themis = { path = "../themis", package = "themis-topology", default-features = false }
+# ── Systems and Parallelization ──
+mnemosyne = { package = "mnemosyne-memory", version = "0.6.0", git = "https://github.com/ryancinsight/Mnemosyne", features = ["eunomia"] }
+moirai = { package = "moirai-runtime", version = "0.4.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+hermes-simd = { version = "0.5.0", git = "https://github.com/ryancinsight/hermes.git" }
+eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
+aequitas = { package = "aequitas", version = "0.1.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
+themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
 bytemuck = { version = "1.25", features = ["derive"] }
