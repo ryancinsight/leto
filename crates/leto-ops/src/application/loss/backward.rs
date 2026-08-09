@@ -1,5 +1,5 @@
-use super::validation::validate_backward;
 use super::CrossEntropyResult;
+use super::validation::validate_backward;
 use crate::domain::real::RealScalar;
 use eunomia::{NumericElement, RealField};
 use leto::{ArrayView, ArrayViewMut};

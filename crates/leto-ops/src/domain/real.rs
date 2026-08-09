@@ -1,5 +1,5 @@
 use crate::domain::scalar::Scalar;
-use eunomia::{Bf16, FloatElement, NumericElement, UnitScalar, F16};
+use eunomia::{Bf16, F16, FloatElement, NumericElement, UnitScalar};
 
 /// Floating-point scalars that provide the real math surface required by Leto
 /// operations.
@@ -28,11 +28,7 @@ pub trait RealScalar: Scalar + FloatElement + UnitScalar + core::ops::Neg<Output
     fn abs_max_slice(s: &[Self]) -> Self {
         s.iter().fold(<Self as NumericElement>::ZERO, |acc, &x| {
             let magnitude = <Self as NumericElement>::abs(x);
-            if magnitude > acc {
-                magnitude
-            } else {
-                acc
-            }
+            if magnitude > acc { magnitude } else { acc }
         })
     }
 }
@@ -60,11 +56,7 @@ macro_rules! impl_real_simd {
                 } else {
                     s.iter().fold(<Self as NumericElement>::ZERO, |acc, &x| {
                         let magnitude = <Self as NumericElement>::abs(x);
-                        if magnitude > acc {
-                            magnitude
-                        } else {
-                            acc
-                        }
+                        if magnitude > acc { magnitude } else { acc }
                     })
                 }
             }

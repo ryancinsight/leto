@@ -17,11 +17,7 @@ const TWO_PI: f64 = 2.0 * PI;
 #[inline]
 pub fn wrap_to_pi(theta: f64) -> f64 {
     let r = theta.rem_euclid(TWO_PI);
-    if r > PI {
-        r - TWO_PI
-    } else {
-        r
-    }
+    if r > PI { r - TWO_PI } else { r }
 }
 
 #[cfg(test)]

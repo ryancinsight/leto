@@ -17,12 +17,12 @@
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
+    BidiagonalDecomposition, BunchKaufmanDecomposition, CholeskyDecomposition,
+    ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition,
+    QrDecomposition, RealSchur, SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
     bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu,
     hessenberg, lu_decompose, qr_decompose, schur, svd_decompose, svd_rank_revealing,
-    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition,
-    BunchKaufmanDecomposition, CholeskyDecomposition, ColPivQrDecomposition,
-    FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition, QrDecomposition, RealSchur,
-    SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
+    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose,
 };
 use crate::{
     det as det_kernel, inv as inv_kernel, kron as kron_kernel, matexp as matexp_kernel,

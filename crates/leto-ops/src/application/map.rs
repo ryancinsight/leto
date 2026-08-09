@@ -1,5 +1,5 @@
 use crate::application::index::{
-    line_elements, unit_stride_row_slice, RowMajorTraversal, TileGeometry,
+    RowMajorTraversal, TileGeometry, line_elements, unit_stride_row_slice,
 };
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};

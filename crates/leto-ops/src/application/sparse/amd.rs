@@ -233,8 +233,8 @@ fn insert_sorted(sorted: &mut Vec<usize>, value: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::sparse::lu_symbolic::apply_symmetric_perm;
     use crate::application::sparse::CooMatrix;
+    use crate::application::sparse::lu_symbolic::apply_symmetric_perm;
 
     /// 2-D 5-point Poisson stencil on a `k × k` grid flattened to
     /// `n = k²`. Symmetric SPD: diagonal = 4, off-diagonal = −1 at the

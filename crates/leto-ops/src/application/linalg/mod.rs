@@ -56,48 +56,48 @@ pub mod svd;
 /// Symmetric indefinite unpivoted `U D Uᵀ` factorization.
 pub mod udu;
 
-pub use bidiagonal::{bidiagonalize, BidiagonalDecomposition};
-pub use bunch_kaufman::{bunch_kaufman, BunchKaufmanDecomposition};
+pub use bidiagonal::{BidiagonalDecomposition, bidiagonalize};
+pub use bunch_kaufman::{BunchKaufmanDecomposition, bunch_kaufman};
 pub use cholesky::{
-    cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, CholeskyDecomposition,
+    CholeskyDecomposition, cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve,
 };
-pub use col_piv_qr::{col_piv_qr, ColPivQrDecomposition};
+pub use col_piv_qr::{ColPivQrDecomposition, col_piv_qr};
 pub use eigen::SymmetricEigenDecomposition;
 pub use eigen::{
     symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
     symmetric_eigenvalues_jacobi_with_tolerance,
 };
 pub use eigenvalues::eigenvalues;
-pub use full_piv_lu::{full_piv_lu, FullPivLuDecomposition};
-pub use hessenberg::{hessenberg, HessenbergDecomposition};
-pub use lu::{det, inv, lu_decompose, solve, LuDecomposition};
+pub use full_piv_lu::{FullPivLuDecomposition, full_piv_lu};
+pub use hessenberg::{HessenbergDecomposition, hessenberg};
+pub use lu::{LuDecomposition, det, inv, lu_decompose, solve};
 pub use lu_batch::lu_batch;
 pub use matrix::{
     AsMatrixView, MatrixDecompose, MatrixFunction, MatrixNorm, MatrixProduct, MatrixProperties,
     MatrixSolve,
 };
 pub use matrix_function::{matexp, matpow};
-pub use nnls::{nnls, NnlsConfig, NnlsResult};
+pub use nnls::{NnlsConfig, NnlsResult, nnls};
 pub use norms::{
-    l2_normalize, l2_normalize_into, norm, norm_l1, norm_l2, norm_max, NormKind, NormL1, NormL2,
-    NormMax,
+    NormKind, NormL1, NormL2, NormMax, l2_normalize, l2_normalize_into, norm, norm_l1, norm_l2,
+    norm_max,
 };
 pub use products::kron;
 pub use properties::{matrix_rank, matrix_rank_with_tolerance, trace};
-pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};
-pub use schur::{schur, RealSchur};
+pub use qr::{QrDecomposition, qr_decompose, solve_least_squares};
+pub use schur::{RealSchur, schur};
 pub use svd::{
-    pinv, singular_values, svd_decompose, svd_decompose_with_tolerance, svd_rank_revealing,
-    svd_rank_revealing_with_tolerance, svd_via_bidiagonal, SvdDecomposition,
+    SvdDecomposition, pinv, singular_values, svd_decompose, svd_decompose_with_tolerance,
+    svd_rank_revealing, svd_rank_revealing_with_tolerance, svd_via_bidiagonal,
 };
-pub use udu::{udu_decompose, UduDecomposition};
+pub use udu::{UduDecomposition, udu_decompose};
 
 /// Iterative solvers (SSOT re-export).
 pub use iterative::{
-    BiCGSTAB, Configurable, ConjugateGradient, ConvergenceMonitor, ILUPreconditioner,
+    BiCGSTAB, Configurable, ConjugateGradient, ConvergenceMonitor, GMRES, ILUPreconditioner,
     IdentityPreconditioner, IterativeLinearSolver, IterativeSolverConfig, JacobiPreconditioner,
     LinearOperator, LinearSolver, LsqrConfig, LsqrResult, LsqrSolver, LsqrStopReason,
-    Preconditioner, SORPreconditioner, SSORPreconditioner, GMRES,
+    Preconditioner, SORPreconditioner, SSORPreconditioner,
 };
 
 /// Complex linear algebra (re-export).
@@ -105,5 +105,5 @@ pub use complex_linalg::{complex_inv, complex_solve};
 
 /// Hermitian eigensolvers (re-export).
 pub use hermitian::{
-    hermitian_eigen_jacobi, hermitian_eigen_qr, HermitianEigenConfig, HermitianEigenResult,
+    HermitianEigenConfig, HermitianEigenResult, hermitian_eigen_jacobi, hermitian_eigen_qr,
 };

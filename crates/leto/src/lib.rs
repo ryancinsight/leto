@@ -45,7 +45,7 @@ pub use application::{
     concat, covariance, mean_all, mean_axis, median_all, median_axis, pad, pearson_correlation,
     quantile_all, quantile_axis, split, stack, sum_all, sum_axis, Array1, Array2, Array3, Array4,
     ArrayD, ArrayView1, ArrayView2, ArrayView3, ArrayView4, ArrayViewMut1, ArrayViewMut2,
-    ArrayViewMut3, ArrayViewMut4, AxisChunks, AxisIter, AxisIterMut, ElementIter, ExactChunks,
-    FixedMatrix, FixedVector, IndexedIter, IndexedIterMut, Interpolation, Lanes, LanesMut,
-    LendingIterator, PadWidth, ScalarOperand, Tiles, Windows,
+    ArrayViewMut3, ArrayViewMut4, AxisChunks, AxisIter, AxisIterMut, ElementIter, ElementIterMut,
+    ExactChunks, FixedMatrix, FixedVector, IndexedIter, IndexedIterMut, Interpolation, Lanes,
+    LanesMut, LendingIterator, PadWidth, ScalarOperand, Tiles, Windows,
 };

@@ -1,4 +1,4 @@
-use crate::application::index::{line_elements, RowMajorTraversal, TileGeometry};
+use crate::application::index::{RowMajorTraversal, TileGeometry, line_elements};
 use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 

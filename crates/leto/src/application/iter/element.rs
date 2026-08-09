@@ -8,9 +8,11 @@
 //! [`ExactSizeIterator`] and [`DoubleEndedIterator`]; the two ends share one
 //! `[front, back)` cursor so forward and backward consumption meet exactly once.
 
+use crate::application::array::Array;
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
+use crate::infrastructure::storage::Storage;
 
 #[inline]
 fn odometer_step<const N: usize>(
@@ -377,6 +379,48 @@ impl<'a, T, const N: usize> DoubleEndedIterator for IndexedIterMut<'a, T, N> {
 
 impl<'a, T, const N: usize> ExactSizeIterator for IndexedIterMut<'a, T, N> {}
 
+/// Fallible mutable iterator over logical row-major elements of a view.
+///
+/// Construction validates storage reachability and logical-offset injectivity
+/// before any mutable reference can escape. This makes arbitrary positive and
+/// negative strides safe while rejecting zero-stride or otherwise aliased
+/// layouts. Construct through [`ArrayViewMut::try_iter_mut`] or
+/// [`Array::try_iter_mut`].
+pub struct ElementIterMut<'a, T, const N: usize> {
+    inner: IndexedIterMut<'a, T, N>,
+}
+
+impl<'a, T, const N: usize> ElementIterMut<'a, T, N> {
+    /// Build a plain mutable iterator from an already validated indexed iterator.
+    #[inline]
+    pub(crate) fn from_indexed(inner: IndexedIterMut<'a, T, N>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'a, T, const N: usize> Iterator for ElementIterMut<'a, T, N> {
+    type Item = &'a mut T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(_, value)| value)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl<'a, T, const N: usize> DoubleEndedIterator for ElementIterMut<'a, T, N> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|(_, value)| value)
+    }
+}
+
+impl<'a, T, const N: usize> ExactSizeIterator for ElementIterMut<'a, T, N> {}
+
 /// `for elem in &view` iterates the view's elements in logical row-major order.
 impl<'a, T, const N: usize> IntoIterator for &ArrayView<'a, T, N> {
     type Item = &'a T;
@@ -385,5 +429,38 @@ impl<'a, T, const N: usize> IntoIterator for &ArrayView<'a, T, N> {
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+/// `for elem in &array` iterates an owned array in logical row-major order.
+///
+/// The iterator preserves the array's arbitrary strides and does not require a
+/// contiguous copy. Mutable iteration intentionally remains fallible through
+/// [`Array::indexed_iter_mut`](crate::application::array::Array::indexed_iter_mut),
+/// because an infallible `IntoIterator<Item = &mut T>` implementation could not
+/// report rejection of zero-stride aliasing layouts.
+impl<'a, T, S, const N: usize> IntoIterator for &'a Array<T, S, N>
+where
+    S: Storage<T>,
+{
+    type Item = &'a T;
+    type IntoIter = ElementIter<'a, T, N>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.view().iter()
+    }
+}
+
+/// `for elem in &mutable_view` provides a read-only traversal without exposing
+/// mutable aliases. Use [`ArrayViewMut::indexed_iter_mut`] for validated mutable
+/// traversal.
+impl<'a, T, const N: usize> IntoIterator for &'a ArrayViewMut<'_, T, N> {
+    type Item = &'a T;
+    type IntoIter = ElementIter<'a, T, N>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_view().iter()
     }
 }

@@ -49,11 +49,11 @@
 //! (`LetoError::ShapeMismatch`, `LetoError::StorageError`) so consumers'
 //! error-handling is unchanged.
 
-use crate::application::linalg::lu::{lu_decompose, LuDecomposition};
+use crate::application::linalg::lu::{LuDecomposition, lu_decompose};
 use crate::application::sparse::csc::CscMatrix;
 use crate::application::sparse::csr::CsrMatrix;
 use crate::application::sparse::lu_numeric::{factor_numeric, triangular_solve_into};
-use crate::application::sparse::lu_symbolic::{factor_symbolic_with_ordering, SymbolicLu};
+use crate::application::sparse::lu_symbolic::{SymbolicLu, factor_symbolic_with_ordering};
 use crate::domain::real::RealScalar;
 use leto::{Array1, Array2, ArrayView1, ArrayViewMut1, LetoError, Result};
 

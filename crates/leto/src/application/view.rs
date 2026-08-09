@@ -1,6 +1,6 @@
 use crate::application::array::Array;
 use crate::application::iter::{
-    AxisChunks, ElementIter, ExactChunks, IndexedIter, IndexedIterMut, Windows,
+    AxisChunks, ElementIter, ElementIterMut, ExactChunks, IndexedIter, IndexedIterMut, Windows,
 };
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -438,6 +438,16 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn indexed_iter_mut(self) -> Result<IndexedIterMut<'a, T, N>> {
         IndexedIterMut::new(self)
+    }
+
+    /// Iterator over mutable elements in logical row-major order.
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] if the layout is out of bounds or cannot prove
+    /// that each logical index addresses a distinct physical element.
+    #[inline]
+    pub fn try_iter_mut(self) -> Result<ElementIterMut<'a, T, N>> {
+        Ok(ElementIterMut::from_indexed(self.indexed_iter_mut()?))
     }
 
     /// Consume the view and return the backing mutable slice with lifetime `'a`.

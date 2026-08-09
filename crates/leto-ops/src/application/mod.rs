@@ -49,44 +49,44 @@ pub mod vector;
 pub mod zip;
 
 pub use linalg::{
-    cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve, det, inv, kron, l2_normalize,
-    l2_normalize_into, lu_decompose, matrix_rank, matrix_rank_with_tolerance, norm, norm_l1,
-    norm_l2, norm_max, qr_decompose, solve, solve_least_squares, symmetric_eigen_jacobi,
+    CholeskyDecomposition, LuDecomposition, MatrixProduct, MatrixProperties, NormKind, NormL1,
+    NormL2, NormMax, QrDecomposition, SymmetricEigenDecomposition, cholesky_decompose,
+    cholesky_det, cholesky_inv, cholesky_solve, det, inv, kron, l2_normalize, l2_normalize_into,
+    lu_decompose, matrix_rank, matrix_rank_with_tolerance, norm, norm_l1, norm_l2, norm_max,
+    qr_decompose, solve, solve_least_squares, symmetric_eigen_jacobi,
     symmetric_eigen_jacobi_with_tolerance, symmetric_eigenvalues_jacobi,
-    symmetric_eigenvalues_jacobi_with_tolerance, trace, CholeskyDecomposition, LuDecomposition,
-    MatrixProduct, MatrixProperties, NormKind, NormL1, NormL2, NormMax, QrDecomposition,
-    SymmetricEigenDecomposition,
+    symmetric_eigenvalues_jacobi_with_tolerance, trace,
 };
 pub use map::{
-    add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp, EqOp,
-    GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
+    AddOp, BinaryOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp, add, binary_map, div,
+    mul, scalar_map, scalar_map_into, sub, sum,
 };
 pub use matrix::{batched_matmul, matmul};
-pub use optimization::{minimize, LbfgsConfig, LbfgsMemory, LbfgsResult};
+pub use optimization::{LbfgsConfig, LbfgsMemory, LbfgsResult, minimize};
 pub use random::{
     normal_with_seed, normal_with_seed_into, uniform_with_seed, uniform_with_seed_into,
 };
 pub use reduction::{
-    max, max_axis, max_axis_into, mean_axis, mean_axis_into, min, min_axis, min_axis_into,
-    product_axis, product_axis_into, reduce_all, reduce_axis, reduce_axis_into, sum_axis,
-    sum_axis_into, AxisReduction, MaxAxis, MeanAxis, MinAxis, ProductAxis, SumAxis,
+    AxisReduction, MaxAxis, MeanAxis, MinAxis, ProductAxis, SumAxis, max, max_axis, max_axis_into,
+    mean_axis, mean_axis_into, min, min_axis, min_axis_into, product_axis, product_axis_into,
+    reduce_all, reduce_axis, reduce_axis_into, sum_axis, sum_axis_into,
 };
 pub use scan::{
-    cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
+    CumProdOp, CumSumOp, ScanDirection, ScanOp, cumsum, cumsum_into, scan_axis, scan_axis_into,
 };
-pub use sparse::{spgemm, spmm, spmm_into, spmv, spmv_into, CsrMatrix};
+pub use sparse::{CsrMatrix, spgemm, spmm, spmm_into, spmv, spmv_into};
 pub use statistics::{
     normalized_rmse, nrmse, pearson, percentile_range, phase_error_degrees_for_correlation,
     phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,
 };
 pub use stencil::laplacian_2d_into;
 pub use unary::{
-    map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ExpOp, LnOp, NegOp,
-    PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
+    AbsOp, CosOp, ExpOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp, map, map_inplace,
+    map_into, mapv, unary_map, unary_map_into,
 };
 pub use vector::dot;
 pub use zip::{
-    coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold,
-    indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip_mut_with,
-    zip_fold, zip_mut_with, CoordinateMapPlan, IndexedZipMutOutputs, ZipMutOutputs, ZipSources,
+    CoordinateMapPlan, IndexedZipMutOutputs, ZipMutOutputs, ZipSources, coordinate_map_inplace,
+    coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold, indexed_fold_fortran,
+    indexed_map_inplace, indexed_map4_inplace, indexed_zip_mut_with, zip_fold, zip_mut_with,
 };

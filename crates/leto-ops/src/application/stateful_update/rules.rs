@@ -5,7 +5,7 @@ use super::parameters::{
     AdaGradParameters, AdamParameters, AdamWParameters, RmsPropParameters, SgdParameters,
 };
 use super::validation::{validate_one, validate_two};
-use crate::{zip_mut_with, RealScalar};
+use crate::{RealScalar, zip_mut_with};
 
 mod sealed {
     pub trait Sealed {}

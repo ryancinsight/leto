@@ -127,11 +127,7 @@ impl LbfgsMemory {
             let last = k - 1;
             let sy = dot(&self.s_hist[last], &self.y_hist[last]);
             let yy = dot(&self.y_hist[last], &self.y_hist[last]);
-            if yy > 0.0 {
-                sy / yy
-            } else {
-                1.0
-            }
+            if yy > 0.0 { sy / yy } else { 1.0 }
         } else {
             1.0
         };

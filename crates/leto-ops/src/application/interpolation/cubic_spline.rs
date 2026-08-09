@@ -8,7 +8,7 @@
 //! ## Reference
 //! Burden & Faires, *Numerical Analysis*, §3.5.
 
-use super::{check_bounds, search::find_interval, validate_nodes, Interpolation1D};
+use super::{Interpolation1D, check_bounds, search::find_interval, validate_nodes};
 use eunomia::{FloatElement, RealField};
 use leto::{LetoError, Result};
 

@@ -8,6 +8,24 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [patch] Implement `IntoIterator` for borrowed owned arrays and borrowed mutable
+  views, plus fallible plain mutable iteration through `Array::try_iter_mut` and
+  `ArrayViewMut::try_iter_mut`. Iteration remains logical row-major and
+  stride-aware; the mutable iterators reuse the injectivity proof from
+  `indexed_iter_mut`, so zero-stride aliasing layouts are rejected before any
+  `&mut T` escapes.
+
+- [minor] Add `MatmulTilePolicy`, a bounded provider seam for the existing dense
+  matmul row-block kernels. It uses power-of-two shapes derived from L2 geometry,
+  while production convenience APIs retain the measured fixed 32-row route.
+  An  alternating-order, checksum-consuming, value-preserving comparison of
+  the generic fallback was inconclusive under current host variance (`329.68 µs`
+  automatic 16-row vs `352.80 µs` fixed 32-row on a 3 MiB-L2 host, with
+  overlapping intervals). Dense C×C now shares the policy-aware row-block /
+  tiled-GEMM route; a 64×64 fixed-1 versus fixed-32 differential test confirms
+  value equivalence. The route benchmark is evidence of coverage, not a speedup
+  claim.
+
 - [minor] Add provider-owned mean cross-entropy forward and additive backward
   over borrowed Leto views. The scalar-generic operation retains probabilities
   in caller-owned storage, accepts strided layouts, borrows the upstream scalar,

@@ -1936,67 +1936,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[patch.unused]]
-name = "asclepius"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "asclepius-coeus"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "tyche-core"
-version = "0.1.0"
-
-[[patch.unused]]
 name = "hyperion"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "hephaestus-core"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-cuda"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-metal"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-rocm"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "hephaestus-wgpu"
-version = "0.18.0"
-
-[[patch.unused]]
-name = "ritk-core"
-version = "0.9.0"
-
-[[patch.unused]]
-name = "ritk-dicom"
+name = "horae"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "ritk-image"
-version = "0.2.0"
-
-[[patch.unused]]
-name = "ritk-io"
-version = "0.2.0"
-
-[[patch.unused]]
-name = "ritk-registration"
-version = "0.53.0"
-
-[[patch.unused]]
-name = "ritk-spatial"
+name = "proteus"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "ritk-vtk"
+name = "apollo-fft"
+version = "0.25.0"
+
+[[patch.unused]]
+name = "apollo-nufft"
+version = "0.7.0"
+
+[[patch.unused]]
+name = "apollo-sht"
+version = "0.7.0"
+
+[[patch.unused]]
+name = "moirai-gpu"
+version = "0.4.0"
+
+[[patch.unused]]
+name = "moirai-http"
+version = "0.4.0"
+
+[[patch.unused]]
+name = "iris"
 version = "0.1.0"
 
 [[patch.unused]]
@@ -2028,14 +2000,6 @@ name = "coeus-tensor"
 version = "0.9.0"
 
 [[patch.unused]]
-name = "gaia"
-version = "0.3.0"
-
-[[patch.unused]]
-name = "moirai-gpu"
-version = "0.4.0"
-
-[[patch.unused]]
 name = "consus-compression"
 version = "0.1.0"
 
@@ -2064,28 +2028,68 @@ name = "consus-zarr"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "horae"
+name = "asclepius"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "proteus"
+name = "asclepius-coeus"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "iris"
+name = "ritk-core"
+version = "0.9.0"
+
+[[patch.unused]]
+name = "ritk-dicom"
 version = "0.1.0"
 
 [[patch.unused]]
-name = "apollo-fft"
-version = "0.25.0"
+name = "ritk-image"
+version = "0.2.0"
 
 [[patch.unused]]
-name = "apollo-nufft"
-version = "0.7.0"
+name = "ritk-io"
+version = "0.2.0"
 
 [[patch.unused]]
-name = "apollo-sht"
-version = "0.7.0"
+name = "ritk-registration"
+version = "0.53.0"
+
+[[patch.unused]]
+name = "ritk-spatial"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "ritk-vtk"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "hephaestus-core"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-cuda"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-metal"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-rocm"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "hephaestus-wgpu"
+version = "0.18.0"
+
+[[patch.unused]]
+name = "tyche-core"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "gaia"
+version = "0.3.0"
 
 [[patch.unused]]
 name = "athena-core"

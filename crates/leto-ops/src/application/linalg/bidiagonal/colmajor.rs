@@ -43,11 +43,7 @@ fn larfg<T: RealScalar>(x: &mut [T]) -> (T, T) {
     }
     let beta = {
         let b = alpha.mul(alpha).add(xnorm_sq).sqrt();
-        if alpha <= T::ZERO {
-            b
-        } else {
-            T::ZERO.sub(b)
-        }
+        if alpha <= T::ZERO { b } else { T::ZERO.sub(b) }
     };
     let tau = beta.sub(alpha).div(beta);
     let scal = T::ONE.div(alpha.sub(beta));

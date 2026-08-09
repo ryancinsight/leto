@@ -1,4 +1,4 @@
-use crate::application::index::{unit_stride_row_slice, RowMajorTraversal};
+use crate::application::index::{RowMajorTraversal, unit_stride_row_slice};
 use crate::domain::real::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -90,19 +90,11 @@ impl<T: RealScalar> NormKind<T> for NormMax {
     #[inline(always)]
     fn accumulate(acc: T, x: T) -> T {
         let magnitude = x.abs();
-        if magnitude > acc {
-            magnitude
-        } else {
-            acc
-        }
+        if magnitude > acc { magnitude } else { acc }
     }
     #[inline(always)]
     fn combine(acc: T, row_acc: T) -> T {
-        if row_acc > acc {
-            row_acc
-        } else {
-            acc
-        }
+        if row_acc > acc { row_acc } else { acc }
     }
     #[inline(always)]
     fn finish(acc: T) -> T {

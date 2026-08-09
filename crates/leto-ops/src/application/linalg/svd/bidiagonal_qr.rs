@@ -19,7 +19,7 @@
 //! factors). It is the default `svd_decompose`; the rank-revealing one-sided
 //! Jacobi (`super::jacobi`) remains for rank-deficient / maximal-accuracy needs.
 
-use super::{default_tolerance, validate_input, SvdDecomposition};
+use super::{SvdDecomposition, default_tolerance, validate_input};
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
 

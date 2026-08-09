@@ -42,9 +42,9 @@
 //! solve can inverse-permute the column-order solution back to original
 //! row/column order.
 
+use super::CscMatrix;
 use super::amd::amd_order;
 use super::lu_sparse::OrderingStrategy;
-use super::CscMatrix;
 use crate::domain::scalar::Scalar;
 
 /// Symbolic factorization result: the static sparsity pattern of `L ∪ U`

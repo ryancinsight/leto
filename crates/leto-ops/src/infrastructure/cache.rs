@@ -22,9 +22,10 @@ pub const FALLBACK_CACHE_LINE_BYTES: usize = 64;
 /// Evidence tier: type-level contract plus value-semantic unit tests. With the
 /// `topology` feature enabled, L1/L2 capacities are read from `themis`
 /// `CacheLevel` values; otherwise the documented
-/// fallback constants are returned. Current hot kernels keep their existing
-/// compile-time tile constants until a benchmarked blocking policy consumes
-/// this geometry.
+/// fallback constants are returned. The production convenience route retains
+/// the measured 32-row specialization; the explicit geometry-derived policy is
+/// consumed by both dense C×C and generic row-block routes and remains available
+/// for hardware-specific evaluation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CacheGeometry {
     l1_bytes: usize,
@@ -75,6 +76,69 @@ impl CacheGeometry {
     #[must_use]
     pub const fn cache_line_bytes(self) -> usize {
         self.cache_line_bytes
+    }
+}
+
+/// Selects the row-block shape for the existing matmul kernel family.
+///
+/// The selector is deliberately conservative: it uses at most one quarter of
+/// the detected L2 capacity for output rows, caps the block at the measured
+/// `32`-row specialization, and rounds down to a power of two. This preserves
+/// the existing kernel model while preventing very wide output rows from
+/// overfilling a small L2. It is a policy contract, not a performance claim;
+/// callers must benchmark a changed policy before claiming a speedup.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MatmulTilePolicy {
+    row_block: usize,
+}
+
+impl MatmulTilePolicy {
+    /// Construct a validated explicit row-block policy.
+    ///
+    /// Only the existing power-of-two kernel specializations are accepted.
+    #[must_use]
+    pub const fn fixed(row_block: usize) -> Option<Self> {
+        match row_block {
+            1 | 2 | 4 | 8 | 16 | 32 => Some(Self { row_block }),
+            _ => None,
+        }
+    }
+
+    /// Select the current automatic policy from the process topology cache.
+    #[must_use]
+    pub fn automatic(element_bytes: usize, cols: usize) -> Self {
+        Self::for_geometry(cached_cache_geometry(), element_bytes, cols)
+    }
+
+    /// Select a conservative row block for `cols` output columns.
+    #[must_use]
+    pub fn for_geometry(geometry: CacheGeometry, element_bytes: usize, cols: usize) -> Self {
+        let row_bytes = cols.saturating_mul(element_bytes.max(1));
+        if row_bytes == 0 {
+            return Self { row_block: 1 };
+        }
+
+        let budget = geometry.l2_bytes() / 4;
+        let capacity = (budget / row_bytes).clamp(1, 32);
+        let row_block = if capacity >= 32 {
+            32
+        } else {
+            let next_power = capacity.next_power_of_two();
+            if next_power == capacity {
+                capacity
+            } else {
+                next_power / 2
+            }
+        }
+        .max(1);
+
+        Self { row_block }
+    }
+
+    /// Number of output rows processed by one kernel block.
+    #[must_use]
+    pub const fn row_block(self) -> usize {
+        self.row_block
     }
 }
 
@@ -135,6 +199,64 @@ mod tests {
         assert_eq!(geometry.l2_bytes(), 256 * 1024);
         assert_eq!(geometry.l3_bytes(), 8 * 1024 * 1024);
         assert_eq!(geometry.cache_line_bytes(), 64);
+    }
+
+    #[test]
+    fn matmul_policy_preserves_measured_default_for_common_shapes() {
+        let geometry = CacheGeometry::fallback();
+
+        assert_eq!(
+            MatmulTilePolicy::for_geometry(geometry, 8, 64).row_block(),
+            32
+        );
+        assert_eq!(
+            MatmulTilePolicy::for_geometry(geometry, 8, 256).row_block(),
+            32
+        );
+    }
+
+    #[test]
+    fn matmul_policy_downsizes_wide_rows_without_exceeding_bounds() {
+        let geometry = CacheGeometry::fallback();
+
+        assert_eq!(
+            MatmulTilePolicy::for_geometry(geometry, 8, 1_024).row_block(),
+            8
+        );
+        assert_eq!(
+            MatmulTilePolicy::for_geometry(geometry, 8, 2_048).row_block(),
+            4
+        );
+        assert_eq!(
+            MatmulTilePolicy::for_geometry(geometry, 8, 1).row_block(),
+            32
+        );
+    }
+
+    #[test]
+    fn fixed_matmul_policy_accepts_only_supported_specializations() {
+        assert_eq!(
+            MatmulTilePolicy::fixed(32).map(MatmulTilePolicy::row_block),
+            Some(32)
+        );
+        assert_eq!(MatmulTilePolicy::fixed(3), None);
+        assert_eq!(MatmulTilePolicy::fixed(64), None);
+    }
+
+    #[test]
+    fn matmul_policy_handles_empty_and_tiny_cache_inputs() {
+        assert_eq!(
+            MatmulTilePolicy::for_geometry(CacheGeometry::fallback(), 0, 0).row_block(),
+            1
+        );
+
+        let tiny = CacheGeometry {
+            l1_bytes: 4 * 1024,
+            l2_bytes: 32 * 1024,
+            l3_bytes: 256 * 1024,
+            cache_line_bytes: 64,
+        };
+        assert_eq!(MatmulTilePolicy::for_geometry(tiny, 8, 256).row_block(), 4);
     }
 
     #[cfg(feature = "topology")]

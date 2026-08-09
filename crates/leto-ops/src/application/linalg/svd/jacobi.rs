@@ -1,6 +1,6 @@
 //! Rank-revealing SVD by one-sided Jacobi column orthogonalization.
 
-use super::{default_tolerance, validate_input, SvdDecomposition};
+use super::{SvdDecomposition, default_tolerance, validate_input};
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result};
 

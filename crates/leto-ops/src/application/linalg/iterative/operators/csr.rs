@@ -5,9 +5,9 @@
 //! an adapter for the most common operator by far.
 
 use super::super::traits::LinearOperator;
+use crate::CsrMatrix;
 use crate::application::sparse::spmv_into;
 use crate::domain::scalar::Scalar as LetoScalar;
-use crate::CsrMatrix;
 use eunomia::{NumericElement, RealField};
 use leto::{Array1, LetoError, Result};
 
@@ -35,11 +35,7 @@ where
     /// [`Self::ncols`] without tripping the square-system dimension guard.
     fn size(&self) -> usize {
         let (rows, columns) = self.shape();
-        if rows == columns {
-            rows
-        } else {
-            0
-        }
+        if rows == columns { rows } else { 0 }
     }
 
     fn nrows(&self) -> usize {
