@@ -24,7 +24,7 @@ mnemosyne = { package = "mnemosyne-memory", version = "0.6.0", git = "https://gi
 moirai = { package = "moirai-runtime", version = "0.4.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { version = "0.5.0", git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
-aequitas = { package = "aequitas", version = "0.1.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
+aequitas = { package = "aequitas", version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Numeric Foundations ──
