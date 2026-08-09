@@ -66,12 +66,12 @@ pub use coo::CooMatrix;
 pub use csc::{CscColumn, CscMatrix};
 pub use csc_spmv::{csc_spmv, csc_spmv_into};
 pub use csr::{CsrMatrix, CsrRow};
-pub use lu_numeric::{NumericLu, factor_numeric};
+pub use lu_numeric::{factor_numeric, NumericLu};
 pub use lu_sparse::{
-    DENSE_LIMIT_DEFAULT, OrderingStrategy, OwnedNumericLu, SparseLuSolver, csr_to_dense,
-    sparse_lu_solve,
+    csr_to_dense, sparse_lu_solve, OrderingStrategy, OwnedNumericLu, SparseLuSolver,
+    DENSE_LIMIT_DEFAULT,
 };
-pub use lu_symbolic::{SymbolicLu, factor_symbolic, factor_symbolic_with_ordering};
+pub use lu_symbolic::{factor_symbolic, factor_symbolic_with_ordering, SymbolicLu};
 pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into};
 pub use spmv::{spmv, spmv_into};

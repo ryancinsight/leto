@@ -637,16 +637,14 @@ mod tests {
 
     #[test]
     fn from_parts_validates_invariants() {
-        assert!(
-            CscMatrix::<f64>::from_parts(
-                vec![1.0, 2.0, 3.0],
-                vec![0, 1, 2],
-                vec![0, 2, 2, 3],
-                3,
-                3
-            )
-            .is_ok()
-        );
+        assert!(CscMatrix::<f64>::from_parts(
+            vec![1.0, 2.0, 3.0],
+            vec![0, 1, 2],
+            vec![0, 2, 2, 3],
+            3,
+            3
+        )
+        .is_ok());
         assert!(CscMatrix::<f64>::from_parts(vec![1.0], vec![0, 1], vec![0, 1], 2, 1).is_err());
         assert!(CscMatrix::<f64>::from_parts(vec![1.0], vec![5], vec![0, 1], 2, 1).is_err());
         assert!(CscMatrix::<f64>::from_parts(vec![1.0], vec![0], vec![1, 1], 2, 1).is_err());

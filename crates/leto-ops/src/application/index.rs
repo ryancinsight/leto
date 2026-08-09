@@ -61,7 +61,11 @@ impl<const N: usize> RowMajorTraversal<N> {
 
     #[inline]
     pub(crate) const fn last_axis_stride(self, layout: leto::Layout<N>) -> isize {
-        if N == 0 { 0 } else { layout.strides[N - 1] }
+        if N == 0 {
+            0
+        } else {
+            layout.strides[N - 1]
+        }
     }
 }
 
@@ -146,7 +150,11 @@ pub(crate) const fn line_elements<T>() -> usize {
         return usize::MAX;
     }
     let lane = 64 / size;
-    if lane == 0 { 1 } else { lane }
+    if lane == 0 {
+        1
+    } else {
+        lane
+    }
 }
 
 /// Borrow the physical row span for a logical row whose last-axis stride is ±1.

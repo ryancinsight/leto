@@ -5,4 +5,4 @@
 
 pub mod lbfgs;
 
-pub use lbfgs::{LbfgsConfig, LbfgsMemory, LbfgsResult, minimize};
+pub use lbfgs::{minimize, LbfgsConfig, LbfgsMemory, LbfgsResult};

@@ -11,7 +11,7 @@
 //! ## Reference
 //! Berrut & Trefethen (2004). *Barycentric Lagrange Interpolation*, SIAM Rev.
 
-use super::{Interpolation1D, check_bounds, validate_nodes};
+use super::{check_bounds, validate_nodes, Interpolation1D};
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{LetoError, Result};
 

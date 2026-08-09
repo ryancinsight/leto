@@ -1,5 +1,5 @@
 use crate::domain::strategy::{SimdOperations, SimdStrategy};
-use eunomia::{Bf16, CastFrom, Complex, F16, NumericElement};
+use eunomia::{Bf16, CastFrom, Complex, NumericElement, F16};
 
 /// Leto operation scalar contract.
 ///
@@ -150,7 +150,11 @@ pub trait Scalar: NumericElement {
         s.iter()
             .copied()
             .fold(<Self as NumericElement>::MAX_VALUE, |acc, x| {
-                if x < acc { x } else { acc }
+                if x < acc {
+                    x
+                } else {
+                    acc
+                }
             })
     }
 
@@ -160,7 +164,11 @@ pub trait Scalar: NumericElement {
         s.iter()
             .copied()
             .fold(<Self as NumericElement>::MIN_VALUE, |acc, x| {
-                if x > acc { x } else { acc }
+                if x > acc {
+                    x
+                } else {
+                    acc
+                }
             })
     }
 
@@ -361,7 +369,11 @@ macro_rules! impl_scalar_simd {
                     s.iter()
                         .copied()
                         .fold(<Self as NumericElement>::MAX_VALUE, |acc, x| {
-                            if x < acc { x } else { acc }
+                            if x < acc {
+                                x
+                            } else {
+                                acc
+                            }
                         })
                 }
             }
@@ -374,7 +386,11 @@ macro_rules! impl_scalar_simd {
                     s.iter()
                         .copied()
                         .fold(<Self as NumericElement>::MIN_VALUE, |acc, x| {
-                            if x > acc { x } else { acc }
+                            if x > acc {
+                                x
+                            } else {
+                                acc
+                            }
                         })
                 }
             }

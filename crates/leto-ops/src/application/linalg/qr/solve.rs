@@ -1,6 +1,6 @@
 //! QR least-squares solve: apply `Qᵀ` via the stored reflectors, back-substitute `R`.
 
-use super::{QrDecomposition, qr_decompose};
+use super::{qr_decompose, QrDecomposition};
 use crate::domain::real::RealScalar;
 use leto::{Array1, ArrayView1, ArrayView2, ArrayViewMut1, LetoError, Result};
 

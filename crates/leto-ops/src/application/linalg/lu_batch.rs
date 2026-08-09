@@ -10,7 +10,7 @@ use crate::domain::real::RealScalar;
 use leto::SliceArg;
 use leto::{ArrayView3, LetoError, Result};
 
-use super::lu::{LuDecomposition, lu_decompose};
+use super::lu::{lu_decompose, LuDecomposition};
 
 /// Decompose a batch of square matrices `A_i` into `P_i · A_i = L_i · U_i`,
 /// returning one [`LuDecomposition`] per matrix.

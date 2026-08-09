@@ -50,8 +50,8 @@
 //! [`lu_decompose`](crate::application::linalg::lu) path uses the same
 //! convention, so consumers' error-handling logic is unchanged.
 
-use super::CscMatrix;
 use super::lu_symbolic::SymbolicLu;
+use super::CscMatrix;
 use crate::domain::real::RealScalar;
 use leto::{Array1, ArrayView1, ArrayViewMut1, LetoError, Result};
 
@@ -611,8 +611,8 @@ pub fn factor_numeric<'a, T: RealScalar>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::sparse::CooMatrix;
     use crate::application::sparse::lu_symbolic::factor_symbolic;
+    use crate::application::sparse::CooMatrix;
     use leto::Array1;
 
     /// Build an f64 CSC square matrix from triples.

@@ -10,6 +10,6 @@ pub use backward::convolution_backward_accumulate;
 pub use forward::convolution_forward_into;
 pub use leto::{ConvolutionParameters, TransposedConvolutionParameters};
 pub use transposed::{
-    TransposedConvolutionGradients, convolution_transposed_backward_accumulate,
-    convolution_transposed_forward_into,
+    convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
+    TransposedConvolutionGradients,
 };

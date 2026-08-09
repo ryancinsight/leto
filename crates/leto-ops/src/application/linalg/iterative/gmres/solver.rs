@@ -41,7 +41,7 @@ use super::super::traits::{
     Configurable, IterativeLinearSolver, LinearOperator, LinearSolver, Preconditioner,
 };
 use super::arnoldi::{self, ArnoldiOutcome};
-use super::{flat, flat_mut, flat2, flat2_mut, givens};
+use super::{flat, flat2, flat2_mut, flat_mut, givens};
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{Array1, Array2, LetoError, Result};
 use std::fmt::Debug;
