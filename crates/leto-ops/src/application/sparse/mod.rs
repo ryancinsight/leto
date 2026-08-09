@@ -61,11 +61,11 @@ mod spgemm;
 mod spmm;
 mod spmv;
 
+pub use amd::amd_order;
 pub use coo::CooMatrix;
 pub use csc::{CscColumn, CscMatrix};
 pub use csc_spmv::{csc_spmv, csc_spmv_into};
 pub use csr::{CsrMatrix, CsrRow};
-pub use amd::amd_order;
 pub use lu_numeric::{factor_numeric, NumericLu};
 pub use lu_sparse::{
     csr_to_dense, sparse_lu_solve, OrderingStrategy, OwnedNumericLu, SparseLuSolver,

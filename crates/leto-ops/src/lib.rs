@@ -12,7 +12,9 @@ pub use domain::real::RealScalar;
 pub use domain::rng::Xorshift64;
 pub use domain::scalar::Scalar;
 pub use domain::strategy::{ExecutionStrategy, ScalarStrategy};
-pub use infrastructure::cache::{cache_geometry, CacheGeometry};
+pub use infrastructure::cache::{
+    cache_geometry, cached_cache_geometry, CacheGeometry, MatmulTilePolicy,
+};
 
 pub use domain::strategy::SimdStrategy;
 
@@ -134,7 +136,7 @@ pub use application::map::{
     add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp, EqOp,
     GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
 };
-pub use application::matrix::{batched_matmul, matmul, matmul_accumulate};
+pub use application::matrix::{batched_matmul, matmul, matmul_accumulate, matmul_with_tile_policy};
 pub use application::nonlinear::{AndersonAccelerator, AndersonConfig, AndersonMethod};
 pub use application::optimization::{minimize, LbfgsConfig, LbfgsMemory, LbfgsResult};
 pub use application::random::{

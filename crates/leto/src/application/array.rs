@@ -1,5 +1,6 @@
 use crate::application::iter::{
-    AxisChunks, ElementIter, ExactChunks, IndexedIter, IndexedIterMut, Lanes, LanesMut, Windows,
+    AxisChunks, ElementIter, ElementIterMut, ExactChunks, IndexedIter, IndexedIterMut, Lanes,
+    LanesMut, Windows,
 };
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
@@ -466,6 +467,19 @@ where
     #[inline]
     pub fn indexed_iter_mut(&mut self) -> Result<IndexedIterMut<'_, T, N>> {
         self.view_mut().indexed_iter_mut()
+    }
+
+    /// Iterator over mutable elements in logical row-major order, preserving
+    /// arbitrary positive and negative strides without materializing a copy.
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] if the layout is out of bounds or cannot prove
+    /// that each logical index addresses a distinct physical element. In
+    /// particular, zero-stride broadcast layouts are rejected before any
+    /// mutable reference is yielded.
+    #[inline]
+    pub fn try_iter_mut(&mut self) -> Result<ElementIterMut<'_, T, N>> {
+        self.view_mut().try_iter_mut()
     }
 
     /// The elements as one mutable contiguous slice in logical row-major order,

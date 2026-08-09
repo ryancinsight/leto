@@ -134,11 +134,28 @@ format, and diff checks.
 
 ## LETO-MATMUL-PERF-1 [minor] — Owner: Codex `/root` (complete)
 
+- [x] Deliver the deferred topology policy as a bounded provider contract:
+      `MatmulTilePolicy` selects only existing row-block monomorphizations,
+      preserves the common 32-row route, and has fallback/tiny-cache tests.
+      This closes implementation delivery without claiming benchmark improvement.
+- [x] Run the required alternating-order, checksum-consuming,
+      value-preserving policy comparison for the generic fallback. On the
+      detected 3 MiB-L2 host, automatic 16-row blocking measured `329.68 µs`
+      [327.85–333.38] and fixed 32-row blocking measured `352.80 µs`
+      [305.31–419.24] for the wide strided case. The intervals overlap
+      substantially, so the result is inconclusive. Production retains its
+      existing fixed 32-row route.
+
 - [x] Establish a quiet-host, counterbalanced dense matmul baseline against
       ndarray at 64×64, 128×128, and 256×256 before changing production code.
 - [x] Profile the current row/block/column kernel and cache-topology decision;
       reject any tile, packing, dispatch, or allocation change without a
       statistically significant value-preserving improvement.
+- [x] Add common dense C×C route evidence: remove the legacy `serial_cc_matmul`
+      / `parallel_cc_matmul` bypass, route dense C×C through the policy-aware
+      row-block kernel, and differentially verify fixed-1/fixed-32 output
+      equality at 64×64. Record route medians separately from policy-ranking
+      evidence; no adaptive speedup claim is made.
 - [x] If the profile identifies a complete provider-owned fix, implement it
       in the canonical matmul module with differential tests and synchronized
       benchmark/PM evidence; otherwise close this item as an evidence-only
@@ -1000,6 +1017,10 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [patch] Add allocating keep-dim axis reduction wrappers: `sum_axis`, `mean_axis`, `min_axis`, and `max_axis`.
 - [x] [patch] Add ndarray-parity constructors used by Apollo: `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec`.
 - [x] [patch] Add row/column/axis iteration APIs with contiguous fast paths and strided fallbacks.
+- [x] [patch] Complete borrowed iterator ergonomics for owned arrays and mutable views:
+      `IntoIterator for &Array` and read-only `IntoIterator for &ArrayViewMut`
+      preserve logical stride order; mutable `&mut T` traversal remains the
+      fallible alias-rejecting `indexed_iter_mut` contract.
 - [x] [patch] Add named rank-2 `rows`, `columns`, `rows_mut`, and `columns_mut` wrappers over the axis iterator APIs.
 - [x] [patch] Add shape aliases or type aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`, `ArrayView2`, `ArrayView3` if Apollo migration keeps rank-specific readability.
 - [x] [patch] Add `map`, `map_into`, `mapv`-equivalent, and precision-conversion APIs without hidden widen-and-narrow computation.

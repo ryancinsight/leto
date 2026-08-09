@@ -918,10 +918,21 @@ no unmeasured "optimization" per performance_engineering.
   temporaries. Criterion all-features current medians:
   `dense_64x64` 22.536 µs (~−19.8% vs recorded 28.1 µs table baseline);
   `dense_256x256` 1.4016 ms (~−8.3% vs recorded 1.529 ms table baseline).
-- [ ] [minor] Add topology-adaptive matmul tile sizing from `CacheGeometry`
-  once the row/block/column tile policy is benchmarked across matrix sizes.
-  Current 0.18.1 row block is a fixed L2-fit const-generic specialization, not
-  runtime topology selection.
+- [x] [minor] Close topology-adaptive matmul tile sizing from `CacheGeometry`.
+  **Implementation delivered:** `MatmulTilePolicy` uses one quarter of detected
+  L2, caps at the existing 32-row specialization, rounds to a safe power-of-two
+  const-generic shape, and preserves the measured common-shape 32-row route.
+  **Route-coverage evidence (2026-08-08):** dense C×C inputs now use the same
+  policy-aware row-block/tiled-GEMM route as the generic layout path; the legacy
+  `serial_cc_matmul`/`parallel_cc_matmul` bypass was removed. A 64×64 explicit
+  fixed-1 versus fixed-32 differential test is value-equivalent, and the dense
+  64×64/256×256 benchmarks execute through the production route (`6.0371 µs`
+  and `116.35 µs` medians in the recorded run). The alternating-order,
+  checksum-consuming 64×64×4096 strided policy comparison still selected 16
+  rows automatically versus fixed 32 with overlapping intervals, so it provides
+  no adaptive speedup or regression claim. Production convenience APIs retain
+  fixed 32; the explicit adaptive seam remains available for hardware-specific
+  experiments.
 - [x] [minor] `LETO-MATMUL-PERF-1`: Close dense matmul oracle performance
   parity before any replacement claim. **Owner:** Codex `/root` (complete).
   **Claimed files:** `crates/leto-ops/src/application/matrix.rs`,
@@ -1035,6 +1046,11 @@ no unmeasured "optimization" per performance_engineering.
 
 ## Phase 3: Coeus Tensor Substrate Requirements [minor]
 - [ ] Add shape/stride/layout contracts suitable for tensor batches, channels, and rank-generic model activations.
+  The iterator portion is now provider-complete: `&Array` and `&ArrayViewMut`
+  implement logical, stride-aware `IntoIterator`; plain mutable yielding is
+  available through fallible `try_iter_mut` and the indexed form, so aliased
+  layouts are rejected before any `&mut T` escapes. Remaining work is the
+  broader tensor-batch/channel contract, not basic iteration ergonomics.
 - [x] Add representative broadcast semantics compatible with tensor elementwise operations, including keep-dim `[N, 1] -> [N, C]` read-only broadcast into elementwise add/mul. Verification: `migration_fixtures` covers Coeus normalization-like row reductions and broadcasted arithmetic.
 - [x] Add reductions over axes with keep-dim output modes required by Coeus: `sum_axis_into`, `mean_axis_into`, `min_axis_into`, and `max_axis_into`. Verification: value and ndarray differential tests cover row/column reductions, strided transposed inputs, shape mismatch rejection, and empty-axis behavior.
 - [x] Add allocating convenience wrappers for axis reductions only after storage constructors are complete. Verification: value tests cover contiguous row/column reductions, strided transposed input, C-contiguous output, and empty-axis sum/mean semantics.

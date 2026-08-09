@@ -38,6 +38,35 @@ the 256-column benchmark shape.
 | reductions/norm_l2_reverse_last_axis_256x256 | 9.615 µs | borrowed unit-stride row slices (0.19.0), −18.00% median in criterion run |
 | zip/zip_mut_with_transposed_256x256 | 40.7 µs | line-tiled (0.16.1); closure-opaque body limits further gain |
 
+## Topology policy evaluation (2026-08-08)
+
+The post-repair quiet comparison used the existing Criterion harness with
+all-features, deterministic f64 inputs, identical prepared strided operands,
+an output-equivalence preflight, alternating target order, and full-output
+checksums outside each timed interval. The automatic selector used
+`cached_cache_geometry()`, matching the production topology cache. On the
+observed host, L2 was 3 MiB and the selector chose 16 output rows; the explicit
+control chose the retained 32-row specialization.
+
+| Benchmark | Median | 95% CI | Result |
+| --- | ---: | ---: | --- |
+| `matmul/wide_policy_auto_64x64x4096` | 329.68 µs | 327.85–333.38 µs | value-equivalent adaptive 16-row route |
+| `matmul/wide_policy_fixed32_64x64x4096` | 352.80 µs | 305.31–419.24 µs | value-equivalent retained production route |
+
+The intervals overlap substantially, so this run is inconclusive under current
+host variance and does not establish an adaptive win or regression. Production
+convenience APIs therefore remain fixed at 32 rows; the explicit
+`MatmulTilePolicy` seam is retained for future hardware-specific experiments.
+This is policy-evaluation evidence, not a global performance ranking.
+
+The dense C×C route now shares the policy-aware row-block/tiled-GEMM path rather
+than using the removed `serial_cc_matmul`/`parallel_cc_matmul` bypass. A focused
+64×64 fixed-1 versus fixed-32 differential test passed with identical output.
+A separate route-coverage run measured `matmul/dense_64x64` at `6.0371 µs`
+(`[5.6937–6.3841]`) and `matmul/dense_256x256` at `116.35 µs`
+(`[115.89–117.16]`). These observations confirm execution of the dense route;
+they are not claimed as a cross-run optimization or parity result.
+
 ## Contiguous and non-unit-stride coverage (2026-07-23)
 
 Commands: `rustup run nightly cargo bench --locked -p leto-ops --bench kernels

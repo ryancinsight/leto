@@ -1,5 +1,38 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-08-08 Fallible plain mutable iteration
+
+- **Finding:** Leto had logical stride-aware read-only iteration and checked
+  `indexed_iter_mut`, but no plain mutable iterator for callers that do not
+  need the logical index. The existing `Array::iter_mut` remains the
+  contiguous-only compatibility surface and cannot serve arbitrary strides.
+- **Resolution:** add `ElementIterMut` plus `Array::try_iter_mut` and
+  `ArrayViewMut::try_iter_mut`. The plain iterator delegates to the existing
+  injectivity-checked `IndexedIterMut`, so positive, negative, and transposed
+  layouts remain zero-copy while zero-stride or otherwise aliased layouts are
+  rejected before any `&mut T` escapes. No infallible mutable `IntoIterator`
+  is added because its trait contract cannot report layout rejection.
+- **Evidence target:** logical-order strided mutation, double-ended/exact-size
+  behavior inherited from the shared iterator, alias rejection, formatting,
+  warning-denied compile/test gates, doctests, and Rustdoc. This closes the
+  basic mutable-iteration ergonomics gap; broader tensor batch/channel layout
+  work remains separate.
+
+## 2026-08-08 Borrowed iterator ergonomics
+
+- **Resolution:** `&Array` and `&ArrayViewMut` now implement
+  `IntoIterator` using the existing logical, stride-aware `ElementIter`.
+  Owned-array and mutable-view callers can use idiomatic read-only `for`
+  traversal without materializing a contiguous copy.
+- **Safety boundary:** mutable iteration remains the fallible
+  `indexed_iter_mut` contract. Its preflight validates storage reachability
+  and rejects non-injective/zero-stride layouts before yielding any `&mut T`;
+  no infallible mutable `IntoIterator` is introduced.
+- **Evidence:** the core iteration suite covers owned-array, transposed,
+  mutable-view, indexed mutable, double-ended, empty, and alias-rejection
+  cases; focused Leto Nextest passes 14/14. This closes iterator ergonomics
+  within the broader tensor batch/channel layout item, which remains open.
+
 ## 2026-08-04 Provider-owned CPU cross-entropy gap
 
 - **Finding:** a downstream consumer currently owns stable softmax,
@@ -59,6 +92,32 @@
 - **Limit:** this proves dependency direction and current oracle ownership,
   not complete parity across every provider operation. New removal work needs
   an explicit replacement oracle per operation family.
+
+## 2026-08-08 Topology-adaptive matmul policy
+
+- **Resolution:** `leto-ops::MatmulTilePolicy` consumes the existing
+  `CacheGeometry` contract and selects only bounded, power-of-two row-block
+  instantiations already supported by the matmul kernel. The policy budgets
+  one quarter of detected L2 per output-row footprint, caps the common route at
+  32 rows, and downsizes unusually wide rows without allocating or changing
+  arithmetic order.
+- **Evidence tier:** pure policy tests cover the measured 32-row common shapes,
+  wide-row down-sizing, empty/tiny inputs, and fallback geometry. The explicit
+  policy seam is threaded through serial and parallel row-block paths; dense C×C
+  inputs no longer bypass it. The legacy `serial_cc_matmul` /
+  `parallel_cc_matmul` fast path was removed so dense and generic layouts share
+  the policy-aware row-block/tiled-GEMM implementation. A 64×64 fixed-1 versus
+  fixed-32 differential test is value-equivalent. **Benchmark (2026-08-08):**
+  dense route medians were `6.0371 µs` at 64×64 and `116.35 µs` at 256×256 in
+  one run; these are route-coverage observations, not a cross-run speedup
+  claim. The alternating-order, checksum-consuming, value-preserving
+  64×64×4096 strided comparison on a host with 3 MiB L2 selected 16 rows
+  automatically (`329.68 µs`, 95% CI `327.85–333.38 µs`) versus fixed 32 rows
+  (`352.80 µs`, 95% CI `305.31–419.24 µs`). The intervals overlap substantially,
+  so host variance prevents a reliable adaptive policy ranking. **Status:**
+  implementation and route coverage delivered; adaptive performance ranking
+  remains inconclusive. Fixed 32 remains the production policy and the explicit
+  adaptive selector remains available for future hardware-specific evidence.
 
 ## 2026-07-23 Dense matmul parity audit
 

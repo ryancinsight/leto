@@ -83,6 +83,68 @@ fn indexed_iter_mut_double_ended_meets_once() {
 }
 
 #[test]
+fn try_iter_mut_updates_transposed_logical_order() {
+    let mut a = leto([2, 3], vec![1, 2, 3, 4, 5, 6]);
+
+    for value in a
+        .view_mut()
+        .transpose_mut([1, 0])
+        .unwrap()
+        .try_iter_mut()
+        .unwrap()
+    {
+        *value *= 10;
+    }
+
+    assert_eq!(
+        a.iter().copied().collect::<Vec<_>>(),
+        vec![10, 20, 30, 40, 50, 60]
+    );
+}
+
+#[test]
+fn try_iter_mut_supports_negative_stride_and_double_ended_consumption() {
+    let layout = Layout::new([2, 3], [3, -1], 2);
+    let storage = VecStorage::new(vec![1, 2, 3, 4, 5, 6]);
+    let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
+
+    {
+        let mut iter = a.try_iter_mut().unwrap();
+        assert_eq!(iter.len(), 6);
+        *iter.next().unwrap() += 10;
+        *iter.next_back().unwrap() += 60;
+        assert_eq!(iter.len(), 4);
+        for value in iter {
+            *value += 100;
+        }
+    }
+
+    // Logical order is [2, 1, 0, 5, 4, 3] for the reverse-last-axis view.
+    assert_eq!(
+        a.iter().copied().collect::<Vec<_>>(),
+        vec![13, 102, 101, 106, 105, 64]
+    );
+}
+
+#[test]
+fn try_iter_mut_rejects_aliasing_layout_before_yielding() {
+    let layout = Layout::new([2, 2], [1, 1], 0);
+    let storage = VecStorage::new(vec![0, 1, 2]);
+    let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
+
+    let err = match a.try_iter_mut() {
+        Ok(_) => panic!("aliasing layout must not yield mutable references"),
+        Err(err) => err,
+    };
+    assert_eq!(
+        err,
+        LetoError::StorageError {
+            reason: "indexed_iter_mut requires provably disjoint logical offsets".to_string()
+        }
+    );
+}
+
+#[test]
 fn indexed_iter_mut_rejects_aliasing_layout() {
     let layout = Layout::new([2, 2], [1, 1], 0);
     let storage = VecStorage::new(vec![0, 1, 2]);
@@ -148,6 +210,25 @@ fn into_iter_for_reference_view() {
         sum += x;
     }
     assert_eq!(sum, 34);
+}
+
+#[test]
+fn into_iter_for_reference_array_preserves_strided_logical_order() {
+    let a = leto([2, 3], vec![1, 2, 3, 4, 5, 6]);
+    let values: Vec<i32> = (&a).into_iter().copied().collect();
+    assert_eq!(values, vec![1, 2, 3, 4, 5, 6]);
+
+    let transposed = a.transpose([1, 0]).unwrap();
+    let values: Vec<i32> = (&transposed).into_iter().copied().collect();
+    assert_eq!(values, vec![1, 4, 2, 5, 3, 6]);
+}
+
+#[test]
+fn into_iter_for_reference_mutable_view_is_read_only() {
+    let mut a = leto([2, 2], vec![7, 8, 9, 10]);
+    let view = a.view_mut();
+    let values: Vec<i32> = (&view).into_iter().copied().collect();
+    assert_eq!(values, vec![7, 8, 9, 10]);
 }
 
 #[test]

@@ -1,4 +1,5 @@
 use crate::domain::scalar::Scalar;
+use crate::infrastructure::cache::MatmulTilePolicy;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result};
 
 /// Nonzero density of `lhs` at or below which [`matmul_auto`] routes to the
@@ -10,9 +11,9 @@ use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result};
 /// the CSR gather's larger per-flop constant. A conservative `0.1` keeps the
 /// sparse path strictly winning (measured ~17× at `0.05`) and never regresses the
 /// dense majority case, which pays only the `O(m·s)` density scan.
-// Thirty-two f64 output rows plus one RHS row fit inside the conservative
-// 256 KiB L2 fallback at the 256-column benchmark shape while preserving a
-// single const-generic kernel instantiation.
+// The policy selects among these existing const-generic instantiations. The
+// 32-row specialization remains the conservative common-shape fallback and is
+// also used for the fixed-size alpha panel in the depth-batched path.
 const MATMUL_ROW_BLOCK: usize = 32;
 const MATMUL_DEPTH_BLOCK: usize = 4;
 const MATMUL_DEPTH_BATCH_ROWS: usize = 128;
@@ -247,94 +248,6 @@ fn parallel_dot_matmul<T: Scalar>(
     });
 }
 
-fn serial_cc_matmul<T: Scalar>(
-    lhs: &ArrayView<'_, T, 2>,
-    rhs: &ArrayView<'_, T, 2>,
-    out: &mut ArrayViewMut<'_, T, 2>,
-    accumulate: bool,
-) {
-    let [m, k] = lhs.shape();
-    let [_, n] = rhs.shape();
-
-    if !accumulate {
-        zero_output(
-            validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"),
-            out,
-        );
-    }
-
-    let lhs_offset = lhs.offset();
-    let rhs_offset = rhs.offset();
-    let out_offset = out.offset();
-    let lhs_data = lhs.data();
-    let rhs_data = rhs.data();
-    let out_data = out.data_mut();
-
-    for i in 0..m {
-        unsafe {
-            let out_ptr = out_data.as_mut_ptr().add(out_offset + i * n);
-            let out_row = core::slice::from_raw_parts_mut(out_ptr, n);
-            for kk in 0..k {
-                let alpha = *lhs_data.get_unchecked(lhs_offset + i * k + kk);
-                if alpha == T::ZERO {
-                    continue;
-                }
-                let rhs_row = &rhs_data[rhs_offset + kk * n..rhs_offset + kk * n + n];
-                T::axpy_slice(alpha, rhs_row, out_row);
-            }
-        }
-    }
-}
-
-#[cfg(feature = "parallel")]
-fn parallel_cc_matmul<T: Scalar>(
-    lhs: &ArrayView<'_, T, 2>,
-    rhs: &ArrayView<'_, T, 2>,
-    out: &mut ArrayViewMut<'_, T, 2>,
-    accumulate: bool,
-) {
-    let [m, k] = lhs.shape();
-    let [_, n] = rhs.shape();
-
-    if !accumulate {
-        zero_output(
-            validate_matmul(lhs, rhs, out).expect("route_matmul validated dimensions"),
-            out,
-        );
-    }
-
-    let lhs_offset = lhs.offset();
-    let rhs_offset = rhs.offset();
-    let out_offset = out.offset();
-    let lhs_ptr = lhs.data().as_ptr() as usize;
-    let rhs_ptr = rhs.data().as_ptr() as usize;
-    let out_ptr = out.data_mut().as_mut_ptr() as usize;
-
-    // Dispatch in row blocks to amortise per-task scheduling overhead and
-    // avoid false sharing when n * size_of::<T>() < 64.
-    let n_blocks = m.div_ceil(PARALLEL_ROW_BLOCK);
-    moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(n_blocks, move |block| {
-        let lhs_ptr = lhs_ptr as *const T;
-        let rhs_ptr = rhs_ptr as *const T;
-        let out_ptr = out_ptr as *mut T;
-        let i_start = block * PARALLEL_ROW_BLOCK;
-        let i_end = (i_start + PARALLEL_ROW_BLOCK).min(m);
-        for i in i_start..i_end {
-            unsafe {
-                let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
-                for kk in 0..k {
-                    let alpha = *lhs_ptr.add(lhs_offset + i * k + kk);
-                    if alpha == T::ZERO {
-                        continue;
-                    }
-                    let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
-                    T::axpy_slice(alpha, rhs_row, out_row);
-                }
-            }
-        }
-    });
-}
-
 fn serial_outer_matmul<T: Scalar>(
     lhs: &ArrayView<'_, T, 2>,
     rhs: &ArrayView<'_, T, 2>,
@@ -426,6 +339,7 @@ fn route_matmul<T: Scalar>(
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
     accumulate: bool,
+    tile_policy: MatmulTilePolicy,
 ) -> Result<()> {
     let layout = validate_matmul(lhs, rhs, out)?;
     #[cfg(not(feature = "parallel"))]
@@ -461,18 +375,6 @@ fn route_matmul<T: Scalar>(
         return Ok(());
     }
 
-    if lhs.is_c_dense() && rhs.is_c_dense() && out.is_c_dense() {
-        #[cfg(feature = "parallel")]
-        {
-            if is_parallel_beneficial(layout) {
-                parallel_cc_matmul(lhs, rhs, out, accumulate);
-                return Ok(());
-            }
-        }
-        serial_cc_matmul(lhs, rhs, out, accumulate);
-        return Ok(());
-    }
-
     // Fallback: copy only genuinely non-dense operands to contiguous. A
     // dense-but-offset operand is kept in place (the generic kernel addresses it
     // through its layout offset), so only strided/broadcast operands pay a copy.
@@ -500,11 +402,11 @@ fn route_matmul<T: Scalar>(
     #[cfg(feature = "parallel")]
     {
         if is_parallel_beneficial(layout) {
-            parallel_matmul(&lhs_view, &rhs_view, out, layout);
+            parallel_matmul(&lhs_view, &rhs_view, out, layout, tile_policy);
             return Ok(());
         }
     }
-    serial_matmul(&lhs_view, &rhs_view, out, layout);
+    serial_matmul(&lhs_view, &rhs_view, out, layout, tile_policy);
     Ok(())
 }
 
@@ -514,21 +416,41 @@ pub fn matmul<T: Scalar>(
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
 ) -> Result<()> {
+    matmul_with_tile_policy(
+        lhs,
+        rhs,
+        out,
+        MatmulTilePolicy::fixed(MATMUL_ROW_BLOCK)
+            .expect("the measured default row block is supported"),
+    )
+}
+
+/// Perform matrix multiplication with an explicit bounded row-tile policy.
+///
+/// This is primarily useful for controlled provider benchmarks and callers
+/// that already own a topology policy. Normal callers should use [`matmul`],
+/// which retains the measured fixed 32-row production policy.
+pub fn matmul_with_tile_policy<T: Scalar>(
+    lhs: &ArrayView<'_, T, 2>,
+    rhs: &ArrayView<'_, T, 2>,
+    out: &mut ArrayViewMut<'_, T, 2>,
+    tile_policy: MatmulTilePolicy,
+) -> Result<()> {
     // Dense-but-offset outputs (a batched/sliced sub-view) route in place: the
     // kernels write through the layout offset, so only a genuinely strided
     // output needs the scratch + copy-back.
     if out.is_c_dense() {
         let mut out_view = out.reborrow();
-        route_matmul(lhs, rhs, &mut out_view, false)
+        route_matmul(lhs, rhs, &mut out_view, false, tile_policy)
     } else if out.is_f_dense() {
         let lhs_t = lhs.transpose([1, 0])?;
         let rhs_t = rhs.transpose([1, 0])?;
         let mut out_t = out.reborrow().transpose_mut([1, 0])?;
-        route_matmul(&rhs_t, &lhs_t, &mut out_t, false)
+        route_matmul(&rhs_t, &lhs_t, &mut out_t, false, tile_policy)
     } else {
         let mut out_contig = Array::from_elem(out.shape(), T::ZERO);
         let mut out_view = out_contig.view_mut();
-        route_matmul(lhs, rhs, &mut out_view, false)?;
+        route_matmul(lhs, rhs, &mut out_view, false, tile_policy)?;
         copy_back_to_out(&out_view, out)?;
         Ok(())
     }
@@ -544,16 +466,37 @@ pub fn matmul_accumulate<T: Scalar>(
     // only a genuinely strided output needs the scratch + copy-back.
     if out.is_c_dense() {
         let mut out_view = out.reborrow();
-        route_matmul(lhs, rhs, &mut out_view, true)
+        route_matmul(
+            lhs,
+            rhs,
+            &mut out_view,
+            true,
+            MatmulTilePolicy::fixed(MATMUL_ROW_BLOCK)
+                .expect("the measured default row block is supported"),
+        )
     } else if out.is_f_dense() {
         let lhs_t = lhs.transpose([1, 0])?;
         let rhs_t = rhs.transpose([1, 0])?;
         let mut out_t = out.reborrow().transpose_mut([1, 0])?;
-        route_matmul(&rhs_t, &lhs_t, &mut out_t, true)
+        route_matmul(
+            &rhs_t,
+            &lhs_t,
+            &mut out_t,
+            true,
+            MatmulTilePolicy::fixed(MATMUL_ROW_BLOCK)
+                .expect("the measured default row block is supported"),
+        )
     } else {
         let mut out_contig = out.to_contiguous();
         let mut out_view = out_contig.view_mut();
-        route_matmul(lhs, rhs, &mut out_view, true)?;
+        route_matmul(
+            lhs,
+            rhs,
+            &mut out_view,
+            true,
+            MatmulTilePolicy::fixed(MATMUL_ROW_BLOCK)
+                .expect("the measured default row block is supported"),
+        )?;
         copy_back_to_out(&out_view, out)?;
         Ok(())
     }
@@ -565,15 +508,17 @@ fn serial_matmul<T: Scalar>(
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
     layout: MatmulLayout,
+    tile_policy: MatmulTilePolicy,
 ) {
     if can_row_block(layout) {
-        row_blocked_matmul::<T, MATMUL_ROW_BLOCK>(
+        row_blocked_matmul_with_policy::<T>(
             lhs.data().as_ptr(),
             rhs.data().as_ptr(),
             out.data_mut().as_mut_ptr(),
             0,
             layout.rows,
             layout,
+            tile_policy,
         );
         return;
     }
@@ -616,6 +561,29 @@ fn can_row_block(layout: MatmulLayout) -> bool {
         && layout.cols > 0
         && layout.rhs_stride_col == 1
         && layout.out_stride_col == 1
+}
+
+#[inline]
+fn row_blocked_matmul_with_policy<T: Scalar>(
+    lhs_ptr: *const T,
+    rhs_ptr: *const T,
+    out_ptr: *mut T,
+    start_row: usize,
+    end_row: usize,
+    layout: MatmulLayout,
+    tile_policy: MatmulTilePolicy,
+) {
+    let row_block = tile_policy.row_block();
+
+    match row_block {
+        1 => row_blocked_matmul::<T, 1>(lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout),
+        2 => row_blocked_matmul::<T, 2>(lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout),
+        4 => row_blocked_matmul::<T, 4>(lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout),
+        8 => row_blocked_matmul::<T, 8>(lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout),
+        16 => row_blocked_matmul::<T, 16>(lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout),
+        32 => row_blocked_matmul::<T, 32>(lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout),
+        _ => unreachable!("matmul tile policy must return a power-of-two block <= 32"),
+    }
 }
 
 #[inline]
@@ -847,6 +815,7 @@ fn parallel_matmul<T: Scalar>(
     rhs: &ArrayView<'_, T, 2>,
     out: &mut ArrayViewMut<'_, T, 2>,
     layout: MatmulLayout,
+    tile_policy: MatmulTilePolicy,
 ) {
     if can_row_block(layout) {
         let lhs_ptr = lhs.data().as_ptr() as usize;
@@ -862,8 +831,14 @@ fn parallel_matmul<T: Scalar>(
                 let out_ptr = out_ptr as *mut T;
                 let start_row = block * MATMUL_ROW_BLOCK;
                 let end_row = (start_row + MATMUL_ROW_BLOCK).min(layout.rows);
-                row_blocked_matmul::<T, MATMUL_ROW_BLOCK>(
-                    lhs_ptr, rhs_ptr, out_ptr, start_row, end_row, layout,
+                row_blocked_matmul_with_policy::<T>(
+                    lhs_ptr,
+                    rhs_ptr,
+                    out_ptr,
+                    start_row,
+                    end_row,
+                    layout,
+                    tile_policy,
                 );
             },
         );

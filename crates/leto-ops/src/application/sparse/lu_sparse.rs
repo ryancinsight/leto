@@ -546,8 +546,8 @@ pub fn csr_to_dense<T: RealScalar>(matrix: &CsrMatrix<T>) -> Array2<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::sparse::CooMatrix;
     use crate::application::sparse::lu_symbolic::factor_symbolic;
+    use crate::application::sparse::CooMatrix;
 
     fn make_csr(nrows: usize, ncols: usize, triplets: &[(usize, usize, f64)]) -> CsrMatrix<f64> {
         let mut coo = CooMatrix::new(nrows, ncols);

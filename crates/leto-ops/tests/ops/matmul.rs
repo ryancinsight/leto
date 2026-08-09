@@ -1,5 +1,5 @@
 use leto::{Array, Layout, Storage, VecStorage};
-use leto_ops::{matmul, matvec};
+use leto_ops::{matmul, matmul_accumulate, matmul_with_tile_policy, matvec, MatmulTilePolicy};
 
 #[test]
 fn test_matvec_contiguous() {
@@ -162,6 +162,71 @@ fn matmul_matches_dense_on_sparse_and_dense_inputs() {
     matmul(&dense.view(), &b.view(), &mut o1.view_mut()).unwrap();
     matmul(&dense.view(), &b.view(), &mut o2.view_mut()).unwrap();
     assert_eq!(o1.storage().as_slice(), o2.storage().as_slice());
+}
+
+#[test]
+fn dense_common_route_honors_explicit_tile_policy() {
+    let n = 64usize;
+    let lhs = Array::from_shape_vec(
+        [n, n],
+        (0..n * n)
+            .map(|i| (i as f64 * 0.03125 + 1.0) * 1.0e-3)
+            .collect(),
+    )
+    .unwrap();
+    let rhs = Array::from_shape_vec(
+        [n, n],
+        (0..n * n)
+            .map(|i| (i as f64 * 0.0175 + 0.5) * 1.0e-3)
+            .collect(),
+    )
+    .unwrap();
+    let mut one_row = Array::zeros([n, n]);
+    let mut thirty_two_rows = Array::zeros([n, n]);
+
+    matmul_with_tile_policy(
+        &lhs.view(),
+        &rhs.view(),
+        &mut one_row.view_mut(),
+        MatmulTilePolicy::fixed(1).unwrap(),
+    )
+    .unwrap();
+    matmul_with_tile_policy(
+        &lhs.view(),
+        &rhs.view(),
+        &mut thirty_two_rows.view_mut(),
+        MatmulTilePolicy::fixed(32).unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        one_row.storage().as_slice(),
+        thirty_two_rows.storage().as_slice()
+    );
+}
+
+#[test]
+fn dense_common_route_accumulates_without_overwriting() {
+    let lhs = Array::from_shape_vec([2, 2], vec![1.0f64, 2.0, 3.0, 4.0]).unwrap();
+    let rhs = Array::from_shape_vec([2, 2], vec![5.0f64, 6.0, 7.0, 8.0]).unwrap();
+    let mut product = Array::zeros([2, 2]);
+    let mut out = Array::from_shape_vec([2, 2], vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+
+    matmul_with_tile_policy(
+        &lhs.view(),
+        &rhs.view(),
+        &mut product.view_mut(),
+        MatmulTilePolicy::fixed(1).unwrap(),
+    )
+    .unwrap();
+    matmul_accumulate(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+
+    let expected: Vec<_> = [10.0, 20.0, 30.0, 40.0]
+        .into_iter()
+        .zip(product.storage().as_slice().iter().copied())
+        .map(|(initial, value)| initial + value)
+        .collect();
+    assert_eq!(out.storage().as_slice(), expected.as_slice());
 }
 
 #[test]
