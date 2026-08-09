@@ -4,7 +4,7 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
-## Unreleased
+## [0.41.0] - 2026-08-09
 
 ### Added
 

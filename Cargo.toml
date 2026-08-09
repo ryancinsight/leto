@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.40.0"
+version = "0.41.0"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -16,8 +16,8 @@ repository = "https://github.com/ryancinsight/leto.git"
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──
-leto = { version = "0.40.0", path = "crates/leto" }
-leto-ops = { version = "0.40.0", path = "crates/leto-ops" }
+leto = { version = "0.41.0", path = "crates/leto" }
+leto-ops = { version = "0.41.0", path = "crates/leto-ops" }
 
 # ── Systems and Parallelization (local path for migration) ──
 mnemosyne = { path = "../mnemosyne/crates/mnemosyne", package = "mnemosyne-memory", features = ["eunomia"] }
