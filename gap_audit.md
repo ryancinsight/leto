@@ -1,5 +1,22 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-08-09 Hermes reduced-precision provider boundary
+
+- **Finding:** `leto-ops` had complete scalar contracts for Eunomia `F16` and
+  `Bf16`, but its `SimdStrategy` deliberately returned unsupported for every
+  operation, so callers could not reach Hermes' existing safe emulated,
+  conversion, or BF16 tile providers.
+- **Resolution:** `F16` and `Bf16` now use the same generic Hermes provider
+  implementation as `f32`/`f64`. Runtime dispatch remains capability-accurate:
+  Hermes selects only supported architecture kernels and otherwise executes its
+  scalar/emulated path. This change makes no blanket native-BF16 claim.
+- **Evidence:** direct provider tests are authored for elementwise arithmetic,
+  sum/dot, and accumulation; library compilation and formatting pass. Test,
+  Clippy, and doctest execution is validation-blocked by the host's `alloca`
+  build script failing to execute `gcc.exe`. Native AVX-512 BF16 remains a
+  Hermes tile capability; native SVE remains separately blocked and `SveArch`
+  remains explicitly emulated.
+
 ## 2026-08-08 Fallible plain mutable iteration
 
 - **Finding:** Leto had logical stride-aware read-only iteration and checked

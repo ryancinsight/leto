@@ -8,6 +8,14 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] Route Leto's Eunomia `F16` and `Bf16` `SimdStrategy` operations
+  through Hermes' capability-checked public provider. Elementwise arithmetic,
+  reductions, AXPY, GEMV, and GEMM now share the same provider boundary as
+  `f32`/`f64`, retaining Hermes' scalar/emulated fallback when native hardware
+  is unavailable. This does not claim native BF16 arithmetic for every host;
+  native AVX-512 BF16 remains the Hermes tile-provider capability. Test-bearing
+  gates remain validation-blocked by the local `alloca`/`gcc.exe` build setup.
+
 - [patch] Implement `IntoIterator` for borrowed owned arrays and borrowed mutable
   views, plus fallible plain mutable iteration through `Array::try_iter_mut` and
   `ArrayViewMut::try_iter_mut`. Iteration remains logical row-major and

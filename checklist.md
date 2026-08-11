@@ -1,5 +1,17 @@
 # Leto Development Checklist
 
+## LETO-HERMES-REDUCED-PRECISION-PROVIDER-1 [minor] — Implemented; validation blocked
+
+- [x] Route `F16` and `Bf16` `SimdStrategy` operations through Hermes' public
+      capability-checked provider.
+- [x] Preserve scalar fallback semantics when a native or conversion backend is
+      unavailable; keep Eunomia as the numeric SSOT.
+- [x] Add elementwise, sum/dot, and `C += alpha*x` provider contract tests.
+- [x] Verify formatting, library compile, and diff cleanliness.
+- [ ] Execute the provider tests, Clippy, Nextest, and doctests on a host where
+      the `alloca` build script can execute its configured C compiler.
+- [ ] Mark complete only after those test-bearing gates pass.
+
 ## LETO-CROSS-ENTROPY-PROVIDER-1 [minor, arch] — Owner: Codex
 
 - [x] Claim the provider boundary and record ADR 0023.

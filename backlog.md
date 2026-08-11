@@ -1,5 +1,21 @@
 # Leto Work Backlog
 
+## LETO-HERMES-REDUCED-PRECISION-PROVIDER-1 — Route F16/Bf16 operations through Hermes [minor, validation-blocked]
+
+**Outcome:** `leto-ops::SimdStrategy` now delegates `F16` and `Bf16` elementwise,
+reduction, AXPY, GEMV, and GEMM operations to Hermes' capability-checked public
+provider, with the existing scalar implementation retained as the provider's
+fallback. Eunomia remains the numeric SSOT; Leto does not claim that every
+reduced-precision operation is native hardware SIMD. Native AVX-512 BF16
+`DPBF16PS` remains confined to Hermes' BF16 tile provider.
+
+**Evidence:** direct F16/Bf16 provider tests are authored for elementwise
+arithmetic, sum, dot, and `C += alpha*x`; rustfmt, library compilation, and diff
+checks pass. The test-bearing Clippy/Nextest/doctest gates remain blocked by the
+host's `alloca` build script failing to execute `gcc.exe`, so the new tests have
+not yet been executed. No Rust source diagnostic or assertion failure was
+reported.
+
 ## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, complete]
 
 **Owner:** Codex on `codex/leto-cross-entropy-provider`; claimed 2026-08-04.

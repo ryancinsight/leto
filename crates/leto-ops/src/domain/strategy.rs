@@ -235,122 +235,90 @@ macro_rules! impl_simd_ops_native {
 impl_simd_ops_native!(f32);
 impl_simd_ops_native!(f64);
 
-// Reduced-precision types use the scalar fallback until the complete
-// `SimdOperations` surface has native Hermes kernels.
-macro_rules! impl_simd_ops_unsupported {
-    ($t:ty) => {
-        impl SimdOperations<$t> for SimdStrategy {
-            #[inline(always)]
-            fn add_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn sub_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn mul_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn div_slice(_a: &[$t], _b: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn sum_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn dot_slice(_a: &[$t], _b: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn axpy_slice(_alpha: $t, _x: &[$t], _out: &mut [$t]) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn axpy_rows(
-                _alphas: &[$t],
-                _x: &[$t],
-                _out: &mut [$t],
-                _row_stride: usize,
-                _rows: usize,
-                _cols: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn axpy_rows_batch(
-                _alphas: &[$t],
-                _x_panel: &[$t],
-                _out: &mut [$t],
-                _row_stride: usize,
-                _rows: usize,
-                _depth: usize,
-                _cols: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn tiled_gemm(
-                _a: &[$t],
-                _b: &[$t],
-                _c: &mut [$t],
-                _m: usize,
-                _n: usize,
-                _k: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn gemv_strided(
-                _a: &[$t],
-                _x: &[$t],
-                _y: &mut [$t],
-                _nrows: usize,
-                _ncols: usize,
-                _lda: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn gemv_transpose_strided(
-                _a: &[$t],
-                _x: &[$t],
-                _y: &mut [$t],
-                _nrows: usize,
-                _ncols: usize,
-                _lda: usize,
-            ) -> Result<(), &'static str> {
-                Err("simd unsupported for type")
-            }
-            #[inline(always)]
-            fn abs_sum_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn abs_max_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn min_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn max_slice(_s: &[$t]) -> Option<$t> {
-                None
-            }
-            #[inline(always)]
-            fn jaccard_distance(_a: &[$t], _b: &[$t]) -> Option<f64> {
-                None
-            }
-            #[inline(always)]
-            fn hamming_distance(_a: &[$t], _b: &[$t]) -> Option<u64> {
-                None
-            }
-        }
-    };
-}
+// Reduced-precision values use the same capability-checked Hermes provider as
+// the full-width scalar types. Hermes may select an emulated or conversion
+// backend when the host lacks a native reduced-precision instruction; Leto does
+// not make a stronger hardware claim than the provider does.
+impl_simd_ops_native!(F16);
+impl_simd_ops_native!(Bf16);
 
-impl_simd_ops_unsupported!(F16);
-impl_simd_ops_unsupported!(Bf16);
+#[cfg(test)]
+mod tests {
+    use super::{SimdOperations, SimdStrategy};
+    use eunomia::{Bf16, F16};
+
+    #[test]
+    fn reduced_precision_provider_covers_elementwise_and_reductions() {
+        let f16_a = [F16::from_f32(1.25), F16::from_f32(-2.5), F16::from_f32(3.0)];
+        let f16_b = [F16::from_f32(2.0), F16::from_f32(0.5), F16::from_f32(-1.0)];
+        let mut f16_out = [F16::ZERO; 3];
+        <SimdStrategy as SimdOperations<F16>>::add_slice(&f16_a, &f16_b, &mut f16_out)
+            .expect("Hermes F16 provider should accept valid equal-length slices");
+        assert_eq!(
+            f16_out.map(F16::to_bits),
+            [
+                F16::from_f32(3.25).to_bits(),
+                F16::from_f32(-2.0).to_bits(),
+                F16::from_f32(2.0).to_bits()
+            ]
+        );
+        assert_eq!(
+            <SimdStrategy as SimdOperations<F16>>::sum_slice(&f16_a),
+            Some(F16::from_f32(1.75))
+        );
+        assert_eq!(
+            <SimdStrategy as SimdOperations<F16>>::dot_slice(&f16_a, &f16_b),
+            Some(F16::from_f32(-1.75))
+        );
+
+        let bf16_a = [
+            Bf16::from_f32(1.5),
+            Bf16::from_f32(-2.0),
+            Bf16::from_f32(0.25),
+        ];
+        let bf16_b = [
+            Bf16::from_f32(2.0),
+            Bf16::from_f32(0.5),
+            Bf16::from_f32(4.0),
+        ];
+        let mut bf16_out = [Bf16::ZERO; 3];
+        <SimdStrategy as SimdOperations<Bf16>>::mul_slice(&bf16_a, &bf16_b, &mut bf16_out)
+            .expect("Hermes BF16 provider should accept valid equal-length slices");
+        assert_eq!(
+            bf16_out.map(Bf16::to_bits),
+            [
+                Bf16::from_f32(3.0).to_bits(),
+                Bf16::from_f32(-1.0).to_bits(),
+                Bf16::from_f32(1.0).to_bits()
+            ]
+        );
+        assert_eq!(
+            <SimdStrategy as SimdOperations<Bf16>>::sum_slice(&bf16_a),
+            Some(Bf16::from_f32(-0.25))
+        );
+    }
+
+    #[test]
+    fn reduced_precision_provider_preserves_axpy_accumulation() {
+        let x = [
+            Bf16::from_f32(1.5),
+            Bf16::from_f32(-2.0),
+            Bf16::from_f32(0.25),
+        ];
+        let mut out = [
+            Bf16::from_f32(1.0),
+            Bf16::from_f32(3.0),
+            Bf16::from_f32(-1.0),
+        ];
+        <SimdStrategy as SimdOperations<Bf16>>::axpy_slice(Bf16::from_f32(2.0), &x, &mut out)
+            .expect("Hermes BF16 provider should preserve C += alpha*x");
+        assert_eq!(
+            out.map(Bf16::to_bits),
+            [
+                Bf16::from_f32(4.0).to_bits(),
+                Bf16::from_f32(-1.0).to_bits(),
+                Bf16::from_f32(-0.5).to_bits()
+            ]
+        );
+    }
+}
