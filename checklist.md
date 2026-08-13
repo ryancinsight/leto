@@ -9,6 +9,26 @@
       independent review.
 - [x] Pass exact-head CI and merge before the accelerator and consumer slices.
 
+## LETO-CONVOLUTION-PROVIDER-1 [major, arch] — complete
+
+- [x] Deliver one scalar- and rank-generic regular and transposed convolution
+      family over borrowed views and caller-owned outputs, with checked
+      failure-atomic validation and no operation-path allocation.
+- [x] Cover f32, f64, F16, and Bf16; regular and transposed 1-D, 2-D, and 3-D
+      value semantics; strided layouts; output-padding gradients; and typed
+      invalid-contract failures.
+- [x] Merge implementation PRs #78, #79, and #80; current provider default is
+      `e525d8dd5ee52d12de0bf61987e8af6bf896700f`.
+- [x] Verify exact-head hosted run `31663241086`: formatting, minimal-feature
+      compilation, warning-denied Clippy, configured Nextest, doctests, and
+      documentation all pass.
+- [x] Confirm Coeus direct CPU dispatch and host-loop deletion at default
+      `aabdec67a0f5baa415c4abb6dded69db41b2f2d6`, hosted run `31672329963`.
+
+Residual: Leto retains 33 pre-existing Rustdoc broken/private-link warnings;
+none is introduced by the convolution family. Accelerator implementation is
+owned by Hephaestus.
+
 ## LETO-CRATES-METADATA-1 [patch] — Owner: Codex
 
 - [x] Add precise crates.io descriptions to both publishable packages.
