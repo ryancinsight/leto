@@ -1,6 +1,6 @@
 use crate::application::iter::{
     AxisChunks, ElementIter, ElementIterMut, ExactChunks, IndexedIter, IndexedIterMut, Lanes,
-    LanesMut, Windows,
+    LanesMut, TaskPartitionsMut, Windows,
 };
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
@@ -480,6 +480,23 @@ where
     #[inline]
     pub fn try_iter_mut(&mut self) -> Result<ElementIterMut<'_, T, N>> {
         self.view_mut().try_iter_mut()
+    }
+
+    /// Split the logical row-major domain into disjoint mutable task partitions.
+    ///
+    /// The partition iterator validates the complete layout once and leaves
+    /// scheduling to the caller. Each partition is a move-only range token
+    /// suitable for a scoped execution provider.
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] when `chunk_size` is zero, storage is invalid, or
+    /// the layout is not provably injective.
+    #[inline]
+    pub fn task_partitions_mut(
+        &mut self,
+        chunk_size: usize,
+    ) -> Result<TaskPartitionsMut<'_, T, N>> {
+        self.view_mut().task_partitions_mut(chunk_size)
     }
 
     /// The elements as one mutable contiguous slice in logical row-major order,

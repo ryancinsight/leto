@@ -21,6 +21,9 @@ pub use domain::strategy::SimdStrategy;
 #[cfg(feature = "parallel")]
 pub use domain::strategy::ParallelStrategy;
 
+#[cfg(feature = "parallel")]
+pub use infrastructure::parallel::{for_each_task_partition_mut, for_each_task_partition_mut_with};
+
 pub use application::attention::{
     scaled_dot_product_attention_backward_accumulate, scaled_dot_product_attention_into,
     AttentionError, AttentionGradients, AttentionMask, AttentionOperand, AttentionResult,

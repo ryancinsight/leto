@@ -9,6 +9,7 @@
 //! `[front, back)` cursor so forward and backward consumption meet exactly once.
 
 use crate::application::array::Array;
+use crate::application::index::index_from_flat;
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -52,6 +53,35 @@ fn odometer_step_back<const N: usize>(
 
 fn layout_may_alias_mutable_offsets<const N: usize>(layout: &Layout<N>) -> Result<bool> {
     Ok(!layout.is_injective()?)
+}
+
+/// Private proof token for one bounds-valid, injective mutable layout.
+///
+/// The token is created once at the mutable partition boundary. It is not
+/// exposed as a view or slice, so partition construction cannot duplicate the
+/// raw layout proof outside this module.
+struct MutableLayoutProof<'a, T, const N: usize> {
+    ptr: std::ptr::NonNull<T>,
+    layout: Layout<N>,
+    storage_len: usize,
+    _marker: std::marker::PhantomData<&'a mut [T]>,
+}
+
+impl<'a, T, const N: usize> MutableLayoutProof<'a, T, N> {
+    fn new(view: ArrayViewMut<'a, T, N>, aliasing_reason: &'static str) -> Result<Self> {
+        view.layout.validate_storage_len(view.len)?;
+        if layout_may_alias_mutable_offsets(&view.layout)? {
+            return Err(LetoError::StorageError {
+                reason: aliasing_reason.to_string(),
+            });
+        }
+        Ok(Self {
+            ptr: view.ptr,
+            layout: view.layout,
+            storage_len: view.len,
+            _marker: std::marker::PhantomData,
+        })
+    }
 }
 
 /// Iterator over every element of a view in logical row-major order.
@@ -285,37 +315,67 @@ pub struct IndexedIterMut<'a, T, const N: usize> {
 }
 
 impl<'a, T, const N: usize> IndexedIterMut<'a, T, N> {
-    /// Build a mutable indexed iterator over `view`.
+    /// Build a mutable indexed iterator over the complete logical view.
     pub(crate) fn new(view: ArrayViewMut<'a, T, N>) -> Result<Self> {
-        let layout = view.layout;
-        layout.validate_storage_len(view.len)?;
-        if layout_may_alias_mutable_offsets(&layout)? {
-            return Err(LetoError::StorageError {
-                reason: "indexed_iter_mut requires provably disjoint logical offsets".to_string(),
+        let end = view.layout.size();
+        Self::new_range(view, 0, end)
+    }
+
+    /// Build a mutable indexed iterator over a validated logical range.
+    ///
+    /// The range is expressed in row-major logical positions, not physical
+    /// storage offsets. It is the primitive used by [`TaskPartitionsMut`].
+    pub(crate) fn new_range(
+        view: ArrayViewMut<'a, T, N>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self> {
+        Self::from_proof(
+            MutableLayoutProof::new(
+                view,
+                "indexed_iter_mut requires provably disjoint logical offsets",
+            )?,
+            start,
+            end,
+        )
+    }
+
+    fn from_proof(proof: MutableLayoutProof<'a, T, N>, start: usize, end: usize) -> Result<Self> {
+        let MutableLayoutProof {
+            ptr,
+            layout,
+            storage_len: _,
+            _marker: _,
+        } = proof;
+        let size = layout.size();
+        if start > end || end > size {
+            return Err(LetoError::OutOfBounds {
+                index: vec![start, end],
+                shape: vec![size],
             });
         }
-
-        let back = layout.size();
-        let (back_index, back_offset) = if back > 0 {
-            let mut idx = [0usize; N];
-            for (i, item) in idx.iter_mut().enumerate() {
-                *item = layout.shape[i] - 1;
-            }
-            let offset = layout
-                .offset_of(idx)
-                .expect("invariant: last index is valid");
-            (idx, offset)
+        let (front_index, front_offset, back_index, back_offset) = if start < end {
+            let front_index = index_from_flat(start, &layout.shape);
+            let back_index = index_from_flat(end - 1, &layout.shape);
+            let front_offset = layout
+                .offset_of(front_index)
+                .expect("invariant: range start is a valid logical index");
+            let back_offset = layout
+                .offset_of(back_index)
+                .expect("invariant: range end is a valid logical index");
+            (front_index, front_offset, back_index, back_offset)
         } else {
-            ([0usize; N], layout.offset)
+            ([0usize; N], layout.offset, [0usize; N], layout.offset)
         };
+
         Ok(Self {
-            ptr: view.ptr,
+            ptr,
             layout,
             shape: layout.shape,
             front: 0,
-            back,
-            front_index: [0usize; N],
-            front_offset: layout.offset,
+            back: end - start,
+            front_index,
+            front_offset,
             back_index,
             back_offset,
             _marker: std::marker::PhantomData,
@@ -379,6 +439,10 @@ impl<'a, T, const N: usize> DoubleEndedIterator for IndexedIterMut<'a, T, N> {
 
 impl<'a, T, const N: usize> ExactSizeIterator for IndexedIterMut<'a, T, N> {}
 
+// SAFETY: construction validates storage bounds and injectivity, and the
+// iterator owns the exclusive mutable traversal token for its range.
+unsafe impl<T: Send, const N: usize> Send for IndexedIterMut<'_, T, N> {}
+
 /// Fallible mutable iterator over logical row-major elements of a view.
 ///
 /// Construction validates storage reachability and logical-offset injectivity
@@ -420,6 +484,158 @@ impl<'a, T, const N: usize> DoubleEndedIterator for ElementIterMut<'a, T, N> {
 }
 
 impl<'a, T, const N: usize> ExactSizeIterator for ElementIterMut<'a, T, N> {}
+
+// SAFETY: ElementIterMut delegates to IndexedIterMut, whose construction and
+// range proof prevent duplicate mutable references.
+unsafe impl<T: Send, const N: usize> Send for ElementIterMut<'_, T, N> {}
+
+/// A single disjoint logical task partition of a mutable array.
+///
+/// A partition is restricted to one half-open row-major logical range and
+/// exposes only its own mutable element iterator. Consume it with
+/// [`IntoIterator`]; a partition cannot be cloned or recreated from its raw
+/// storage by safe code.
+pub struct TaskPartitionMut<'a, T, const N: usize> {
+    start: usize,
+    end: usize,
+    iter: ElementIterMut<'a, T, N>,
+}
+
+impl<'a, T, const N: usize> TaskPartitionMut<'a, T, N> {
+    /// Return the zero-based logical range covered by this partition.
+    #[must_use]
+    pub const fn logical_range(&self) -> core::ops::Range<usize> {
+        self.start..self.end
+    }
+
+    /// Return the number of logical elements in this partition.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.end - self.start
+    }
+
+    /// Return whether this partition contains no logical elements.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+}
+
+impl<'a, T, const N: usize> IntoIterator for TaskPartitionMut<'a, T, N> {
+    type Item = &'a mut T;
+    type IntoIter = ElementIterMut<'a, T, N>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter
+    }
+}
+
+// SAFETY: a partition contains only a range-limited mutable iterator. The
+// parent proof establishes disjointness from every sibling range, and T: Send
+// makes moving the token to a scoped worker sound.
+unsafe impl<T: Send, const N: usize> Send for TaskPartitionMut<'_, T, N> {}
+
+/// Allocation-free iterator producing disjoint mutable task partitions.
+///
+/// Construction validates storage bounds and logical-offset injectivity once.
+/// Each yielded partition is a distinct row-major logical range, so the
+/// injectivity proof lifts logical disjointness to physical storage
+/// disjointness for negative and strided layouts as well.
+pub struct TaskPartitionsMut<'a, T, const N: usize> {
+    proof: MutableLayoutProof<'a, T, N>,
+    chunk_size: usize,
+    front: usize,
+    back: usize,
+}
+
+impl<'a, T, const N: usize> TaskPartitionsMut<'a, T, N> {
+    /// Build disjoint logical task partitions from a mutable view.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError`] if `chunk_size` is zero, storage bounds are
+    /// invalid, or the layout is not provably injective.
+    pub(crate) fn new(view: ArrayViewMut<'a, T, N>, chunk_size: usize) -> Result<Self> {
+        if chunk_size == 0 {
+            return Err(LetoError::StorageError {
+                reason: "mutable task partition chunk size must be non-zero".to_string(),
+            });
+        }
+        let proof = MutableLayoutProof::new(
+            view,
+            "mutable task partitions require provably disjoint logical offsets",
+        )?;
+        let size = proof.layout.size();
+        Ok(Self {
+            proof,
+            chunk_size,
+            front: 0,
+            back: size.div_ceil(chunk_size),
+        })
+    }
+
+    #[inline]
+    fn range_at(&self, partition: usize) -> (usize, usize) {
+        let size = self.proof.layout.size();
+        let start = partition
+            .checked_mul(self.chunk_size)
+            .expect("invariant: partition start fits in logical size");
+        let end = start.saturating_add(self.chunk_size).min(size);
+        (start, end)
+    }
+
+    #[inline]
+    fn partition_at(&self, partition: usize) -> TaskPartitionMut<'a, T, N> {
+        let (start, end) = self.range_at(partition);
+        let proof = MutableLayoutProof {
+            ptr: self.proof.ptr,
+            layout: self.proof.layout,
+            storage_len: self.proof.storage_len,
+            _marker: std::marker::PhantomData,
+        };
+        let inner = IndexedIterMut::from_proof(proof, start, end)
+            .expect("invariant: partition range is within validated logical domain");
+        TaskPartitionMut {
+            start,
+            end,
+            iter: ElementIterMut::from_indexed(inner),
+        }
+    }
+}
+
+impl<'a, T, const N: usize> Iterator for TaskPartitionsMut<'a, T, N> {
+    type Item = TaskPartitionMut<'a, T, N>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.front >= self.back {
+            return None;
+        }
+        let partition = self.partition_at(self.front);
+        self.front += 1;
+        Some(partition)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.back - self.front;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a, T, const N: usize> DoubleEndedIterator for TaskPartitionsMut<'a, T, N> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.back -= 1;
+        Some(self.partition_at(self.back))
+    }
+}
+
+impl<'a, T, const N: usize> ExactSizeIterator for TaskPartitionsMut<'a, T, N> {}
 
 /// `for elem in &view` iterates the view's elements in logical row-major order.
 impl<'a, T, const N: usize> IntoIterator for &ArrayView<'a, T, N> {
