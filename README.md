@@ -37,9 +37,9 @@ scheme and the crate responsibility.
 
 | Crate | Responsibility |
 | --- | --- |
-| `leto` | Core const-rank layout, slicing, array, view, and storage primitives. |
-| `leto-ops` | Elementwise arithmetic, reductions, matrix multiplication, SIMD hooks, and Moirai-backed parallel loops. |
-| `leto-python` | Thin PyO3/NumPy boundary over Rust operations with GIL release around compute. |
+| [`leto`](crates/leto/README.md) | Core const-rank layout, slicing, array, view, and storage primitives. |
+| [`leto-ops`](crates/leto-ops/README.md) | Elementwise arithmetic, reductions, matrix multiplication, dense and sparse linear algebra, SIMD hooks, and Moirai-backed parallel loops. |
+| [`leto-python`](crates/leto-python/README.md) | Thin PyO3/NumPy boundary over Rust operations with GIL release around compute. |
 
 ## Python Releases
 
@@ -240,10 +240,10 @@ Current value-semantic coverage includes:
 - allocating keep-dim `sum_axis`, `mean_axis`, `min_axis`, and `max_axis`
   reductions over contiguous, strided, and empty-axis inputs.
 - `map_into`, `mapv`, and `map` over contiguous and strided inputs.
-- differential tests against `ndarray` for map-style contiguous/transposed
-  traversal and keep-dim axis reductions.
-- `sum` and 2D `matmul`, including differential matmul checks against
-  `ndarray` for contiguous and transposed inputs.
+- differential tests for map-style contiguous/transposed traversal and
+  keep-dim axis reductions against in-repo scalar reference implementations.
+- `sum` and 2D `matmul`, including differential matmul checks for contiguous
+  and transposed inputs against a reference triple loop.
 - symmetric Jacobi eigendecomposition value tests (eigenvalue ordering,
   reconstruction, orthonormality, symmetry/finiteness rejection).
 - PyO3 output conversion consumes owned Leto vectors into NumPy instead of
@@ -257,13 +257,38 @@ Current value-semantic coverage includes:
 
 ### Linear Algebra Features
 
-- `symmetric_eigen_jacobi` and `symmetric_eigen_jacobi_with_tolerance`
-  compute symmetric eigendecompositions (ascending eigenvalues, orthonormal
-  column eigenvectors) via Jacobi rotations, generic over `T: RealScalar` and
-  running in native precision. This closed Apollo's `nalgebra` dependency:
-  FrFT/GFT eigendecomposition now runs on Leto.
-- Further decompositions (LU, QR, Cholesky, SVD) are added only with a named
-  consumer driver and a differential oracle; see `gap_audit.md` §B.
+All decompositions are generic over `T: RealScalar` and run in native
+precision. Each is a free function returning a decomposition type; the fluent
+trait layer below exposes the same kernels as rank-2 methods.
+
+- Eigen, symmetric: `symmetric_eigen_jacobi` and
+  `symmetric_eigen_jacobi_with_tolerance` (ascending eigenvalues, orthonormal
+  column eigenvectors) via Jacobi rotations, with eigenvalues-only variants
+  `symmetric_eigenvalues_jacobi` / `symmetric_eigenvalues_jacobi_with_tolerance`.
+  This closed Apollo's `nalgebra` dependency: FrFT/GFT eigendecomposition now
+  runs on Leto.
+- Eigen, Hermitian: `hermitian_eigen_jacobi` and `hermitian_eigen_qr`
+  (`f64`/`C64`), configured by `HermitianEigenConfig`, descending by default.
+- Eigen, general: `eigenvalues` returns all eigenvalues of a general real
+  matrix as `Complex<T>` (real ones with zero imaginary part, complex ones as
+  conjugate pairs). Order is unspecified.
+- Real Schur: `schur` computes `A = Q T Qᵀ` by Francis double-shift QR in real
+  arithmetic. `RealSchur<T>` exposes `q()`, `t()` (quasi-upper-triangular, 1x1
+  blocks for real eigenvalues and 2x2 blocks for conjugate pairs), and
+  `eigenvalues()` read off the diagonal blocks in index order.
+- Triangular and orthogonal factorizations: `lu_decompose` (partial pivot),
+  `full_piv_lu` (complete pivot, rank-revealing), `qr_decompose` (Householder),
+  `col_piv_qr` (rank-revealing), `cholesky_decompose` (SPD), `udu_decompose`
+  and `bunch_kaufman` (symmetric indefinite), `hessenberg`, and
+  `bidiagonalize` (Golub-Kahan).
+- SVD: `svd_decompose`, `svd_rank_revealing`, `svd_via_bidiagonal`,
+  `singular_values` (descending), and `pinv`, each with a `_with_tolerance`
+  variant where a tolerance applies.
+- Direct solvers and scalars: `solve`, `solve_least_squares`, `det`, `inv`,
+  `trace`, `matrix_rank`, `kron`, `matexp`, `matpow`, and `nnls`.
+- Iterative solvers: `ConjugateGradient` (SPD), `BiCGSTAB`, restarted `GMRES`,
+  and `LsqrSolver`, over the `LinearOperator` trait, with `Identity`, `Jacobi`,
+  `SOR`, `SSOR`, and `ILU` preconditioners.
 - A fluent rank-2 trait layer (ADR 0003) consolidates the ndarray strided-array
   and nalgebra matrix-method models onto the existing `Array2`/`ArrayView2`: any
   rank-2 receiver gains `matmul`, `norm_l1`/`norm_l2`/`norm_max`, `lu`, `qr`,
@@ -275,23 +300,29 @@ Current value-semantic coverage includes:
   borrowed arrays, and strided views all carry the surface. The full ndarray
   0.16 / nalgebra 0.35 completeness program lives in `docs/completeness/`.
 
-### Runnable Migration Evidence
+### Runnable Accuracy Evidence
 
-`leto-ops` ships two deterministic, CI-safe examples for consumer migration
-checks:
+`leto-ops` ships two deterministic, CI-safe accuracy examples. Neither
+compares against a third-party provider: both check Leto against an
+independent reference or an analytical bound.
 
 ```sh
-cargo run --locked -p leto-ops --example ndarray_parity
-cargo run --locked -p leto-ops --example nalgebra_parity
+cargo run --locked -p leto-ops --example scalar_reference_parity
+cargo run --locked -p leto-ops --example poisson_sparse_lu_accuracy
 ```
 
-`ndarray_parity` compares construction, elementwise addition, dot product,
-matrix multiplication, sum, and `mapv`, reporting every absolute differential
-against exact-operation or `γₙ` reduction bounds. `nalgebra_parity` compares a
-manufactured Dirichlet Poisson solve through nalgebra dense LU and Leto Ops
-COO→CSR plus `SparseLuSolver`; it independently checks normalized residuals and
-the exact discrete sine eigenmode with condition-number-scaled bounds. These
-are runnable workflow examples, not benchmarks. Controlled performance
+`scalar_reference_parity` runs construction, elementwise addition, dot product,
+matrix multiplication, sum, and `mapv` through Leto and recomputes each with a
+plain-Rust scalar loop, reporting every absolute differential against
+exact-operation or `γₙ` reduction bounds.
+
+`poisson_sparse_lu_accuracy` solves a manufactured Dirichlet Poisson system
+through `SparseLuSolver` by two assembly routes — a dense `Array2` converted
+with `CsrMatrix::from_dense`, and COO triplets converted with `to_csr` — then
+checks normalized backward errors against `γ(3n)` and both solutions against
+the exact discrete sine eigenmode with condition-number-scaled forward bounds.
+
+These are runnable workflow examples, not benchmarks. Controlled performance
 comparisons remain in the Criterion targets.
 
 ## Replacement Status
@@ -302,8 +333,9 @@ comparisons remain in the Criterion targets.
   `leto::Array2<f64>`.
 - **ndarray, Apollo**: replaced. Apollo commit `324f380` uses native Leto host
   arrays across its transform families; its manifests and resolved Rust graph
-  contain no `ndarray` or retired `ndarray-compat` dependency edge. Leto retains
-  `ndarray` only as its own dev-dependency differential oracle.
+  contain no `ndarray` or retired `ndarray-compat` dependency edge. Leto itself
+  no longer depends on `ndarray` in any capacity, including dev-dependencies
+  (ADR 0017); its differential oracles are in-repo reference implementations.
 - **Coeus backend**: CPU array layer consolidated onto Leto (verified
   2026-06-15 against coeus HEAD `037fdd5`). Coeus's CPU `BackendOps` route every
   array primitive (elementwise, matmul + batched, axis reductions,
@@ -324,13 +356,27 @@ The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
 
 ## Dependency Policy
 
-Core Leto crates must not depend on `ndarray` or `nalgebra` in production. Leto
-packages use them only as dev-dependency differential oracles for replacement
-tests and examples; no public feature, re-export, or conversion implementation
-exposes either provider.
+No Leto crate depends on `ndarray` or `nalgebra` in any dependency section,
+including dev-dependencies: ADR 0017 retired the last of them. Differential
+tests and examples use in-repo scalar reference implementations and analytical
+values as their oracles. No public feature, re-export, or conversion
+implementation exposes either provider.
 Language and FFI consumers construct native Leto arrays at their ownership
 boundaries instead of routing through a provider compatibility module.
 
 Downstream Atlas repositories consume Leto through a Git remote. Provider-side
 changes must be committed and pushed before Apollo, Coeus, or other consumers
 update their lockfiles.
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.

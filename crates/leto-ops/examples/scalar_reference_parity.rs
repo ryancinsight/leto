@@ -1,8 +1,13 @@
-//! Runnable Leto-to-Leto migration evidence.
+//! Runnable accuracy evidence for Leto kernels against plain-Rust references.
 //!
 //! The harness executes deterministic construction, elementwise, reduction,
-//! and matrix operations through Leto. It reports the measured absolute
-//! differential for each operation and checks it against one of two contracts:
+//! and matrix operations through Leto, and independently recomputes each one
+//! with a straightforward scalar loop over `std` iterators (naive summation,
+//! a triple-loop matmul). No third-party array provider is involved: the
+//! oracle is the reference loop, not another library.
+//!
+//! It reports the measured absolute differential for each operation and checks
+//! it against one of two contracts:
 //!
 //! - elementwise operations must be bitwise equal because both paths execute
 //!   the same ordered IEEE-754 operation per element;
@@ -11,7 +16,7 @@
 //!
 //! Run with:
 //!
-//! cargo run --locked -p leto-ops --example ndarray_parity
+//! cargo run --locked -p leto-ops --example scalar_reference_parity
 
 mod support;
 

@@ -13,6 +13,7 @@ rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ryancinsight/leto.git"
+readme = "README.md"
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──
@@ -26,9 +27,6 @@ hermes-simd = { version = "0.6.0", git = "https://github.com/ryancinsight/hermes
 eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 aequitas = { package = "aequitas", version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false }
-
-# ── Numeric Foundations ──
-bytemuck = { version = "1.25", features = ["derive"] }
 
 # ── Dev-only compatibility deps were removed per LETO-NDARRAY-BOUNDARY-1 ──
 

@@ -1,13 +1,18 @@
-//! Runnable Leto-to-Leto migration evidence.
+//! Runnable accuracy evidence for `SparseLuSolver` on a manufactured system.
 //!
-//! Both providers solve the manufactured one-dimensional Poisson system
-//!  with homogeneous Dirichlet boundaries. The legacy path uses
-//! a dense Leto matrix and LU; the Atlas path assembles Leto Ops COO/CSR,
-//! carries its right-hand side in a Leto Array1, and uses SparseLuSolver.
-//! The latter intentionally exercises the solver's documented dense-backed
-//! boundary for systems within DENSE_LIMIT_DEFAULT.
+//! Both paths solve the same one-dimensional Poisson system with homogeneous
+//! Dirichlet boundaries through Leto Ops `SparseLuSolver`; they differ only in
+//! how the matrix reaches CSR:
 //!
-//! Verification is independent of provider agreement:
+//! - the dense route fills a Leto `Array2` and converts with
+//!   `CsrMatrix::from_dense`;
+//! - the sparse route pushes COO triplets and converts with `to_csr`.
+//!
+//! At this order both land on the solver's documented dense-backed boundary
+//! for systems within `DENSE_LIMIT_DEFAULT`, so the run also exercises that
+//! path. No third-party solver is involved.
+//!
+//! Verification is independent of the two routes agreeing with each other:
 //!
 //! - each normalized residual is bounded by gamma(3n), the backward-error bound
 //!   for partial-pivoting LU on this diagonally dominant, growth-factor-one
@@ -22,7 +27,7 @@
 //!
 //! Run with:
 //!
-//! cargo run --locked -p leto-ops --example nalgebra_parity
+//! cargo run --locked -p leto-ops --example poisson_sparse_lu_accuracy
 
 mod support;
 
@@ -176,7 +181,7 @@ fn observations(problem: &Problem) -> ([Observation; 5], f64) {
 
     let backward_bound = gamma(3 * problem.order);
     let solution_scale = maximum_absolute(&discrete_solution);
-    let provider_forward_bound = forward_error_bound(problem, solution_scale, backward_bound);
+    let path_forward_bound = forward_error_bound(problem, solution_scale, backward_bound);
     let observations = [
         Observation::new(
             "dense_backward",
@@ -191,17 +196,17 @@ fn observations(problem: &Problem) -> ([Observation; 5], f64) {
         Observation::new(
             "dense_discrete",
             max_abs_diff(&dense_solution, &discrete_solution),
-            provider_forward_bound,
+            path_forward_bound,
         ),
         Observation::new(
             "sparse_discrete",
             max_abs_diff(&sparse_solution, &discrete_solution),
-            provider_forward_bound,
+            path_forward_bound,
         ),
         Observation::new(
-            "provider_agreement",
+            "dense_vs_sparse_agreement",
             max_abs_diff(&dense_solution, &sparse_solution),
-            2.0 * provider_forward_bound,
+            2.0 * path_forward_bound,
         ),
     ];
     let discretization_error = max_abs_diff(&discrete_solution, &continuum_solution);

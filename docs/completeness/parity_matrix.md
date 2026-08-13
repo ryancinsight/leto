@@ -9,8 +9,8 @@ Scored inventory backing [`PLAN.md`](PLAN.md). Status legend:
 - **Excluded(reason)** — out of parity denominator with recorded rationale.
 
 Evidence column: `parity.rs` / `oracle_parity.rs` = differential test file;
-`kernels.rs` = criterion oracle benchmark; `ndarray_parity.rs` and
-`nalgebra_parity.rs` = runnable end-to-end examples. Example evidence
+`kernels.rs` = criterion oracle benchmark; `scalar_reference_parity.rs` and
+`poisson_sparse_lu_accuracy.rs` = runnable end-to-end examples. Example evidence
 supplements, but does not replace, the focused contract tests that own each
 row's status. This matrix is seeded from the 2026-06-14 first pass; Stage 1–2
 of the plan fills the remaining oracle surface (geometry, full
@@ -20,27 +20,27 @@ iterator/slicing surface, companion crates) to a complete count.
 
 | Operation | Oracle | Leto API | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| Construct: zeros/ones/from_elem/from_vec/from_shape_vec/from_shape_fn/from_fn/eye/from_iter | ndarray | `Array::*` + `FromIterator` | Verified | core_tests — constructor shape/value semantics, identity, closure generation, iterator collection; `ndarray_parity.rs` runnable construction differential |
+| Construct: zeros/ones/from_elem/from_vec/from_shape_vec/from_shape_fn/from_fn/eye/from_iter | ndarray | `Array::*` + `FromIterator` | Verified | core_tests — constructor shape/value semantics, identity, closure generation, iterator collection; `scalar_reference_parity.rs` runnable construction differential |
 | Rank aliases Array1–3, views, mut views | ndarray `Ix1..` | `Array1..3`, `ArrayView*` | Verified | core_tests |
 | Slicing (ranges, neg index/step, newaxis, ellipsis) | `s![]` / `slice` | `SliceArg`/`slice_with` | Verified | core/slicing |
 | Transpose / permute | `.t()`/`permuted_axes` | `transpose`/permute | Verified | core/transform |
 | Broadcast | `broadcast` | layout broadcast | Verified | layout_property |
 | Axis iteration, rows/columns | `axis_iter`, `rows` | `AxisIter*`, `rows/columns` | Verified | core_tests |
 | reshape / into_shape | `into_shape_with_order` | reshape/to_contiguous | Verified | core/transform — zero-copy dense reshape, owned rank change, strided rejection, and logical-order materialization |
-| Elementwise add/sub/mul/div | `+ - * /` | `add/sub/mul/div` | Complete | parity.rs, kernels.rs `add_*`; `ndarray_parity.rs` runnable add differential |
+| Elementwise add/sub/mul/div | `+ - * /` | `add/sub/mul/div` | Complete | parity.rs, kernels.rs `add_*`; `scalar_reference_parity.rs` runnable add differential |
 | Scalar–array arithmetic | `&a + s` | `scalar_map` | Verified | parity.rs |
 | Unary math (exp/ln/sin/cos/sqrt/abs/neg/recip/powf) | `mapv(f)` | `unary_map`+ZST ops | Complete | parity.rs, kernels.rs `exp_*` |
-| map/mapv/map_into | `map`/`mapv` | `map`/`mapv`/`map_into` | Verified | differential.rs; `ndarray_parity.rs` runnable `mapv` differential |
+| map/mapv/map_into | `map`/`mapv` | `map`/`mapv`/`map_into` | Verified | differential.rs; `scalar_reference_parity.rs` runnable `mapv` differential |
 | map_inplace | `mapv_inplace` | `map_inplace` | Verified | unary_math |
 | Multi-array zip (3+), indexed zip | `Zip`, `Zip::indexed` | `zip_mut_with`, `indexed_zip_mut_with` | Verified | ops tests |
-| sum / mean / min / max (all) | `.sum/.mean/...` | `sum`, leto `*_all` | Complete (sum) | parity.rs, kernels.rs `sum_*`; `ndarray_parity.rs` runnable sum differential with `γₙ` bound |
+| sum / mean / min / max (all) | `.sum/.mean/...` | `sum`, leto `*_all` | Complete (sum) | parity.rs, kernels.rs `sum_*`; `scalar_reference_parity.rs` runnable sum differential with `γₙ` bound |
 | sum/mean/min/max axis (keep-dim) | `sum_axis(Axis)` | `sum_axis`/`mean_axis`/… | Verified | parity.rs |
 | argmin / argmax (axis index-array + whole-array multi-index) | ndarray-stats | `argmin`/`argmax` (axis) + `argmin_all`/`argmax_all` (`[usize; N]`) | Verified | core reductions — axis variants + whole-array multi-index; first-occurrence tie-break; value-agrees-with-`min_all`/`max_all` cross-check |
 | cumsum / prefix scan | (no native) | `cumsum`/`scan_axis` | Verified | parity.rs |
-| matmul 2D | `.dot()` | `matmul` | Complete | parity.rs, kernels.rs matmul; `ndarray_parity.rs` runnable matrix differential with `γₙ` bound |
+| matmul 2D | `.dot()` | `matmul` | Complete | parity.rs, kernels.rs matmul; `scalar_reference_parity.rs` runnable matrix differential with `γₙ` bound |
 | matmul transposed/strided | `.dot(t())` | `matmul` | Verified | parity.rs |
 | batched matmul (rank-3) | (manual) | `batched_matmul` | Verified | parity.rs |
-| vector dot | `Array1::dot` | `dot` | Complete | parity.rs, kernels.rs `dot_*`; `ndarray_parity.rs` runnable dot differential with `γₙ` bound |
+| vector dot | `Array1::dot` | `dot` | Complete | parity.rs, kernels.rs `dot_*`; `scalar_reference_parity.rs` runnable dot differential with `γₙ` bound |
 | concat / stack | `concatenate`/`stack` | `concat`/`stack` | Verified | parity.rs |
 | pad / split | (manual) | `pad`/`split` | Verified | structure tests |
 | Random (uniform/normal, seeded) | ndarray-rand | `uniform/normal_with_seed` | Complete | structure_ops.rs, kernels.rs |
@@ -67,7 +67,7 @@ for the implemented kernels; `Missing` rows are still missing *kernels*.
 
 | Operation | Oracle | Leto API | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| COO/CSR direct solve within dense limit | nalgebra dense LU + discrete sine eigenmode | `CooMatrix` → `CsrMatrix` + `SparseLuSolver` | Verified | `nalgebra_parity.rs` — manufactured Dirichlet Poisson solve; normalized backward errors, exact discrete solution, provider agreement, and exact `κ∞`-scaled bounds |
+| COO/CSR direct solve within dense limit | exact discrete sine eigenmode + `κ∞`-scaled bounds | `CooMatrix` → `CsrMatrix` + `SparseLuSolver` | Verified | `poisson_sparse_lu_accuracy.rs` — manufactured Dirichlet Poisson solve; normalized backward errors, exact discrete solution, dense/sparse assembly agreement, and exact `κ∞`-scaled bounds |
 | LU + solve + det + inverse | `LU`/`try_inverse` | `lu_decompose/solve/det/inv` | Verified | oracle_parity.rs |
 | QR + least squares | `QR` | `qr_decompose/solve_least_squares` | Verified | parity.rs (lstsq) |
 | Cholesky factor/solve/det/inv | `Cholesky` | `cholesky_*` | Verified | oracle_parity.rs |

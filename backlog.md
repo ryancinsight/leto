@@ -881,7 +881,7 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   regression.
 
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
-Criterion baselines recorded in `benchmark_results.md` (2026-06-11); every
+Criterion baselines recorded in `gap_audit.md` (2026-06-11); every
 item below must show a statistically significant improvement against them —
 no unmeasured "optimization" per performance_engineering.
 - [x] [patch] Row-walk strided traversal (`RowMajorTraversal` in
@@ -943,7 +943,7 @@ no unmeasured "optimization" per performance_engineering.
 - [x] [minor] `LETO-MATMUL-PERF-1`: Close dense matmul oracle performance
   parity before any replacement claim. **Owner:** Codex `/root` (complete).
   **Claimed files:** `crates/leto-ops/src/application/matrix.rs`,
-  `crates/leto-ops/benches/kernels.rs`, `benchmark_results.md`,
+  `crates/leto-ops/benches/kernels.rs`,
   `gap_audit.md`, and `checklist.md`.
   The 0.19.7 fused multi-row AXPY improves Leto but still trails
   ndarray/nalgebra at 64x64, 128x128, and 256x256. Current medians:
@@ -970,7 +970,7 @@ no unmeasured "optimization" per performance_engineering.
   **Owner:** Codex `/root` (complete). **Claimed files:**
   `crates/leto-ops/src/application/reduction.rs`,
   `crates/leto-ops/tests/ops/reduction.rs`,
-  `crates/leto-ops/benches/kernels.rs`, `benchmark_results.md`,
+  `crates/leto-ops/benches/kernels.rs`,
   `gap_audit.md`, and `checklist.md`. Acceptance: one canonical generic
   fallback preserves logical values and the existing reduction contract for
   positive and negative strides, performs no allocation or materialization,

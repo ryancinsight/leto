@@ -1,9 +1,10 @@
 # Leto Completeness Plan: Full ndarray / nalgebra Parity
 
 Status: active. Owner: leto workspace. Created 2026-06-14.
-Reference targets: `ndarray 0.16`, `nalgebra 0.35` (workspace-pinned dev oracles).
+Reference targets: `ndarray 0.16`, `nalgebra 0.35` (documented API surfaces used
+as the parity denominator; neither is a Leto dependency — ADR 0017).
 Companion artifacts: [`parity_matrix.md`](parity_matrix.md) (the scored inventory),
-`gap_audit.md` (prior consumer-driven audit), `benchmark_results.md` (perf baselines).
+`gap_audit.md` (prior consumer-driven audit and criterion perf baselines).
 
 ## 1. Objective and scope decision
 
@@ -126,7 +127,7 @@ sample-size 10, AVX2-class Win11 x86_64):
 | sum | 3.53 µs | 4.53 µs | ~0.78× (faster) |
 | vector dot | 7.06 µs | 9.35 µs | ~0.76× (faster) |
 
-Dense matmul (from `benchmark_results.md`, unchanged this pass): Leto
+Dense matmul (from the `gap_audit.md` criterion baselines, unchanged this pass): Leto
 17.4 µs / 109 µs / 1.06 ms at 64/128/256² vs ndarray 8.5 / 66.5 / 496 µs —
 **~1.6–2.1× slower**, the standing open performance target.
 

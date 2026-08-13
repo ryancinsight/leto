@@ -7,6 +7,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Math, reduction, SIMD, and parallel kernels for Leto arrays"
+readme.workspace = true
+documentation = "https://docs.rs/leto-ops"
+keywords = ["linear-algebra", "simd", "matrix", "kernels", "sparse"]
+categories = ["mathematics", "science", "algorithms"]
 
 [dependencies]
 # ── Local Workspace Crates ──
@@ -18,7 +22,6 @@ hermes-simd = { workspace = true }
 themis = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
-bytemuck = { workspace = true }
 eunomia = { workspace = true }
 
 # ── Serialization ──

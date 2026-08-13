@@ -7,13 +7,16 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "N-dimensional strided arrays, zero-copy views, and storage backends"
+readme.workspace = true
+documentation = "https://docs.rs/leto"
+keywords = ["array", "multidimensional", "strided", "zero-copy", "views"]
+categories = ["data-structures", "science", "mathematics"]
 
 [dependencies]
 # ── Systems and Parallelization ──
 mnemosyne = { workspace = true, optional = true }
 
 # ── Numeric Foundations ──
-bytemuck = { workspace = true }
 aequitas = { workspace = true }
 eunomia = { workspace = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }

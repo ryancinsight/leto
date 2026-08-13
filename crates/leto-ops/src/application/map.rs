@@ -246,7 +246,7 @@ where
     // Row-walk traversal: one offset computation per innermost row, then a
     // pure stride-increment walk along the last axis. Removes the per-element
     // div/mod index decomposition and the three per-element offset products
-    // (the measured ~87x strided-vs-contiguous gap; see benchmark_results.md).
+    // (the measured ~87x strided-vs-contiguous gap; see gap_audit.md).
     let Some(traversal) = RowMajorTraversal::new(size, shape) else {
         return Ok(());
     };
