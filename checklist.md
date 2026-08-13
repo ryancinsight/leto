@@ -32,16 +32,20 @@
 - [x] Refresh dependency resolution and pass focused gates.
 - [x] Merge before rerunning dependent Hephaestus provider CI.
 
-## LETO-STATEFUL-ZERO-LR-1 [patch] — Owner: Codex
+## LETO-STATEFUL-ZERO-LR-1 [patch] — complete
 
-- PM closeout claimed on `codex/leto-pm-closeout`.
+- Owner: Codex; PR #86 merged as `7d8c98f`; PM closeout ran on
+  `codex/leto-pm-closeout`.
 - [x] Admit finite zero learning rates without relaxing epsilon or domain
       validation.
 - [x] Cover all five parameter contracts with focused Nextest.
-- [ ] Pass warning-denied Clippy and exact-head hosted checks; merge.
+- [x] Pass warning-denied Clippy and exact-head hosted checks; Rust verification
+      run `30716401746` passed and current CI run `31645757949` is green.
 
-## LETO-STATEFUL-UPDATE-1 [minor, arch] — Owner: Codex
+## LETO-STATEFUL-UPDATE-1 [minor, arch] — complete
 
+- Owner: Codex; PR #85 merged as `7c8b90b`; current CI run `31645757949` is
+  green.
 - [x] Record CPU ownership, scalar/rank variation, validation, and consumer
       migration direction in ADR 0022.
 - [x] Implement one generic borrowed stateful-update family over mutable zip.
@@ -49,6 +53,13 @@
       guard-preservation, IEEE-special-value, and rejection conformance.
 - [x] Pass warning-denied gates, independent review, and exact-head CI; merge is
       the delivery transition for this completed provider slice.
+
+## LETO-STABLE-VECTOR-NORM-1 [patch] — complete
+
+- [x] Stabilize finite large and subnormal Euclidean norms without widening
+      precision, with value-semantic f32/f64 regression coverage.
+- [x] Merge PR #84 as `aa5c283` and verify current default head `8c4e609`
+      through CI run `31645757949`.
 
 ## LETO-ATTENTION-GROUPED-MASK-001 [minor, arch] — Owner: Codex
 

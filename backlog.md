@@ -80,7 +80,7 @@ warning-denied Clippy, and 492/492 focused Nextest cases pass. PR #89 merged as
 `themis-topology` 0.10.1, refresh the lockfile, pass focused checks, and merge
 before dependent Hephaestus provider CI is retried.
 
-## LETO-STATEFUL-ZERO-LR-1 — Preserve warmup updates [patch, in-progress]
+## LETO-STATEFUL-ZERO-LR-1 — Preserve warmup updates [patch, complete]
 
 **Owner:** Codex on `codex/leto-pm-closeout`; PM closeout claimed 2026-08-13.
 
@@ -91,10 +91,11 @@ learning rate while retaining strict positive epsilon and finite-domain checks.
 non-finite rates remain rejected, focused Nextest and warning-denied Clippy
 pass, and exact-head hosted checks pass before merge.
 
-**Status:** implementation and focused local verification complete; hosted
-verification pending.
+**Status:** complete. PR #86 merged as `7d8c98f`; Rust verification run
+`30716401746` passed. The current default head `8c4e609` also passes the full CI
+run `31645757949`.
 
-## LETO-STATEFUL-UPDATE-1 — Provider-owned CPU updates [minor, arch, in-progress]
+## LETO-STATEFUL-UPDATE-1 — Provider-owned CPU updates [minor, arch, complete]
 
 **Owner:** Codex on `codex/leto-pm-closeout`; PM closeout claimed 2026-08-13.
 
@@ -119,7 +120,7 @@ independent-review gates pass.
 full Leto/Leto Ops Nextest, warning-denied Clippy, doctest, Rustdoc, standalone
 minimal-feature, SemVer, independent-review, and exact-head hosted gates.
 
-## LETO-STABLE-VECTOR-NORM-1 — Range-stable Euclidean geometry [patch, in-progress]
+## LETO-STABLE-VECTOR-NORM-1 — Range-stable Euclidean geometry [patch, complete]
 
 **Owner:** Codex on `codex/leto-pm-closeout`; PM closeout claimed 2026-08-13.
 
@@ -136,6 +137,10 @@ non-goals.
 large and subnormal-scale lengths without widening precision; ordinary and
 non-finite IEEE behavior remains explicit; format, focused check, warning-denied
 Clippy, Nextest, doctest, Rustdoc, and SemVer gates pass.
+
+**Status:** complete. PR #84 merged as `aa5c283`; the current default head
+`8c4e609` passes CI run `31645757949`, including the range-stable norm
+implementation and regression suite.
 
 ## LETO-MUTABLE-ZIP-PROVIDER-1 — Generalize mutable zip outputs [major, arch, complete]
 
