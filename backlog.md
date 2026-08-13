@@ -82,7 +82,7 @@ before dependent Hephaestus provider CI is retried.
 
 ## LETO-STATEFUL-ZERO-LR-1 — Preserve warmup updates [patch, in-progress]
 
-**Owner:** Codex on `codex/leto-zero-learning-rate`; claimed 2026-08-01.
+**Owner:** Codex on `codex/leto-pm-closeout`; PM closeout claimed 2026-08-13.
 
 **Outcome:** every stateful-update parameter contract accepts a finite zero
 learning rate while retaining strict positive epsilon and finite-domain checks.
@@ -96,7 +96,7 @@ verification pending.
 
 ## LETO-STATEFUL-UPDATE-1 — Provider-owned CPU updates [minor, arch, in-progress]
 
-**Owner:** Codex on `codex/leto-stateful-update`; claimed 2026-08-01.
+**Owner:** Codex on `codex/leto-pm-closeout`; PM closeout claimed 2026-08-13.
 
 **Driver:** Coeus currently owns CPU optimizer formulas while Hephaestus owns
 the corresponding accelerator seam. Leto must own the scalar-preserving CPU
@@ -121,7 +121,7 @@ minimal-feature, SemVer, independent-review, and exact-head hosted gates.
 
 ## LETO-STABLE-VECTOR-NORM-1 — Range-stable Euclidean geometry [patch, in-progress]
 
-**Owner:** Codex on `codex/leto-stable-vector-norm`; claimed 2026-07-31.
+**Owner:** Codex on `codex/leto-pm-closeout`; PM closeout claimed 2026-08-13.
 
 **Driver:** Gaia polyline arc length delegates to `Vector::norm`, whose direct
 sum of squares overflows or underflows for finite vectors with representable

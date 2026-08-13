@@ -34,6 +34,7 @@
 
 ## LETO-STATEFUL-ZERO-LR-1 [patch] — Owner: Codex
 
+- PM closeout claimed on `codex/leto-pm-closeout`.
 - [x] Admit finite zero learning rates without relaxing epsilon or domain
       validation.
 - [x] Cover all five parameter contracts with focused Nextest.
