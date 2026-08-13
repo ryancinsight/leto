@@ -1,13 +1,11 @@
-//! GAT-driven lending iterators for zero-copy array subview access.
-//!
-//! ## Motivation
-//!
-//! The standard [`Iterator`] trait requires `Item` to have a lifetime independent
-//! of `&self`. This prevents returning views *borrowed from the iterator itself*
-//! (the "streaming iterator" problem). GATs (`type Item<'this>`) solve this by
-//! tying the yielded lifetime to `&mut self`.
+//! Lending iteration and non-overlapping tile views.
 //!
 //! ## `LendingIterator`
+//!
+//! The standard [`Iterator`] trait requires `Item` to have a lifetime independent
+//! of `&self`. This prevents returning items *borrowed from the iterator itself*
+//! (the "streaming iterator" problem). GATs (`type Item<'this>`) solve it by
+//! tying the yielded lifetime to `&mut self`:
 //!
 //! ```text
 //! trait LendingIterator {
@@ -16,12 +14,17 @@
 //! }
 //! ```
 //!
+//! The GAT is warranted only when an item genuinely borrows from the iterator —
+//! a reused scratch buffer, for example. An iterator whose items borrow the same
+//! data the iterator borrows is a plain [`Iterator`] and must be declared as one:
+//! the narrower item lifetime would forfeit [`IntoIterator`], `zip`, `enumerate`,
+//! `rev`, [`ExactSizeIterator`] and every parallel bridge for no capability.
+//!
 //! ## `Tiles` — non-overlapping rectangular tile views
 //!
-//! Partitions an array into `N`-D tiles of shape `tile_shape`. Each call to
-//! [`Tiles::next`] yields a *borrowed* [`ArrayView`] whose lifetime is tied to
-//! the `Tiles` object itself. For SIMD hot-paths this enables processing one
-//! tile at a time without loading all windows into memory simultaneously.
+//! Partitions an array into `N`-D tiles of shape `tile_shape`. Each tile is a
+//! zero-copy [`ArrayView`] into the *parent* slice, so `Tiles` is a plain
+//! [`Iterator`] and composes with the whole adaptor ecosystem.
 //!
 //! # Theorem (tile cover)
 //!
@@ -68,27 +71,46 @@ pub trait LendingIterator {
 
 // ── Tiles ──────────────────────────────────────────────────────────────────
 
-/// GAT-driven non-overlapping tile iterator.
+/// Non-overlapping tile iterator over a strided parent layout.
 ///
-/// Partitions the backing slice (in row-major order) into rectangular tiles of
-/// `tile_shape`. The last tile along each axis is automatically clipped to the
+/// Partitions the backing slice (in row-major tile order) into rectangular tiles
+/// of `tile_shape`. The last tile along each axis is automatically clipped to the
 /// remaining extent when the array shape is not divisible by `tile_shape`.
 ///
-/// Each [`LendingIterator::next`] call returns a zero-copy [`ArrayView`] into
-/// the backing data; no element is copied. The yielded view's lifetime is tied
-/// to `&'this self` (the GAT bound).
+/// Each item is a zero-copy [`ArrayView`] into the backing data; no element is
+/// copied. Items borrow the parent slice for `'a`, not the iterator, so `Tiles`
+/// is a plain [`Iterator`] and additionally satisfies [`DoubleEndedIterator`]
+/// and [`ExactSizeIterator`].
 ///
 /// Construct with [`Tiles::new`].
+///
+/// # Examples
+///
+/// ```
+/// use leto::{Array2, Storage, Tiles};
+///
+/// // 3x5 row-major, tiled 2x2 — a tiling that does not divide it evenly.
+/// let a = Array2::from_shape_vec([3, 5], (0..15).map(f64::from).collect::<Vec<_>>())?;
+/// let tiles = Tiles::new(a.storage().as_slice(), a.layout(), [2, 2]).expect("valid tile shape");
+///
+/// assert_eq!(tiles.len(), 6);
+/// let shapes: Vec<[usize; 2]> = tiles.map(|tile| tile.shape()).collect();
+/// // The right column, bottom row, and bottom-right corner are clipped.
+/// assert_eq!(shapes, [[2, 2], [2, 2], [2, 1], [1, 2], [1, 2], [1, 1]]);
+/// # Ok::<(), leto::LetoError>(())
+/// ```
 pub struct Tiles<'a, T, const N: usize> {
     data: &'a [T],
     parent_layout: Layout<N>,
     tile_shape: [usize; N],
     /// Tile-grid shape: `tile_grid[i] = ceil(parent[i] / tile[i])`.
     tile_grid: [usize; N],
-    /// Total number of tiles.
+    /// Total number of tiles in the tiling; fixed at construction.
     total: usize,
-    /// Index of the next tile to yield (row-major).
-    cursor: usize,
+    /// Flat index of the next tile yielded from the front.
+    front: usize,
+    /// One past the flat index of the next tile yielded from the back.
+    back: usize,
 }
 
 impl<'a, T, const N: usize> Tiles<'a, T, N> {
@@ -96,8 +118,13 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
     ///
     /// # Errors
     ///
-    /// Returns `None` if any `tile_shape[i] == 0` (zero-size tiles are
-    /// not meaningful) or if `N == 0`.
+    /// Returns `None` if `N == 0`, if any `tile_shape[i] == 0` (zero-size tiles
+    /// are not meaningful), if the tile grid overflows `usize`, or if
+    /// `parent_layout` addresses physical offsets outside `data`.
+    ///
+    /// Rejecting an out-of-range layout here is what makes the
+    /// [`ExactSizeIterator`] contract sound: every tile origin is then a valid
+    /// parent index, so iteration can never terminate early.
     #[must_use]
     pub fn new(data: &'a [T], parent_layout: Layout<N>, tile_shape: [usize; N]) -> Option<Self> {
         if N == 0 {
@@ -106,6 +133,7 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
         if tile_shape.contains(&0) {
             return None;
         }
+        parent_layout.validate_storage_len(data.len()).ok()?;
         let parent_shape = parent_layout.shape;
         let mut tile_grid = [0usize; N];
         let mut total = 1usize;
@@ -119,7 +147,8 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
             tile_shape,
             tile_grid,
             total,
-            cursor: 0,
+            front: 0,
+            back: total,
         })
     }
 
@@ -152,33 +181,63 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
         }
         extent
     }
-}
 
-impl<'a, T: Copy, const N: usize> LendingIterator for Tiles<'a, T, N> {
-    type Item<'this>
-        = ArrayView<'this, T, N>
-    where
-        Self: 'this;
-
-    fn next(&mut self) -> Option<Self::Item<'_>> {
-        if self.cursor >= self.total {
-            return None;
-        }
-
-        let tile_idx = self.flat_to_tile_index(self.cursor);
+    /// Build the view for flat tile index `flat`, which must be `< self.total`.
+    ///
+    /// Borrows `self` only to read `Copy` state; the returned view borrows the
+    /// parent slice for `'a`, which is what lets `Tiles` be a plain `Iterator`.
+    #[inline]
+    fn view_at(&self, flat: usize) -> ArrayView<'a, T, N> {
+        let tile_idx = self.flat_to_tile_index(flat);
         let extent = self.tile_extent(&tile_idx);
 
         // Starting element index in row-major: Σᵢ tile_idx[i]·tile_shape[i]·stride[i]
         let origin: [usize; N] = std::array::from_fn(|i| tile_idx[i] * self.tile_shape[i]);
-        let offset = self.parent_layout.offset_of(origin).ok()?;
+        // `tile_idx[i] < ceil(sᵢ/tᵢ)` implies `origin[i] ≤ (ceil(sᵢ/tᵢ) − 1)·tᵢ < sᵢ`,
+        // so the origin is in bounds; `Tiles::new` validated that every in-bounds
+        // parent index resolves to a physical offset inside `data`.
+        let offset = self
+            .parent_layout
+            .offset_of(origin)
+            .expect("invariant: tile origin is an in-bounds index of a validated parent layout");
 
         let view_layout = Layout::new(extent, self.parent_layout.strides, offset);
-
-        self.cursor += 1;
-
-        Some(ArrayView::new(view_layout, self.data))
+        ArrayView::new(view_layout, self.data)
     }
 }
+
+impl<'a, T, const N: usize> Iterator for Tiles<'a, T, N> {
+    type Item = ArrayView<'a, T, N>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.front >= self.back {
+            return None;
+        }
+        let view = self.view_at(self.front);
+        self.front += 1;
+        Some(view)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.back - self.front;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a, T, const N: usize> DoubleEndedIterator for Tiles<'a, T, N> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.back -= 1;
+        Some(self.view_at(self.back))
+    }
+}
+
+impl<T, const N: usize> ExactSizeIterator for Tiles<'_, T, N> {}
 
 #[cfg(test)]
 mod tests {
@@ -190,6 +249,27 @@ mod tests {
         // [[0,1,2],[3,4,5]]
         Array::from_shape_vec([2, 3], vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
             .expect("shape matches data")
+    }
+
+    /// 3x5 row-major holding `0..15`. Tiled `[2, 2]` it clips on the right
+    /// column, the bottom row, and the bottom-right corner simultaneously.
+    fn array3x5() -> Array<f64, VecStorage<f64>, 2> {
+        Array::from_shape_vec([3, 5], (0..15).map(f64::from).collect::<Vec<_>>())
+            .expect("shape matches data")
+    }
+
+    /// Tiles of `array3x5()` under a `[2, 2]` tiling, in row-major tile order.
+    const RAGGED_3X5_TILES: [(&[usize; 2], &[f64]); 6] = [
+        (&[2, 2], &[0.0, 1.0, 5.0, 6.0]),
+        (&[2, 2], &[2.0, 3.0, 7.0, 8.0]),
+        (&[2, 1], &[4.0, 9.0]),
+        (&[1, 2], &[10.0, 11.0]),
+        (&[1, 2], &[12.0, 13.0]),
+        (&[1, 1], &[14.0]),
+    ];
+
+    fn values(tile: &ArrayView<'_, f64, 2>) -> Vec<f64> {
+        tile.iter().copied().collect()
     }
 
     #[test]
@@ -213,18 +293,15 @@ mod tests {
     #[test]
     fn tiles_cover_all_elements() {
         let a = array2x3();
-        let mut tiles =
+        let tiles =
             Tiles::new(a.storage().as_slice(), a.layout(), [1, 2]).expect("valid tile shape");
         let mut collected = Vec::new();
-        while let Some(tile) = tiles.next() {
-            for val in tile.iter() {
-                collected.push(*val);
-            }
+        for tile in tiles {
+            collected.extend(tile.iter().copied());
         }
         // All 6 elements covered (row 0 tiles [0,1], [2]; row 1 tiles [3,4], [5])
-        let mut sorted = collected.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        assert_eq!(sorted, vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
+        collected.sort_by(f64::total_cmp);
+        assert_eq!(collected, vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
     }
 
     #[test]
@@ -233,28 +310,10 @@ mod tests {
         let mut tiles =
             Tiles::new(a.storage().as_slice(), a.layout(), [1, 3]).expect("valid tile shape");
         let row0 = tiles.next().expect("first tile");
-        assert_eq!(
-            row0.iter().copied().collect::<Vec<_>>(),
-            vec![0.0, 1.0, 2.0]
-        );
+        assert_eq!(values(&row0), vec![0.0, 1.0, 2.0]);
         let row1 = tiles.next().expect("second tile");
-        assert_eq!(
-            row1.iter().copied().collect::<Vec<_>>(),
-            vec![3.0, 4.0, 5.0]
-        );
+        assert_eq!(values(&row1), vec![3.0, 4.0, 5.0]);
         assert!(tiles.next().is_none());
-    }
-
-    #[test]
-    fn lending_iterator_manual_loop() {
-        let a = array2x3();
-        let mut tiles =
-            Tiles::new(a.storage().as_slice(), a.layout(), [1, 3]).expect("valid tile shape");
-        let mut sums = Vec::new();
-        while let Some(tile) = tiles.next() {
-            sums.push(tile.iter().copied().sum::<f64>());
-        }
-        assert_eq!(sums, vec![3.0, 12.0]); // 0+1+2 = 3, 3+4+5 = 12
     }
 
     #[test]
@@ -264,12 +323,174 @@ mod tests {
     }
 
     #[test]
-    fn count_remaining_exhausts_iterator() {
+    fn reject_layout_exceeding_data() {
         let a = array2x3();
+        // A 4x3 layout over a 6-element slice addresses offsets 0..=11.
+        let oversized = Layout::new([4, 3], [3, 1], 0);
+        assert!(Tiles::new(a.storage().as_slice(), oversized, [1, 3]).is_none());
+    }
+
+    // ── Iterator composition (what the GAT previously precluded) ───────────
+
+    #[test]
+    fn for_loop_over_tiles_uses_into_iterator() {
+        let a = array2x3();
+        let tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [1, 2]).expect("valid tile shape");
+        let mut seen = Vec::new();
+        for tile in tiles {
+            seen.push(values(&tile));
+        }
+        // Columns clip at width 1 because 3 mod 2 == 1.
+        assert_eq!(
+            seen,
+            vec![vec![0.0, 1.0], vec![2.0], vec![3.0, 4.0], vec![5.0]]
+        );
+    }
+
+    #[test]
+    fn zip_and_enumerate_over_ragged_tiling() {
+        let a = array3x5();
+        let tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [2, 2]).expect("valid tile shape");
+
+        let mut checked = 0usize;
+        for (index, (tile, (expected_shape, expected_values))) in
+            tiles.zip(RAGGED_3X5_TILES.iter()).enumerate()
+        {
+            assert_eq!(tile.shape(), **expected_shape, "shape of tile {index}");
+            assert_eq!(values(&tile), *expected_values, "values of tile {index}");
+            checked += 1;
+        }
+        assert_eq!(checked, RAGGED_3X5_TILES.len());
+    }
+
+    #[test]
+    fn collect_ragged_tiling_preserves_clipped_contents() {
+        let a = array3x5();
+        let tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [2, 2]).expect("valid tile shape");
+        let collected: Vec<Vec<f64>> = tiles.map(|tile| values(&tile)).collect();
+
+        let expected: Vec<Vec<f64>> = RAGGED_3X5_TILES
+            .iter()
+            .map(|(_, vals)| vals.to_vec())
+            .collect();
+        assert_eq!(collected, expected);
+
+        // The clipped tiles partition the parent exactly: 4+4+2+2+2+1 == 15.
+        let mut flat: Vec<f64> = collected.into_iter().flatten().collect();
+        flat.sort_by(f64::total_cmp);
+        assert_eq!(flat, (0..15).map(f64::from).collect::<Vec<_>>());
+    }
+
+    // ── ExactSizeIterator / DoubleEndedIterator contracts ──────────────────
+
+    #[test]
+    fn exact_size_len_matches_yielded_count() {
+        let a = array3x5();
         let mut tiles =
-            Tiles::new(a.storage().as_slice(), a.layout(), [1, 3]).expect("valid tile shape");
-        assert_eq!(tiles.count_remaining(), 2);
-        // Iterator is now exhausted
-        assert!(tiles.next().is_none());
+            Tiles::new(a.storage().as_slice(), a.layout(), [2, 2]).expect("valid tile shape");
+
+        let mut remaining = tiles.len();
+        assert_eq!(remaining, 6);
+        while let Some(tile) = tiles.next() {
+            // A non-trivial read proves the tile is real, not a placeholder.
+            assert!(!values(&tile).is_empty());
+            remaining -= 1;
+            assert_eq!(tiles.len(), remaining, "len must be exact after each step");
+            assert_eq!(tiles.size_hint(), (remaining, Some(remaining)));
+        }
+        assert_eq!(remaining, 0);
+        assert_eq!(tiles.len(), 0);
+    }
+
+    #[test]
+    fn double_ended_reverses_the_same_sequence() {
+        let a = array3x5();
+        let forward: Vec<Vec<f64>> = Tiles::new(a.storage().as_slice(), a.layout(), [2, 2])
+            .expect("valid tile shape")
+            .map(|tile| values(&tile))
+            .collect();
+        let mut backward: Vec<Vec<f64>> = Tiles::new(a.storage().as_slice(), a.layout(), [2, 2])
+            .expect("valid tile shape")
+            .rev()
+            .map(|tile| values(&tile))
+            .collect();
+        backward.reverse();
+        assert_eq!(backward, forward);
+    }
+
+    #[test]
+    fn interleaved_ends_yield_each_tile_exactly_once() {
+        let a = array3x5();
+        let mut tiles =
+            Tiles::new(a.storage().as_slice(), a.layout(), [2, 2]).expect("valid tile shape");
+
+        let mut head = Vec::new();
+        let mut tail = Vec::new();
+        while let Some(front) = tiles.next() {
+            head.push(values(&front));
+            if let Some(back) = tiles.next_back() {
+                tail.push(values(&back));
+            }
+        }
+        tail.reverse();
+        head.extend(tail);
+
+        let expected: Vec<Vec<f64>> = RAGGED_3X5_TILES
+            .iter()
+            .map(|(_, vals)| vals.to_vec())
+            .collect();
+        assert_eq!(head, expected);
+    }
+
+    // ── LendingIterator remains a supported public seam ────────────────────
+
+    /// Lends a reused scratch buffer — the case the GAT genuinely exists for,
+    /// unlike `Tiles`, whose items borrow the parent slice rather than `self`.
+    struct ScratchLender {
+        buffer: [f64; 2],
+        remaining: usize,
+    }
+
+    impl LendingIterator for ScratchLender {
+        type Item<'this>
+            = &'this mut [f64; 2]
+        where
+            Self: 'this;
+
+        fn next(&mut self) -> Option<Self::Item<'_>> {
+            if self.remaining == 0 {
+                return None;
+            }
+            self.remaining -= 1;
+            self.buffer[0] += 1.0;
+            self.buffer[1] = self.buffer[0] * 2.0;
+            Some(&mut self.buffer)
+        }
+    }
+
+    #[test]
+    fn lending_iterator_lends_a_reused_buffer() {
+        let mut lender = ScratchLender {
+            buffer: [0.0, 0.0],
+            remaining: 3,
+        };
+        let mut seen = Vec::new();
+        while let Some(buffer) = lender.next() {
+            seen.push((buffer[0], buffer[1]));
+        }
+        assert_eq!(seen, vec![(1.0, 2.0), (2.0, 4.0), (3.0, 6.0)]);
+    }
+
+    #[test]
+    fn count_remaining_exhausts_the_lender() {
+        let mut lender = ScratchLender {
+            buffer: [0.0, 0.0],
+            remaining: 4,
+        };
+        assert_eq!(lender.count_remaining(), 4);
+        assert!(lender.next().is_none());
     }
 }

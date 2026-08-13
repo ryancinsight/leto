@@ -10,6 +10,8 @@
 //!   `indexed_iter` / `indexed_iter_mut` parity).
 //! - lanes — [`Lanes`], [`LanesMut`]: 1-D views along one axis (leto
 //!   `lanes` / `lanes_mut` parity).
+//! - lending — [`Tiles`]: non-overlapping rectangular tile views, plus the
+//!   [`LendingIterator`] seam for items that borrow the iterator itself.
 //! - windows — [`Windows`]: zero-copy sliding-window subviews (leto
 //!   `windows` parity).
 
