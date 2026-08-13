@@ -128,8 +128,8 @@ fn try_iter_mut_supports_negative_stride_and_double_ended_consumption() {
 
 #[test]
 fn try_iter_mut_rejects_aliasing_layout_before_yielding() {
-    let layout = Layout::new([2, 2], [1, 1], 0);
-    let storage = VecStorage::new(vec![0, 1, 2]);
+    let layout = Layout::new([2, 2], [0, 1], 0);
+    let storage = VecStorage::new(vec![0, 1]);
     let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
 
     let err = match a.try_iter_mut() {
@@ -236,4 +236,82 @@ fn iter_empty_array_yields_nothing() {
     let a: Array2<i32> = Array2::from_shape_vec([0, 0], vec![]).unwrap();
     assert_eq!(a.iter().count(), 0);
     assert_eq!(a.indexed_iter().count(), 0);
+}
+
+#[test]
+fn task_partitions_cover_contiguous_logical_domain_once() {
+    let mut a = leto([2, 3], vec![0; 6]);
+    let mut ranges = Vec::new();
+    for partition in a.task_partitions_mut(2).unwrap() {
+        ranges.push(partition.logical_range());
+        let start = ranges
+            .last()
+            .expect("invariant: range was just pushed")
+            .start as i32;
+        for (offset, value) in partition.into_iter().enumerate() {
+            *value = start + offset as i32;
+        }
+    }
+
+    assert_eq!(ranges, vec![0..2, 2..4, 4..6]);
+    assert_eq!(
+        a.iter().copied().collect::<Vec<_>>(),
+        vec![0, 1, 2, 3, 4, 5]
+    );
+}
+
+#[test]
+fn task_partitions_preserve_negative_stride_logical_order() {
+    let layout = Layout::new([2, 3], [3, -1], 2);
+    let storage = VecStorage::new(vec![0; 6]);
+    let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
+
+    for partition in a.task_partitions_mut(2).unwrap() {
+        let start = partition.logical_range().start as i32;
+        for (offset, value) in partition.into_iter().enumerate() {
+            *value = start + offset as i32;
+        }
+    }
+
+    // The partition callback sees row-major logical positions, while the
+    // backing storage is written in reverse-last-axis physical order.
+    assert_eq!(
+        a.iter().copied().collect::<Vec<_>>(),
+        vec![0, 1, 2, 3, 4, 5]
+    );
+}
+
+#[test]
+fn task_partitions_reject_zero_chunks_and_aliasing() {
+    let mut valid = leto([2, 2], vec![0; 4]);
+    assert_eq!(
+        match valid.task_partitions_mut(0) {
+            Ok(_) => panic!("zero chunk size must be rejected"),
+            Err(error) => error,
+        },
+        LetoError::StorageError {
+            reason: "mutable task partition chunk size must be non-zero".to_string()
+        }
+    );
+
+    let layout = Layout::new([2, 2], [1, 1], 0);
+    let storage = VecStorage::new(vec![0, 1, 2]);
+    let mut aliased = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
+    assert_eq!(
+        match aliased.task_partitions_mut(1) {
+            Ok(_) => panic!("aliased layout must be rejected"),
+            Err(error) => error,
+        },
+        LetoError::StorageError {
+            reason: "mutable task partitions require provably disjoint logical offsets".to_string()
+        }
+    );
+}
+
+#[test]
+fn empty_task_partition_domain_has_no_callbacks() {
+    let mut a: Array2<i32> = Array2::from_shape_vec([0, 3], vec![]).unwrap();
+    let mut partitions = a.task_partitions_mut(1).unwrap();
+    assert_eq!(partitions.len(), 0);
+    assert!(partitions.next().is_none());
 }

@@ -1,6 +1,7 @@
 use crate::application::array::Array;
 use crate::application::iter::{
-    AxisChunks, ElementIter, ElementIterMut, ExactChunks, IndexedIter, IndexedIterMut, Windows,
+    AxisChunks, ElementIter, ElementIterMut, ExactChunks, IndexedIter, IndexedIterMut,
+    TaskPartitionsMut, Windows,
 };
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -448,6 +449,20 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn try_iter_mut(self) -> Result<ElementIterMut<'a, T, N>> {
         Ok(ElementIterMut::from_indexed(self.indexed_iter_mut()?))
+    }
+
+    /// Split this logical row-major domain into disjoint mutable task partitions.
+    ///
+    /// Partitions expose only range-limited element iterators and never expose
+    /// the complete backing slice, which makes them suitable for a scheduler
+    /// boundary without creating overlapping mutable access paths.
+    ///
+    /// # Errors
+    /// Returns [`LetoError`] when `chunk_size` is zero, storage is invalid, or
+    /// the layout is not provably injective.
+    #[inline]
+    pub fn task_partitions_mut(self, chunk_size: usize) -> Result<TaskPartitionsMut<'a, T, N>> {
+        TaskPartitionsMut::new(self, chunk_size)
     }
 
     /// Consume the view and return the backing mutable slice with lifetime `'a`.
