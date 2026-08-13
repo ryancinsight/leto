@@ -36,6 +36,15 @@ criterion = { workspace = true }
 name = "kernels"
 harness = false
 
+# ATLAS-ARCH-008 sub-slice: L-BFGS flat-ring vs jagged-baseline direction.
+# Compares the converted CSR-shaped ring buffer (`LbfgsMemory`) against an
+# inline pre-conversion `Vec<Vec<f64>>` reference over {8, 32} memory ×
+# {100, 1000} dim. Run with `cargo bench -p leto-ops --bench lbfgs`;
+# single-iteration smoke via `-- --test`.
+[[bench]]
+name = "lbfgs"
+harness = false
+
 [features]
 default = ["std", "parallel", "mnemosyne-memory", "topology"]
 std = ["leto/std"]
