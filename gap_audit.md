@@ -1,5 +1,22 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-08-13 Convolution provider closure
+
+The generic regular and transposed convolution family is complete at provider
+default `e525d8dd5ee52d12de0bf61987e8af6bf896700f`. PRs #78, #79, and #80
+delivered the forward, backward, transposed backward, and canonical parameter
+identity changes. Hosted run `31663241086` passed formatting, minimal-feature
+compilation, warning-denied Clippy, configured Nextest, doctests, and
+documentation at that exact head. Coeus default
+`aabdec67a0f5baa415c4abb6dded69db41b2f2d6` consumes the provider directly and
+deletes its former host convolution loops; hosted run `31672329963` passes at
+that exact consumer head.
+
+The remaining 33 Leto Rustdoc broken/private-link warnings predate this family
+and are recorded in the provider backlog. No convolution-specific warning,
+compatibility adapter, fallback, or performance claim remains open. Hephaestus
+owns accelerator execution and its separate device-gate evidence.
+
 ## 2026-08-08 Fallible plain mutable iteration
 
 - **Finding:** Leto had logical stride-aware read-only iteration and checked

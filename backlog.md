@@ -267,9 +267,10 @@ this branch; merge state is currently `UNSTABLE` because the external
 `recurseml/analysis` status reports `Error occurred during analysis
 (4c584e3a..4a836cd8)`, while CodeRabbit review remains pending.
 
-## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [major, arch, in progress]
+## LETO-CONVOLUTION-PROVIDER-1 — Generic convolution contracts [major, arch, complete]
 
-**Owner:** Codex on `codex/leto-convolution-parameters-core`
+**Owner:** Atlas integration; implementation delivered through PRs #78, #79,
+and #80.
 
 **Driver:** Coeus ADR-0046 requires CPU backend selection to execute directly
 through Leto before Coeus can delete its transposed-convolution host default
@@ -298,22 +299,23 @@ all requested gradient targets, and checked dimension arithmetic before
 mutation. Generic f32/f64/F16/Bf16 conformance; 1-D, 2-D, and 3-D transposed
 semantics; output-padding gradient behavior; exact typed errors; and failure
 atomicity, including strided input/weight/output/gradient views, pass under
-focused Nextest (18/18). Package test targets
-compile warning-free on Rust 1.97 GNU; doctests pass 11/11 with one existing
-ignored case; and all 196 applicable minor-release SemVer checks pass.
-Warning-denied Clippy collection remains blocked by mixed MSYS2/rustup
-artifacts in the shared build cache. Rustdoc emits 33 pre-existing broken-link
-warnings. ADR 0019 records the provider contract.
+focused Nextest (18/18). Package test targets compile warning-free on Rust
+1.97 GNU; doctests pass 11/11 with one existing ignored case; and all 196
+applicable minor-release SemVer checks pass. The exact current provider default
+is `e525d8dd5ee52d12de0bf61987e8af6bf896700f`: PR #78 merged as `4137a1c`,
+PR #79 as `aa958be`, and PR #80 as `f896c43`. Hosted run `31663241086` passes
+formatting, minimal-feature compilation, warning-denied Clippy, configured
+Nextest, doctests, and documentation at that exact head. Local Rustdoc retains
+33 pre-existing broken/private-link warnings; the convolution family adds no
+new diagnostic. ADR 0019 records the provider contract.
 
-The Coeus consumer-closure audit found that transposed autograd still owns
-host-side 1-D, 2-D, and 3-D backward loops. The provider now exposes the
-missing transposed backward contract and public parameter accessors required
-by the Hephaestus accelerator seam. The active dependency-direction follow-up
-promotes the parameter vocabulary into lightweight `leto`, allowing
-`hephaestus-core` to share the SSOT without depending on the full CPU
-operations crate. Focused Leto/Leto Ops Nextest passes 21/21. SemVer checks
-pass 196/196 for the additive `leto` surface and classify the canonical
-`leto-ops` struct-identity move as major; ADR 0019 records the migration.
+Coeus consumer integration is complete independently under
+`ATLAS-COEUS-CONVOLUTION-020`: current Coeus default
+`aabdec67a0f5baa415c4abb6dded69db41b2f2d6` routes CPU convolution directly
+through Leto, routes accelerators through Hephaestus, and deletes the former
+host kernels and autograd loops. Coeus hosted run `31672329963` passes at that
+exact head. The provider item is therefore complete; accelerator execution
+remains owned by Hephaestus and is outside this CPU provider item.
 
 ## LETO-COMPARISON-OPS-1 — Broadcast comparison markers [minor, complete]
 
