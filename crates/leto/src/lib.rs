@@ -19,7 +19,7 @@ pub use domain::layout::Layout;
 pub use domain::remove_axis::{RankMarker, RemoveAxis};
 pub use domain::slice::SliceArg;
 /// Complex number — re-exported from `eunomia`, the Atlas datatype SSOT
-/// ([ADR 0011](../docs/adr/0011-num-complex-removal.md ; see also eunomia ADR 0001)).
+/// ([ADR 0024](../docs/adr/0024-num-complex-removal.md ; see also eunomia ADR 0001)).
 pub use eunomia::Complex;
 pub use geometry::{
     Isometry3, Point, Point2, Point3, Quaternion, RotationBasisError, Translation3, Unit,

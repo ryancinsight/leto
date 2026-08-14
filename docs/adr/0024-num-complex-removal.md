@@ -1,4 +1,4 @@
-# ADR 0011: Atlas-native `Complex<T>`, removing the `num-complex` dependency
+# ADR 0024: Atlas-native `Complex<T>`, removing the `num-complex` dependency
 
 - Status: Accepted
 - Date: 2026-06-29
