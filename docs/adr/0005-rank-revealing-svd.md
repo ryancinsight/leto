@@ -1,86 +1,128 @@
-# ADR 0005: Rank-revealing SVD via one-sided Jacobi
+# ADR 0005: Rank-revealing SVD
 
 - Status: Accepted
 - Date: 2026-06-15
-- Class: [major] (new decomposition contract; additive surface)
-- Update 2026-06-16: `svd_decompose` and `singular_values` are no longer
-  Gram-backed. The full-rank-only default path now uses the bidiagonal-QR
-  implementation (`svd/bidiagonal_qr.rs`) for accuracy and performance, while
-  this ADR's one-sided Jacobi path remains the rank-revealing implementation for
-  rank-deficient SVD and pseudoinverse.
+- Class: [major] (decomposition contract; rank deficiency is data, not an error)
+
+## Revisions
+
+- **2026-08-13 — decision re-derived; one-sided Jacobi retired.** The original
+  decision selected one-sided Jacobi *against the Gram-matrix path*, on the
+  grounds that Gram could not produce null-space vectors. The Gram path was
+  deleted on 2026-06-16 and replaced by bidiagonal QR, which removed that
+  premise. The record was patched with a note rather than re-derived, leaving
+  this ADR justifying a second implementation by comparison with a path that no
+  longer existed. Re-derived below against the surviving alternative: bidiagonal
+  QR is itself rank-revealing, so `svd/jacobi.rs` is deleted, `pinv` moves onto
+  the bidiagonal path, and the full-rank rejection policy is removed. The
+  decomposition surface collapses to a single entry point (`svd_decompose`);
+  `svd_rank_revealing`, `svd_via_bidiagonal`, `svd_decompose_with_tolerance` and
+  `MatrixDecompose::svd_rank_revealing` are removed with it. Superseded content
+  is in git history; this file states only the decision now in force.
 
 ## Context
 
-`svd_decompose` (the Gram-matrix path, ADR-era Stage A1) forms `AᵀA` (or `AAᵀ`)
-and diagonalizes it with the symmetric Jacobi eigensolver, deriving the missing
-factor as `U = A V Σ⁻¹`. This is accurate for full-rank inputs but **rejects
-rank-deficient matrices**: a zero singular value makes `Σ⁻¹` undefined, so the
-null-space singular vectors cannot be recovered. That leaves two parity gaps vs
-nalgebra: a rank-revealing SVD and a rank-deficient Moore-Penrose pseudoinverse.
+Leto is the linear-algebra SSOT for the Atlas stack, so a duplicated
+decomposition is duplicated in every consumer. The SVD surface carried two
+implementations behind one `SvdDecomposition` contract and one validator:
+`svd/bidiagonal_qr.rs` (Golub–Reinsch implicit-shift) and `svd/jacobi.rs`
+(one-sided Jacobi, ~200 lines).
 
-Forming the Gram matrix also squares the condition number (`κ(AᵀA) = κ(A)²`),
-which loses ~half the significant digits on ill-conditioned inputs.
+They were separated by policy, not capability. The bidiagonal path *chose* to
+reject rank-deficient input while its own documentation stated that it "handles
+rank-deficient input (zero singular values emerge)". Rank deficiency is a
+property of the data that the decomposition measures; refusing to return it
+forces callers to a second entry point for an answer the first one already
+computed.
 
 ## Options
 
-1. **Golub-Kahan bidiagonalization + implicit-shift QR** — the LAPACK `gesvd`
-   route. Most general and fastest asymptotically, but a large, intricate
-   implementation (Householder bidiagonalization, Wilkinson shifts, deflation,
-   careful handling of tiny diagonal/superdiagonal entries).
-2. **One-sided Jacobi SVD** — orthogonalize the columns of `A` by a sweep of
-   Jacobi rotations; the converged column norms are the singular values, the
-   normalized columns are `U`, and the accumulated rotation matrix is `V`.
-3. Keep Gram-only; leave rank-deficient SVD/pinv unimplemented.
+1. **Keep both paths.** Justified only if Jacobi is more capable or more
+   accurate on some class the bidiagonal path handles poorly.
+2. **Single bidiagonal-QR path, rank revealed in `Σ`.** Delete Jacobi, move
+   `pinv` across, drop the rejection policy.
+3. Keep both implementations but unify the names behind one entry point — a
+   forwarding shim, prohibited: it preserves the duplication and adds an alias.
 
 ## Decision
 
-Adopt option 2, one-sided Jacobi, as the rank-revealing path. At the time of
-this ADR it lived alongside the existing Gram path; as of 2026-06-16 that
-full-rank-only path is replaced by bidiagonal QR without changing this ADR's
-rank-revealing decision:
+Adopt option 2. Option 1 was tested before deletion rather than assumed, since
+one-sided Jacobi has a genuine published accuracy advantage (Demmel & Veselić,
+*Jacobi's method is more accurate than QR*, SIMAX 13(4), 1992) on column-scaled
+matrices, and a real advantage would have been a capability difference.
 
-- It is **rank-revealing by construction**: rank-deficient columns converge to
-  zero norm, surfacing `σ = 0` honestly; `V` stays fully orthonormal (it is a
-  product of rotations), so no fabricated null-space vectors are needed.
-- It is **more accurate** than Gram — it never forms `AᵀA`, so it works in the
-  native precision of `A` without squaring the condition number.
-- It is **far simpler and more auditable** than Golub-Kahan, with a clean
-  monotone-convergence proof, which suits a from-scratch, theorem-documented
-  implementation. (Golub-Kahan can be revisited later purely as a perf
-  optimization for large matrices, behind the same `SvdDecomposition` contract.)
+Measured, `f64`, both paths on identical input:
 
-Wide inputs (`m < n`) are handled by decomposing `Aᵀ` and swapping `U ↔ V`
-(`A = (Aᵀ)ᵀ`), so one code path covers all shapes (DRY).
+| Class | bidiagonal QR | one-sided Jacobi |
+| --- | --- | --- |
+| Exact rank deficiency (tall/wide/square, rank-1 and 5×4 rank-2) | σ correct; recon ≤ 3.1e-15; `U`,`V` orthonormal to 8.9e-16 | σ correct; **`UᵀU − I` = 1.0** (zero column); wide input puts the defect in `V` |
+| σ = 1e-14, below the 1e-12 tolerance | recon 1.6e-30 | **recon 1.0e-14** — the whole singular value dropped |
+| Graded triangular, κ ≈ 1e16 | σ = [1.732051, 8.164966e-9, 7.071068e-17] | identical to 7 digits |
+| Column-scaled `B·D`, κ ≈ 1e17 (Demmel–Veselić class) | σ₃ = 5.4433105395182064e-17 | σ₃ = 5.443310539518174e-17 (6e-15 relative) |
+| Column-scaled `B·D`, κ ≈ 1e21 | σ₃ = 5.443310539518211e-21; ∏σ vs det 7.4e-15 | σ₃ = 5.4433105395181706e-21; ∏σ vs det 7.0e-16 |
 
-The Moore-Penrose pseudoinverse is **unified** onto this path: `pinv` becomes
-rank-revealing (`A⁺ = Σ_{σᵢ>τ} σᵢ⁻¹ vᵢ uᵢᵀ`), matching nalgebra's single
-`pseudo_inverse`. The full-rank `svd_decompose` keeps its explicit
-rank-deficiency rejection, but its implementation is now bidiagonal QR rather
-than Gram.
+The published Jacobi advantage does not materialize here: on the column-scaled
+class the two paths agree to 15 significant digits on the smallest singular
+value, and both match the determinant oracle to a few ulps. There is no class
+where the bidiagonal path fails and Jacobi succeeds.
 
-## Structure (deep vertical hierarchy)
+The comparison instead runs the other way. Jacobi normalizes converged columns
+only where `σⱼ > τ`, leaving the rest of `U` zero, which costs it two contract
+properties the bidiagonal path holds unconditionally:
 
-`linalg/svd.rs` is refactored into a leaf-module tree (SRP/SoC):
+- **Orthonormal factors at deficient rank.** Bidiagonal `U` and `V` are
+  accumulated products of Householder reflectors and Givens rotations;
+  orthogonality of a product of orthogonal factors does not depend on the
+  singular values being nonzero, so `UᵀU = VᵀV = I` at every rank. Jacobi
+  returns a zero column instead of a null-space basis vector.
+- **Reconstruction of small singular values.** Any `σ` at or below the absolute
+  tolerance loses its `U` column entirely, so `A = U Σ Vᵀ` fails by exactly the
+  dropped `σ` — 1e-14 in the measured case, versus 1.6e-30.
+
+The second point also falsified this ADR's own prior claim that on the Jacobi
+path "`V` is always fully orthonormal": for wide input the kernel transposes and
+swaps the factors, so the zero column lands in `V`.
+
+Consequently the surviving path is strictly more capable, and the rejection
+policy has nothing left to protect. `svd_decompose` accepts every finite
+non-empty matrix and reports rank in `Σ`; a caller needing a full-rank guarantee
+tests `singular_values.last()` against its own noise floor, which the library
+cannot know. `pinv` keeps its relative cutoff (`τ·σ_max`, `τ = 1e-12`) and is
+now sound for a stronger reason: every retained direction has a genuine
+orthonormal `U` column behind it.
+
+Wide inputs (`m < n`) are handled by decomposing `Aᵀ` and swapping `U ↔ V`, so
+one code path covers all shapes.
+
+## Structure
 
 ```text
 linalg/svd/
-  mod.rs           SvdDecomposition struct, shared validation/tolerance, re-exports
-  bidiagonal_qr.rs full-rank/default thin SVD and singular values
-  jacobi.rs        one-sided Jacobi rank-revealing SVD (svd_rank_revealing)
-  pseudoinverse.rs Moore-Penrose pinv (rank-revealing, via jacobi)
+  mod.rs           SvdDecomposition contract, shared validation, re-exports
+  bidiagonal_qr.rs the SVD: svd_decompose (thin, any rank) and singular_values
+  pseudoinverse.rs Moore-Penrose pinv on svd_decompose
 ```
 
-The module path `linalg::svd` and all public names are unchanged.
+`singular_values` stays a separate entry point: it is the same algorithm under
+`qr_iterate::<_, false>`, a zero-cost const-generic specialization that skips
+`U`/`V` accumulation. That is one implementation with a compile-time switch, not
+a second implementation.
 
 ## Consequences
 
-- New public surface: `svd_rank_revealing` / `svd_rank_revealing_with_tolerance`,
-  and `MatrixDecompose::svd_rank_revealing`. `pinv` now handles rank-deficient
-  input (strictly more capable; full-rank behavior unchanged).
-- Verified against nalgebra `SVD`/`pseudo_inverse` plus oracle-independent
-  invariants: reconstruction `A = U Σ Vᵀ`, orthonormality `VᵀV = I`, and the
-  Moore-Penrose conditions `A A⁺ A = A`, `A⁺ A A⁺ = A⁺`.
-- Convergence is capped at a fixed sweep count with a relative off-orthogonality
-  threshold; the cap is a safety bound, not a tuned tolerance.
-- Evidence tier: monotone-convergence proof sketch in rustdoc + differential and
-  property tests. No machine-checked proof.
+- Public surface shrinks to `svd_decompose`, `singular_values`, `pinv` and
+  `MatrixDecompose::{svd, singular_values}`.
+- Breaking for downstream consumers of the removed names. `svd_rank_revealing`
+  callers migrate to `svd_decompose` with no behavioral loss — the replacement
+  is strictly more capable. Callers that relied on `svd_decompose` returning
+  `Err` for rank-deficient input must test `Σ` explicitly; a silent change from
+  `Err` to a zero singular value is the migration risk to flag. Known consumers:
+  `hephaestus-{cuda,metal,rocm}`, which re-export `svd_rank_revealing` and
+  delegate to it.
+- Verified by oracle-independent invariants: reconstruction `A = U Σ Vᵀ`,
+  orthonormality `UᵀU = VᵀV = I` (now asserted at deficient rank, which the
+  Jacobi path could not satisfy), sub-tolerance σ reconstruction, the
+  Moore-Penrose conditions, and cross-path σ agreement between the values-only
+  and accumulating instantiations.
+- Evidence tier: implicit-shift QR convergence proof sketch in rustdoc, plus
+  differential and property tests. No machine-checked proof.

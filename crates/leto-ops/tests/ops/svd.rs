@@ -1,5 +1,5 @@
 use leto::{Array2, SliceArg, Storage};
-use leto_ops::{pinv, singular_values, svd_decompose, svd_rank_revealing, MatrixProduct};
+use leto_ops::{pinv, singular_values, svd_decompose, MatrixProduct};
 
 fn assert_close(lhs: f64, rhs: f64, epsilon: f64) {
     assert!(
@@ -141,28 +141,22 @@ fn svd_is_generic_over_f32() {
 }
 
 #[test]
-fn svd_rejects_unsupported_or_invalid_inputs() {
-    let wide_rank_deficient = Array2::from_shape_vec([2, 3], vec![1.0f64; 6]).unwrap();
-    assert!(svd_decompose(&wide_rank_deficient.view()).is_err());
-
-    let rank_deficient =
-        Array2::from_shape_vec([3, 2], vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0]).unwrap();
-    assert!(svd_decompose(&rank_deficient.view()).is_err());
-    assert!(singular_values(&rank_deficient.view()).is_ok());
-
+fn svd_rejects_invalid_inputs() {
     let non_finite = Array2::from_shape_vec([2, 2], vec![1.0, f64::NAN, 0.0, 1.0]).unwrap();
     assert!(svd_decompose(&non_finite.view()).is_err());
     assert!(singular_values(&non_finite.view()).is_err());
 }
 
-// ── Rank-revealing one-sided Jacobi SVD (ADR 0005) ──────────────────────────
+// ── Rank-deficient input: revealed in Σ, never rejected (ADR 0005) ──────────
 
+/// Rank deficiency is data, not an error: `svd_decompose` returns it as `σ = 0`
+/// and still delivers orthonormal `U` *and* `V`, so `A = U Σ Vᵀ` holds exactly.
 #[test]
-fn svd_rank_revealing_reconstructs_rank_deficient_matrix() {
+fn svd_decompose_reveals_rank_deficiency_with_orthonormal_factors() {
     // Row 2 = 2 * row 1 → rank 1, one zero singular value.
     let values = vec![1.0, 2.0, 2.0, 4.0];
     let matrix = Array2::from_shape_vec([2, 2], values.clone()).unwrap();
-    let svd = svd_rank_revealing(&matrix.view()).unwrap();
+    let svd = svd_decompose(&matrix.view()).unwrap();
 
     assert_eq!(svd.singular_values.len(), 2);
     assert!(svd.singular_values[0] >= svd.singular_values[1]);
@@ -174,16 +168,42 @@ fn svd_rank_revealing_reconstructs_rank_deficient_matrix() {
         assert_close(*actual, *expected, 1.0e-9);
     }
 
-    // V is fully orthonormal (the defining property the Gram path cannot give).
-    let v = svd.right_singular_vectors.storage().as_slice();
-    assert_close(column_norm(v, 2, 2, 0), 1.0, 1.0e-9);
-    assert_close(column_norm(v, 2, 2, 1), 1.0, 1.0e-9);
-    assert_close(column_dot(v, 2, 2, 0, 1), 0.0, 1.0e-9);
+    // Both factors stay orthonormal at deficient rank: the null-space column of
+    // U is materialized, not left zero.
+    for factor in [&svd.left_singular_vectors, &svd.right_singular_vectors] {
+        let f = factor.storage().as_slice();
+        assert_close(column_norm(f, 2, 2, 0), 1.0, 1.0e-9);
+        assert_close(column_norm(f, 2, 2, 1), 1.0, 1.0e-9);
+        assert_close(column_dot(f, 2, 2, 0, 1), 0.0, 1.0e-9);
+    }
 }
 
+/// A singular value far below any plausible rank tolerance must still be carried
+/// by its own `U` column. Zeroing sub-tolerance `U` columns instead — as a
+/// tolerance-gated construction does — leaves a reconstruction error equal to
+/// the whole dropped singular value; here that would be `1e-14` rather than
+/// rounding noise.
 #[test]
-fn svd_rank_revealing_matches_standard_singular_values() {
-    // Full-rank and rank-deficient, tall and wide.
+fn svd_decompose_reconstructs_below_tolerance_singular_value() {
+    let values = vec![1.0, 0.0, 0.0, 1.0e-14];
+    let matrix = Array2::from_shape_vec([2, 2], values.clone()).unwrap();
+    let svd = svd_decompose(&matrix.view()).unwrap();
+
+    assert_close(svd.singular_values[1], 1.0e-14, 1.0e-26);
+    let reconstructed = reconstruct(&svd, 2);
+    for (actual, expected) in reconstructed.iter().zip(values.iter()) {
+        assert_close(*actual, *expected, 1.0e-20);
+    }
+}
+
+/// Cross-path agreement: `singular_values` and `svd_decompose` remain two
+/// distinct routes through the bidiagonal QR — values-only runs
+/// `bidiagonal_diag_colmajor` + `qr_iterate::<_, false>`, the full SVD runs
+/// `bidiagonalize` + `qr_iterate::<_, true>` with U/V accumulation. They must
+/// agree on σ across full-rank and rank-deficient, tall, square and wide input;
+/// a defect in the accumulating instantiation shows up as a divergence here.
+#[test]
+fn singular_values_agree_between_values_only_and_full_svd() {
     let cases: [(usize, usize, Vec<f64>); 3] = [
         (4, 2, vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 1.0]),
         (2, 2, vec![1.0, 2.0, 2.0, 4.0]),
@@ -191,7 +211,7 @@ fn svd_rank_revealing_matches_standard_singular_values() {
     ];
     for (rows, cols, values) in cases {
         let a = Array2::from_shape_vec([rows, cols], values.clone()).unwrap();
-        let mut leto_sv = svd_rank_revealing(&a.view()).unwrap().singular_values;
+        let mut leto_sv = svd_decompose(&a.view()).unwrap().singular_values;
         let mut ref_sv = singular_values(&a.view()).unwrap();
         leto_sv.sort_by(|x: &f64, y: &f64| y.total_cmp(x));
         ref_sv.sort_by(|x: &f64, y: &f64| y.total_cmp(x));
@@ -282,9 +302,7 @@ fn singular_values_resolve_wide_dynamic_range() {
 /// Full bidiagonal-QR SVD: reconstruction `A = U Σ Vᵀ`, orthonormal U/V columns,
 /// descending σ, and σ-match vs singular_values free fn — across tall/square/wide shapes.
 #[test]
-fn svd_via_bidiagonal_reconstructs_and_matches() {
-    use leto_ops::svd_via_bidiagonal;
-
+fn svd_decompose_reconstructs_and_matches() {
     let gen = |seed: u64, len: usize| -> Vec<f64> {
         let mut s = seed.wrapping_add(0x9E3779B97F4A7C15);
         (0..len)
@@ -303,7 +321,7 @@ fn svd_via_bidiagonal_reconstructs_and_matches() {
     {
         let data = gen(idx as u64 * 31 + 5, m * n);
         let a = Array2::from_shape_vec([m, n], data.clone()).unwrap();
-        let svd = svd_via_bidiagonal(&a.view()).unwrap();
+        let svd = svd_decompose(&a.view()).unwrap();
         let k = m.min(n);
 
         assert_eq!(svd.singular_values.len(), k, "shape {m}x{n}");

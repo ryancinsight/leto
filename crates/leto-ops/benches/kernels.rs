@@ -23,7 +23,7 @@ use leto_ops::{
 };
 use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
-    svd_via_bidiagonal, udu_decompose,
+    svd_decompose, udu_decompose,
 };
 use leto_ops::{csc_spmv_into, spmm, spmv_into, CscMatrix, CsrMatrix};
 use std::hint::black_box;
@@ -668,7 +668,7 @@ fn bench_decomposition_compare(c: &mut Criterion) {
         });
 
         group.bench_function(format!("svd_leto_{n}x{n}"), |b| {
-            b.iter(|| black_box(svd_via_bidiagonal(black_box(&leto_mat.view())).unwrap()))
+            b.iter(|| black_box(svd_decompose(black_box(&leto_mat.view())).unwrap()))
         });
 
         group.bench_function(format!("singular_values_leto_{n}x{n}"), |b| {
@@ -917,7 +917,7 @@ fn bench_svd_scaling(c: &mut Criterion) {
     for &n in &[64usize, 128, 192] {
         let mat = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0e-3)).unwrap();
         group.bench_function(format!("svd_{n}x{n}"), |b| {
-            b.iter(|| black_box(svd_via_bidiagonal(black_box(&mat.view())).unwrap()))
+            b.iter(|| black_box(svd_decompose(black_box(&mat.view())).unwrap()))
         });
     }
     group.finish();

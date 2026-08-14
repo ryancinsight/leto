@@ -1,8 +1,17 @@
-//! Moore-Penrose pseudoinverse via the rank-revealing SVD.
+//! Moore-Penrose pseudoinverse via the SVD.
 
-use super::{default_tolerance, svd_rank_revealing_with_tolerance};
+use super::svd_decompose;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
+
+/// Relative rank cutoff: singular values below `1e-12 · σ_max` are treated as
+/// noise and their directions dropped from `A⁺`. Relative rather than absolute
+/// so the cutoff scales with the matrix; `1e-12` sits well above `f64` rounding
+/// of the decomposition (`O(ε·σ_max)`, `ε ≈ 2.2e-16`) and below any singular
+/// value a caller would consider structurally present.
+fn rank_cutoff_ratio<T: RealScalar>() -> T {
+    T::ONE.div(T::from_usize(1_000_000_000_000))
+}
 
 /// Moore-Penrose pseudoinverse `A⁺` (shape `n × m`), rank-revealing.
 ///
@@ -12,6 +21,12 @@ use leto::{Array2, ArrayView2, Result, Storage};
 /// singular values below the noise floor, so **rank-deficient inputs are
 /// handled** (unlike a normal-equations or full-rank-only inverse).
 ///
+/// Dropping a direction here is safe precisely because
+/// [`svd_decompose`](super::svd_decompose) materializes an orthonormal `U`
+/// column for every singular value including the zero ones: the retained
+/// directions form an orthonormal basis of the numerical range, so
+/// `Σ⁺Σ` is the identity on them and the Moore-Penrose identities close.
+///
 /// # Theorem (Moore-Penrose conditions)
 /// `A⁺` defined above satisfies the four defining identities; in particular
 /// `A A⁺ A = A` and `A⁺ A A⁺ = A⁺`. *Proof:* substitute `A = U Σ Vᵀ`,
@@ -19,22 +34,21 @@ use leto::{Array2, ArrayView2, Result, Storage};
 /// `A A⁺ A = U Σ (Σ⁺ Σ) Vᵀ = U Σ Vᵀ = A`, since `Σ⁺Σ` is the identity on the
 /// nonzero singular directions. ∎
 ///
-/// Numerically sound: built on the one-sided Jacobi SVD, it never forms `AᵀA`
-/// and so does not square the condition number.
+/// Numerically sound: built on the bidiagonal-QR SVD, it never forms `AᵀA` and
+/// so does not square the condition number.
 ///
 /// # Errors
 /// [`leto::LetoError`] on empty or non-finite input.
 pub fn pinv<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     let [rows, cols] = matrix.shape();
-    let tolerance = default_tolerance::<T>();
-    let svd = svd_rank_revealing_with_tolerance(matrix, tolerance)?;
+    let svd = svd_decompose(matrix)?;
 
     let sigma_max = svd
         .singular_values
         .iter()
         .copied()
         .fold(T::ZERO, |m, s| if s > m { s } else { m });
-    let cutoff = sigma_max.mul(tolerance);
+    let cutoff = sigma_max.mul(rank_cutoff_ratio::<T>());
 
     // Reciprocate retained singular values; below-cutoff directions contribute 0.
     let k = svd.singular_values.len();

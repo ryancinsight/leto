@@ -6,7 +6,7 @@
 | [0002](0002-coeus-rank-boundary.md) | Const-rank Coeus provider boundary | Accepted |
 | [0003](0003-matrix-linalg-trait-layer.md) | Fluent rank-2 linear-algebra trait layer | — |
 | [0004](0004-array-elementwise-operators.md) | Elementwise operator overloading on `Array` | — |
-| [0005](0005-rank-revealing-svd.md) | Rank-revealing SVD via one-sided Jacobi | — |
+| [0005](0005-rank-revealing-svd.md) | Rank-revealing SVD | Accepted |
 | [0006](0006-nonsymmetric-eigensolver-track.md) | Non-symmetric eigensolver track (Hessenberg → Francis QR) | — |
 | [0007](0007-dynamic-rank-boundary.md) | Dynamic rank (`IxDyn`) as a boundary carrier with a zero-copy rank bridge | — |
 | [0008](0008-parity-scope-boundary.md) | Parity scope boundary — fixed-size storage, compile-time shape, geometry | — |

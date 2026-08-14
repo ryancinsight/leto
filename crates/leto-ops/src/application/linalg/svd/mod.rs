@@ -9,40 +9,38 @@
 //! orthonormal (`uᵢᵀuⱼ = vᵢᵀAᵀA vⱼ / (σᵢσⱼ) = λⱼ δᵢⱼ /(σᵢσⱼ) = δᵢⱼ`) and
 //! `A vᵢ = σᵢ uᵢ`, i.e. `A V = U Σ`. ∎
 //!
-//! Paths share the [`SvdDecomposition`] contract (SSOT for the result type):
-//! - `bidiagonal_qr` — implicit-shift bidiagonal QR (Golub–Reinsch): the default
-//!   thin SVD ([`svd_decompose`]) and `singular_values`. Avoids `AᵀA`, so
-//!   conditioning is `κ(A)` not `κ(A)²`; `svd_decompose` rejects rank-deficient
-//!   input to preserve its contract.
-//! - `jacobi` — **rank-revealing** one-sided Jacobi SVD; accepts rank-deficient
-//!   input and surfaces zero singular values honestly (ADR 0005).
+//! One implementation backs the whole surface (SSOT): `bidiagonal_qr`,
+//! Golub–Reinsch implicit-shift bidiagonal QR. It never forms `AᵀA`, so
+//! conditioning stays `κ(A)` rather than `κ(A)²`, and it is **rank-revealing**:
+//! zero singular values emerge from the iteration itself, while `U` and `V`
+//! stay orthogonal whatever the rank of `A` — both are accumulated products of
+//! Householder reflectors and Givens rotations, and a product of orthogonal
+//! factors is orthogonal irrespective of the singular values it diagonalizes.
+//! Rank is therefore read off `Σ` rather than signalled by an error (ADR 0005).
 //!
-//! `pseudoinverse` builds the Moore-Penrose `A⁺` on the rank-revealing path.
+//! - [`svd_decompose`] — thin SVD `A = U Σ Vᵀ`, all shapes, any rank.
+//! - [`singular_values`] — values only, no `U`/`V` accumulation.
+//! - [`pinv`] — Moore-Penrose `A⁺` under a relative rank cutoff.
 
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
 
-/// Bidiagonal-QR SVD: default thin SVD, singular values (accuracy-preserving).
+/// Bidiagonal-QR SVD: thin SVD and singular values (accuracy-preserving).
 pub mod bidiagonal_qr;
-/// Rank-revealing one-sided Jacobi SVD.
-pub mod jacobi;
 /// Moore-Penrose pseudoinverse.
 pub mod pseudoinverse;
 
-pub use bidiagonal_qr::{
-    singular_values, svd_decompose, svd_decompose_with_tolerance, svd_via_bidiagonal,
-};
-pub use jacobi::{svd_rank_revealing, svd_rank_revealing_with_tolerance};
+pub use bidiagonal_qr::{singular_values, svd_decompose};
 pub use pseudoinverse::pinv;
 
 /// Thin singular value decomposition `A = U Σ Vᵀ`.
 ///
-/// `singular_values` are sorted descending (length `k = min(m, n)`);
-/// `left_singular_vectors` is `U` (`m × k`, columns) and
-/// `right_singular_vectors` is `V` (`n × k`, columns). On the rank-revealing
-/// [`self::jacobi`] path, singular values may be zero, in which case the corresponding
-/// `U` column is zero (its direction lies in the left null space and is not
-/// materialized); `V` is always fully orthonormal.
+/// `singular_values` are sorted descending (length `k = min(m, n)`) and are
+/// non-negative; `left_singular_vectors` is `U` (`m × k`, columns) and
+/// `right_singular_vectors` is `V` (`n × k`, columns). Rank-deficient input
+/// yields zero singular values, and `U` and `V` keep orthonormal columns in
+/// that case too — the null-space directions are materialized rather than left
+/// zero, so `UᵀU = VᵀV = I` holds at every rank.
 #[derive(Debug, Clone)]
 pub struct SvdDecomposition<T> {
     /// Singular values sorted descending.
@@ -53,26 +51,13 @@ pub struct SvdDecomposition<T> {
     pub right_singular_vectors: leto::Array2<T>,
 }
 
-/// Default eigen/orthogonality tolerance: `1e-12` relative.
-pub(super) fn default_tolerance<T: RealScalar>() -> T {
-    T::ONE.div(T::from_usize(1_000_000_000_000))
-}
-
-/// Reject empty, non-finite, or invalid-tolerance input shared by both paths.
-pub(super) fn validate_input<T: RealScalar>(
-    matrix: &ArrayView2<'_, T>,
-    tolerance: T,
-) -> Result<()> {
+/// Reject empty or non-finite input.
+pub(super) fn validate_input<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<()> {
     let [rows, cols] = matrix.shape();
     if rows == 0 || cols == 0 {
         return Err(LetoError::ShapeMismatch {
             lhs: vec![rows, cols],
             rhs: vec![rows.max(1), cols.max(1)],
-        });
-    }
-    if !tolerance.is_finite() || tolerance < T::ZERO {
-        return Err(LetoError::StorageError {
-            reason: "SVD tolerance must be finite and non-negative".to_string(),
         });
     }
     let all_finite = if let Some(slice) = matrix.as_slice() {

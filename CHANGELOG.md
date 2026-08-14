@@ -4,6 +4,39 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [Unreleased]
+
+### Removed
+
+- [major] Retire the one-sided Jacobi SVD (`svd/jacobi.rs`), collapsing the two
+  SVD implementations to one. ADR 0005 had justified Jacobi against the
+  Gram-matrix path, which was deleted in 0.14.x; the surviving bidiagonal QR is
+  itself rank-revealing, so the second implementation had no remaining premise.
+  Measured before deletion: on exact rank deficiency, sub-tolerance singular
+  values, and column-scaled graded matrices to κ ≈ 1e21 (the Demmel–Veselić
+  class where Jacobi is published as more accurate), the two paths agree to 15
+  significant digits, while Jacobi additionally returned a **non-orthonormal**
+  `U` at deficient rank and lost reconstruction by the full magnitude of any
+  singular value below its absolute tolerance (1e-14 vs 1.6e-30). ADR 0005 is
+  re-derived in place with the measurements.
+- [major] Remove `svd_rank_revealing`, `svd_rank_revealing_with_tolerance`,
+  `svd_via_bidiagonal`, `svd_decompose_with_tolerance`, and
+  `MatrixDecompose::svd_rank_revealing`. The SVD surface is now `svd_decompose`,
+  `singular_values`, `pinv` and `MatrixDecompose::{svd, singular_values}`.
+  Migration: `svd_rank_revealing` and `svd_via_bidiagonal` callers move to
+  `svd_decompose` with no behavioral loss.
+
+### Changed
+
+- [major] `svd_decompose` no longer rejects rank-deficient input. Rank is
+  reported as `σ = 0` in the returned `Σ` — the value the decomposition already
+  computed — rather than as `Err`. Callers requiring full rank must now test
+  `singular_values.last()` against their own noise floor; the silent
+  `Err`-to-zero-σ change is the migration risk to check.
+- [patch] `pinv` builds on `svd_decompose` instead of the Jacobi path, and its
+  relative `τ·σ_max` cutoff is now backed by a genuinely orthonormal `U` at
+  every rank.
+
 ## [0.41.0] - 2026-08-09
 
 ### Added

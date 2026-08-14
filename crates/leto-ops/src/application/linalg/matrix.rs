@@ -18,8 +18,8 @@ use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu,
-    hessenberg, lu_decompose, qr_decompose, schur, svd_decompose, svd_rank_revealing,
-    symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition,
+    hessenberg, lu_decompose, qr_decompose, schur, svd_decompose, symmetric_eigen_jacobi,
+    symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition,
     BunchKaufmanDecomposition, CholeskyDecomposition, ColPivQrDecomposition,
     FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition, QrDecomposition, RealSchur,
     SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
@@ -216,17 +216,12 @@ pub trait MatrixDecompose<T: RealScalar> {
     /// # Errors
     /// [`LetoError`](leto::LetoError) on wide (`m < n`) or non-finite input.
     fn bidiagonalize(&self) -> Result<BidiagonalDecomposition<T>>;
-    /// Thin SVD for finite full-rank matrices (bidiagonal QR; rejects rank-deficient).
+    /// Thin SVD `A = U Σ Vᵀ` (bidiagonal QR). Rank-revealing: rank-deficient
+    /// input yields zero singular values rather than an error (ADR 0005).
     ///
     /// # Errors
-    /// [`LetoError`](leto::LetoError) on rank-deficient or invalid input.
+    /// [`LetoError`](leto::LetoError) on empty, non-finite, or non-converged input.
     fn svd(&self) -> Result<SvdDecomposition<T>>;
-    /// Rank-revealing SVD (one-sided Jacobi); accepts rank-deficient input and
-    /// surfaces zero singular values (ADR 0005).
-    ///
-    /// # Errors
-    /// [`LetoError`](leto::LetoError) on empty or non-finite input.
-    fn svd_rank_revealing(&self) -> Result<SvdDecomposition<T>>;
     /// Singular values sorted descending, including rank-deficient inputs.
     ///
     /// # Errors
@@ -297,10 +292,6 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
     #[inline]
     fn svd(&self) -> Result<SvdDecomposition<T>> {
         svd_decompose(&self.as_matrix_view())
-    }
-    #[inline]
-    fn svd_rank_revealing(&self) -> Result<SvdDecomposition<T>> {
-        svd_rank_revealing(&self.as_matrix_view())
     }
     #[inline]
     fn singular_values(&self) -> Result<Vec<T>> {

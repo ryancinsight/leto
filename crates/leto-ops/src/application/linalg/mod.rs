@@ -86,10 +86,7 @@ pub use products::kron;
 pub use properties::{matrix_rank, matrix_rank_with_tolerance, trace};
 pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};
 pub use schur::{schur, RealSchur};
-pub use svd::{
-    pinv, singular_values, svd_decompose, svd_decompose_with_tolerance, svd_rank_revealing,
-    svd_rank_revealing_with_tolerance, svd_via_bidiagonal, SvdDecomposition,
-};
+pub use svd::{pinv, singular_values, svd_decompose, SvdDecomposition};
 pub use udu::{udu_decompose, UduDecomposition};
 
 /// Iterative solvers (SSOT re-export).

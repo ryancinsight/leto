@@ -16,10 +16,9 @@
 //! This module provides both the singular **values** (no `U`/`V` accumulation —
 //! a zero-cost const-generic specialization) and the full thin SVD with `U`/`V`
 //! (the rotations are accumulated into the bidiagonalization's orthogonal
-//! factors). It is the default `svd_decompose`; the rank-revealing one-sided
-//! Jacobi (`super::jacobi`) remains for rank-deficient / maximal-accuracy needs.
+//! factors). It is the sole SVD implementation, rank-deficient input included.
 
-use super::{default_tolerance, validate_input, SvdDecomposition};
+use super::{validate_input, SvdDecomposition};
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
 
@@ -33,8 +32,7 @@ const MAX_ITER: usize = 4000;
 /// [`LetoError`](leto::LetoError) on empty / non-finite input, or QR
 /// non-convergence.
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
-    let tolerance = default_tolerance::<T>();
-    validate_input(matrix, tolerance)?;
+    validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
 
     // Bidiagonalization requires `m >= n`; σ(A) = σ(Aᵀ), so transpose wide input.
@@ -356,50 +354,24 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
     ))
 }
 
-/// Thin SVD for a **full-rank** matrix (default tolerance); rejects
-/// rank-deficient input. Bidiagonal-QR backed (supersedes the former Gram path).
-///
-/// # Errors
-/// [`LetoError`](leto::LetoError) on empty / non-finite / rank-deficient input.
-pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
-    svd_decompose_with_tolerance(matrix, default_tolerance::<T>())
-}
-
-/// Thin SVD for a full-rank matrix with an explicit rank tolerance.
-///
-/// # Errors
-/// [`LetoError`](leto::LetoError) on empty / non-finite / rank-deficient input,
-/// or invalid tolerance.
-pub fn svd_decompose_with_tolerance<T: RealScalar>(
-    matrix: &ArrayView2<'_, T>,
-    tolerance: T,
-) -> Result<SvdDecomposition<T>> {
-    validate_input(matrix, tolerance)?;
-    let svd = svd_via_bidiagonal(matrix)?;
-    if let Some(&sigma_min) = svd.singular_values.last() {
-        if sigma_min <= tolerance {
-            return Err(leto::LetoError::StorageError {
-                reason: "SVD input is rank-deficient".to_string(),
-            });
-        }
-    }
-    Ok(svd)
-}
-
 /// Thin SVD `A = U Σ Vᵀ` via implicit-shift bidiagonal QR (Golub–Reinsch).
 ///
 /// Wide input (`m < n`) is handled by `σ(A) = σ(Aᵀ)` with `U(A) = V(Aᵀ)`,
 /// `V(A) = U(Aᵀ)`: the SVD of the tall `Aᵀ` is computed and its factors swapped.
-/// Faster and more accurate than the Gram path (conditioning `κ(A)`, not
-/// `κ(A)²`); handles rank-deficient input (zero singular values emerge).
+///
+/// Rank-deficient input is accepted: rank deficiency is data, reported as
+/// `σᵢ = 0` in the returned `Σ`, not an error. `U` and `V` keep orthonormal
+/// columns at every rank because both are accumulated products of Householder
+/// reflectors and Givens rotations, whose orthogonality does not depend on the
+/// singular values being nonzero. Callers that require full rank test
+/// `singular_values.last()` against their own threshold — the appropriate
+/// threshold is the caller's noise floor, which this function cannot know.
 ///
 /// # Errors
 /// [`LetoError`](leto::LetoError) on empty / non-finite input or QR
 /// non-convergence.
-pub fn svd_via_bidiagonal<T: RealScalar>(
-    matrix: &ArrayView2<'_, T>,
-) -> Result<SvdDecomposition<T>> {
-    validate_input(matrix, default_tolerance::<T>())?;
+pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
+    validate_input(matrix)?;
     let [m, n] = matrix.shape();
     if m >= n {
         let (u, sigma, v) = svd_tall(matrix)?;

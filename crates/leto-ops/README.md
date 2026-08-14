@@ -31,7 +31,7 @@ let qr = a.qr()?;
   contiguous and strided/transposed inputs.
 - Dense decompositions: LU (partial and full pivot), QR (Householder and
   column-pivoted), Cholesky, UDU, Bunch-Kaufman, Hessenberg, bidiagonalization,
-  SVD (thin and rank-revealing), symmetric and Hermitian eigensolvers, the
+  rank-revealing thin SVD, symmetric and Hermitian eigensolvers, the
   general non-symmetric `eigenvalues`, and real `schur`.
 - Direct and iterative solvers: `solve`, `solve_least_squares`, `pinv`, plus
   `ConjugateGradient`, `BiCGSTAB`, `GMRES`, and `LsqrSolver` with Jacobi, SOR,
