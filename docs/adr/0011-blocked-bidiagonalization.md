@@ -1,6 +1,6 @@
 # ADR 0011: Blocked bidiagonal reduction (`dgebrd`/`dlabrd`) for singular values
 
-- Status: **Implemented, oracle-verified, then REVERTED as measured-regressive.**
+- Status: Accepted
   Superseded conclusion below (the "disparity" is a small-matrix artifact; leto's
   unblocked reduce is already at parity at scale).
 
@@ -14,6 +14,12 @@
   core. The lane is explicitly scoped to the full-factor path (`m × n` reduction
   followed by `A = U B Vᵀ`) and is intended to close gap residuals without revisiting
   the reverted full-blocked `dlabrd` path.
+
+> **Revision (2026-08-14):** The full values-only blocked reduction remains
+> rejected by the measured regression documented below. The accepted decision is
+> to retain that implementation as a reference and keep only the narrow
+> full-factor compact-WY lane under measurement; no full blocked values-only
+> fast path is claimed as shipped.
 
 ## Outcome (measured)
 

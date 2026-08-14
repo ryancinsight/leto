@@ -1,8 +1,11 @@
 # ADR 0012 — Values-only singular values: dqds vs the bidiagonal Givens QR sweep
 
-- Status: investigated, prototype reverted, scoped as a [major] follow-up
+- Status: Proposed
 - Date: 2026-06-17
 - Change class: [major] (new values-only kernel + shift/splitting machinery)
+
+> **Revision (2026-08-14):** The dqds prototype was investigated and reverted;
+> this ADR remains `Proposed` because the follow-up kernel is not shipped.
 
 > **Correction (read first).** An earlier revision of this ADR framed the 64²
 > gap as *algorithmic* — "nalgebra is fast because it uses dqds; leto's Givens is

@@ -1,8 +1,13 @@
 # ADR 0001: Elementwise operator overloading on `Array`
 
-- Status: Superseded by ADR 0004 (2026-06-15)
+- Status: Rejected
 - Date: 2026-06-10
 - Class: [arch]
+
+> **Revision (2026-08-14):** ADR 0004 superseded the deferred operator
+> decision and shipped the operator surface. The original decision is retained
+> for its architectural rationale and is recorded as `Rejected` in the
+> canonical lifecycle because it is no longer the accepted direction.
 
 ## Context
 
