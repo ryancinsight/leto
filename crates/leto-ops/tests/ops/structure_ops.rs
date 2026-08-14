@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Layout, LetoError, SliceArg, Storage, VecStorage};
 use leto_ops::{
     batched_matmul, coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace,

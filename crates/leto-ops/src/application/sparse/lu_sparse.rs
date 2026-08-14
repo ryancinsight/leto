@@ -49,6 +49,8 @@
 //! (`LetoError::ShapeMismatch`, `LetoError::StorageError`) so consumers'
 //! error-handling is unchanged.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use crate::application::linalg::lu::{lu_decompose, LuDecomposition};
 use crate::application::sparse::csc::CscMatrix;
 use crate::application::sparse::csr::CsrMatrix;

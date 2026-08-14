@@ -4,6 +4,11 @@
 //! leto `rowvar = true`). Expected values are derived by hand from
 //! `C[i,j] = (1/(n−ddof)) Σₖ (xᵢₖ−x̄ᵢ)(xⱼₖ−x̄ⱼ)`.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::application::reduction::var_axis;
 use leto::application::statistics::{covariance, pearson_correlation};
 use leto::{Array2, LetoError, Storage};

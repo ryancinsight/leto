@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use core::fmt::Debug;
 
 use eunomia::{Bf16, F16};

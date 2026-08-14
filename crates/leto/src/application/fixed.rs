@@ -4,6 +4,8 @@
 //! arrays would add avoidable allocation and layout metadata. They are plain
 //! row-major array wrappers, so indexing and arithmetic stay stack-local.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use core::ops::{
     Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign,
 };

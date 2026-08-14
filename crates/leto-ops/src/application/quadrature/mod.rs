@@ -22,6 +22,8 @@
 //! Weights satisfy `∑ wᵢ = 2` and are exact for polynomials up to degree 2n−1.
 //! [`GaussLegendreN`] wraps these as a `Quadrature<f64>` rule.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use eunomia::{FloatElement, NumericElement, RealField};
 
 use crate::application::special_legendre::legendre_poly_and_deriv;

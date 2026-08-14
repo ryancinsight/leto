@@ -11,6 +11,8 @@
 //! ## Reference
 //! Berrut & Trefethen (2004). *Barycentric Lagrange Interpolation*, SIAM Rev.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use super::{check_bounds, validate_nodes, Interpolation1D};
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{LetoError, Result};

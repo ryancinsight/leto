@@ -4,6 +4,11 @@
 //! `h = q·(n−1)` with linear interpolation between bracketing order statistics;
 //! every expected value below is computed by hand from that definition.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::application::reduction::{
     median_all, median_axis, quantile_all, quantile_axis, Interpolation,
 };

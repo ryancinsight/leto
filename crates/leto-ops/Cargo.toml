@@ -58,3 +58,6 @@ std = ["leto/std"]
 parallel = ["dep:moirai"]
 mnemosyne-memory = ["leto/mnemosyne-memory"]
 topology = ["std", "dep:themis", "themis/std"]
+
+[lints]
+workspace = true

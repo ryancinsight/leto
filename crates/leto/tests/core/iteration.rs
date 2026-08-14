@@ -1,5 +1,10 @@
 //! Element / indexed iteration: logical-order, strided, and double-ended.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Array2, ElementIter, Layout, LetoError, VecStorage};
 
 fn leto(shape: [usize; 2], data: Vec<i32>) -> Array2<i32> {

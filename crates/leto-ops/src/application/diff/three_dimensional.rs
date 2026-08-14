@@ -26,6 +26,11 @@
 //! let grad_x = op.apply_x(field.view());
 //! ```
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet LETO-UNWRAP-1: pre-existing debt"
+)]
+
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{Array3, ArrayView3, LetoError, Result};
 

@@ -42,6 +42,8 @@
 //! For history depth m=5 and 10³ outer iterations, total shift cost drops from
 //! O(5 × 10³) = 5000 ops to O(10³) = 1000 ops in pointer increments.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{Array1, Array2};
 use std::collections::VecDeque;

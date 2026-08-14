@@ -9,6 +9,8 @@
 //! ## Reference
 //! Burden & Faires, *Numerical Analysis*, §3.1.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use super::{check_bounds, search::find_interval, validate_nodes, Interpolation1D};
 use eunomia::RealField;
 use leto::{LetoError, Result};

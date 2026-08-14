@@ -4,6 +4,11 @@
 //! convention-independent *contract* — `A = Q H Qᵀ`, `Q` orthogonal, `H` upper
 //! Hessenberg — plus orthogonal-similarity invariants (trace, Frobenius norm).
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, Storage};
 use leto_ops::{hessenberg, norm_l2, trace, MatrixProduct};
 

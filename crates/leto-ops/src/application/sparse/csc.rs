@@ -13,6 +13,8 @@
 //! [`transpose`](Self::transpose) of the CSR ↔ CSC duality) bridges to the
 //! existing CSR solver surface.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use super::CsrMatrix;
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;

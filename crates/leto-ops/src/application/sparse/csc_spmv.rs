@@ -5,6 +5,8 @@
 //! `y[i]`.  This is a gather-free scatter-add pattern (no indirection on `x`),
 //! unlike CSR which needs `x[col_indices[p]]`.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use super::CscMatrix;
 use crate::domain::scalar::Scalar;
 use leto::{Array1, ArrayView1, LetoError, Result};

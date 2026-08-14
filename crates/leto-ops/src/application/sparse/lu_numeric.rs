@@ -50,6 +50,8 @@
 //! [`lu_decompose`](crate::application::linalg::lu) path uses the same
 //! convention, so consumers' error-handling logic is unchanged.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use super::lu_symbolic::SymbolicLu;
 use super::CscMatrix;
 use crate::domain::real::RealScalar;

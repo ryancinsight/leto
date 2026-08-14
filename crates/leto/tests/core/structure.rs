@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{concat, pad, split, stack, Array, Layout, Storage, VecStorage};
 
 fn array2(rows: usize, cols: usize, data: Vec<i32>) -> Array<i32, VecStorage<i32>, 2> {

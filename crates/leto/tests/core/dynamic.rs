@@ -1,5 +1,10 @@
 //! Runtime-rank `ArrayD` boundary carrier + zero-copy rank bridge (ADR 0007).
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::application::reduction::sum_all;
 use leto::{Array2, ArrayD, LayoutDyn, LetoError, VecStorage};
 

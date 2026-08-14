@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
     add, binary_map, div, indexed_zip_mut_with, map, map_into, mapv, mul, scalar_map, sub,

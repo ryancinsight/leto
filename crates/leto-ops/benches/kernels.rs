@@ -14,6 +14,11 @@
 //! family includes a C-dense case and a prepared non-unit-stride view so view
 //! construction and allocation do not contaminate the timed operation.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
 use leto_ops::{

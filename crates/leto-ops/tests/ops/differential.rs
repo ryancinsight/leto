@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{concat, stack, Array, SliceArg, Storage};
 use leto_ops::{
     add, batched_matmul, cumsum, mapv, matmul, max_axis, mean_axis, min_axis, scalar_map, sum,

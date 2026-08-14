@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use eunomia::{Complex32, Complex64, F16};
 use leto::{Array1, Array2, Array3, SliceArg, Storage};
 use leto_ops::{add, mapv, matmul, mul, sum_axis_into};

@@ -13,6 +13,11 @@
 //! only for surface Leto actually implements, so a green run is an honest parity
 //! signal and never test-gaming.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{concat, stack, Array, Array2, SliceArg, Storage};
 use leto_ops::{
     add, batched_matmul, cumsum, div, dot, matmul, mean_axis, mul, scalar_map, solve_least_squares,

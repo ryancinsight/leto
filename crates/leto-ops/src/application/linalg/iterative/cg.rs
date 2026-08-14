@@ -17,6 +17,11 @@
 //! - Hestenes & Stiefel (1952). *Methods of conjugate gradients for solving linear equations.*
 //! - Saad (2003). *Iterative Methods for Sparse Linear Systems*, §6.7.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "ratchet LETO-UNWRAP-1: pre-existing debt"
+)]
+
 use super::config::IterativeSolverConfig;
 use super::convergence::ConvergenceMonitor;
 use super::ops::{assign_residual, axpy, copy_vec, dot, norm, scale_add, validate_len};

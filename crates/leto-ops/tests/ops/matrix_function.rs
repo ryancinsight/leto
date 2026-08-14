@@ -1,5 +1,10 @@
 //! Matrix power / exponential: closed-form oracles + self-validation.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, LetoError, Storage};
 use leto_ops::{matexp, matpow, MatrixFunction, MatrixProduct};
 

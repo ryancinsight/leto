@@ -4,6 +4,8 @@
 //! `lu.rs`.  They complement [`leto_ops`] for beamforming, acoustics, and any
 //! application that requires complex-valued linear system solves.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use eunomia::Complex;
 use leto::{Array1, Array2, LetoError, Result};
 

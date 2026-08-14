@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use leto::{TaskPartitionMut, TaskPartitionsMut};
 
 /// Partition and run a 1D loop in parallel using Moirai's work-stealing runtime.

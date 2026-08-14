@@ -2,6 +2,11 @@
 //! products (Kronecker), using analytical expected values and oracle-independent
 //! identities.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, LetoError, SliceArg, Storage};
 use leto_ops::application::{
     kron as application_kron, matrix_rank as application_matrix_rank, trace as application_trace,

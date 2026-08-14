@@ -1,5 +1,10 @@
 //! Tests for symmetric indefinite unpivoted `A = U D Uᵀ`.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Array2, Storage};
 use leto_ops::{udu_decompose, MatrixDecompose, MatrixProduct};
 

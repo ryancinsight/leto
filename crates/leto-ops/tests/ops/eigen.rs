@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, SliceArg, Storage};
 use leto_ops::{symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi};
 

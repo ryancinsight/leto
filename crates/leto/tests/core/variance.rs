@@ -1,5 +1,10 @@
 //! Variance / standard-deviation reductions: closed-form + reference differential.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::application::reduction::{std_all, std_axis, var_all, var_axis};
 use leto::{Array2, Storage};
 

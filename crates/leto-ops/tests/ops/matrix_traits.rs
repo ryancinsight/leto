@@ -6,6 +6,11 @@
 //! values). A transposed-receiver case proves arbitrary-layout support flows
 //! through the  bridge unchanged.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Array2, Storage};
 use leto_ops::{det, matmul, norm_l2, MatrixDecompose, MatrixNorm, MatrixProduct, MatrixSolve};
 

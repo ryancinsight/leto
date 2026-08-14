@@ -6,6 +6,11 @@
 //! known spectra give oracle-independent checks; the Schur decomposition
 //! provides cross-validation for general cases.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use eunomia::Complex;
 use leto::Array2;
 use leto_ops::{eigenvalues, schur};

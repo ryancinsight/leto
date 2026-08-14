@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::geometry::{Point1, Point2, Point3, Vector3};
 
 #[test]

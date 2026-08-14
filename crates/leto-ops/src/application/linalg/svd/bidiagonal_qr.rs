@@ -25,6 +25,8 @@
 //! (the rotations are accumulated into the bidiagonalization's orthogonal
 //! factors). It is the sole SVD implementation, rank-deficient input included.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use super::{validate_input, SvdDecomposition};
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};

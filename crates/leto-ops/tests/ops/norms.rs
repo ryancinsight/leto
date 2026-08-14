@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Layout, SliceArg, Storage, VecStorage};
 use leto_ops::{norm_l1, norm_l2, norm_max};
 

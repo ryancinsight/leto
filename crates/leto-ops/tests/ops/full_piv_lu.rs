@@ -1,5 +1,10 @@
 //! Tests for complete-pivoting LU `P A Q = L U` (rank-revealing).
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Array2, Storage};
 use leto_ops::{det, full_piv_lu, solve, MatrixProduct};
 

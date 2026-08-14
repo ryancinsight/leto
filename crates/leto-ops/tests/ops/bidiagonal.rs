@@ -5,6 +5,11 @@
 //! bidiagonal — plus singular-value preservation (the property that makes
 //! bidiagonalization the SVD's first phase), tied to leto's own `singular_values`.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, Storage};
 use leto_ops::{bidiagonalize, singular_values, MatrixProduct};
 

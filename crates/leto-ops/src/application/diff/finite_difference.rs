@@ -1,5 +1,7 @@
 //! Generic 1-D finite-difference operator.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use super::schemes::FiniteDifferenceScheme;
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{Array1, LetoError, Result};

@@ -22,6 +22,8 @@
 //! - Bro, R. & de Jong, S. (1997). A fast non-negativity-constrained least
 //!   squares algorithm.  *J. Chemometrics* 11(5), 393–401.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use crate::application::linalg::qr::qr_decompose;
 use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result as LetoResult};
 

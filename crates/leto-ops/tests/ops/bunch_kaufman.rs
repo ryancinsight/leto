@@ -1,5 +1,10 @@
 //! Bunch–Kaufman `P A Pᵀ = L D Lᵀ`: exact reconstruction + LU differential.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array1, Array2, LetoError, Storage};
 use leto_ops::{bunch_kaufman, det as lu_det, solve as lu_solve, MatrixDecompose};
 

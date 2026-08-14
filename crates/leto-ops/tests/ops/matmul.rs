@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{matmul, matmul_accumulate, matmul_with_tile_policy, matvec, MatmulTilePolicy};
 

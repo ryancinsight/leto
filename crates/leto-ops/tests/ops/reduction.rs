@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Layout, SliceArg, Storage, VecStorage};
 use leto_ops::{
     max_axis, max_axis_into, mean_axis, mean_axis_into, min_axis, min_axis_into, product_axis,

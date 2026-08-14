@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use crate::application::array::Array;
 use crate::application::iter::{
     AxisChunks, ElementIter, ElementIterMut, ExactChunks, IndexedIter, IndexedIterMut,

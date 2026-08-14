@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Array2, SliceArg, Storage};
 use leto_ops::{
     cholesky_decompose, det, inv, norm_l1, norm_l2, norm_max, singular_values, solve,

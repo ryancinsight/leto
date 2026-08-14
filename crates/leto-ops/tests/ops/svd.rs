@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use eunomia::RealField;
 use leto::{Array2, SliceArg, Storage};
 use leto_ops::{pinv, singular_values, svd_decompose, MatrixProduct, RealScalar};

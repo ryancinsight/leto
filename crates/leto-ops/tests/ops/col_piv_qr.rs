@@ -1,5 +1,10 @@
 //! Tests for column-pivoted (rank-revealing) QR `A P = Q R`.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array, Array2, Storage};
 use leto_ops::{col_piv_qr, solve_least_squares, MatrixProduct};
 

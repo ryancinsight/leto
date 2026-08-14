@@ -1,5 +1,10 @@
 //! Lane iteration: 1-D views along an axis (count, content, strided, mutable).
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array1, Array2};
 
 fn leto2(shape: [usize; 2], data: Vec<i32>) -> Array2<i32> {

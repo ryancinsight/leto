@@ -5,6 +5,8 @@
 //! per-matrix kernel is the same `O(n³)` elimination as
 //! [`lu_decompose`](super::lu_decompose).
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 use crate::domain::real::RealScalar;
 #[cfg(not(feature = "parallel"))]
 use leto::SliceArg;

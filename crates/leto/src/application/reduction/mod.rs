@@ -13,6 +13,8 @@
 //! respecting arbitrary strides.
 //! All leaf modules import it via `crate::application::reduction::iter_elements`.
 
+#![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
+
 pub mod mean;
 pub mod min_max;
 pub mod quantile;

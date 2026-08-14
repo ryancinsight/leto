@@ -50,3 +50,69 @@ criterion = "0.8"
 codegen-units = 1
 lto = "thin"
 opt-level = 3
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+
+# Pedantic floor ratchet: every class listed below already fires in this
+# workspace and is allowed at its measured baseline; every class NOT listed
+# is a hard error. Counts are `cargo clippy --all-targets` hits at the time
+# the floor was established (total / production, production excluding
+# `#[cfg(test)]` modules and test, bench and example targets). Burn a class
+# down to zero, then delete its line -- the floor tightens, never loosens.
+
+# --- Documentation debt (451 sites, 426 in production) ---
+missing_errors_doc = "allow" # 178 (178 prod)
+must_use_candidate = "allow" # 106 (106 prod)
+doc_markdown = "allow" # 83 (58 prod)
+missing_panics_doc = "allow" # 74 (74 prod)
+return_self_not_must_use = "allow" # 10 (10 prod)
+
+# --- Numeric conversion debt (618 sites, 359 in production) ---
+cast_possible_wrap = "allow" # 216 (170 prod)
+cast_precision_loss = "allow" # 187 (45 prod)
+cast_sign_loss = "allow" # 84 (82 prod)
+cast_possible_truncation = "allow" # 56 (10 prod)
+unreadable_literal = "allow" # 40 (38 prod)
+cast_lossless = "allow" # 26 (6 prod)
+float_cmp = "allow" # 5 (5 prod)
+manual_midpoint = "allow" # 2 (1 prod)
+range_minus_one = "allow" # 1 (1 prod)
+comparison_chain = "allow" # 1 (1 prod)
+
+# --- Raw-pointer / layout debt (12 sites, 12 in production) ---
+ptr_as_ptr = "allow" # 10 (10 prod)
+ref_as_ptr = "allow" # 2 (2 prod)
+
+# --- Style debt (421 sites, 357 in production) ---
+inline_always = "allow" # 107 (107 prod)
+many_single_char_names = "allow" # 71 (52 prod)
+needless_pass_by_value = "allow" # 57 (52 prod)
+elidable_lifetime_names = "allow" # 46 (46 prod)
+similar_names = "allow" # 30 (23 prod)
+semicolon_if_nothing_returned = "allow" # 22 (9 prod)
+too_many_lines = "allow" # 18 (16 prod)
+items_after_statements = "allow" # 12 (6 prod)
+redundant_closure_for_method_calls = "allow" # 11 (9 prod)
+explicit_iter_loop = "allow" # 10 (7 prod)
+iter_without_into_iter = "allow" # 4 (4 prod)
+manual_let_else = "allow" # 4 (2 prod)
+no_effect_underscore_binding = "allow" # 4 (4 prod)
+unnecessary_wraps = "allow" # 4 (4 prod)
+manual_assert = "allow" # 3 (1 prod)
+single_match_else = "allow" # 3 (3 prod)
+unused_self = "allow" # 3 (3 prod)
+cloned_instead_of_copied = "allow" # 2 (2 prod)
+struct_field_names = "allow" # 2 (2 prod)
+uninlined_format_args = "allow" # 2 (2 prod)
+used_underscore_binding = "allow" # 2 (0 prod)
+collapsible_else_if = "allow" # 1 (1 prod)
+ignored_unit_patterns = "allow" # 1 (0 prod)
+into_iter_without_iter = "allow" # 1 (1 prod)
+map_unwrap_or = "allow" # 1 (1 prod)
+
+# --- Restriction floor ---
+# `unwrap_used` is denied outright: no workspace-wide allow. The 1933 existing
+# sites (83 in production) are pinned per file by `#![expect(..., reason = "LETO-UNWRAP-1")]`,
+# which self-expires the moment a file's last unwrap goes.
+unwrap_used = "deny"

@@ -1,5 +1,10 @@
 //! Value-semantic tests for elementwise operators (ADR 0004).
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, Storage};
 
 fn assert_reduced_precision_scalar_arithmetic<T>()

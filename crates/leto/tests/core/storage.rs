@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{
     domain::{RankMarker, RemoveAxis},
     Array, CowStorage, Layout, LetoError, Storage, VecStorage,

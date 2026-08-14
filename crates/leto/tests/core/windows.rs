@@ -1,5 +1,10 @@
 //! Sliding-window iteration: count theorem, content, strided, double-ended.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, LetoError};
 
 fn leto(shape: [usize; 2], data: Vec<i32>) -> Array2<i32> {

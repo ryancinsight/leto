@@ -1,6 +1,11 @@
 //! Stack-allocated `StackStorage` backing: allocation-free arrays that reuse
 //! the full operation surface through the `Storage` trait (SSOT).
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::application::reduction::{mean_all, sum_all, var_all};
 use leto::{Array, StackStorage, Storage};
 

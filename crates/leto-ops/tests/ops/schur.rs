@@ -1,5 +1,10 @@
 //! Real Schur `A = Q T Qᵀ`: reconstruction, orthogonality, structure, spectrum.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test scope: failed precondition = test failure"
+)]
+
 use leto::{Array2, Storage};
 use leto_ops::{schur, MatrixDecompose};
 
