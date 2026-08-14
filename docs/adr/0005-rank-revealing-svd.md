@@ -6,6 +6,32 @@
 
 ## Revisions
 
+- **2026-08-14 — evidence gap closed; zero-diagonal chase added.** The decision
+  below stands, but the evidence table that justified it was gathered at `f64` on
+  *near*-deficient matrices only, and that is a different case from exact rank
+  deficiency. Exact deficiency can leave an **exact zero on the diagonal** of the
+  bidiagonal factor, which a shifted QR step cannot deflate: the implicit `BᵀB`
+  is singular, the Wilkinson shift takes its nonzero eigenvalue, and the sweep
+  converges to a fixed point at `d = 0`, `e ≠ 0` that `scale + |e| == scale`
+  never accepts. Whether the zero is exact depends on the rounding of the
+  bidiagonalization and therefore on the precision, so the gap was specifically
+  **exact rank deficiency at `f32`**: `[[1,2],[2,4],[3,6]]` bidiagonalizes to
+  `d = [−3.7416573, 0]`, `e = [7.4833145]` at `f32` and spun to the
+  4000-iteration cap, surfacing in `hephaestus-cuda` as
+  `SVD failed: … QR failed to converge`. Leto's own suite missed it because it
+  tested rank deficiency at `f64` and `f32` genericity only on full-rank input —
+  never together. Fixed structurally, not by widening the deflation tolerance
+  (which would have traded every singular value's accuracy for a structural
+  gap): a negligible diagonal inside the active block is now chased out with
+  Givens rotations — left rotations along the row for an interior zero, right
+  rotations up the trailing column for a zero at the block's bottom — after which
+  the block splits and normal deflation proceeds. Tests now run exact
+  rank-deficiency at **both** precisions across tall, wide, square, rank-1,
+  rank-2-of-3 and rank-2-of-4, asserting analytic σ, reconstruction and
+  orthonormality of `U` *and* `V` against a derived `8·max(m,n)·ε·‖A‖₂` bound,
+  plus unit tests driving each chase branch directly from a constructed
+  bidiagonal. The orthonormality assertions are deliberate: they pin the property
+  that retiring Jacobi was chosen to protect.
 - **2026-08-13 — decision re-derived; one-sided Jacobi retired.** The original
   decision selected one-sided Jacobi *against the Gram-matrix path*, on the
   grounds that Gram could not produce null-space vectors. The Gram path was

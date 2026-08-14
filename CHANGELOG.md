@@ -6,6 +6,24 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [Unreleased]
 
+### Fixed
+
+- [patch] `svd_decompose` and `singular_values` no longer fail with
+  `bidiagonal SVD QR failed to converge` on **exactly** rank-deficient input.
+  An exact rank deficiency can put an exact zero on the diagonal of the
+  bidiagonal factor, which a shifted QR step cannot deflate — the implicit
+  `BᵀB` is singular, so the sweep converges to `d = 0, e ≠ 0` and spins to the
+  iteration cap. A negligible diagonal inside the active block is now chased out
+  with Givens rotations (left rotations along the row for an interior zero,
+  right rotations up the trailing column for a zero at the block's bottom),
+  after which the block splits and normal deflation proceeds; `U` and `V` stay
+  orthonormal because the chase is itself a product of plane rotations. The
+  deflation criterion is unchanged, so no singular value's accuracy moves.
+  Reproducer: `[[1,2],[2,4],[3,6]]` at `f32`. Exact rank deficiency is now
+  tested at `f32` **and** `f64` across tall, wide, square, rank-1,
+  rank-2-of-3 and rank-2-of-4 — the previous suite covered rank deficiency and
+  `f32` genericity only separately.
+
 ### Removed
 
 - [major] Retire the one-sided Jacobi SVD (`svd/jacobi.rs`), collapsing the two

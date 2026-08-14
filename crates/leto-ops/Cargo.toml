@@ -33,6 +33,10 @@ thiserror = { workspace = true }
 [dev-dependencies]
 aequitas.workspace = true
 leto = { workspace = true }
+# Already a normal dependency; repeated here so integration tests can name the
+# scalar traits (`RealField::EPSILON`, `FloatElement::from_f64`) that
+# precision-generic test batteries need to derive their own error bounds.
+eunomia = { workspace = true }
 criterion = { workspace = true }
 
 [[bench]]
