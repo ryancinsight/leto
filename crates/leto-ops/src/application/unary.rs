@@ -144,8 +144,8 @@ where
     if in_step.unsigned_abs() >= input_tile || out_step.unsigned_abs() >= output_tile {
         let tile = input_tile.min(output_tile);
         if let Some(geometry) = TileGeometry::new(size, shape, tile) {
-            let input_row_step = input_layout.strides[N - 2];
-            let output_row_step = output_layout.strides[N - 2];
+            let input_row_step = input_layout.strides()[N - 2];
+            let output_row_step = output_layout.strides()[N - 2];
             for slab in 0..geometry.slabs() {
                 let slab_idx = geometry.slab_base_index(slab);
                 let input_slab_base = input_layout.offset_of(slab_idx)? as isize;
@@ -465,8 +465,8 @@ where
     if in_step.unsigned_abs() >= input_tile || out_step.unsigned_abs() >= output_tile {
         let tile = input_tile.min(output_tile);
         if let Some(geometry) = TileGeometry::new(ctx.size, ctx.shape, tile) {
-            let input_row_step = ctx.input_layout.strides[N - 2];
-            let output_row_step = ctx.output_layout.strides[N - 2];
+            let input_row_step = ctx.input_layout.strides()[N - 2];
+            let output_row_step = ctx.output_layout.strides()[N - 2];
             let blocks = geometry.slabs() * geometry.row_blocks();
             let block_chunk = (4096 / (geometry.tile() * geometry.width()).max(1)).max(1);
 

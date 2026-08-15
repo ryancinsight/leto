@@ -122,16 +122,22 @@ fn copy_back_to_out<T: Scalar>(
     dst: &mut ArrayViewMut<'_, T, 2>,
 ) -> Result<()> {
     let shape = dst.shape();
+    // `validate_matmul` at the dispatch sites validates the *scratch* output
+    // view, not `dst`; `dst` is the caller's view and reaches the raw writes
+    // below unproven. Establish its storage bound here.
+    let dst_len = dst.data().len();
+    dst.layout().validate_storage_len(dst_len)?;
     let src_ptr = src.data().as_ptr();
     let dst_ptr = dst.data_mut().as_mut_ptr();
 
     for r in 0..shape[0] {
         let src_row_offset = r as isize * shape[1] as isize;
-        let dst_row_offset = dst.layout().offset as isize + r as isize * dst.strides()[0];
+        let dst_row_offset = dst.layout().offset() as isize + r as isize * dst.strides()[0];
 
         if dst.strides()[1] == 1 {
-            // SAFETY: src is C-contiguous, dst is verified valid by validate_matmul,
-            // and this row is unit-stride.
+            // SAFETY: src is C-contiguous, `validate_storage_len` above proved
+            // every physical offset `dst`'s layout addresses lies inside its
+            // buffer, and this row is unit-stride.
             unsafe {
                 core::ptr::copy_nonoverlapping(
                     src_ptr.offset(src_row_offset),
@@ -140,7 +146,8 @@ fn copy_back_to_out<T: Scalar>(
                 );
             }
         } else {
-            // SAFETY: dst is validated, this handles strided copy elements.
+            // SAFETY: `validate_storage_len` above bounds every physical offset
+            // `dst`'s layout addresses; this handles strided copy elements.
             for c in 0..shape[1] {
                 unsafe {
                     let val = *src_ptr.offset(src_row_offset + c as isize);
@@ -915,18 +922,20 @@ pub fn batched_matmul<T: Scalar>(
     let out_batch_stride = out.strides()[0];
 
     let lhs_mat = |b: usize| {
-        Layout::new(
+        Layout::try_new(
             [m, lhs_k],
             [lhs.strides()[1], lhs.strides()[2]],
             (lhs.offset() as isize + b as isize * lhs_batch_stride) as usize,
         )
+        .expect("invariant: batch submatrix layout derives from a validated parent")
     };
     let rhs_mat = |b: usize| {
-        Layout::new(
+        Layout::try_new(
             [rhs_k, n],
             [rhs.strides()[1], rhs.strides()[2]],
             (rhs.offset() as isize + b as isize * rhs_batch_stride) as usize,
         )
+        .expect("invariant: batch submatrix layout derives from a validated parent")
     };
     let out_offset = out.offset() as isize;
     let out_strides = [out.strides()[1], out.strides()[2]];
@@ -979,16 +988,18 @@ pub fn batched_matmul<T: Scalar>(
                 let rhs_ptr = rhs_ptr as *const T;
                 let out_ptr = out_ptr as *mut T;
 
-                let lhs_layout = Layout::new(
+                let lhs_layout = Layout::try_new(
                     [m, lhs_k],
                     lhs_strides,
                     (lhs_offset + b as isize * lhs_batch_stride) as usize,
-                );
-                let rhs_layout = Layout::new(
+                )
+                .expect("invariant: batch submatrix layout derives from a validated parent");
+                let rhs_layout = Layout::try_new(
                     [rhs_k, n],
                     rhs_strides,
                     (rhs_offset + b as isize * rhs_batch_stride) as usize,
-                );
+                )
+                .expect("invariant: batch submatrix layout derives from a validated parent");
 
                 let lhs_view = unsafe {
                     ArrayView::new(lhs_layout, core::slice::from_raw_parts(lhs_ptr, lhs_len))
@@ -997,7 +1008,8 @@ pub fn batched_matmul<T: Scalar>(
                     ArrayView::new(rhs_layout, core::slice::from_raw_parts(rhs_ptr, rhs_len))
                 };
                 let abs_offset = (out_offset + b as isize * out_batch_stride) as usize;
-                let out_layout = Layout::new([out_m, out_n], out_strides, abs_offset);
+                let out_layout = Layout::try_new([out_m, out_n], out_strides, abs_offset)
+                    .expect("invariant: batch submatrix layout derives from a validated parent");
                 // Borrow only this batch's physical span `[lo, hi]` and rebase
                 // the offset into it. `batches_disjoint` (checked above)
                 // guarantees these per-batch slices never overlap across tasks,
@@ -1005,7 +1017,9 @@ pub fn batched_matmul<T: Scalar>(
                 let (lo, hi) = out_layout.min_max_offsets();
                 let mut out_view = unsafe {
                     ArrayViewMut::new(
-                        Layout::new([out_m, out_n], out_strides, abs_offset - lo),
+                        Layout::try_new([out_m, out_n], out_strides, abs_offset - lo).expect(
+                            "invariant: batch submatrix layout derives from a validated parent",
+                        ),
                         core::slice::from_raw_parts_mut(out_ptr.add(lo), hi - lo + 1),
                     )
                 };
@@ -1029,11 +1043,12 @@ pub fn batched_matmul<T: Scalar>(
     for b in 0..batch {
         let lhs_view = ArrayView::new(lhs_mat(b), lhs.data());
         let rhs_view = ArrayView::new(rhs_mat(b), rhs.data());
-        let out_layout = Layout::new(
+        let out_layout = Layout::try_new(
             [out_m, out_n],
             out_strides,
             (out_offset + b as isize * out_batch_stride) as usize,
-        );
+        )
+        .expect("invariant: batch submatrix layout derives from a validated parent");
         let mut out_view = ArrayViewMut::new(out_layout, out.data_mut());
         matmul(&lhs_view, &rhs_view, &mut out_view)?;
     }

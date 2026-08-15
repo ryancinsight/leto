@@ -341,19 +341,19 @@ where
 
     if N == 2
         && axis == 0
-        && input_layout.strides[1] == 1
-        && input_layout.strides[0] == input.shape()[1] as isize
-        && output_layout.strides[1] == 1
-        && output_layout.strides[0] == out_shape[1] as isize
+        && input_layout.strides()[1] == 1
+        && input_layout.strides()[0] == input.shape()[1] as isize
+        && output_layout.strides()[1] == 1
+        && output_layout.strides()[0] == out_shape[1] as isize
         && !output_layout.has_zero_stride_aliasing()
     {
         let rows = input.shape()[0];
         let cols = input.shape()[1];
-        let row_stride = input_layout.strides[0];
-        let col_stride = input_layout.strides[1];
-        let input_base = input_layout.offset;
-        let output_base = output_layout.offset;
-        let output_col_stride = output_layout.strides[1];
+        let row_stride = input_layout.strides()[0];
+        let col_stride = input_layout.strides()[1];
+        let input_base = input_layout.offset();
+        let output_base = output_layout.offset();
+        let output_col_stride = output_layout.strides()[1];
 
         if rows == 0 {
             for col in 0..cols {
@@ -402,7 +402,7 @@ where
         }
     }
 
-    let is_axis_contiguous = input_layout.strides[axis] == 1;
+    let is_axis_contiguous = input_layout.strides()[axis] == 1;
 
     for flat_idx in 0..out_size {
         let out_idx = index_from_flat(flat_idx, &out_shape);
@@ -430,7 +430,7 @@ where
             }
         } else {
             let mut a = Op::initial(input_data[first_off]);
-            let axis_stride = input_layout.strides[axis];
+            let axis_stride = input_layout.strides()[axis];
             for axis_idx in 1..axis_len {
                 let input_off = (first_off as isize + axis_idx as isize * axis_stride) as usize;
                 a = Op::fold(a, input_data[input_off]);
@@ -476,7 +476,7 @@ where
         ctx.out_size,
         chunk_size,
         move |start, end| {
-            let is_axis_contiguous = ctx.input_layout.strides[ctx.axis] == 1;
+            let is_axis_contiguous = ctx.input_layout.strides()[ctx.axis] == 1;
             for flat_idx in start..end {
                 let out_idx = index_from_flat(flat_idx, &ctx.out_shape);
                 let out_off = ctx
@@ -519,7 +519,7 @@ where
                     }
                 } else {
                     let mut a = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
-                    let axis_stride = ctx.input_layout.strides[ctx.axis];
+                    let axis_stride = ctx.input_layout.strides()[ctx.axis];
                     for axis_idx in 1..ctx.axis_len {
                         let input_off =
                             (first_off as isize + axis_idx as isize * axis_stride) as usize;

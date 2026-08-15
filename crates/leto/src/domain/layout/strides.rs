@@ -7,11 +7,9 @@ impl<const N: usize> Layout<N> {
     pub fn c_contiguous(shape: [usize; N]) -> Result<Self> {
         let mut strides = [0isize; N];
         crate::domain::layout::kernels::c_contiguous_strides(&shape, &mut strides)?;
-        Ok(Self {
-            shape,
-            strides,
-            offset: 0,
-        })
+        // Route through the validating constructor so `try_new` remains the
+        // single place the layout invariant is established.
+        Self::try_new(shape, strides, 0)
     }
 
     /// Create a Fortran-contiguous (column-major) layout for a given shape.
@@ -37,10 +35,6 @@ impl<const N: usize> Layout<N> {
                 };
             }
         }
-        Ok(Self {
-            shape,
-            strides,
-            offset: 0,
-        })
+        Self::try_new(shape, strides, 0)
     }
 }

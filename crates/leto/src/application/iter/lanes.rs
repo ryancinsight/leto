@@ -80,7 +80,7 @@ where
 {
     let reduced_shape = marker.remove_shape(shape, axis)?;
     let reduced_strides = marker.remove_strides(strides, axis)?;
-    let complement = Layout::new(reduced_shape, reduced_strides, offset);
+    let complement = Layout::from_parts_unchecked(reduced_shape, reduced_strides, offset);
     Ok((complement, shape[axis], strides[axis]))
 }
 
@@ -126,14 +126,14 @@ impl<'a, T, const N: usize, const M: usize> Lanes<'a, T, N, M> {
         let (back_index, back_offset) = if back > 0 {
             let mut idx = [0usize; M];
             for (i, item) in idx.iter_mut().enumerate() {
-                *item = complement.shape[i] - 1;
+                *item = complement.shape()[i] - 1;
             }
             let offset = complement
                 .offset_of(idx)
                 .expect("invariant: last index is valid");
             (idx, offset)
         } else {
-            ([0usize; M], complement.offset)
+            ([0usize; M], complement.offset())
         };
         Ok(Self {
             data: view.data(),
@@ -143,7 +143,7 @@ impl<'a, T, const N: usize, const M: usize> Lanes<'a, T, N, M> {
             front: 0,
             back,
             front_index: [0usize; M],
-            front_offset: complement.offset,
+            front_offset: complement.offset(),
             back_index,
             back_offset,
         })
@@ -158,11 +158,12 @@ impl<'a, T, const N: usize, const M: usize> Iterator for Lanes<'a, T, N, M> {
         if self.front >= self.back {
             return None;
         }
-        let layout = Layout::new([self.axis_len], [self.axis_stride], self.front_offset);
+        let layout =
+            Layout::from_parts_unchecked([self.axis_len], [self.axis_stride], self.front_offset);
         odometer_step(
             &mut self.front_index,
-            &self.complement.shape,
-            &self.complement.strides,
+            &self.complement.shape(),
+            &self.complement.strides(),
             &mut self.front_offset,
         );
         self.front += 1;
@@ -183,11 +184,12 @@ impl<'a, T, const N: usize, const M: usize> DoubleEndedIterator for Lanes<'a, T,
             return None;
         }
         self.back -= 1;
-        let layout = Layout::new([self.axis_len], [self.axis_stride], self.back_offset);
+        let layout =
+            Layout::from_parts_unchecked([self.axis_len], [self.axis_stride], self.back_offset);
         odometer_step_back(
             &mut self.back_index,
-            &self.complement.shape,
-            &self.complement.strides,
+            &self.complement.shape(),
+            &self.complement.strides(),
             &mut self.back_offset,
         );
         Some(ArrayView::new(layout, self.data))
@@ -248,7 +250,7 @@ impl<'a, T, const N: usize, const M: usize> LanesMut<'a, T, N, M> {
             front: 0,
             back,
             front_index: [0usize; M],
-            front_offset: complement.offset,
+            front_offset: complement.offset(),
             _marker: std::marker::PhantomData,
         })
     }
@@ -262,18 +264,23 @@ impl<'a, T, const N: usize, const M: usize> Iterator for LanesMut<'a, T, N, M> {
         if self.front >= self.back {
             return None;
         }
-        let layout = Layout::new([self.axis_len], [self.axis_stride], self.front_offset);
+        let layout =
+            Layout::from_parts_unchecked([self.axis_len], [self.axis_stride], self.front_offset);
         odometer_step(
             &mut self.front_index,
-            &self.complement.shape,
-            &self.complement.strides,
+            &self.complement.shape(),
+            &self.complement.strides(),
             &mut self.front_offset,
         );
         self.front += 1;
 
         let (min_offset, max_offset) = layout.min_max_offsets();
         let span_len = max_offset - min_offset + 1;
-        let adjusted_layout = Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
+        let adjusted_layout = Layout::from_parts_unchecked(
+            layout.shape(),
+            layout.strides(),
+            layout.offset() - min_offset,
+        );
 
         unsafe {
             Some(ArrayViewMut {

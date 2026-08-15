@@ -134,11 +134,7 @@ impl<const N: usize> Layout<N> {
             });
         }
 
-        Ok(Layout {
-            shape,
-            strides: target.strides,
-            offset: self.offset,
-        })
+        Layout::try_new(shape, target.strides, self.offset)
     }
 }
 
@@ -234,7 +230,7 @@ mod tests {
     fn zero_stride_axis_with_nonunit_size_does_alias() {
         // shape [3, 4, 5], strides [5, 0, 1]: axis-1 has dim 4 and stride 0,
         // so logical indices `[_, 0..4, _]` all map to the same row.
-        let layout = Layout::<3>::new([3, 4, 5], [5, 0, 1], 0);
+        let layout = Layout::<3>::from_parts_unchecked([3, 4, 5], [5, 0, 1], 0);
         assert_eq!(layout.size(), 60);
         assert!(layout.has_zero_stride_aliasing());
     }
@@ -244,7 +240,7 @@ mod tests {
     /// the (mistaken) notion that any zero stride triggers the predicate.
     #[test]
     fn broadcast_axis_alone_is_not_aliasing() {
-        let layout = Layout::<3>::new([3, 1, 5], [5, 0, 1], 0);
+        let layout = Layout::<3>::from_parts_unchecked([3, 1, 5], [5, 0, 1], 0);
         assert_eq!(layout.size(), 15);
         assert!(!layout.has_zero_stride_aliasing());
     }
@@ -254,38 +250,42 @@ mod tests {
     #[test]
     fn broadcast_layout_with_zero_dim_is_not_aliasing() {
         // shape [3, 1, 0], strides [0, 0, 1]: size 0 so no aliasing.
-        let layout = Layout::<3>::new([3, 1, 0], [0, 0, 1], 0);
+        let layout = Layout::<3>::from_parts_unchecked([3, 1, 0], [0, 0, 1], 0);
         assert_eq!(layout.size(), 0);
         assert!(!layout.has_zero_stride_aliasing());
     }
 
     #[test]
     fn rank_three_injectivity_accepts_ambiguous_non_overlapping_layout() {
-        let layout = Layout::<3>::new([1, 3, 2], [6, 2, 3], 0);
+        let layout = Layout::<3>::from_parts_unchecked([1, 3, 2], [6, 2, 3], 0);
         assert!(layout.is_injective().expect("injectivity proof"));
     }
 
     #[test]
     fn rank_three_injectivity_rejects_nonzero_stride_collision() {
-        let layout = Layout::<3>::new([1, 3, 2], [6, 2, 4], 0);
+        let layout = Layout::<3>::from_parts_unchecked([1, 3, 2], [6, 2, 4], 0);
         assert!(!layout.is_injective().expect("injectivity proof"));
     }
 
     #[test]
     fn rank_eight_separation_proves_transposed_layout_injective() {
-        let layout = Layout::<8>::new([2, 3, 1, 1, 1, 1, 1, 1], [1, 2, 0, 0, 0, 0, 0, 0], 0);
+        let layout = Layout::<8>::from_parts_unchecked(
+            [2, 3, 1, 1, 1, 1, 1, 1],
+            [1, 2, 0, 0, 0, 0, 0, 0],
+            0,
+        );
         assert!(layout.is_injective().expect("injectivity proof"));
     }
 
     #[test]
     fn generic_separation_rejects_nonzero_stride_collision() {
-        let layout = Layout::<4>::new([2, 2, 1, 1], [1, 1, 0, 0], 0);
+        let layout = Layout::<4>::from_parts_unchecked([2, 2, 1, 1], [1, 1, 0, 0], 0);
         assert!(!layout.is_injective().expect("injectivity proof"));
     }
 
     #[test]
     fn generic_injectivity_accepts_interleaved_non_overlapping_layout() {
-        let layout = Layout::<2>::new([2, 3], [3, 2], 0);
+        let layout = Layout::<2>::from_parts_unchecked([2, 3], [3, 2], 0);
         assert!(layout.is_injective().expect("injectivity proof"));
     }
 
@@ -313,7 +313,7 @@ mod tests {
                                 }
                                 let expected = offsets.len()
                                     == first_dimension * second_dimension * third_dimension;
-                                let actual = Layout::<3>::new(shape, strides, 0)
+                                let actual = Layout::<3>::from_parts_unchecked(shape, strides, 0)
                                     .is_injective()
                                     .expect("small exact injectivity domain");
                                 assert_eq!(

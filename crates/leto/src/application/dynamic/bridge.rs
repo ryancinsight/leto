@@ -27,9 +27,9 @@ where
     pub fn into_dyn(self) -> ArrayD<T, S> {
         let layout = self.layout; // `Layout<N>` is `Copy`.
         let dyn_layout = LayoutDyn::new(
-            layout.shape.to_vec().into_boxed_slice(),
-            layout.strides.to_vec().into_boxed_slice(),
-            layout.offset,
+            layout.shape().to_vec().into_boxed_slice(),
+            layout.strides().to_vec().into_boxed_slice(),
+            layout.offset(),
         )
         .expect("invariant: shape and strides both have length N");
         ArrayD {
@@ -76,7 +76,7 @@ where
                 .map_err(|_| LetoError::StorageError {
                     reason: "rank-checked strides failed fixed-length conversion".to_string(),
                 })?;
-        let layout = Layout::new(shape, strides, self.layout.offset);
+        let layout = Layout::from_parts_unchecked(shape, strides, self.layout.offset);
         Array::new(layout, self.storage)
     }
 }

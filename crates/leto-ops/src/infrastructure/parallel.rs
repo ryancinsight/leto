@@ -139,7 +139,8 @@ mod tests {
     fn parallel_policy_updates_strided_negative_layout() {
         let runtime = Moirai::builder().worker_threads(2).build().unwrap();
         let mut storage = vec![-1; 6];
-        let layout = Layout::new([2, 3], [3, -1], 2);
+        let layout =
+            Layout::try_new([2, 3], [3, -1], 2).expect("invariant: fixture layout is valid");
         let view = ArrayViewMut::try_new(layout, &mut storage).unwrap();
         let partitions = view.task_partitions_mut(2).unwrap();
 

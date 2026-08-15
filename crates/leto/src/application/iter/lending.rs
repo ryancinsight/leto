@@ -134,7 +134,7 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
             return None;
         }
         parent_layout.validate_storage_len(data.len()).ok()?;
-        let parent_shape = parent_layout.shape;
+        let parent_shape = parent_layout.shape();
         let mut tile_grid = [0usize; N];
         let mut total = 1usize;
         for i in 0..N {
@@ -172,7 +172,7 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
 
     /// Compute the actual (possibly clipped) shape for tile `tile_idx`.
     fn tile_extent(&self, tile_idx: &[usize; N]) -> [usize; N] {
-        let parent_shape = self.parent_layout.shape;
+        let parent_shape = self.parent_layout.shape();
         let mut extent = [0usize; N];
         for i in 0..N {
             let start = tile_idx[i] * self.tile_shape[i];
@@ -201,7 +201,8 @@ impl<'a, T, const N: usize> Tiles<'a, T, N> {
             .offset_of(origin)
             .expect("invariant: tile origin is an in-bounds index of a validated parent layout");
 
-        let view_layout = Layout::new(extent, self.parent_layout.strides, offset);
+        let view_layout =
+            Layout::from_parts_unchecked(extent, self.parent_layout.strides(), offset);
         ArrayView::new(view_layout, self.data)
     }
 }
@@ -326,7 +327,7 @@ mod tests {
     fn reject_layout_exceeding_data() {
         let a = array2x3();
         // A 4x3 layout over a 6-element slice addresses offsets 0..=11.
-        let oversized = Layout::new([4, 3], [3, 1], 0);
+        let oversized = Layout::from_parts_unchecked([4, 3], [3, 1], 0);
         assert!(Tiles::new(a.storage().as_slice(), oversized, [1, 3]).is_none());
     }
 

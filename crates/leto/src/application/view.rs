@@ -15,7 +15,7 @@ use crate::infrastructure::storage::{SliceStorage, VecStorage};
 /// overflow. Shared by the contiguous-slice accessors of both view types.
 #[inline]
 fn dense_block_range<const N: usize>(layout: &Layout<N>) -> Option<core::ops::Range<usize>> {
-    let start = layout.offset;
+    let start = layout.offset();
     let end = start.checked_add(layout.checked_size().ok()?)?;
     Some(start..end)
 }
@@ -44,19 +44,19 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
     /// Returns the shape of the view.
     #[inline]
     pub const fn shape(&self) -> [usize; N] {
-        self.layout.shape
+        self.layout.shape()
     }
 
     /// Returns the strides of the view.
     #[inline]
     pub const fn strides(&self) -> [isize; N] {
-        self.layout.strides
+        self.layout.strides()
     }
 
     /// Returns the offset of the view.
     #[inline]
     pub const fn offset(&self) -> usize {
-        self.layout.offset
+        self.layout.offset()
     }
 
     /// Returns the total logical size of the view.
@@ -391,19 +391,19 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// Returns the shape of the view.
     #[inline]
     pub const fn shape(&self) -> [usize; N] {
-        self.layout.shape
+        self.layout.shape()
     }
 
     /// Returns the strides of the view.
     #[inline]
     pub const fn strides(&self) -> [isize; N] {
-        self.layout.strides
+        self.layout.strides()
     }
 
     /// Returns the offset of the view.
     #[inline]
     pub const fn offset(&self) -> usize {
-        self.layout.offset
+        self.layout.offset()
     }
 
     /// Returns the total logical size of the view.
@@ -584,7 +584,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         let broadcasted_layout = self.layout.broadcast(target_shape)?;
         if broadcasted_layout.has_zero_stride_aliasing() {
             return Err(LetoError::IncompatibleBroadcast {
-                from: self.layout.shape.to_vec(),
+                from: self.layout.shape().to_vec(),
                 to: target_shape.to_vec(),
             });
         }
@@ -847,7 +847,13 @@ impl<'a, T, const N: usize> std::ops::Index<[usize; N]> for ArrayViewMut<'a, T, 
             .layout
             .offset_of(index)
             .expect("ArrayViewMut index out of bounds");
-        // SAFETY: ptr is valid for len elements for the lifetime of the view.
+        assert!(
+            offset < self.len,
+            "ArrayViewMut index physical offset {offset} exceeds backing length {}",
+            self.len
+        );
+        // SAFETY: ptr is valid for len elements for the lifetime of the view,
+        // and the assertion above establishes `offset < len`.
         unsafe { &*self.ptr.as_ptr().add(offset) }
     }
 }
@@ -860,7 +866,13 @@ impl<'a, T, const N: usize> std::ops::IndexMut<[usize; N]> for ArrayViewMut<'a, 
             .layout
             .offset_of(index)
             .expect("ArrayViewMut index_mut out of bounds");
-        // SAFETY: ptr is valid for len elements for the lifetime of the view.
+        assert!(
+            offset < self.len,
+            "ArrayViewMut index_mut physical offset {offset} exceeds backing length {}",
+            self.len
+        );
+        // SAFETY: ptr is valid for len elements for the lifetime of the view,
+        // and the assertion above establishes `offset < len`.
         unsafe { &mut *self.ptr.as_ptr().add(offset) }
     }
 }
@@ -887,7 +899,13 @@ impl<'a, T> std::ops::Index<usize> for ArrayViewMut<'a, T, 1> {
             .layout
             .offset_of([index])
             .expect("ArrayViewMut1 index out of bounds");
-        // SAFETY: ptr is valid for len elements.
+        assert!(
+            offset < self.len,
+            "ArrayViewMut1 index physical offset {offset} exceeds backing length {}",
+            self.len
+        );
+        // SAFETY: ptr is valid for len elements, and the assertion above
+        // establishes `offset < len`.
         unsafe { &*self.ptr.as_ptr().add(offset) }
     }
 }
@@ -900,7 +918,13 @@ impl<'a, T> std::ops::IndexMut<usize> for ArrayViewMut<'a, T, 1> {
             .layout
             .offset_of([index])
             .expect("ArrayViewMut1 index_mut out of bounds");
-        // SAFETY: ptr is valid for len elements.
+        assert!(
+            offset < self.len,
+            "ArrayViewMut1 index_mut physical offset {offset} exceeds backing length {}",
+            self.len
+        );
+        // SAFETY: ptr is valid for len elements, and the assertion above
+        // establishes `offset < len`.
         unsafe { &mut *self.ptr.as_ptr().add(offset) }
     }
 }

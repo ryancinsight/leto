@@ -542,7 +542,7 @@ impl<'data, T, const N: usize> ZipSources<N> for &ArrayView<'data, T, N> {
         if N == 0 {
             0
         } else {
-            (*self).layout().strides[N - 1]
+            (*self).layout().strides()[N - 1]
         }
     }
 

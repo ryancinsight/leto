@@ -264,9 +264,9 @@ where
     if column_walk {
         if let Some(geometry) = TileGeometry::new(size, shape, tile) {
             let (lhs_rs, rhs_rs, out_rs) = (
-                lhs_layout.strides[N - 2],
-                rhs_layout.strides[N - 2],
-                out_layout.strides[N - 2],
+                lhs_layout.strides()[N - 2],
+                rhs_layout.strides()[N - 2],
+                out_layout.strides()[N - 2],
             );
             for slab in 0..geometry.slabs() {
                 let base_idx = geometry.slab_base_index(slab);
@@ -381,9 +381,9 @@ where
     if column_walk {
         if let Some(geometry) = TileGeometry::new(ctx.size, ctx.shape, tile) {
             let (lhs_rs, rhs_rs, out_rs) = (
-                ctx.lhs_layout.strides[N - 2],
-                ctx.rhs_layout.strides[N - 2],
-                ctx.out_layout.strides[N - 2],
+                ctx.lhs_layout.strides()[N - 2],
+                ctx.rhs_layout.strides()[N - 2],
+                ctx.out_layout.strides()[N - 2],
             );
             let blocks = geometry.slabs() * geometry.row_blocks();
             let block_chunk = (4096 / (geometry.tile() * geometry.width()).max(1)).max(1);

@@ -25,6 +25,7 @@ pub mod schur;
 pub mod sparse;
 pub mod stateful_update;
 pub mod stencil;
+pub mod storage_bounds;
 pub mod structure_ops;
 pub mod svd;
 pub mod udu;

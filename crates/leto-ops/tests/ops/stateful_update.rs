@@ -34,7 +34,7 @@ fn assert_guards<T: NumericElement>(storage: &[T; 6], first: f64, second: f64) {
 }
 
 fn run<T: RealScalar>(epsilon: f64) {
-    let layout = Layout::new([2, 2], [3, 1], 1);
+    let layout = Layout::try_new([2, 2], [3, 1], 1).expect("valid test layout");
     let gradient_storage = [
         scalar(81.0),
         scalar(0.1),
@@ -381,7 +381,7 @@ fn non_finite_operands_follow_ieee_propagation() {
 
 #[test]
 fn interleaved_injective_layout_updates_each_logical_element_once() {
-    let layout = Layout::new([2, 3], [3, 2], 0);
+    let layout = Layout::try_new([2, 3], [3, 2], 0).expect("valid test layout");
     let mut parameter = [1.0_f32, 91.0, 2.0, 3.0, 4.0, 5.0, 92.0, 6.0];
     let gradient = [0.1_f32, 81.0, 0.2, 0.3, 0.4, 0.5, 82.0, 0.6];
     let mut velocity = [0.0_f32, 71.0, 0.0, 0.0, 0.0, 0.0, 72.0, 0.0];

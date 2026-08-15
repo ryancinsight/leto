@@ -124,15 +124,17 @@ proptest! {
 
     #[test]
     fn negative_stride_layout_storage_span_is_checked(len in 1usize..32) {
-        let valid = Layout::new([len], [-1], len - 1);
+        let valid = Layout::try_new([len], [-1], len - 1).unwrap();
 
         prop_assert_eq!(valid.checked_min_max_offsets().unwrap(), (0, len - 1));
         prop_assert!(valid.validate_storage_len(len).is_ok());
 
         if len > 1 {
-            let invalid = Layout::new([len], [-1], 0);
+            // Walking [0..len) at stride -1 from base 0 addresses offset
+            // -(len - 1). The rejection now happens at construction rather
+            // than in the downstream offset query.
             let rejects_negative_span = matches!(
-                invalid.checked_min_max_offsets(),
+                Layout::try_new([len], [-1], 0),
                 Err(LetoError::StorageError { .. })
             );
             prop_assert!(rejects_negative_span);

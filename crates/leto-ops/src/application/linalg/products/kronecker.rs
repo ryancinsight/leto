@@ -40,6 +40,11 @@ use leto::{Array2, ArrayView2, Result};
 pub fn kron<T: Scalar>(a: &ArrayView2<'_, T>, b: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     let [a_rows, a_cols] = a.shape();
     let [b_rows, b_cols] = b.shape();
+    // Establishes the storage proof the strided branch's `get_unchecked` on
+    // `a_data` relies on. `b` is read through the checked `get`/`as_slice`
+    // paths, but is validated too so both operands carry the same contract.
+    a.layout().validate_storage_len(a.data().len())?;
+    b.layout().validate_storage_len(b.data().len())?;
     let rows = a_rows * b_rows;
     let cols = a_cols * b_cols;
     let mut values = vec![T::ZERO; rows * cols];
@@ -90,7 +95,8 @@ pub fn kron<T: Scalar>(a: &ArrayView2<'_, T>, b: &ArrayView2<'_, T>) -> Result<A
             let row_base = i * b_rows;
             for j in 0..a_cols {
                 let a_off = a_row_off + j as isize * a_strides[1];
-                // SAFETY: matrix index bounds are validated on construction.
+                // SAFETY: `validate_storage_len` above proved every physical
+                // offset this layout addresses lies inside `a_data`.
                 let scale = unsafe { *a_data.get_unchecked(a_off as usize) };
                 if scale == T::ZERO {
                     continue;

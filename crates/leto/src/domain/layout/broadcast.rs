@@ -42,10 +42,6 @@ impl<const N: usize> Layout<N> {
             }
         }
 
-        Ok(Layout {
-            shape: new_shape,
-            strides: new_strides,
-            offset: self.offset,
-        })
+        Layout::try_new(new_shape, new_strides, self.offset)
     }
 }

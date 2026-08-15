@@ -109,7 +109,7 @@ fn try_iter_mut_updates_transposed_logical_order() {
 
 #[test]
 fn try_iter_mut_supports_negative_stride_and_double_ended_consumption() {
-    let layout = Layout::new([2, 3], [3, -1], 2);
+    let layout = Layout::try_new([2, 3], [3, -1], 2).unwrap();
     let storage = VecStorage::new(vec![1, 2, 3, 4, 5, 6]);
     let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
 
@@ -133,7 +133,7 @@ fn try_iter_mut_supports_negative_stride_and_double_ended_consumption() {
 
 #[test]
 fn try_iter_mut_rejects_aliasing_layout_before_yielding() {
-    let layout = Layout::new([2, 2], [0, 1], 0);
+    let layout = Layout::try_new([2, 2], [0, 1], 0).unwrap();
     let storage = VecStorage::new(vec![0, 1]);
     let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
 
@@ -151,7 +151,7 @@ fn try_iter_mut_rejects_aliasing_layout_before_yielding() {
 
 #[test]
 fn indexed_iter_mut_rejects_aliasing_layout() {
-    let layout = Layout::new([2, 2], [1, 1], 0);
+    let layout = Layout::try_new([2, 2], [1, 1], 0).unwrap();
     let storage = VecStorage::new(vec![0, 1, 2]);
     let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
 
@@ -267,7 +267,7 @@ fn task_partitions_cover_contiguous_logical_domain_once() {
 
 #[test]
 fn task_partitions_preserve_negative_stride_logical_order() {
-    let layout = Layout::new([2, 3], [3, -1], 2);
+    let layout = Layout::try_new([2, 3], [3, -1], 2).unwrap();
     let storage = VecStorage::new(vec![0; 6]);
     let mut a = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
 
@@ -299,7 +299,7 @@ fn task_partitions_reject_zero_chunks_and_aliasing() {
         }
     );
 
-    let layout = Layout::new([2, 2], [1, 1], 0);
+    let layout = Layout::try_new([2, 2], [1, 1], 0).unwrap();
     let storage = VecStorage::new(vec![0, 1, 2]);
     let mut aliased = Array::<i32, VecStorage<i32>, 2>::new(layout, storage).unwrap();
     assert_eq!(

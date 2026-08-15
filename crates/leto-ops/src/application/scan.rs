@@ -124,8 +124,8 @@ where
     let output_layout = output.layout();
     let input_data = input.data();
     let output_data = output.data_mut();
-    let in_axis_step = input_layout.strides[axis];
-    let out_axis_step = output_layout.strides[axis];
+    let in_axis_step = input_layout.strides()[axis];
+    let out_axis_step = output_layout.strides()[axis];
 
     let mut index = [0usize; N];
     for outer_flat in 0..outer {

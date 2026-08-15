@@ -107,7 +107,7 @@ impl<'a, T, const N: usize> ElementIter<'a, T, N> {
     pub(crate) fn new(view: &ArrayView<'a, T, N>) -> Self {
         let layout = view.layout();
         let contiguous_iter = if layout.is_c_dense() {
-            let start = layout.offset;
+            let start = layout.offset();
             let end = start + layout.size();
             Some(view.data()[start..end].iter())
         } else {
@@ -117,24 +117,24 @@ impl<'a, T, const N: usize> ElementIter<'a, T, N> {
         let (back_index, back_offset) = if back > 0 {
             let mut idx = [0usize; N];
             for (i, item) in idx.iter_mut().enumerate() {
-                *item = layout.shape[i] - 1;
+                *item = layout.shape()[i] - 1;
             }
             let offset = layout
                 .offset_of(idx)
                 .expect("invariant: last index is valid");
             (idx, offset)
         } else {
-            ([0usize; N], layout.offset)
+            ([0usize; N], layout.offset())
         };
         Self {
             contiguous_iter,
             data: view.data(),
             layout,
-            shape: layout.shape,
+            shape: layout.shape(),
             front: 0,
             back,
             front_index: [0usize; N],
-            front_offset: layout.offset,
+            front_offset: layout.offset(),
             back_index,
             back_offset,
         }
@@ -156,7 +156,7 @@ impl<'a, T, const N: usize> Iterator for ElementIter<'a, T, N> {
             odometer_step(
                 &mut self.front_index,
                 &self.shape,
-                &self.layout.strides,
+                &self.layout.strides(),
                 &mut self.front_offset,
             );
             self.front += 1;
@@ -189,7 +189,7 @@ impl<'a, T, const N: usize> DoubleEndedIterator for ElementIter<'a, T, N> {
             odometer_step_back(
                 &mut self.back_index,
                 &self.shape,
-                &self.layout.strides,
+                &self.layout.strides(),
                 &mut self.back_offset,
             );
             Some(elem)
@@ -225,23 +225,23 @@ impl<'a, T, const N: usize> IndexedIter<'a, T, N> {
         let (back_index, back_offset) = if back > 0 {
             let mut idx = [0usize; N];
             for (i, item) in idx.iter_mut().enumerate() {
-                *item = layout.shape[i] - 1;
+                *item = layout.shape()[i] - 1;
             }
             let offset = layout
                 .offset_of(idx)
                 .expect("invariant: last index is valid");
             (idx, offset)
         } else {
-            ([0usize; N], layout.offset)
+            ([0usize; N], layout.offset())
         };
         Self {
             data: view.data(),
             layout,
-            shape: layout.shape,
+            shape: layout.shape(),
             front: 0,
             back,
             front_index: [0usize; N],
-            front_offset: layout.offset,
+            front_offset: layout.offset(),
             back_index,
             back_offset,
         }
@@ -261,7 +261,7 @@ impl<'a, T, const N: usize> Iterator for IndexedIter<'a, T, N> {
         odometer_step(
             &mut self.front_index,
             &self.shape,
-            &self.layout.strides,
+            &self.layout.strides(),
             &mut self.front_offset,
         );
         self.front += 1;
@@ -287,7 +287,7 @@ impl<'a, T, const N: usize> DoubleEndedIterator for IndexedIter<'a, T, N> {
         odometer_step_back(
             &mut self.back_index,
             &self.shape,
-            &self.layout.strides,
+            &self.layout.strides(),
             &mut self.back_offset,
         );
         Some((index, elem))
@@ -355,8 +355,8 @@ impl<'a, T, const N: usize> IndexedIterMut<'a, T, N> {
             });
         }
         let (front_index, front_offset, back_index, back_offset) = if start < end {
-            let front_index = index_from_flat(start, &layout.shape);
-            let back_index = index_from_flat(end - 1, &layout.shape);
+            let front_index = index_from_flat(start, &layout.shape());
+            let back_index = index_from_flat(end - 1, &layout.shape());
             let front_offset = layout
                 .offset_of(front_index)
                 .expect("invariant: range start is a valid logical index");
@@ -365,13 +365,13 @@ impl<'a, T, const N: usize> IndexedIterMut<'a, T, N> {
                 .expect("invariant: range end is a valid logical index");
             (front_index, front_offset, back_index, back_offset)
         } else {
-            ([0usize; N], layout.offset, [0usize; N], layout.offset)
+            ([0usize; N], layout.offset(), [0usize; N], layout.offset())
         };
 
         Ok(Self {
             ptr,
             layout,
-            shape: layout.shape,
+            shape: layout.shape(),
             front: 0,
             back: end - start,
             front_index,
@@ -396,7 +396,7 @@ impl<'a, T, const N: usize> Iterator for IndexedIterMut<'a, T, N> {
         odometer_step(
             &mut self.front_index,
             &self.shape,
-            &self.layout.strides,
+            &self.layout.strides(),
             &mut self.front_offset,
         );
         self.front += 1;
@@ -426,7 +426,7 @@ impl<'a, T, const N: usize> DoubleEndedIterator for IndexedIterMut<'a, T, N> {
         odometer_step_back(
             &mut self.back_index,
             &self.shape,
-            &self.layout.strides,
+            &self.layout.strides(),
             &mut self.back_offset,
         );
         // SAFETY: construction validates storage bounds and rejects layouts

@@ -7,6 +7,7 @@ pub mod indexing;
 pub mod iteration;
 pub mod lanes;
 pub mod layout;
+pub mod layout_validation;
 pub mod quantile;
 pub mod serde;
 pub mod slicing;

@@ -64,7 +64,7 @@ impl<const N: usize> RowMajorTraversal<N> {
         if N == 0 {
             0
         } else {
-            layout.strides[N - 1]
+            layout.strides()[N - 1]
         }
     }
 }

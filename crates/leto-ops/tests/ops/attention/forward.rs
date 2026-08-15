@@ -149,7 +149,7 @@ fn strided_inputs_and_outputs_match_contiguous_semantics() {
     let query_data = [0.0_f64, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0];
     let key_data = query_data;
     let value_data = [0.0_f64, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.0];
-    let layout = Layout::new([1, 2, 2], [8, 4, 2], 1);
+    let layout = Layout::try_new([1, 2, 2], [8, 4, 2], 1).expect("valid test layout");
     let query = ArrayView::try_new(layout, &query_data).expect("valid strided query");
     let key = ArrayView::try_new(layout, &key_data).expect("valid strided key");
     let value = ArrayView::try_new(layout, &value_data).expect("valid strided value");
@@ -204,7 +204,7 @@ fn injective_interleaved_outputs_are_accepted_without_materialization() {
     let query = array([1, 3, 1], vec![0.0_f64; 3]);
     let key = array([1, 2, 1], vec![0.0_f64; 2]);
     let value = array([1, 2, 2], vec![2.0_f64, 4.0, 6.0, 8.0]);
-    let interleaved = Layout::new([1, 3, 2], [6, 2, 3], 0);
+    let interleaved = Layout::try_new([1, 3, 2], [6, 2, 3], 0).expect("valid test layout");
     let mut output_data = [99.0_f64; 8];
     let mut weight_data = [99.0_f64; 8];
     let mut output = ArrayViewMut::try_new(interleaved, &mut output_data)
@@ -240,7 +240,7 @@ fn aliased_mutable_outputs_are_rejected_before_writing() {
     let query = array([1, 2, 1], vec![0.0_f64; 2]);
     let key = array([1, 1, 1], vec![0.0_f64]);
     let value = array([1, 1, 1], vec![3.0_f64]);
-    let aliased = Layout::new([1, 2, 1], [2, 0, 1], 0);
+    let aliased = Layout::try_new([1, 2, 1], [2, 0, 1], 0).expect("valid test layout");
     let mut output_data = [7.0_f64];
     let mut weights = array([1, 2, 1], vec![8.0_f64; 2]);
 
@@ -275,7 +275,7 @@ fn nonzero_stride_collisions_are_rejected_before_writing() {
     let query = array([1, 3, 1], vec![0.0_f64; 3]);
     let key = array([1, 2, 1], vec![0.0_f64; 2]);
     let value = array([1, 2, 2], vec![2.0_f64, 4.0, 6.0, 8.0]);
-    let aliased = Layout::new([1, 3, 2], [6, 2, 4], 0);
+    let aliased = Layout::try_new([1, 3, 2], [6, 2, 4], 0).expect("valid test layout");
     let mut output_data = [7.0_f64; 9];
     let mut weights = array([1, 3, 2], vec![8.0_f64; 6]);
 
@@ -310,7 +310,7 @@ fn negative_strides_preserve_logical_attention_order() {
     let query_data = [1.0_f64, 0.0, 0.0, 1.0];
     let key_data = query_data;
     let value_data = [2.0_f64, 0.0, 0.0, 4.0];
-    let reversed_rows = Layout::new([1, 2, 2], [4, -2, 1], 2);
+    let reversed_rows = Layout::try_new([1, 2, 2], [4, -2, 1], 2).expect("valid test layout");
     let query = ArrayView::try_new(reversed_rows, &query_data).expect("valid reversed query");
     let key = ArrayView::try_new(reversed_rows, &key_data).expect("valid reversed key");
     let value = ArrayView::try_new(reversed_rows, &value_data).expect("valid reversed value");

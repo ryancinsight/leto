@@ -195,7 +195,7 @@ where
         });
     }
     let view = arr.view();
-    let shape = view.layout().shape;
+    let shape = view.layout().shape();
     let mut it = iter_elements(&view).enumerate();
     let (_, first) = it.next().expect("non-empty array has at least one element");
     let mut best_val = *first;

@@ -58,7 +58,7 @@ impl<'a, T, const N: usize, const M: usize> Iterator for AxisIter<'a, T, N, M> {
             None
         } else {
             let offset = self.current_offset as usize;
-            let layout = Layout::new(self.sub_shape, self.sub_strides, offset);
+            let layout = Layout::from_parts_unchecked(self.sub_shape, self.sub_strides, offset);
             self.current_offset += self.step_stride;
             self.index += 1;
             Some(ArrayView::new(layout, self.data))
@@ -137,14 +137,17 @@ impl<'a, T, const N: usize, const M: usize> Iterator for AxisIterMut<'a, T, N, M
             None
         } else {
             let offset = self.current_offset as usize;
-            let layout = Layout::new(self.sub_shape, self.sub_strides, offset);
+            let layout = Layout::from_parts_unchecked(self.sub_shape, self.sub_strides, offset);
             self.current_offset += self.step_stride;
             self.index += 1;
 
             let (min_offset, max_offset) = layout.min_max_offsets();
             let span_len = max_offset - min_offset + 1;
-            let adjusted_layout =
-                Layout::new(layout.shape, layout.strides, layout.offset - min_offset);
+            let adjusted_layout = Layout::from_parts_unchecked(
+                layout.shape(),
+                layout.strides(),
+                layout.offset() - min_offset,
+            );
 
             unsafe {
                 Some(ArrayViewMut {

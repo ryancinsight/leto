@@ -107,7 +107,8 @@ impl<'a, T, const N: usize> ExactChunks<'a, T, N> {
             .base_layout
             .offset_of(origin)
             .expect("invariant: chunk origin is inside parent shape");
-        let layout = Layout::new(self.chunk_shape, self.base_layout.strides, offset);
+        let layout =
+            Layout::from_parts_unchecked(self.chunk_shape, self.base_layout.strides(), offset);
         ArrayView::new(layout, self.data)
     }
 }
@@ -212,11 +213,11 @@ impl<'a, T, const N: usize> AxisChunks<'a, T, N> {
             .offset_of(origin)
             .expect("invariant: axis chunk origin is inside parent shape");
 
-        let mut shape = self.base_layout.shape;
+        let mut shape = self.base_layout.shape();
         shape[self.axis] = self
             .chunk_len
-            .min(self.base_layout.shape[self.axis] - start);
-        let layout = Layout::new(shape, self.base_layout.strides, offset);
+            .min(self.base_layout.shape()[self.axis] - start);
+        let layout = Layout::from_parts_unchecked(shape, self.base_layout.strides(), offset);
         ArrayView::new(layout, self.data)
     }
 }

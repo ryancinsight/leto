@@ -22,7 +22,7 @@ fn layout_round_trips_const_rank_above_serde_array_limit() {
     const RANK: usize = 33;
     let shape = [2usize; RANK];
     let strides = [1isize; RANK];
-    let original = Layout::<RANK>::new(shape, strides, 7);
+    let original = Layout::<RANK>::try_new(shape, strides, 7).unwrap();
 
     let encoded = serde_json::to_string(&original).unwrap();
     let decoded: Layout<RANK> = serde_json::from_str(&encoded).unwrap();

@@ -41,6 +41,10 @@ pub fn trace<T: Scalar>(matrix: &ArrayView2<'_, T>) -> Result<T> {
     if rows == 0 {
         return Ok(T::ZERO);
     }
+    // Establishes the storage proof the `get_unchecked` below relies on: every
+    // physical offset addressed by this layout lies inside `data`. Without it a
+    // caller-supplied view built by the unchecked `ArrayView::new` reaches UB.
+    matrix.layout().validate_storage_len(matrix.data().len())?;
     let data = matrix.data();
     let strides = matrix.strides();
     let diag_stride = strides[0] + strides[1];
@@ -48,9 +52,10 @@ pub fn trace<T: Scalar>(matrix: &ArrayView2<'_, T>) -> Result<T> {
     let mut acc = T::ZERO;
     for _ in 0..rows {
         // SAFETY: The index [i, i] is logically in-bounds for a square matrix of size `rows`.
-        // The layout is validated, and the precalculated diagonal stride corresponds exactly
-        // to the offset delta for the next [i+1, i+1] element, staying within the bounds
-        // of the storage slice.
+        // `validate_storage_len` above proved every physical offset this layout
+        // addresses lies inside `data`, and the precalculated diagonal stride
+        // corresponds exactly to the offset delta for the next [i+1, i+1]
+        // element, staying within the bounds of the storage slice.
         unsafe {
             acc = acc.add(*data.get_unchecked(offset as usize));
         }

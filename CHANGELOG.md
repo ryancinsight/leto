@@ -6,7 +6,46 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [Unreleased]
 
+### Changed
+
+- [major] `Layout` no longer exposes `shape`, `strides` and `offset` as public
+  fields, `Layout::new` is removed, and the struct is `#[non_exhaustive]`.
+  `Layout::try_new` (and the equivalent
+  `TryFrom<([usize; N], [isize; N], usize)>`) is now the only construction path
+  outside the crate; it validates that the shape product fits `usize` and that
+  every addressed physical offset neither overflows `isize` nor falls below
+  zero, so the infallible `size`/`min_max_offsets`/`offset_of` accessors are
+  total rather than panicking. `Deserialize` routes through the same validation,
+  closing an untrusted-input path. See ADR 0025.
+
+  **Migration.** Field reads become zero-cost `#[inline] const` accessor calls:
+  `layout.shape` → `layout.shape()`, and likewise `strides` and `offset`.
+  Construction becomes `Layout::try_new(shape, strides, offset)` propagated with
+  `?`; where the layout is derived from an already validated one, pair it with
+  `.expect("invariant: …")`. A dense row-major layout should use the existing
+  `Layout::c_contiguous(shape)` instead. Struct literals must become constructor
+  calls. `Layout::try_new` is not `const`, so a `const fn` returning a `Layout`
+  must drop `const`.
+
 ### Fixed
+
+- [patch] Out-of-bounds read and write reachable from entirely safe code. The
+  four `Index`/`IndexMut` impls on `ArrayViewMut` computed a physical offset and
+  dereferenced it without checking it against the backing length, while the
+  `get`/`get_mut` siblings did check. A layout that is individually valid but
+  larger than its buffer — `Layout::c_contiguous([1000])` over a four-element
+  slice, built through the *validating* constructor — was enough to read
+  kilobytes past the allocation with no panic. All four impls now assert
+  `offset < len` before dereferencing, and the reproducer is pinned as a
+  regression test. Note this was never a property `Layout` itself could enforce:
+  it carries no pointer and no length.
+
+- [patch] Three `leto-ops` entry points reached `get_unchecked` or raw pointer
+  writes without establishing a storage bound, unlike their ~20 validating
+  siblings. `trace` and `kron` (strided branch) now call `validate_storage_len`
+  on their operands. `matmul`'s `copy_back_to_out` validated the *scratch*
+  output view via `validate_matmul` while writing through the caller's `dst`;
+  it now validates `dst`.
 
 - [patch] `svd_decompose` and `singular_values` no longer fail with
   `bidiagonal SVD QR failed to converge` on **exactly** rank-deficient input.

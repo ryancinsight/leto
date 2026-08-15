@@ -106,14 +106,17 @@ fn strided_forward_and_backward_preserve_padding() {
     let logits_data = [
         99.0_f64, 2.0, 99.0, 1.0, 99.0, 0.0, 99.0, 0.0, 99.0, 1.0, 99.0, 2.0,
     ];
-    let layout = Layout::new([2, 3], [6, 2], 1);
+    let layout = Layout::try_new([2, 3], [6, 2], 1).expect("valid test layout");
     let logits = ArrayView::try_new(layout, &logits_data).expect("valid strided logits");
     let mut probability_data = [77.0_f64; 12];
     let mut probabilities =
         ArrayViewMut::try_new(layout, &mut probability_data).expect("valid strided probabilities");
     let mut loss_data = [55.0_f64, 55.0];
-    let mut loss =
-        ArrayViewMut::try_new(Layout::new([1], [1], 1), &mut loss_data).expect("valid offset loss");
+    let mut loss = ArrayViewMut::try_new(
+        Layout::try_new([1], [1], 1).expect("valid test layout"),
+        &mut loss_data,
+    )
+    .expect("valid offset loss");
     cross_entropy_forward_into(&logits, &[0, 2], &mut loss, &mut probabilities)
         .expect("valid strided forward");
     let denominator = 1.0 + (-1.0_f64).exp() + (-2.0_f64).exp();
@@ -172,14 +175,17 @@ fn strided_forward_and_backward_preserve_padding() {
 #[test]
 fn permuted_layout_matches_logical_row_order() {
     let logits_data = [2.0_f64, 0.0, 1.0, 1.0, 0.0, 2.0];
-    let layout = Layout::new([2, 3], [1, 2], 0);
+    let layout = Layout::try_new([2, 3], [1, 2], 0).expect("valid test layout");
     let logits = ArrayView::try_new(layout, &logits_data).expect("valid permuted logits");
     let mut probability_data = [0.0_f64; 6];
     let mut probabilities =
         ArrayViewMut::try_new(layout, &mut probability_data).expect("valid permuted probabilities");
     let mut loss_data = [0.0_f64];
-    let mut loss =
-        ArrayViewMut::try_new(Layout::new([1], [1], 0), &mut loss_data).expect("valid scalar loss");
+    let mut loss = ArrayViewMut::try_new(
+        Layout::try_new([1], [1], 0).expect("valid test layout"),
+        &mut loss_data,
+    )
+    .expect("valid scalar loss");
 
     cross_entropy_forward_into(&logits, &[0, 2], &mut loss, &mut probabilities)
         .expect("valid permuted forward");
@@ -231,9 +237,11 @@ fn invalid_target_is_typed_and_failure_atomic() {
 fn aliased_probability_destination_is_rejected_before_loss_mutation() {
     let logits = array([1, 2], vec![0.0_f64, 1.0]);
     let mut probability_data = [7.0_f64];
-    let mut probabilities =
-        ArrayViewMut::try_new(Layout::new([1, 2], [0, 0], 0), &mut probability_data)
-            .expect("broadcast layout is storage-reachable");
+    let mut probabilities = ArrayViewMut::try_new(
+        Layout::try_new([1, 2], [0, 0], 0).expect("valid test layout"),
+        &mut probability_data,
+    )
+    .expect("broadcast layout is storage-reachable");
     let mut loss = array([1], vec![9.0_f64]);
     let error = cross_entropy_forward_into(
         &logits.view(),

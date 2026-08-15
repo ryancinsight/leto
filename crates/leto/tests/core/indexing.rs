@@ -22,21 +22,21 @@ fn test_array_creation_and_indexing() {
 #[test]
 fn test_view_try_new_rejects_external_out_of_bounds_layout() {
     let data = [10, 20];
-    let invalid = Layout::new([2], [1], 1);
+    let invalid = Layout::try_new([2], [1], 1).unwrap();
 
     assert!(matches!(
         ArrayView::try_new(invalid, &data),
         Err(LetoError::StorageError { .. })
     ));
 
-    let valid = ArrayView::try_new(Layout::new([2], [1], 0), &data).unwrap();
+    let valid = ArrayView::try_new(Layout::try_new([2], [1], 0).unwrap(), &data).unwrap();
     assert_eq!(*valid.get([1]).unwrap(), 20);
 }
 
 #[test]
 fn test_view_mut_try_new_rejects_external_out_of_bounds_layout() {
     let mut data = [10, 20];
-    let invalid = Layout::new([2], [1], 1);
+    let invalid = Layout::try_new([2], [1], 1).unwrap();
 
     assert!(matches!(
         ArrayViewMut::try_new(invalid, &mut data),

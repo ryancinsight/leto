@@ -59,11 +59,12 @@ pub fn lu_batch<T: RealScalar>(matrices: &ArrayView3<'_, T>) -> Result<Vec<LuDec
                 return;
             }
 
-            let layout = leto::Layout::new(
+            let layout = leto::Layout::try_new(
                 [n, n],
                 [strides[1], strides[2]],
                 (offset + b as isize * strides[0]) as usize,
-            );
+            )
+            .expect("invariant: batch submatrix layout derives from a validated parent");
             let view = unsafe {
                 leto::ArrayView2::<T>::new(
                     layout,

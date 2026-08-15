@@ -132,11 +132,7 @@ impl<const N: usize> Layout<N> {
             });
         }
 
-        Ok(Layout {
-            shape,
-            strides,
-            offset: offset as usize,
-        })
+        Layout::try_new(shape, strides, offset as usize)
     }
 
     fn expand_slice_args(&self, args: &[SliceArg]) -> Result<Vec<SliceArg>> {
@@ -216,11 +212,7 @@ impl<const N: usize> Layout<N> {
             new_strides[i] = self.strides[axes[i]];
         }
 
-        Ok(Self {
-            shape: new_shape,
-            strides: new_strides,
-            offset: self.offset,
-        })
+        Self::try_new(new_shape, new_strides, self.offset)
     }
 }
 

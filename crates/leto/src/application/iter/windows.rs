@@ -117,7 +117,7 @@ impl<'a, T, const N: usize> Windows<'a, T, N> {
                 .expect("invariant: last window start is valid");
             (idx, offset)
         } else {
-            ([0usize; N], view.layout().offset)
+            ([0usize; N], view.layout().offset())
         };
         Ok(Self {
             data: view.data(),
@@ -127,7 +127,7 @@ impl<'a, T, const N: usize> Windows<'a, T, N> {
             front: 0,
             back: total,
             front_index: [0usize; N],
-            front_offset: view.layout().offset,
+            front_offset: view.layout().offset(),
             back_index,
             back_offset,
         })
@@ -142,15 +142,15 @@ impl<'a, T, const N: usize> Iterator for Windows<'a, T, N> {
         if self.front >= self.back {
             return None;
         }
-        let layout = Layout::new(
+        let layout = Layout::from_parts_unchecked(
             self.window_shape,
-            self.base_layout.strides,
+            self.base_layout.strides(),
             self.front_offset,
         );
         odometer_step(
             &mut self.front_index,
             &self.counts,
-            &self.base_layout.strides,
+            &self.base_layout.strides(),
             &mut self.front_offset,
         );
         self.front += 1;
@@ -171,15 +171,15 @@ impl<'a, T, const N: usize> DoubleEndedIterator for Windows<'a, T, N> {
             return None;
         }
         self.back -= 1;
-        let layout = Layout::new(
+        let layout = Layout::from_parts_unchecked(
             self.window_shape,
-            self.base_layout.strides,
+            self.base_layout.strides(),
             self.back_offset,
         );
         odometer_step_back(
             &mut self.back_index,
             &self.counts,
-            &self.base_layout.strides,
+            &self.base_layout.strides(),
             &mut self.back_offset,
         );
         Some(ArrayView::new(layout, self.data))

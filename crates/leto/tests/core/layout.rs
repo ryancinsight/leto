@@ -8,9 +8,9 @@ use leto::{Layout, LetoError};
 #[test]
 fn test_c_contiguous_layout() {
     let layout = Layout::c_contiguous([2, 3, 4]).unwrap();
-    assert_eq!(layout.shape, [2, 3, 4]);
-    assert_eq!(layout.strides, [12, 4, 1]);
-    assert_eq!(layout.offset, 0);
+    assert_eq!(layout.shape(), [2, 3, 4]);
+    assert_eq!(layout.strides(), [12, 4, 1]);
+    assert_eq!(layout.offset(), 0);
     assert_eq!(layout.size(), 24);
     assert!(layout.is_c_contiguous());
     assert!(!layout.is_f_contiguous());
@@ -23,9 +23,9 @@ fn test_c_contiguous_layout() {
 #[test]
 fn test_f_contiguous_layout() {
     let layout = Layout::f_contiguous([2, 3, 4]).unwrap();
-    assert_eq!(layout.shape, [2, 3, 4]);
-    assert_eq!(layout.strides, [1, 2, 6]);
-    assert_eq!(layout.offset, 0);
+    assert_eq!(layout.shape(), [2, 3, 4]);
+    assert_eq!(layout.strides(), [1, 2, 6]);
+    assert_eq!(layout.offset(), 0);
     assert_eq!(layout.size(), 24);
     assert!(!layout.is_c_contiguous());
     assert!(layout.is_f_contiguous());
@@ -51,19 +51,19 @@ fn test_offset_calculation() {
 
 #[test]
 fn test_negative_stride_offsets_are_checked_before_unsigned_conversion() {
-    let layout = Layout::new([3], [-1], 2);
+    let layout = Layout::try_new([3], [-1], 2).unwrap();
 
     assert_eq!(layout.checked_min_max_offsets().unwrap(), (0, 2));
     assert_eq!(layout.offset_of([0]).unwrap(), 2);
     assert_eq!(layout.offset_of([2]).unwrap(), 0);
 
-    let invalid = Layout::new([3], [-1], 0);
+    // A layout walking [0..3) at stride -1 from base 0 addresses physical
+    // offset -2. `Layout::new` used to build it and leave detection to the
+    // downstream `checked_min_max_offsets`/`offset_of` calls; `try_new` now
+    // refuses it outright, so the failure moves from the accessors to the
+    // constructor. The stronger contract is asserted here.
     assert!(matches!(
-        invalid.checked_min_max_offsets(),
-        Err(LetoError::StorageError { .. })
-    ));
-    assert!(matches!(
-        invalid.offset_of([1]),
+        Layout::try_new([3], [-1], 0),
         Err(LetoError::StorageError { .. })
     ));
 }
@@ -71,7 +71,7 @@ fn test_negative_stride_offsets_are_checked_before_unsigned_conversion() {
 #[test]
 fn test_array_rejects_layout_that_reaches_one_past_storage() {
     use leto::{Array, VecStorage};
-    let layout = Layout::new([2], [1], 1);
+    let layout = Layout::try_new([2], [1], 1).unwrap();
     let storage = VecStorage::new(vec![10, 20]);
 
     assert!(matches!(

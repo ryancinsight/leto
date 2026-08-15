@@ -116,19 +116,19 @@ where
     /// Returns the shape of the array.
     #[inline]
     pub const fn shape(&self) -> [usize; N] {
-        self.layout.shape
+        self.layout.shape()
     }
 
     /// Returns the strides of the array.
     #[inline]
     pub const fn strides(&self) -> [isize; N] {
-        self.layout.strides
+        self.layout.strides()
     }
 
     /// Returns the starting offset of the array.
     #[inline]
     pub const fn offset(&self) -> usize {
-        self.layout.offset
+        self.layout.offset()
     }
 
     /// Returns the total logical size of the array.
@@ -152,7 +152,7 @@ where
     /// Returns a pointer to the first logical element.
     #[inline]
     pub fn as_ptr(&self) -> *const T {
-        self.storage.as_slice()[self.layout.offset..].as_ptr()
+        self.storage.as_slice()[self.layout.offset()..].as_ptr()
     }
 
     /// Returns the layout of the array.
@@ -508,7 +508,7 @@ where
     #[inline]
     pub fn as_slice_mut(&mut self) -> Option<&mut [T]> {
         if self.layout.is_c_dense() {
-            let start = self.layout.offset;
+            let start = self.layout.offset();
             let end = start.checked_add(self.layout.checked_size().ok()?)?;
             self.storage.as_mut_slice().get_mut(start..end)
         } else {
@@ -520,7 +520,7 @@ where
     #[inline]
     pub fn as_slice_memory_order_mut(&mut self) -> Option<&mut [T]> {
         if self.layout.is_contiguous() {
-            let start = self.layout.offset;
+            let start = self.layout.offset();
             let end = start.checked_add(self.layout.checked_size().ok()?)?;
             self.storage.as_mut_slice().get_mut(start..end)
         } else {

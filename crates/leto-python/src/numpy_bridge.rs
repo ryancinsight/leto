@@ -57,7 +57,8 @@ pub(crate) fn view_from_numpy_1d<'a, T: numpy::Element>(
     let el_stride = strides[0] / el_size;
 
     let shape_arr = [shape[0]];
-    let layout = Layout::new(shape_arr, [el_stride], 0);
+    let layout = Layout::try_new(shape_arr, [el_stride], 0)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     let raw_slice = arr.as_slice().map_err(|_| {
         PyValueError::new_err("Failed to extract contiguous slice from NumPy array")
@@ -88,7 +89,8 @@ pub(crate) fn view_from_numpy<'a, T: numpy::Element>(
     }
 
     let shape_arr = [shape[0], shape[1]];
-    let layout = Layout::new(shape_arr, el_strides, 0);
+    let layout = Layout::try_new(shape_arr, el_strides, 0)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     let raw_slice = arr.as_slice().map_err(|_| {
         PyValueError::new_err("Failed to extract contiguous slice from NumPy array")
@@ -159,7 +161,8 @@ pub(crate) fn view_from_numpy_3d<'a, T: numpy::Element>(
     }
 
     let shape_arr = [shape[0], shape[1], shape[2]];
-    let layout = Layout::new(shape_arr, el_strides, 0);
+    let layout = Layout::try_new(shape_arr, el_strides, 0)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     let raw_slice = arr.as_slice().map_err(|_| {
         PyValueError::new_err("Failed to extract contiguous slice from NumPy array")

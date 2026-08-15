@@ -10,9 +10,9 @@ fn test_legacy_slice_empty_range_has_zero_extent_without_underflow() {
     let layout = Layout::c_contiguous([4]).unwrap();
     let sliced = layout.slice(&[(2, 2, 1)]).unwrap();
 
-    assert_eq!(sliced.shape, [0]);
-    assert_eq!(sliced.strides, [1]);
-    assert_eq!(sliced.offset, 2);
+    assert_eq!(sliced.shape(), [0]);
+    assert_eq!(sliced.strides(), [1]);
+    assert_eq!(sliced.offset(), 2);
     assert_eq!(sliced.checked_size().unwrap(), 0);
 }
 
