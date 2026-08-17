@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## ATLAS-ORPHAN-MODULES-096-LETO — Remove the uncompiled transform module [patch, in progress]
+## ATLAS-ORPHAN-MODULES-096-LETO — Remove the uncompiled transform module [patch, complete]
 
 **Owner:** Atlas session; scope is `crates/leto/src/application/transform.rs`
 and the provider-local checklist entry. No `leto-ops`, consumer, or release
@@ -18,6 +18,13 @@ Atlas orphan-module detector records the new count. If a missing public
 contract is discovered during the audit, stop deletion and move the operation
 to the canonical `application` leaf with tests and documentation in the same
 change.
+
+**Outcome:** `crates/leto/src/application/transform.rs` is deleted because it
+had no module declaration or compiled callers and duplicated `Array` methods.
+The direct detector reports `orphan_modules=0`; `git diff --check` passes.
+The inherited Atlas overlay prevents local `--locked` Cargo gates from
+resolving without lockfile churn, so those gates remain an explicit external
+verification limitation rather than a claimed pass.
 
 ## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, complete]
 
