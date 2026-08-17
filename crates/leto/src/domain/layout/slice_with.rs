@@ -41,7 +41,39 @@ impl<const N: usize> Layout<N> {
     /// negative strides, integer indexing that removes an axis, inserted new axes,
     /// and one ellipsis expansion. The caller specifies the output rank `M`.
     pub fn slice_with<const M: usize>(&self, args: &[SliceArg]) -> Result<Layout<M>> {
-        let expanded = self.expand_slice_args(args)?;
+        // Validate the slice specification and expand any ellipsis inline
+        // instead of materializing an intermediate `Vec<SliceArg>`. The
+        // expanded stream feeds directly into the axis walker below, so a
+        // slice/reshape view construction performs no heap allocation.
+        let ellipsis_count = args
+            .iter()
+            .filter(|arg| matches!(arg, SliceArg::Ellipsis))
+            .count();
+        if ellipsis_count > 1 {
+            return Err(LetoError::StorageError {
+                reason: "slice specification contains more than one ellipsis".to_string(),
+            });
+        }
+
+        let consumed_without_ellipsis = args
+            .iter()
+            .filter(|arg| {
+                matches!(
+                    arg,
+                    SliceArg::All | SliceArg::Range { .. } | SliceArg::Index(_)
+                )
+            })
+            .count();
+        if consumed_without_ellipsis > N {
+            return Err(slice_rank_error(N, N, args));
+        }
+
+        let fill = if ellipsis_count == 0 {
+            N.saturating_sub(consumed_without_ellipsis)
+        } else {
+            N - consumed_without_ellipsis
+        };
+
         let mut shape = [0usize; M];
         let mut strides = [0isize; M];
         let mut input_axis = 0usize;
@@ -50,7 +82,10 @@ impl<const N: usize> Layout<N> {
             reason: "slice base offset conversion",
         })?;
 
-        for arg in expanded {
+        // Consume one expanded argument and advance the input/output axis
+        // cursors in lockstep. Inlined by the compiler; the `for` loops below
+        // drive it directly from `args` plus the implicit `fill` tail.
+        let mut emit = |arg: SliceArg| -> Result<()> {
             match arg {
                 SliceArg::All => {
                     if input_axis >= N || output_axis >= M {
@@ -121,6 +156,24 @@ impl<const N: usize> Layout<N> {
                     });
                 }
             }
+            Ok(())
+        };
+
+        for &arg in args {
+            if matches!(arg, SliceArg::Ellipsis) {
+                for _ in 0..fill {
+                    emit(SliceArg::All)?;
+                }
+            } else {
+                emit(arg)?;
+            }
+        }
+        // With no ellipsis, the trailing `fill` axes are implicit full-axis
+        // selections appended at the end.
+        if ellipsis_count == 0 {
+            for _ in 0..fill {
+                emit(SliceArg::All)?;
+            }
         }
 
         if input_axis != N || output_axis != M {
@@ -133,58 +186,6 @@ impl<const N: usize> Layout<N> {
         }
 
         Layout::try_new(shape, strides, offset as usize)
-    }
-
-    fn expand_slice_args(&self, args: &[SliceArg]) -> Result<Vec<SliceArg>> {
-        let ellipsis_count = args
-            .iter()
-            .filter(|arg| matches!(arg, SliceArg::Ellipsis))
-            .count();
-        if ellipsis_count > 1 {
-            return Err(LetoError::StorageError {
-                reason: "slice specification contains more than one ellipsis".to_string(),
-            });
-        }
-
-        let consumed_without_ellipsis = args
-            .iter()
-            .filter(|arg| {
-                matches!(
-                    arg,
-                    SliceArg::All | SliceArg::Range { .. } | SliceArg::Index(_)
-                )
-            })
-            .count();
-        if consumed_without_ellipsis > N {
-            return Err(slice_rank_error(N, N, args));
-        }
-
-        let fill = if ellipsis_count == 0 {
-            N.saturating_sub(consumed_without_ellipsis)
-        } else {
-            N - consumed_without_ellipsis
-        };
-        let mut expanded = Vec::with_capacity(args.len() + fill);
-        let mut inserted_implicit_tail = false;
-
-        for &arg in args {
-            if matches!(arg, SliceArg::Ellipsis) {
-                for _ in 0..fill {
-                    expanded.push(SliceArg::All);
-                }
-                inserted_implicit_tail = true;
-            } else {
-                expanded.push(arg);
-            }
-        }
-
-        if ellipsis_count == 0 && !inserted_implicit_tail {
-            for _ in 0..fill {
-                expanded.push(SliceArg::All);
-            }
-        }
-
-        Ok(expanded)
     }
 
     /// Transpose the layout by permuting the axes.
