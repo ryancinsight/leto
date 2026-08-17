@@ -32,8 +32,18 @@ owned by Hephaestus.
 ## LETO-CRATES-METADATA-1 [patch] — Owner: Codex
 
 - [x] Add precise crates.io descriptions to both publishable packages.
+- [x] Confirm the descriptions, repository metadata, and current workspace
+      version `0.42.0` through locked no-dependency metadata inspection.
 - [ ] Pass locked package dry runs and exact-head hosted gates; merge.
-- [ ] Publish, index, configure trusted publishing, and resume dependents.
+- [ ] Publish, index, and configure trusted publishing under the release
+      authority; this task does not authorize registry publication.
+
+**Current blocker:** `cargo package --locked` from the Atlas umbrella resolves
+the development overlay and requests a lockfile rewrite. The offline package
+command succeeds only by removing git source identities and adding
+`[patch.unused]` entries, so that generated lockfile is not a valid release
+proof and was discarded. Re-open when a standalone locked package job runs
+without the umbrella overlay; then collect exact-head hosted verification.
 
 ## LETO-MOIRAI-PACKAGE-1 [patch] — Owner: Codex
 
@@ -279,7 +289,9 @@ test workflow; Greptile's single P2 finding was fixed and resolved.
 - [x] Document the `leto-python` distribution, `leto_python` import, Cargo
       version source, supported CPython range, and OIDC publication contract.
 - [x] Build, install, import, and inspect a production CPython 3.13 wheel
-      locally as `leto-python` 0.39.0 / `leto_python`.
+      locally as the historical `leto-python` 0.39.0 / `leto_python` artifact.
+- [x] Reconcile the release tracking against the current workspace version
+      `0.42.0`; the 0.39.0 wheel remains historical evidence only.
 - [x] Create the protected `pypi` environment restricted to
       `leto-python-v*` tags.
 - [ ] Pass hosted CI on the exact release-automation head.

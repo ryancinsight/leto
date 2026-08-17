@@ -33,22 +33,28 @@ Rustdoc adds no new diagnostic and retains the tracked baseline of 36 unrelated
 broken/private-link warnings. Exact-head Rust verification passed and PR #94
 merged as `c743a60`.
 
-## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, in-progress]
+## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, blocked]
 
-**Owner:** Codex on `codex/leto-crates-metadata`; claimed 2026-08-02.
+**Owner:** Codex; implementation metadata reconciled 2026-08-17.
 
 **Outcome:** give both publishable packages precise crates.io descriptions so
-the registry accepts their already validated 0.40.0 archives.
+the registry can validate the current 0.42.0 archives.
 
 **Acceptance:** locked metadata and package dry runs pass; `leto` and
-`leto-ops` 0.40.0 are indexed; trusted-publishing-only enforcement and exact
-GitHub Releases are configured; and the dependent publication queue resumes.
+`leto-ops` 0.42.0 are verified for publication; trusted-publishing-only
+enforcement and exact GitHub Releases are configured by the release authority;
+and the dependent publication queue resumes.
 
-**Status:** crates.io rejected the first `leto` upload because its description
-was empty. Both package manifests now carry bounded-context descriptions and
-the canonical repository URL; the locked exact-source `leto` dry run passes
-without package-metadata warnings. Hosted verification, merge, and publication
-remain.
+**Status:** both package manifests carry bounded-context descriptions, complete
+registry metadata, and the current workspace version `0.42.0`; locked
+no-dependency metadata confirms those fields. The locked package gate is
+blocked under the Atlas development overlay because Cargo requests a lockfile
+rewrite. The offline package attempt succeeds only after generating overlay
+lock churn (removing git source identities and adding `[patch.unused]` entries),
+which is not release evidence and was discarded. Re-open when a standalone
+locked package job runs without the umbrella overlay. Hosted verification,
+merge, indexing, trusted-publisher registration, and publication remain
+external release work; this task does not authorize registry mutation.
 
 ## LETO-MOIRAI-PACKAGE-1 — Restore Moirai resolution [patch, complete]
 
@@ -404,9 +410,11 @@ attests and attaches the exact artifacts, then publishes the same wheels to the
 
 **Current evidence:** the release workflow and synchronized distribution
 contract are implemented, and GitHub environment `pypi` accepts only
-`leto-python-v*` tags. A locked CPython 3.13 wheel builds as `leto-python`
-0.39.0, installs into an isolated target, and imports as `leto_python`. Hosted
-CI and pending-publisher registration remain open.
+`leto-python-v*` tags. A historical locked CPython 3.13 wheel built as
+`leto-python` 0.39.0, installed into an isolated target, and imported as
+`leto_python`; the current workspace version is 0.42.0, so that artifact is not
+current-release proof. Hosted CI and pending-publisher registration remain
+open.
 
 ## LETO-NDARRAY-BOUNDARY-1 — Retire public ndarray compatibility [major, done]
 
