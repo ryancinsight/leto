@@ -1,5 +1,14 @@
 # Leto Development Checklist
 
+## ATLAS-LETO-CONTRACT-100 [patch] — in progress
+
+- [ ] Replace the shutdown `is_err()` assertion with an exact
+      `ExecutorError::ShuttingDown` value assertion.
+- [ ] Preserve the callback-not-run behavior and pass formatting, strict
+      Clippy, focused Nextest, and the provider conformance scan.
+- [ ] Record exact provider and hosted evidence before Atlas integration.
+
+
 ## ATLAS-ORPHAN-MODULES-096-LETO [patch] — complete
 
 - [x] Decide the fate of `crates/leto/src/application/transform.rs` after

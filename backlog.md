@@ -1,5 +1,19 @@
 # Leto Work Backlog
 
+## ATLAS-LETO-CONTRACT-100 — Make shutdown regression value-semantic [patch, in progress]
+
+**Owner:** Atlas session; scope is the Leto-ops parallel test assertion and
+these provider-local PM records. No Moirai source, consumer, or release scope
+is included.
+
+**Finding:** the shutdown regression added by `508962d` asserts only
+`ExecutorResult::is_err()`, so it cannot distinguish the required
+`ExecutorError::ShuttingDown` contract from another failure.
+
+**Acceptance:** assert the exact shutdown error variant, reduce Leto's
+`existence_only_assertions` count from 10 to the committed baseline of 9, and
+pass the focused locked provider gates without changing the baseline.
+
 ## ATLAS-ORPHAN-MODULES-096-LETO — Remove the uncompiled transform module [patch, complete]
 
 **Owner:** Atlas session; scope is `crates/leto/src/application/transform.rs`

@@ -1,5 +1,14 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## ATLAS-LETO-CONTRACT-100 — Shutdown error contract (in progress)
+
+The Atlas conformance scan reports `existence_only_assertions=10` against a
+baseline of 9. The additional site is the shutdown regression test in
+`crates/leto-ops/src/infrastructure/parallel.rs`, introduced by provider
+commit `508962d`; it checks only `is_err()` after runtime shutdown. The
+provider exposes `moirai::ExecutorError`, so the test can assert the exact
+`ShuttingDown` value without a compatibility path or baseline edit.
+
 ## 2026-08-13 Convolution provider closure
 
 The generic regular and transposed convolution family is complete at provider
