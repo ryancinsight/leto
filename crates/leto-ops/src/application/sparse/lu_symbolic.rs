@@ -348,3 +348,130 @@ pub(super) fn apply_symmetric_perm<T: Scalar>(csc: &CscMatrix<T>, perm: &[usize]
     }
     coo.to_csc()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::sparse::{CooMatrix, OrderingStrategy};
+
+    fn csc2(entries: &[(usize, usize, f64)]) -> CscMatrix<f64> {
+        let n = 2;
+        let mut coo = CooMatrix::new(n, n);
+        for &(i, j, v) in entries {
+            coo.push(i, j, v);
+        }
+        coo.to_csc()
+    }
+
+    fn csc3(entries: &[(usize, usize, f64)]) -> CscMatrix<f64> {
+        let mut coo = CooMatrix::new(3, 3);
+        for &(i, j, v) in entries {
+            coo.push(i, j, v);
+        }
+        coo.to_csc()
+    }
+
+    /// U column `j` stores rows `≤ j` ascending; L column `j` stores rows
+    /// `> j` ascending; the diagonal `j` is always structurally present in U.
+    #[test]
+    fn storage_convention_holds_for_a_full_column() {
+        // A[2,0], A[1,0], A[0,0] all nonzero -> column 0 of U carries row 0,
+        // column 0 of L carries rows {1, 2}.
+        let csc = csc3(&[(0, 0, 2.0), (1, 0, 3.0), (2, 0, 5.0)]);
+        let sym = factor_symbolic(&csc);
+        assert_eq!(sym.n(), 3);
+        // Whole-vector patterns across all columns: col0 U={0}, col1 U={1},
+        // col2 U={2}; L col0={1,2}, L col1/2 empty.
+        assert_eq!(sym.u_row_indices, vec![0, 1, 2]);
+        assert_eq!(sym.l_row_indices, vec![1, 2]);
+        assert_eq!(sym.u_col_ptr, vec![0, 1, 2, 3]);
+        assert_eq!(sym.l_col_ptr, vec![0, 2, 2, 2]);
+    }
+
+    /// The diagonal is always in U even when A[j, j] is zero.
+    #[test]
+    fn diagonal_is_always_structurally_present_in_u() {
+        // Off-diagonal only: A[1,0] nonzero.
+        let csc = csc2(&[(1, 0, 4.0)]);
+        let sym = factor_symbolic(&csc);
+        // Column 0: seed {1}; diagonal 0 forced into U. Rows ≤ 0 -> {0} to U,
+        // row 1 > 0 -> L column 0.
+        assert_eq!(sym.u_row_indices, vec![0, 1]);
+        assert_eq!(sym.l_row_indices, vec![1]);
+        assert_eq!(sym.u_col_ptr, vec![0, 1, 2]);
+        assert_eq!(sym.l_col_ptr, vec![0, 1, 1]);
+        assert_eq!(sym.u_nnz(), 2);
+        assert_eq!(sym.l_nnz(), 1);
+    }
+
+    /// Identity: U is the diagonal, L is empty.
+    #[test]
+    fn identity_has_no_l_fill() {
+        let csc = csc3(&[(0, 0, 1.0), (1, 1, 1.0), (2, 2, 1.0)]);
+        let sym = factor_symbolic(&csc);
+        assert_eq!(sym.u_nnz(), 3);
+        assert_eq!(sym.l_nnz(), 0);
+        // U row indices per column: [0], [1], [2].
+        assert_eq!(sym.u_row_indices, vec![0, 1, 2]);
+    }
+
+    /// Structural fill is an upper bound: a 2×2 with A[0,1] and A[1,0]
+    /// produces a full L∪U pattern (2×2 dense), matching partial-pivot fill.
+    #[test]
+    fn fill_upper_bound_on_dense_2x2() {
+        let csc = csc2(&[(0, 1, 1.0), (1, 0, 1.0)]);
+        let sym = factor_symbolic(&csc);
+        // Column 0: seed {1}; diagonal 0. U col0 = {0}, L col0 = {1}.
+        // Column 1: seed {0}; diagonal 1; fan-out from L col0 row 1 → merge
+        //   row 1; U col1 = {0, 1}.
+        assert_eq!(sym.u_row_indices, vec![0, 0, 1]);
+        assert_eq!(sym.l_row_indices, vec![1]);
+        assert_eq!(sym.u_nnz(), 3);
+        assert_eq!(sym.l_nnz(), 1);
+    }
+
+    /// The symmetric permutation reorders rows and columns together; applying
+    /// it to the identity yields the identity (pattern preserved).
+    #[test]
+    fn symmetric_perm_preserves_identity_pattern() {
+        let csc = csc3(&[(0, 0, 1.0), (1, 1, 1.0), (2, 2, 1.0)]);
+        let perm = vec![2usize, 0, 1];
+        let permuted = apply_symmetric_perm(&csc, &perm);
+        let sym = factor_symbolic(&permuted);
+        assert_eq!(sym.u_nnz(), 3);
+        assert_eq!(sym.l_nnz(), 0);
+    }
+
+    /// AMD ordering returns a valid permutation and the symbolic pattern
+    /// still satisfies the storage convention on the permuted matrix.
+    #[test]
+    fn amd_ordering_produces_valid_permuted_pattern() {
+        let csc = csc3(&[(0, 2, 1.0), (2, 0, 1.0), (1, 1, 1.0)]);
+        let sym = factor_symbolic_with_ordering(&csc, OrderingStrategy::AmdApproxMinDegree);
+        let perm = sym.amd_col_perm.as_ref().expect("AMD yields a perm");
+        assert_eq!(perm.len(), 3);
+        // Validate the permutation: it is a bijection on 0..3.
+        let mut seen = [false; 3];
+        for &p in perm {
+            assert!(!seen[p], "AMD permutation must be a bijection");
+            seen[p] = true;
+        }
+        // Storage convention holds for the permuted pattern.
+        for j in 0..sym.n() {
+            let u = &sym.u_row_indices[sym.u_col_ptr[j]..sym.u_col_ptr[j + 1]];
+            let l = &sym.l_row_indices[sym.l_col_ptr[j]..sym.l_col_ptr[j + 1]];
+            assert!(u.iter().all(|&r| r <= j), "U col {j} rows must be ≤ {j}");
+            assert!(l.iter().all(|&r| r > j), "L col {j} rows must be > {j}");
+            assert!(u.iter().is_sorted(), "U col {j} rows must be ascending");
+            assert!(l.iter().is_sorted(), "L col {j} rows must be ascending");
+        }
+    }
+
+    /// Natural ordering never sets the AMD column permutation.
+    #[test]
+    fn natural_ordering_has_no_col_perm() {
+        let csc = csc2(&[(0, 1, 1.0), (1, 0, 1.0)]);
+        let sym = factor_symbolic_with_ordering(&csc, OrderingStrategy::Natural);
+        assert!(sym.amd_col_perm.is_none());
+    }
+}
