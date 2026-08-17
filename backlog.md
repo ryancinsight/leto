@@ -576,7 +576,7 @@ all-target/all-feature Clippy; doctest 1/1; warning-denied rustdoc; 196/196
 applicable SemVer checks; value-semantic unordered duplicate, CSC column,
 lookup, and transpose regressions. Merged as PR #41 (`9b22301`).
 
-## LETO-SPARSE-DIRECT-1 — Sparse direct factorization [minor, todo]
+## LETO-SPARSE-DIRECT-1 — Sparse direct factorization [minor, done 2026-08-16]
 
 **Owner:** unclaimed
 
@@ -584,6 +584,15 @@ lookup, and transpose regressions. Merged as PR #41 (`9b22301`).
 
 **Scope:** `leto-ops` CSR factorization, solve, errors, tests, Rustdoc, and
 consumer contract verification.
+
+**DELIVERED 2026-08-16:** the native sparse LU (`SparseLuSolver`,
+`factor_symbolic`/`factor_numeric`, AMD ordering) shipped in leto-ops with
+generic f32/f64 value tests, typed failures, and the symbolic-phase storage
+contracts covered by the lu_symbolic unit suite (PR #114, `a65fcfb`).
+CFDrs's `DirectSparseSolver` consumes `leto_ops::SparseLuSolver` (ADR 0031)
+with a dense fallback; `rsparse` and all old call sites were removed. All
+acceptance bullets are met; the item is closed.
+
 
 Add a generic sparse direct factorization over Leto-owned `CsrMatrix<T>`.
 The implementation must preserve a failure mode independent from iterative
