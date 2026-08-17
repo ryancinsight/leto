@@ -168,6 +168,6 @@ mod tests {
                 panic!("shutdown must reject before callback")
             });
 
-        assert!(result.is_err());
+        assert_eq!(result, Err(moirai::ExecutorError::ShuttingDown));
     }
 }
