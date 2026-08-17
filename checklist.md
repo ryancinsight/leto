@@ -1,12 +1,13 @@
 # Leto Development Checklist
 
-## ATLAS-LETO-CONTRACT-100 [patch] — in progress
+## ATLAS-LETO-CONTRACT-100 [patch] — complete
 
-- [ ] Replace the shutdown `is_err()` assertion with an exact
+- [x] Replace the shutdown `is_err()` assertion with an exact
       `ExecutorError::ShuttingDown` value assertion.
-- [ ] Preserve the callback-not-run behavior and pass formatting, strict
+- [x] Preserve the callback-not-run behavior and pass formatting, strict
       Clippy, focused Nextest, and the provider conformance scan.
-- [ ] Record exact provider and hosted evidence before Atlas integration.
+- [x] Record exact provider head `6463f4a`, scan count 9, strict Clippy, focused
+      Nextest 550/550, hosted CI `32021076930`, and Pages `32021074899`.
 
 
 ## ATLAS-ORPHAN-MODULES-096-LETO [patch] — complete
