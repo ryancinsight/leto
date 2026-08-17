@@ -15,12 +15,13 @@ root conformance script identifies the file as one of Leto's seven orphan
 modules; `crates/leto/src/application/mod.rs` has no `transform` declaration,
 and the compiled `Array` implementation already owns `mapv`, `zip_map`, and
 `fill`. The unreachable file is deleted. `git diff --check` passes and the
-direct orphan detector reports `leto_orphan_modules=0`. The package Cargo
-gates are currently blocked before compilation by the inherited Atlas
-development overlay: `--locked` refuses the required lockfile rewrite, with
-the exact diagnostic `cannot update the lock file ... because --locked was
-passed to prevent this`; no lockfile was changed. The standalone hosted Leto
-gates remain the release evidence for the unchanged compiled surface.
+direct orphan detector reports `leto_orphan_modules=0`. Running from outside
+the Atlas configuration ancestry with the pinned
+`1.97.0-x86_64-pc-windows-msvc` toolchain and the shared target directory
+passes format, locked package check, warning-denied Clippy, configured
+Nextest `314/314`, two doctests, and rustdoc. The inherited Atlas overlay
+still rejects the same `--locked` command before compilation because it would
+rewrite the lockfile; no lockfile churn is committed.
 
 ## LETO-CROSS-ENTROPY-PROVIDER-1 [minor, arch] — Owner: Codex
 

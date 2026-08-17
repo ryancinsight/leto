@@ -22,9 +22,11 @@ change.
 **Outcome:** `crates/leto/src/application/transform.rs` is deleted because it
 had no module declaration or compiled callers and duplicated `Array` methods.
 The direct detector reports `orphan_modules=0`; `git diff --check` passes.
-The inherited Atlas overlay prevents local `--locked` Cargo gates from
-resolving without lockfile churn, so those gates remain an explicit external
-verification limitation rather than a claimed pass.
+From outside the Atlas configuration ancestry, the pinned MSVC toolchain
+passes format, locked check, warning-denied Clippy, configured Nextest
+`314/314`, two doctests, and rustdoc against the standalone lock graph. The
+Atlas overlay still rejects the same `--locked` invocation before compilation
+because it would rewrite the lockfile; no lockfile churn is committed.
 
 ## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, complete]
 
