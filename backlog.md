@@ -1,5 +1,24 @@
 # Leto Work Backlog
 
+## ATLAS-ORPHAN-MODULES-096-LETO — Remove the uncompiled transform module [patch, in progress]
+
+**Owner:** Atlas session; scope is `crates/leto/src/application/transform.rs`
+and the provider-local checklist entry. No `leto-ops`, consumer, or release
+files are in scope.
+
+**Finding:** the file is not reachable from any `mod` declaration. Its
+`mapv`, `zip_map`, and `fill` methods duplicate compiled implementations in
+`application/array.rs`; its additional `to_vec`, `fold`, and `mapv_inplace`
+methods have no compiled callers because the file is not part of the crate.
+
+**Acceptance:** delete the unreachable duplicate rather than wiring a second
+implementation into the public surface; the source orphan count for Leto
+falls by one, the package's value-semantic tests remain green, and the exact
+Atlas orphan-module detector records the new count. If a missing public
+contract is discovered during the audit, stop deletion and move the operation
+to the canonical `application` leaf with tests and documentation in the same
+change.
+
 ## LETO-CROSS-ENTROPY-PROVIDER-1 — Own CPU classification loss [minor, arch, complete]
 
 **Owner:** Codex on `codex/leto-cross-entropy-provider`; claimed 2026-08-04.

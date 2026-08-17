@@ -1,5 +1,21 @@
 # Leto Development Checklist
 
+## ATLAS-ORPHAN-MODULES-096-LETO [patch] — in progress
+
+- [ ] Decide the fate of `crates/leto/src/application/transform.rs` after
+      verifying the module graph and compiled API surface.
+- [ ] Remove the uncompiled duplicate implementation or wire it into the
+      canonical application module; preserve value-semantic coverage without
+      retaining a second source of truth.
+- [ ] Run the Leto package gates and the Atlas orphan-module detector, then
+      record the exact commit and residual count.
+
+Scope is limited to this orphan and its provider-local PM records. The Atlas
+root conformance script identifies the file as one of Leto's seven orphan
+modules; `crates/leto/src/application/mod.rs` has no `transform` declaration,
+and the compiled `Array` implementation already owns `mapv`, `zip_map`, and
+`fill`.
+
 ## LETO-CROSS-ENTROPY-PROVIDER-1 [minor, arch] — Owner: Codex
 
 - [x] Claim the provider boundary and record ADR 0023.
