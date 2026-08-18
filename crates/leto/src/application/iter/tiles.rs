@@ -1,30 +1,12 @@
-//! Lending iteration and non-overlapping tile views.
-//!
-//! ## `LendingIterator`
-//!
-//! The standard [`Iterator`] trait requires `Item` to have a lifetime independent
-//! of `&self`. This prevents returning items *borrowed from the iterator itself*
-//! (the "streaming iterator" problem). GATs (`type Item<'this>`) solve it by
-//! tying the yielded lifetime to `&mut self`:
-//!
-//! ```text
-//! trait LendingIterator {
-//!     type Item<'this> where Self: 'this;
-//!     fn next(&mut self) -> Option<Self::Item<'_>>;
-//! }
-//! ```
-//!
-//! The GAT is warranted only when an item genuinely borrows from the iterator —
-//! a reused scratch buffer, for example. An iterator whose items borrow the same
-//! data the iterator borrows is a plain [`Iterator`] and must be declared as one:
-//! the narrower item lifetime would forfeit [`IntoIterator`], `zip`, `enumerate`,
-//! `rev`, [`ExactSizeIterator`] and every parallel bridge for no capability.
-//!
-//! ## `Tiles` — non-overlapping rectangular tile views
+//! Non-overlapping rectangular tile views.
 //!
 //! Partitions an array into `N`-D tiles of shape `tile_shape`. Each tile is a
-//! zero-copy [`ArrayView`] into the *parent* slice, so `Tiles` is a plain
-//! [`Iterator`] and composes with the whole adaptor ecosystem.
+//! zero-copy [`ArrayView`] into the *parent* slice — it borrows the parent for
+//! `'a` rather than borrowing the iterator — so `Tiles` is a plain [`Iterator`]
+//! and composes with the whole adaptor ecosystem. A streaming-iterator
+//! signature (`type Item<'this>` tied to `&mut self`) would forfeit
+//! [`IntoIterator`], `zip`, `enumerate`, `rev`, [`ExactSizeIterator`] and every
+//! parallel bridge in exchange for no capability, so it is not used here.
 //!
 //! # Theorem (tile cover)
 //!
@@ -34,42 +16,6 @@
 
 use crate::application::view::ArrayView;
 use crate::domain::layout::Layout;
-
-// ── LendingIterator trait ──────────────────────────────────────────────────
-
-/// A GAT-based streaming iterator that lends each item *from itself*, allowing
-/// zero-copy views without requiring the data to outlive `self`.
-///
-/// Unlike [`Iterator`], `Item` may borrow from `&mut self`, so the same
-/// backing store can be reused across calls (e.g. a single scratch buffer).
-///
-/// # Note on standard library compatibility
-///
-/// Once `LendingIterator` stabilizes in the standard library (RFC 3301) this
-/// trait will become redundant. Until then, it is the correct GAT-native
-/// pattern for building zero-copy window/tile iterators over owned data.
-pub trait LendingIterator {
-    /// The type yielded on each call to [`next`](Self::next), borrowing `self`
-    /// for lifetime `'this`.
-    type Item<'this>
-    where
-        Self: 'this;
-
-    /// Advance the iterator and return the next item, or `None` if exhausted.
-    fn next(&mut self) -> Option<Self::Item<'_>>;
-
-    /// Count the remaining items (exhausts the iterator).
-    #[inline]
-    fn count_remaining(&mut self) -> usize {
-        let mut n = 0;
-        while self.next().is_some() {
-            n += 1;
-        }
-        n
-    }
-}
-
-// ── Tiles ──────────────────────────────────────────────────────────────────
 
 /// Non-overlapping tile iterator over a strided parent layout.
 ///
@@ -444,54 +390,5 @@ mod tests {
             .map(|(_, vals)| vals.to_vec())
             .collect();
         assert_eq!(head, expected);
-    }
-
-    // ── LendingIterator remains a supported public seam ────────────────────
-
-    /// Lends a reused scratch buffer — the case the GAT genuinely exists for,
-    /// unlike `Tiles`, whose items borrow the parent slice rather than `self`.
-    struct ScratchLender {
-        buffer: [f64; 2],
-        remaining: usize,
-    }
-
-    impl LendingIterator for ScratchLender {
-        type Item<'this>
-            = &'this mut [f64; 2]
-        where
-            Self: 'this;
-
-        fn next(&mut self) -> Option<Self::Item<'_>> {
-            if self.remaining == 0 {
-                return None;
-            }
-            self.remaining -= 1;
-            self.buffer[0] += 1.0;
-            self.buffer[1] = self.buffer[0] * 2.0;
-            Some(&mut self.buffer)
-        }
-    }
-
-    #[test]
-    fn lending_iterator_lends_a_reused_buffer() {
-        let mut lender = ScratchLender {
-            buffer: [0.0, 0.0],
-            remaining: 3,
-        };
-        let mut seen = Vec::new();
-        while let Some(buffer) = lender.next() {
-            seen.push((buffer[0], buffer[1]));
-        }
-        assert_eq!(seen, vec![(1.0, 2.0), (2.0, 4.0), (3.0, 6.0)]);
-    }
-
-    #[test]
-    fn count_remaining_exhausts_the_lender() {
-        let mut lender = ScratchLender {
-            buffer: [0.0, 0.0],
-            remaining: 4,
-        };
-        assert_eq!(lender.count_remaining(), 4);
-        assert!(lender.next().is_none());
     }
 }

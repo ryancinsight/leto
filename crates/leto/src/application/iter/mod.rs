@@ -10,8 +10,7 @@
 //!   `indexed_iter` / `indexed_iter_mut` parity).
 //! - lanes — [`Lanes`], [`LanesMut`]: 1-D views along one axis (leto
 //!   `lanes` / `lanes_mut` parity).
-//! - lending — [`Tiles`]: non-overlapping rectangular tile views, plus the
-//!   [`LendingIterator`] seam for items that borrow the iterator itself.
+//! - tiles — [`Tiles`]: non-overlapping rectangular tile views.
 //! - windows — [`Windows`]: zero-copy sliding-window subviews (leto
 //!   `windows` parity).
 
@@ -19,7 +18,7 @@ pub mod axis;
 pub mod chunks;
 pub mod element;
 pub mod lanes;
-pub mod lending;
+pub mod tiles;
 pub mod windows;
 
 pub use axis::{AxisIter, AxisIterMut};
@@ -28,5 +27,5 @@ pub use element::{
     ElementIter, ElementIterMut, IndexedIter, IndexedIterMut, TaskPartitionMut, TaskPartitionsMut,
 };
 pub use lanes::{Lanes, LanesMut};
-pub use lending::{LendingIterator, Tiles};
+pub use tiles::Tiles;
 pub use windows::Windows;

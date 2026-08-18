@@ -47,6 +47,5 @@ pub use application::{
     ArrayD, ArrayView1, ArrayView2, ArrayView3, ArrayView4, ArrayViewMut1, ArrayViewMut2,
     ArrayViewMut3, ArrayViewMut4, AxisChunks, AxisIter, AxisIterMut, ElementIter, ElementIterMut,
     ExactChunks, FixedMatrix, FixedVector, IndexedIter, IndexedIterMut, Interpolation, Lanes,
-    LanesMut, LendingIterator, PadWidth, ScalarOperand, TaskPartitionMut, TaskPartitionsMut, Tiles,
-    Windows,
+    LanesMut, PadWidth, ScalarOperand, TaskPartitionMut, TaskPartitionsMut, Tiles, Windows,
 };

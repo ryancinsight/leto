@@ -31,4 +31,5 @@
 | [0023](0023-provider-owned-cross-entropy.md) | Own CPU cross-entropy in leto-ops | Accepted |
 | [0024](0024-num-complex-removal.md) | Atlas-native `Complex<T>`, removing the `num-complex` dependency | Accepted |
 | [0025](0025-layout-construction-boundary.md) | Encapsulate `Layout` construction and place storage bounds at the access site | Accepted |
+| [0026](0026-retire-lending-iterator-seam.md) | Retire the `LendingIterator` seam | Accepted |
 | [—](sparse-support-design.md) | ADR: Sparse Array Support in Leto and Hephaestus | Accepted |

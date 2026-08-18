@@ -35,8 +35,7 @@ pub use dynamic::ArrayD;
 pub use fixed::{FixedMatrix, FixedVector};
 pub use iter::{
     AxisChunks, AxisIter, AxisIterMut, ElementIter, ElementIterMut, ExactChunks, IndexedIter,
-    IndexedIterMut, Lanes, LanesMut, LendingIterator, TaskPartitionMut, TaskPartitionsMut, Tiles,
-    Windows,
+    IndexedIterMut, Lanes, LanesMut, TaskPartitionMut, TaskPartitionsMut, Tiles, Windows,
 };
 pub use reduction::{
     argmax, argmax_all, argmin, argmin_all, max_all, max_axis, mean_all, mean_axis, median_all,

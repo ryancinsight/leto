@@ -6,6 +6,27 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [Unreleased]
 
+### Removed
+
+- [major] The `LendingIterator` trait and the `application::iter::lending`
+  module are removed; the module is renamed to `application::iter::tiles`,
+  which continues to export `Tiles`. The trait had no implementor anywhere in
+  the crate or the stack — `Tiles` yields views borrowing the *parent slice*,
+  not the iterator, and has been a plain `Iterator` (plus
+  `DoubleEndedIterator` and `ExactSizeIterator`) since the tile iterator was
+  corrected. What remained was a public GAT seam whose only implementor was a
+  synthetic test fixture. See ADR 0026.
+
+  **Migration.** Drop `LendingIterator` from `use leto::{…}`; `Tiles` needs no
+  trait import for `.next()`, `for` loops, or any adaptor. The trait's one
+  method without an `Iterator` counterpart, `count_remaining()`, maps to
+  `ExactSizeIterator::len()` where the implementor's length is exact — for
+  `Tiles` it is, and unlike `count_remaining` it does not consume the
+  iterator — or to `Iterator::count()`, which consumes it, where the length is
+  not known exactly. Code that implemented `LendingIterator` for a genuinely
+  lending type (one whose item borrows the iterator itself) should declare its
+  own local trait; leto no longer publishes one.
+
 ### Changed
 
 - [major] `Layout` no longer exposes `shape`, `strides` and `offset` as public
