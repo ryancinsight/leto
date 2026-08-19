@@ -216,6 +216,13 @@ impl<T: Scalar> CsrMatrix<T> {
         (&self.values, &self.col_indices, &self.row_ptr)
     }
 
+    /// Borrow CSR structure immutably and stored values mutably without copying.
+    #[must_use]
+    #[inline]
+    pub fn as_parts_mut(&mut self) -> (&mut [T], &[usize], &[usize]) {
+        (&mut self.values, &self.col_indices, &self.row_ptr)
+    }
+
     /// CSR row-offset array.
     #[must_use]
     #[inline]

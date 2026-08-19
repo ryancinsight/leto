@@ -78,6 +78,27 @@ fn csr_row_views_and_value_mutation_preserve_structure() {
 }
 
 #[test]
+fn csr_mutable_parts_update_values_without_copying_structure() {
+    let mut csr = CsrMatrix::from_parts(
+        vec![2.0f64, -1.0, 3.0, 4.0],
+        vec![0, 2, 1, 2],
+        vec![0, 2, 3, 4],
+        3,
+        3,
+    )
+    .unwrap();
+
+    let (values, col_indices, row_ptr) = csr.as_parts_mut();
+    for (value, &column) in values.iter_mut().zip(col_indices.iter()) {
+        *value += if column == 0 { 0.0 } else { 1.0 };
+    }
+
+    assert_eq!(values, &[2.0, 0.0, 4.0, 5.0]);
+    assert_eq!(col_indices, &[0, 2, 1, 2]);
+    assert_eq!(row_ptr, &[0, 2, 3, 4]);
+}
+
+#[test]
 fn csr_diagonal_norm_and_dominance_are_value_semantic() {
     let dominant = CsrMatrix::from_parts(
         vec![4.0f64, -1.0, 5.0, 1.5, -2.0, 6.0],
