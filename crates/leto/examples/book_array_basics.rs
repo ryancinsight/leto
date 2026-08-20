@@ -4,7 +4,9 @@
 //! [`leto::Array`]. Values are stored in row-major order in a heap-backed
 //! [`VecStorage`]. Zero-copy views borrow from the same storage.
 
-use leto::{Array1, Array2, sum_all};
+extern crate leto;
+
+use leto::{sum_all, Array1, Array2};
 
 fn main() {
     let zeros: Array1<f64> = Array1::zeros(8);

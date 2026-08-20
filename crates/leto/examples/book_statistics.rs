@@ -3,7 +3,9 @@
 //! [`sum_all`], [`mean_all`], and [`pearson_correlation`] are computed over
 //! borrowed array views, leaving ownership with the caller.
 
-use leto::{Array1, Array2, mean_all, pearson_correlation, sum_all};
+extern crate leto;
+
+use leto::{mean_all, pearson_correlation, sum_all, Array1, Array2};
 
 fn main() {
     let a: Array1<f64> = Array1::from_vec(5, vec![1.0, 2.0, 3.0, 4.0, 5.0]).expect("shape matches");
