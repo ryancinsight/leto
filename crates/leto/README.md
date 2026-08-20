@@ -49,6 +49,9 @@ assert_eq!(view.shape(), [1, 2]);
 
 API docs: <https://docs.rs/leto>
 
+The [Leto domain book](../../docs/book/README.md) explains the layout,
+storage, view, structural, and sparse contracts with executable examples.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](../../LICENSE-APACHE) or

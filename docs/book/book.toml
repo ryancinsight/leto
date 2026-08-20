@@ -1,0 +1,13 @@
+[book]
+title = "Leto — N-Dimensional Arrays for Atlas"
+authors = ["Atlas contributors"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../../target/book/leto"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/ryancinsight/leto"
+edit-url-template = "https://github.com/ryancinsight/leto/edit/main/docs/book/{path}"
