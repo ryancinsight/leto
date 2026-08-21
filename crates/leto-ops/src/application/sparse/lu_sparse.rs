@@ -175,7 +175,7 @@ impl SparseLuSolver {
             return Err(LetoError::StorageError {
                 reason: format!(
                     "SparseLuSolver: system order {n} exceeds max_size {}; \
-                     use an iterative solver (BiCGSTAB, CG) for large sparse systems",
+                     use an Athena iterative solver for large sparse systems",
                     self.max_size
                 ),
             });

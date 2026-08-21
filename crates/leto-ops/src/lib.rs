@@ -80,30 +80,17 @@ pub use application::linalg::{
     trace,
     udu_decompose,
     AsMatrixView,
-    // ── Iterative solvers (SSOT) ──────────────────────────────────────────────
-    BiCGSTAB,
+
     BidiagonalDecomposition,
     BunchKaufmanDecomposition,
     CholeskyDecomposition,
     ColPivQrDecomposition,
-    Configurable,
-    ConjugateGradient,
-    ConvergenceMonitor,
+
     FullPivLuDecomposition,
     HermitianEigenConfig,
     HermitianEigenResult,
     HessenbergDecomposition,
-    ILUPreconditioner,
-    IdentityPreconditioner,
-    IterativeLinearSolver,
-    IterativeSolverConfig,
-    JacobiPreconditioner,
-    LinearOperator,
-    LinearSolver,
-    LsqrConfig,
-    LsqrResult,
-    LsqrSolver,
-    LsqrStopReason,
+
     LuDecomposition,
     MatrixDecompose,
     MatrixFunction,
@@ -117,15 +104,13 @@ pub use application::linalg::{
     NormL1,
     NormL2,
     NormMax,
-    Preconditioner,
+
     QrDecomposition,
     RealSchur,
-    SORPreconditioner,
-    SSORPreconditioner,
+
     SvdDecomposition,
     SymmetricEigenDecomposition,
     UduDecomposition,
-    GMRES,
 };
 pub use application::loss::{
     cross_entropy_backward_accumulate, cross_entropy_forward_into, CrossEntropyError,
