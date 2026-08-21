@@ -1,5 +1,27 @@
 # Leto Work Backlog
 
+## ATLAS-LETO-STACK-STORAGE-ORACLE-2026-08-20 — Assert valid stack construction [patch, complete]
+
+**Finding:** `from_stack_validates_capacity` asserted only `is_ok()` for the
+valid constructor result and only `is_err()` for the invalid result. Neither
+branch proved the returned value or the typed failure contract.
+
+**Outcome:** the valid branch now consumes the constructor result and checks
+shape `[2, 2]`, size `4`, and all four inline values. The invalid branch
+matches `LetoError::StorageError` and checks its exact capacity/shape reason.
+
+**Evidence (2026-08-20):** clean lane branch `fix/leto-stack-storage-oracle`
+is based on fetched `origin/main` `c1c8ab2`. Format, locked all-target check,
+warning-denied Clippy, focused Nextest (`1/1`), and full Nextest (`984/984`)
+pass. Doctests pass (`leto` `2/2`; `leto-ops` `20/20` plus one intentional
+ignored case), and Rustdoc completes with 42 pre-existing `leto-ops` warnings;
+the touched test adds none. The conformance scan reports
+`existence_only_assertions: 7` versus `9` on the fetched default, with every
+other class unchanged. A temporary constructor mutation that rejected valid
+shapes failed the focused test (`0/1`), then the source was restored. The
+provider commit and publication status are recorded below; the primary Leto
+checkout remains untouched.
+
 ## ATLAS-LETO-CONTRACT-100 — Make shutdown regression value-semantic [patch, complete]
 
 **Owner:** Atlas session; scope is the Leto-ops parallel test assertion and

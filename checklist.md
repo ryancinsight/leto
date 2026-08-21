@@ -1,5 +1,15 @@
 # Leto Development Checklist
 
+## ATLAS-LETO-STACK-STORAGE-ORACLE-2026-08-20 [patch] — complete
+
+- [x] Replace both capacity-path existence assertions with value-semantic
+      success and typed-error checks.
+- [x] Run exact-lane format, locked checks, nextest, Clippy, doctests, and
+      Rustdoc; verify the provider conformance count decreases.
+- [x] Record the exact provider commit and mutation control; preserve the
+      dirty primary checkout.
+- [ ] Publish the exact provider branch and record hosted/publication status.
+
 ## ATLAS-LETO-CONTRACT-100 [patch] — complete
 
 - [x] Replace the shutdown `is_err()` assertion with an exact
