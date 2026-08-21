@@ -7,7 +7,7 @@
 )]
 
 use leto::application::reduction::{mean_all, sum_all, var_all};
-use leto::{Array, StackStorage, Storage};
+use leto::{Array, LetoError, StackStorage, Storage};
 
 /// A stack-backed 2×2 `f64` array type — no heap allocation.
 type StackMat2 = Array<f64, StackStorage<f64, 4>, 2>;
@@ -30,10 +30,20 @@ fn construct_inspect_and_index() {
 #[test]
 fn from_stack_validates_capacity() {
     // CAP (4) must equal the shape's element count.
-    let ok: Result<Array<f64, StackStorage<f64, 4>, 2>, _> = Array::from_stack([2, 2], [0.0; 4]);
-    assert!(ok.is_ok());
+    let ok: Array<f64, StackStorage<f64, 4>, 2> = Array::from_stack([2, 2], [1.0, 2.0, 3.0, 4.0])
+        .expect("shape [2, 2] matches stack capacity 4");
+    assert_eq!(ok.shape(), [2, 2]);
+    assert_eq!(ok.size(), 4);
+    assert_eq!(ok.storage().as_slice(), &[1.0, 2.0, 3.0, 4.0]);
+
     let bad: Result<Array<f64, StackStorage<f64, 4>, 2>, _> = Array::from_stack([3, 3], [0.0; 4]);
-    assert!(bad.is_err());
+    let Err(LetoError::StorageError { reason }) = bad else {
+        panic!("shape [3, 3] must be rejected for stack capacity 4");
+    };
+    assert_eq!(
+        reason,
+        "stack capacity 4 does not match shape element count 9"
+    );
 }
 
 #[test]

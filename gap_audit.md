@@ -1,5 +1,16 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-08-20 Stack-storage constructor oracle — closed
+
+The capacity test in `crates/leto/tests/core/stack_storage.rs` used
+existence-only assertions for both the valid and invalid `from_stack` paths.
+It now checks the constructed shape, size, and nonuniform inline values, and
+matches the typed `LetoError::StorageError` reason for the rejected shape. The
+provider conformance scan drops the existence-only count from 9 to 7 with no
+other class change. Locked all-target compilation, warning-denied Clippy,
+focused and full Nextest (`1/1` and `984/984`), doctests, and Rustdoc complete;
+a temporary valid-shape rejection mutation fails the focused test.
+
 ## ATLAS-LETO-CONTRACT-100 — Shutdown error contract (closed 2026-08-17)
 
 The Atlas conformance scan reports `existence_only_assertions=10` against a
