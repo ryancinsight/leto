@@ -22,6 +22,13 @@ shapes failed the focused test (`0/1`), then the source was restored. The
 provider commit and publication status are recorded below; the primary Leto
 checkout remains untouched.
 
+**Delivery:** commit `b682cd8` is published on
+`fix/leto-stack-storage-oracle`. GitHub compare confirms exact base
+`c1c8ab2` → head `b682cd8` is one commit ahead with four intended files.
+Draft PR creation was rejected by the GitHub connector with HTTP 403
+`Resource not accessible by integration`; no hosted gate or merge is claimed.
+Re-open publication when repository write authorization is available.
+
 ## ATLAS-LETO-CONTRACT-100 — Make shutdown regression value-semantic [patch, complete]
 
 **Owner:** Atlas session; scope is the Leto-ops parallel test assertion and

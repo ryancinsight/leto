@@ -8,7 +8,9 @@
       Rustdoc; verify the provider conformance count decreases.
 - [x] Record the exact provider commit and mutation control; preserve the
       dirty primary checkout.
-- [ ] Publish the exact provider branch and record hosted/publication status.
+- [x] Publish the exact provider branch and record the compare result.
+- [ ] Open the draft PR and collect hosted gates; blocked by connector HTTP
+      403 (`Resource not accessible by integration`).
 
 ## ATLAS-LETO-CONTRACT-100 [patch] — complete
 
