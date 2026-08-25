@@ -286,9 +286,9 @@ trait layer below exposes the same kernels as rank-2 methods.
   variant where a tolerance applies.
 - Direct solvers and scalars: `solve`, `solve_least_squares`, `det`, `inv`,
   `trace`, `matrix_rank`, `kron`, `matexp`, `matpow`, and `nnls`.
-- Iterative solvers: `ConjugateGradient` (SPD), `BiCGSTAB`, restarted `GMRES`,
-  and `LsqrSolver`, over the `LinearOperator` trait, with `Identity`, `Jacobi`,
-  `SOR`, `SSOR`, and `ILU` preconditioners.
+- Krylov recurrences (CG, BiCGSTAB, restarted GMRES, LSQR) are not part of
+  leto-ops: stack solver ownership moved to Athena (Atlas ADR 0033), whose
+  backend-generic solvers consume leto arrays through the operator seams.
 - A fluent rank-2 trait layer (ADR 0003) consolidates the ndarray strided-array
   and nalgebra matrix-method models onto the existing `Array2`/`ArrayView2`: any
   rank-2 receiver gains `matmul`, `norm_l1`/`norm_l2`/`norm_max`, `lu`, `qr`,
