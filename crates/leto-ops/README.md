@@ -33,9 +33,8 @@ let qr = a.qr()?;
   column-pivoted), Cholesky, UDU, Bunch-Kaufman, Hessenberg, bidiagonalization,
   rank-revealing thin SVD, symmetric and Hermitian eigensolvers, the
   general non-symmetric `eigenvalues`, and real `schur`.
-- Direct and iterative solvers: `solve`, `solve_least_squares`, `pinv`, plus
-  `ConjugateGradient`, `BiCGSTAB`, `GMRES`, and `LsqrSolver` with Jacobi, SOR,
-  SSOR, and ILU preconditioners.
+- Direct solvers: `solve`, `solve_least_squares` (column-pivoted QR), and
+  `pinv`. Krylov recurrences live in Athena (Atlas ADR 0033), not here.
 - Sparse `CooMatrix` / `CsrMatrix` / `CscMatrix` with `spmv`, `spmm`, `spgemm`,
   and a sparse LU (`SparseLuSolver`).
 - A fluent rank-2 trait layer (`MatrixProduct`, `MatrixNorm`,
