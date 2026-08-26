@@ -22,7 +22,7 @@ fn rank_cutoff_ratio<T: RealScalar>() -> T {
 /// handled** (unlike a normal-equations or full-rank-only inverse).
 ///
 /// Dropping a direction here is safe precisely because
-/// [`svd_decompose`](super::svd_decompose) materializes an orthonormal `U`
+/// [`svd_decompose`] materializes an orthonormal `U`
 /// column for every singular value including the zero ones: the retained
 /// directions form an orthonormal basis of the numerical range, so
 /// `Σ⁺Σ` is the identity on them and the Moore-Penrose identities close.

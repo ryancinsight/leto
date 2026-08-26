@@ -1,5 +1,6 @@
 pub mod arithmetic;
 pub mod array_api;
+pub mod assignment;
 pub mod chunks;
 pub mod dynamic;
 pub mod geometry;

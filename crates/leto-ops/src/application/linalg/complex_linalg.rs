@@ -1,7 +1,8 @@
 //! Complex linear algebra: Gaussian elimination for `Array2<Complex<f64>>`.
 //!
 //! These are the generic complex counterparts of the real LU-based routines in
-//! `lu.rs`.  They complement [`leto_ops`] for beamforming, acoustics, and any
+//! `lu.rs`. They complement the other `leto-ops` kernels for beamforming,
+//! acoustics, and any
 //! application that requires complex-valued linear system solves.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]

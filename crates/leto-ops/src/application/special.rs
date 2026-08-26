@@ -1,15 +1,16 @@
 //! Special mathematical functions — SSOT for the Atlas simulation stack.
 //!
 //! Functions here are pure numerics without domain-specific coupling.
-//! They complement [`eunomia`] (scalar types) and [`leto-ops`] linalg kernels.
+//! They complement [`eunomia`] scalar types and the `leto-ops` linear-algebra
+//! kernels.
 //!
 //! ## Functions
 //!
 //! | Function | Description |
 //! |----------|-------------|
-//! | [`sinc`] | Unnormalized cardinal sine sin(x)/x |
-//! | [`erf`] | Gaussian error function (A&S 7.1.26) |
-//! | [`j0`], [`j1`], [`jn`] | Bessel functions of the first kind |
+//! | [Sinc](crate::application::special::sinc) | Unnormalized cardinal sine sin(x)/x |
+//! | [Error function](crate::application::special::erf) | Gaussian error function (A&S 7.1.26) |
+//! | [J₀](crate::application::special::j0), [J₁](crate::application::special::j1), [Jₙ](crate::application::special::jn) | Bessel functions of the first kind |
 
 /// Unnormalized cardinal sine `sinc(x) = sin(x)/x`, with the removable
 /// singularity `sinc(0) = 1`.

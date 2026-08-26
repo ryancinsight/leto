@@ -7,9 +7,9 @@
 //!
 //! | Type | Method | Points required |
 //! |------|--------|----------------|
-//! | [`LinearInterpolation`] | Piecewise-linear | ≥ 2 |
-//! | [`CubicSplineInterpolation`] | Natural cubic spline | ≥ 3 |
-//! | [`LagrangeInterpolation`] | Barycentric Lagrange | ≥ 2 |
+//! | [Linear](crate::application::interpolation::LinearInterpolation) | Piecewise-linear | ≥ 2 |
+//! | [Cubic spline](crate::application::interpolation::CubicSplineInterpolation) | Natural cubic spline | ≥ 3 |
+//! | [Lagrange](crate::application::interpolation::LagrangeInterpolation) | Barycentric Lagrange | ≥ 2 |
 //!
 //! ## Usage
 //!

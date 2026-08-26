@@ -1,5 +1,60 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-08-26 Apollo FFT layout-copy baseline
+
+Apollo's non-contiguous 2-D and 3-D FFT axis passes use caller-owned scratch
+and cache-tiled gather/scatter loops. Leto's existing caller-owned `assign`
+contract is value-correct for the same transposed views, but it converts every
+linear position to an N-dimensional index and performs checked source and
+destination lookup per element.
+
+The locked `layout_copy` Criterion instrument reuses identical source and
+output allocations between candidates and keeps view construction outside the
+timed closures. Median and 95% confidence intervals on the default Windows
+workstation are:
+
+| Shape | Direction | Leto `assign` | Apollo tiled loop | Ratio |
+|---|---:|---:|---:|---:|
+| 4096×16 | gather | 753.62 µs [747.54, 759.14] | 26.010 µs [25.747, 26.432] | 29.0× |
+| 4096×16 | scatter | 747.83 µs [743.04, 752.47] | 28.851 µs [28.386, 29.279] | 25.9× |
+| 4096×64 | gather | 3.1190 ms [3.0997, 3.1340] | 165.06 µs [163.29, 167.65] | 18.9× |
+| 4096×64 | scatter | 3.7923 ms [3.7586, 3.8246] | 174.19 µs [171.51, 177.33] | 21.8× |
+| 16384×16 | gather | 3.0940 ms [3.0847, 3.1056] | 202.27 µs [200.96, 205.07] | 15.3× |
+| 16384×16 | scatter | 3.1699 ms [3.1543, 3.1857] | 172.02 µs [169.38, 174.31] | 18.4× |
+| 65536×4 | gather | 3.0278 ms [3.0168, 3.0511] | 143.89 µs [141.43, 145.81] | 21.0× |
+| 65536×4 | scatter | 3.0087 ms [2.9903, 3.0232] | 153.19 µs [149.14, 156.62] | 19.6× |
+
+Every confidence interval is disjoint. This establishes a Leto traversal
+implementation gap, not an allocation result or an Apollo FFT-arithmetic gap.
+The accepted implementation target is one validated assignment kernel shared
+by owned arrays and mutable views, with a tiled rank-2 transpose route and a
+structural bounds-elided fallback for other strided layouts.
+
+The candidate implements that target without unsafe code or transient
+allocation. Same-binary post-change medians are:
+
+| Shape | Direction | Leto candidate | Apollo tiled loop | Descriptive comparison |
+|---|---:|---:|---:|---:|
+| 4096×16 | gather | 23.526 µs [23.299, 23.739] | 25.947 µs [25.459, 26.290] | Leto median 9.3% lower; intervals disjoint |
+| 4096×16 | scatter | 28.290 µs [27.963, 28.711] | 28.580 µs [28.169, 29.075] | intervals overlap |
+| 4096×64 | gather | 174.46 µs [172.36, 176.63] | 175.21 µs [173.20, 176.34] | intervals overlap |
+| 4096×64 | scatter | 172.26 µs [168.98, 177.58] | 176.97 µs [174.52, 180.29] | intervals overlap |
+| 16384×16 | gather | 156.80 µs [155.95, 158.24] | 166.85 µs [164.27, 169.95] | Leto median 6.0% lower; intervals disjoint |
+| 16384×16 | scatter | 163.07 µs [160.69, 166.01] | 185.15 µs [183.65, 186.87] | Leto median 11.9% lower; intervals disjoint |
+| 65536×4 | gather | 142.88 µs [140.11, 146.23] | 149.88 µs [147.80, 152.86] | Leto median 4.7% lower; intervals disjoint |
+| 65536×4 | scatter | 151.54 µs [149.00, 155.67] | 150.74 µs [148.57, 154.28] | intervals overlap |
+
+Each candidate is a separate Criterion function, so these are independent
+samples within one binary rather than paired observations. Relative medians
+are descriptive; overlapping confidence intervals are inconclusive, and this
+instrument does not establish formal non-inferiority. Four rows have disjoint
+intervals favoring Leto and four overlap. The manual candidate's absolute time
+also moved between binaries, consistent with code placement and host variance,
+so the stored entry baseline establishes only that checked logical indexing was
+the dominant prior cost, not an exact cross-binary improvement percentage. This
+establishes layout-copy throughput only. Apollo integration still must verify
+full FFT behavior and steady-state allocation.
+
 ## 2026-08-20 Stack-storage constructor oracle — closed
 
 The capacity test in `crates/leto/tests/core/stack_storage.rs` used

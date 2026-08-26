@@ -7,7 +7,7 @@
 //!   larger matrices (delegates to Jacobi for n ≤ 32).
 //!
 //! Both algorithms assume the input is Hermitian (`A[i,j] = conj(A[j,i])`).
-//! They complement the real symmetric solver in [`eigen.rs`].
+//! They complement the [real symmetric solver](crate::application::linalg::eigen).
 //!
 //! ## References
 //! - Golub & Van Loan (2013). *Matrix Computations*, §8.4 (Jacobi), §8.3 (QR).

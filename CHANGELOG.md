@@ -29,6 +29,19 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [minor] Built-in `Array` and `ArrayView` assignment sources now expose their
+  borrowed layout to one shared, allocation-free assignment kernel.
+  C-dense copies use `copy_from_slice`; C-destination/F-source rank-2 copies
+  use a cache-budget-derived tiled transpose; other injective layouts use
+  validated logical iterators. `ArrayViewMut::try_assign` adds a typed-error
+  counterpart to `assign`. Shape and storage validation complete before
+  built-in writes, while aliased destinations and external `AssignSource`
+  implementations preserve the prior checked logical-overwrite semantics.
+  At Apollo's four FFT aspect ratios, final same-binary observations place the
+  Leto median from 0.5% above to 11.9% below Apollo's manual tiled-loop median.
+  The independent Criterion samples are reported without a formal
+  non-inferiority claim.
+
 - [major] `Layout` no longer exposes `shape`, `strides` and `offset` as public
   fields, `Layout::new` is removed, and the struct is `#[non_exhaustive]`.
   `Layout::try_new` (and the equivalent

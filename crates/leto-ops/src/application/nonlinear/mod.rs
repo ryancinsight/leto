@@ -2,7 +2,8 @@
 //!
 //! ## Algorithms
 //!
-//! - [`anderson`]: Anderson Acceleration (Type-II MGS-QR variant, VecDeque history)
+//! - [Anderson acceleration](crate::application::nonlinear::anderson): Type-II
+//!   MGS-QR variant with `VecDeque` history
 //!   for fixed-point iterations. Achieves superlinear convergence without an
 //!   explicit Jacobian (Anderson 1965; Walker & Ni 2011).
 //!

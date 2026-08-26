@@ -7,20 +7,22 @@
 //!
 //! | Type | Order | Points |
 //! |------|-------|--------|
-//! | [`TrapezoidalRule`] | 2 | 2 |
-//! | [`SimpsonsRule`] | 4 | 3 |
-//! | [`GaussLegendre2`] | 4 (exact for deg ≤ 3) | 2 |
-//! | [`GaussLegendre3`] | 6 (exact for deg ≤ 5) | 3 |
-//! | [`GaussLegendre5`] | 10 (exact for deg ≤ 9) | 5 |
-//! | [`GaussLegendreN`] | 2n−1 (exact for deg ≤ 2n−1) | n (arbitrary) |
-//! | [`CompositeQuadrature`] | variable | n panels |
+//! | [Trapezoidal](crate::application::quadrature::TrapezoidalRule) | 2 | 2 |
+//! | [Simpson](crate::application::quadrature::SimpsonsRule) | 4 | 3 |
+//! | [Gauss-Legendre 2](crate::application::quadrature::GaussLegendre2) | 4 (exact for deg ≤ 3) | 2 |
+//! | [Gauss-Legendre 3](crate::application::quadrature::GaussLegendre3) | 6 (exact for deg ≤ 5) | 3 |
+//! | [Gauss-Legendre 5](crate::application::quadrature::GaussLegendre5) | 10 (exact for deg ≤ 9) | 5 |
+//! | [Gauss-Legendre n](crate::application::quadrature::GaussLegendreN) | 2n−1 (exact for deg ≤ 2n−1) | n (arbitrary) |
+//! | [Composite](crate::application::quadrature::CompositeQuadrature) | variable | n panels |
 //!
 //! ## Arbitrary-order Gauss-Legendre
 //!
-//! [`gauss_legendre_nodes_weights`] computes n-point GL nodes and weights on
+//! [`gauss_legendre_nodes_weights`](crate::application::quadrature::gauss_legendre_nodes_weights)
+//! computes n-point GL nodes and weights on
 //! [-1, 1] via Newton iteration backed by `legendre_poly_and_deriv` (SSOT).
 //! Weights satisfy `∑ wᵢ = 2` and are exact for polynomials up to degree 2n−1.
-//! [`GaussLegendreN`] wraps these as a `Quadrature<f64>` rule.
+//! [`GaussLegendreN`](crate::application::quadrature::GaussLegendreN) wraps these as a
+//! `Quadrature<f64>` rule.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
@@ -207,7 +209,7 @@ impl<T: RealField + FloatElement + Copy> Quadrature<T> for GaussLegendre5 {
 /// Composite quadrature: applies a base rule to each of `n_panels` uniform panels.
 ///
 /// **Theorem** (composite p-point Gauss, Burden & Faires §4.4): for
-/// f ∈ C^{2p}([a,b]) the error is O(h^{2p}) where h = (b−a)/n.
+/// f ∈ C^{2p}(\[a,b\]) the error is O(h^{2p}) where h = (b−a)/n.
 #[derive(Debug, Clone)]
 pub struct CompositeQuadrature<Q> {
     base: Q,

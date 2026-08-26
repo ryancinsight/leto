@@ -1146,6 +1146,13 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 - [x] [patch] Sync README role, layer boundary, linear-algebra features, and replacement status with the audited state.
 
 ## Next increments (ordered)
+
+- [ ] `LETO-FFT-LAYOUT-THROUGHPUT` (owner: Codex
+  `01a0253c-6013-7552-99cc-36bbbcf77f6d`): preserve the exact Hermes provider
+  pin; measure Apollo's 2-D/3-D tiled gather/scatter boundary; implement and
+  benchmark the justified caller-owned Leto permutation path; migrate Apollo;
+  run value, differential, allocation, performance, documentation, and
+  consumer gates.
 - [x] [minor] Contiguous-slice view access (`as_slice`/`as_mut_slice` now offset-independent C-dense, `as_slice_memory_order`/`as_mut_slice_memory_order`, `is_c_contiguous`/`is_f_contiguous`/`is_contiguous` queries) — unblocks Apollo FFT hot kernels. Value tests: offset-contiguous subview, F-order block, strided-gap rejection, mutable offset-block write.
 - [x] [patch] `map_inplace` (mapv_inplace analogue) and 1D `dot` (contiguous + strided). Value tests in `ops/unary_math.rs`.
 - [x] [major] ADR: const-rank vs dynamic-rank boundary for Coeus integration — `docs/adr/0002-coeus-rank-boundary.md` (const-generic dispatch shim at the Coeus boundary; Leto stays const-rank).

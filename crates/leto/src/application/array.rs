@@ -24,6 +24,18 @@ pub trait AssignSource<T, const N: usize> {
     /// # Errors
     /// Returns [`LetoError`] when the index is out of bounds for the source.
     fn assign_get(&self, index: [usize; N]) -> Result<&T>;
+
+    /// Borrow the source as a validated strided view when its representation
+    /// supports zero-copy traversal.
+    ///
+    /// The view must have the shape returned by [`Self::assign_shape`] and each
+    /// logical element must equal the corresponding [`Self::assign_get`] value.
+    /// Implementors outside Leto may retain the default checked-index route.
+    #[doc(hidden)]
+    #[inline]
+    fn assign_view(&self) -> Option<ArrayView<'_, T, N>> {
+        None
+    }
 }
 
 impl<T, S, const N: usize> AssignSource<T, N> for Array<T, S, N>
@@ -39,6 +51,11 @@ where
     fn assign_get(&self, index: [usize; N]) -> Result<&T> {
         self.get(index)
     }
+
+    #[inline]
+    fn assign_view(&self) -> Option<ArrayView<'_, T, N>> {
+        Some(self.view())
+    }
 }
 
 impl<T, const N: usize> AssignSource<T, N> for ArrayView<'_, T, N> {
@@ -50,6 +67,11 @@ impl<T, const N: usize> AssignSource<T, N> for ArrayView<'_, T, N> {
     #[inline]
     fn assign_get(&self, index: [usize; N]) -> Result<&T> {
         self.get(index)
+    }
+
+    #[inline]
+    fn assign_view(&self) -> Option<ArrayView<'_, T, N>> {
+        Some(self.reborrow())
     }
 }
 
@@ -641,45 +663,6 @@ where
         Ok(&mut slice[offset])
     }
 
-    /// Assign all elements from another array with the same shape.
-    ///
-    /// # Errors
-    /// Returns [`LetoError`] when the shapes differ.
-    #[inline]
-    pub fn try_assign<Rhs>(&mut self, rhs: &Rhs) -> Result<()>
-    where
-        T: Copy,
-        Rhs: AssignSource<T, N>,
-    {
-        let shape = self.shape();
-        if shape != rhs.assign_shape() {
-            return Err(LetoError::ShapeMismatch {
-                lhs: shape.to_vec(),
-                rhs: rhs.assign_shape().to_vec(),
-            });
-        }
-
-        for linear in 0..self.size() {
-            let index = linear_to_index(linear, shape);
-            *self.get_mut(index)? = *rhs.assign_get(index)?;
-        }
-        Ok(())
-    }
-
-    /// Assign all elements from another array with the same shape.
-    ///
-    /// # Panics
-    /// Panics when the shapes differ.
-    #[inline]
-    pub fn assign<Rhs>(&mut self, rhs: &Rhs)
-    where
-        T: Copy,
-        Rhs: AssignSource<T, N>,
-    {
-        self.try_assign(rhs)
-            .expect("invariant: assigned arrays have identical shape");
-    }
-
     /// Add `alpha * rhs` to `self` in place.
     ///
     /// # Panics
@@ -714,7 +697,7 @@ where
     }
 }
 
-fn linear_to_index<const N: usize>(mut linear: usize, shape: [usize; N]) -> [usize; N] {
+pub(crate) fn linear_to_index<const N: usize>(mut linear: usize, shape: [usize; N]) -> [usize; N] {
     let mut index = [0; N];
     for axis in (0..N).rev() {
         let extent = shape[axis];

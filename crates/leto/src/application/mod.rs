@@ -4,6 +4,7 @@ pub mod aliases;
 pub mod arithmetic;
 /// Owned array type.
 pub mod array;
+mod assign;
 /// Named row and column view helpers.
 mod axis;
 mod constructors;
