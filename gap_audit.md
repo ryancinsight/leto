@@ -1,5 +1,35 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-08-26 Apollo FFT layout-copy baseline
+
+Apollo's non-contiguous 2-D and 3-D FFT axis passes use caller-owned scratch
+and cache-tiled gather/scatter loops. Leto's existing caller-owned `assign`
+contract is value-correct for the same transposed views, but it converts every
+linear position to an N-dimensional index and performs checked source and
+destination lookup per element.
+
+The locked `layout_copy` Criterion instrument reuses identical source and
+output allocations between candidates and keeps view construction outside the
+timed closures. Median and 95% confidence intervals on the default Windows
+workstation are:
+
+| Shape | Direction | Leto `assign` | Apollo tiled loop | Ratio |
+|---|---:|---:|---:|---:|
+| 4096×16 | gather | 753.62 µs [747.54, 759.14] | 26.010 µs [25.747, 26.432] | 29.0× |
+| 4096×16 | scatter | 747.83 µs [743.04, 752.47] | 28.851 µs [28.386, 29.279] | 25.9× |
+| 4096×64 | gather | 3.1190 ms [3.0997, 3.1340] | 165.06 µs [163.29, 167.65] | 18.9× |
+| 4096×64 | scatter | 3.7923 ms [3.7586, 3.8246] | 174.19 µs [171.51, 177.33] | 21.8× |
+| 16384×16 | gather | 3.0940 ms [3.0847, 3.1056] | 202.27 µs [200.96, 205.07] | 15.3× |
+| 16384×16 | scatter | 3.1699 ms [3.1543, 3.1857] | 172.02 µs [169.38, 174.31] | 18.4× |
+| 65536×4 | gather | 3.0278 ms [3.0168, 3.0511] | 143.89 µs [141.43, 145.81] | 21.0× |
+| 65536×4 | scatter | 3.0087 ms [2.9903, 3.0232] | 153.19 µs [149.14, 156.62] | 19.6× |
+
+Every confidence interval is disjoint. This establishes a Leto traversal
+implementation gap, not an allocation result or an Apollo FFT-arithmetic gap.
+The accepted implementation target is one validated assignment kernel shared
+by owned arrays and mutable views, with a tiled rank-2 transpose route and a
+structural bounds-elided fallback for other strided layouts.
+
 ## 2026-08-20 Stack-storage constructor oracle — closed
 
 The capacity test in `crates/leto/tests/core/stack_storage.rs` used

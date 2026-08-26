@@ -1221,8 +1221,12 @@ and oracle parity, the allocation census, and no statistically significant
 regression at accepted shapes. Risk: public additive API and
 throughput-sensitive memory ordering. Integrator: Codex
 `01a0253c-6013-7552-99cc-36bbbcf77f6d`. Dependencies: merged Hermes provider
-revision `bbc7bdb` and Apollo PR #125. Lease: `backlog.md`, `checklist.md`, and
-`Cargo.lock` through the prerequisite pin commit. Last update: 2026-08-26.
+revision `bbc7bdb` and Apollo PR #125. Lease: `crates/leto-ops/Cargo.toml`,
+`crates/leto-ops/benches/layout_copy.rs`, and this item entry through the
+baseline-instrument commit. Baseline: checked `assign` is 15.3–29.0× slower
+than Apollo's same-address tiled loop across four FFT shapes, with disjoint 95%
+confidence intervals in both directions; see `gap_audit.md`. Last update:
+2026-08-26.
 Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto` boundaries; these items unblock replacing ndarray inside the kernels.
 - [x] [minor] Add contiguous-slice access on views: `as_slice`/`as_mut_slice` (now offset-independent C-dense) plus `as_slice_memory_order`/`as_mut_slice_memory_order` and `is_c_contiguous`/`is_f_contiguous`/`is_contiguous` queries (named Apollo FFT butterfly blocker). Value tests cover offset-contiguous subviews, F-order blocks, strided-gap rejection, and mutable offset-block writes.
 - [x] [patch] Add `map_inplace` in-place unary mutation (Apollo 1/N normalization sites); memory-order fast path, zero-stride aliasing rejected.
