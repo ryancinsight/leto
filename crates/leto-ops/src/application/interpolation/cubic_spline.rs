@@ -2,7 +2,7 @@
 //!
 //! Minimises bending energy ∫[S''(x)]² dx subject to S(xᵢ) = yᵢ.
 //!
-//! **Error bound** (Burden & Faires): for f ∈ C⁴([a,b]) and mesh step h,
+//! **Error bound** (Burden & Faires): for f ∈ C⁴(\[a,b\]) and mesh step h,
 //! ‖f − S‖_∞ ≤ (5/384) h⁴ ‖f⁽⁴⁾‖_∞.
 //!
 //! ## Reference

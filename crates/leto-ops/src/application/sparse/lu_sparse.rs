@@ -87,13 +87,15 @@ pub const DENSITY_THRESHOLD_DEFAULT: f64 = 0.1;
 /// ZST-equivalent `Copy` enum selected at the symbolic-analysis stage.
 /// Dispatch is by exhaustive match — no vtable, no per-strategy struct.
 /// Adding a new strategy is one enum variant and one match arm in
-/// [`factor_symbolic_with_ordering`]; see [`crate::application::sparse::amd`]
-/// for the AMD implementation.
+/// [`factor_symbolic_with_ordering`]; see
+/// [`amd_order`](crate::application::sparse::amd_order) for the AMD
+/// implementation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[must_use = "OrderingStrategy controls fill in the sparse LU pattern"]
 pub enum OrderingStrategy {
     /// Natural column ordering (`0, 1, …, n-1`). Default; preserves the
-    /// existing [`factor_symbolic`] convention. The right choice when the
+    /// existing [`factor_symbolic`](crate::application::sparse::factor_symbolic)
+    /// convention. The right choice when the
     /// input is already banded or pivoting-free with small bandwidth —
     /// CFDrs's saddle-point blocks.
     #[default]
@@ -113,7 +115,7 @@ pub enum OrderingStrategy {
 /// the same knobs (`max_size`, `pivot_tolerance`) so call-sites can transition
 /// without structural changes. The new `small_switch` and `density_threshold`
 /// knobs control the dense↔sparse dispatch and default to measured crossovers
-/// (see [`SMALL_SWITCH_DEFAULT`] and [`DENSITY_THRESHOLD_DEFAULT`]).
+/// (see `SMALL_SWITCH_DEFAULT` and `DENSITY_THRESHOLD_DEFAULT`).
 #[derive(Debug, Clone)]
 #[must_use = "SparseLuSolver carries the dispatch configuration consumed by solve"]
 pub struct SparseLuSolver {
@@ -331,7 +333,8 @@ impl SparseLuSolver {
     /// partial-pivoting LU, and a sparse factorization that reports
     /// pivoting-required falls back to the dense path — so the returned
     /// factor is defined for any nonsingular input within `max_size`.
-    /// Callers with an unchanged pattern amortize [`factor_symbolic`]
+    /// Callers with an unchanged pattern amortize
+    /// [`factor_symbolic`](crate::application::sparse::factor_symbolic)
     /// across refactorizations (the CFDrs block-preconditioner cache is
     /// the driving consumer); `symbolic` is consulted only on the sparse
     /// arm and must describe `matrix`'s pattern.
@@ -513,8 +516,8 @@ impl<T: RealScalar> OwnedNumericLu<T> {
 /// Convenience: solve `A · x = b` in one call without constructing a solver.
 ///
 /// Uses [`DENSE_LIMIT_DEFAULT`] as the maximum system order and the
-/// measured dispatch thresholds [`SMALL_SWITCH_DEFAULT`] and
-/// [`DENSITY_THRESHOLD_DEFAULT`].
+/// measured dispatch thresholds `SMALL_SWITCH_DEFAULT` and
+/// `DENSITY_THRESHOLD_DEFAULT`.
 ///
 /// # Errors
 /// Forwards all errors from [`SparseLuSolver::solve`].

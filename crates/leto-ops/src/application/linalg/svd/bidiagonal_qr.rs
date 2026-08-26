@@ -18,7 +18,7 @@
 //! the implicit `BᵀB` is singular and the sweep reaches a fixed point at
 //! `d = 0`, `e ≠ 0` instead of deflating. That case is handled separately, by
 //! rotating the offending row (or trailing column) out of the block; see
-//! [`chase_negligible_diagonal_row`] and [`chase_negligible_diagonal_column`].
+//! `chase_negligible_diagonal_row` and `chase_negligible_diagonal_column`.
 //!
 //! This module provides both the singular **values** (no `U`/`V` accumulation —
 //! a zero-cost const-generic specialization) and the full thin SVD with `U`/`V`
@@ -262,7 +262,7 @@ fn chase_negligible_diagonal_row<T: RealScalar, const VEC: bool>(
 /// Zero the superdiagonal `e[q-1]` above a negligible **trailing** diagonal
 /// `d[q]`, deflating `σ = 0` off the bottom of the block.
 ///
-/// The transpose of [`chase_negligible_diagonal_row`]: with `B[q,q] = 0` the
+/// The transpose of `chase_negligible_diagonal_row`: with `B[q,q] = 0` the
 /// last column of the block holds only `e[q-1]`, so column rotations `(j, q)`
 /// for `j = q-1 … p` annihilate it against `d[j]` and chase the fill `−s·e[j-1]`
 /// one row up per step, out of the top of the block. Column `q` ends zero, so

@@ -91,7 +91,7 @@ impl<'a, T: RealScalar> NumericLu<'a, T> {
     }
 
     /// Row permutation: `row_perm[i]` is the original row index that ends
-    /// up in slot `i` after pivoting. Used by [`solve`] to permute the RHS.
+    /// up in slot `i` after pivoting. Used by [`Self::solve`] to permute the RHS.
     #[must_use]
     #[inline]
     pub fn row_perm(&self) -> &[usize] {

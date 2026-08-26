@@ -5,8 +5,10 @@
 //!
 //! ## Modules
 //!
-//! - [`window`]: Spectral apodization/window coefficients (Hann, Hamming, Blackman, Tukey).
-//! - [`phase`]: Phase-angle arithmetic on the circle (`wrap_to_pi`).
+//! - [Window functions](crate::application::signal::window): spectral
+//!   apodization coefficients (Hann, Hamming, Blackman, Tukey).
+//! - [Phase](crate::application::signal::phase): angle arithmetic on the circle
+//!   (`wrap_to_pi`).
 
 pub mod phase;
 pub mod window;

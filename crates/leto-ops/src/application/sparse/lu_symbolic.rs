@@ -51,7 +51,8 @@ use crate::domain::scalar::Scalar;
 /// under natural column ordering, encoded as paired CSC index arrays.
 ///
 /// This is the pivoting-free upper bound on fill. The numeric phase in
-/// [`crate::application::sparse::lu_numeric`] consumes this pattern and
+/// [`factor_numeric`](crate::application::sparse::factor_numeric) consumes
+/// this pattern and
 /// records the actual row permutation produced by partial pivoting.
 ///
 /// # Storage convention

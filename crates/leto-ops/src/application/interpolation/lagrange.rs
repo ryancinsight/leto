@@ -30,7 +30,7 @@ impl<T: RealField + FloatElement + Copy> LagrangeInterpolation<T> {
     /// Construct from node data.  Computes barycentric weights in O(n²).
     ///
     /// # Errors
-    /// Same as [`LinearInterpolation::new`].
+    /// Same as [`super::LinearInterpolation::new`].
     pub fn new(x_data: Vec<T>, y_data: Vec<T>) -> Result<Self> {
         if x_data.len() != y_data.len() {
             return Err(LetoError::InvalidInput(

@@ -1216,15 +1216,15 @@ duplicated loops, and preserves zero steady-state allocation. FFT arithmetic,
 Apollo pass scheduling, and GPU dispatch are non-goals. Acceptance covers
 analytical and ndarray-differential permutation tests (rectangular, empty,
 singleton, invalid-axis, aliasing, and failure-atomic cases), a same-address
-Criterion comparison against Apollo's current loop, Apollo 2-D/3-D round trips
-and oracle parity, the allocation census, and no statistically significant
-regression at accepted shapes. Risk: public additive API and
+Criterion observations against Apollo's current loop, reported without a
+formal non-inferiority claim; Apollo 2-D/3-D round trips and oracle parity; and
+the allocation census. Risk: public additive API and
 throughput-sensitive memory ordering. Integrator: Codex
 `01a0253c-6013-7552-99cc-36bbbcf77f6d`. Dependencies: merged Hermes provider
-revision `bbc7bdb` and Apollo PR #125. Lease:
-`crates/leto/src/application/{assign,array,view,mod}.rs`,
-`crates/leto/tests/core/{assignment,mod}.rs`, and this item entry through the
-assignment-kernel commit. Baseline: checked `assign` is 15.3–29.0× slower
+revision `bbc7bdb` and Apollo PR #125. Lease: `crates/leto-ops/src/application`
+Rustdoc links and this item entry through the workspace-doc repair commit.
+Provider commit `5410f47` adds the validated assignment kernel and its
+adversarial layout tests. Baseline: checked `assign` is 15.3–29.0× slower
 than Apollo's same-address tiled loop across four FFT shapes, with disjoint 95%
 confidence intervals in both directions; see `gap_audit.md`. Last update:
 2026-08-26.
