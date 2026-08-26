@@ -1206,6 +1206,23 @@ while Hephaestus owns accelerator attention.
 - [ ] [arch] Re-base Coeus's CPU storage/layout layer onto Leto types (or thin adapters) and delete the duplicate, as a coordinated cross-repo unit per the co-evolution protocol; file the consumer-side item in the Coeus backlog naming Leto as provider.
 
 ## Phase 7: ndarray Parity Completion (Apollo hot kernels) [minor]
+
+`LETO-FFT-LAYOUT-THROUGHPUT` [minor] is in progress. It provides the measured,
+caller-owned layout-movement primitive required by Apollo's non-contiguous 2-D
+and 3-D FFT axis passes. The implementation profiles the existing cache-tiled
+gather/scatter loops first, adds one rank- and scalar-generic Leto operation
+only when the profile confirms the provider boundary, replaces Apollo's
+duplicated loops, and preserves zero steady-state allocation. FFT arithmetic,
+Apollo pass scheduling, and GPU dispatch are non-goals. Acceptance covers
+analytical and ndarray-differential permutation tests (rectangular, empty,
+singleton, invalid-axis, aliasing, and failure-atomic cases), a same-address
+Criterion comparison against Apollo's current loop, Apollo 2-D/3-D round trips
+and oracle parity, the allocation census, and no statistically significant
+regression at accepted shapes. Risk: public additive API and
+throughput-sensitive memory ordering. Integrator: Codex
+`01a0253c-6013-7552-99cc-36bbbcf77f6d`. Dependencies: merged Hermes provider
+revision `bbc7bdb` and Apollo PR #125. Lease: `backlog.md`, `checklist.md`, and
+`Cargo.lock` through the prerequisite pin commit. Last update: 2026-08-26.
 Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto` boundaries; these items unblock replacing ndarray inside the kernels.
 - [x] [minor] Add contiguous-slice access on views: `as_slice`/`as_mut_slice` (now offset-independent C-dense) plus `as_slice_memory_order`/`as_mut_slice_memory_order` and `is_c_contiguous`/`is_f_contiguous`/`is_contiguous` queries (named Apollo FFT butterfly blocker). Value tests cover offset-contiguous subviews, F-order blocks, strided-gap rejection, and mutable offset-block writes.
 - [x] [patch] Add `map_inplace` in-place unary mutation (Apollo 1/N normalization sites); memory-order fast path, zero-stride aliasing rejected.
