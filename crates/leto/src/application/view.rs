@@ -791,36 +791,6 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             crate::domain::remove_axis::RankMarker::<N>,
         )
     }
-
-    /// Copy elements from `rhs` into this mutable view (leto `assign` parity).
-    ///
-    /// Walks both views in logical row-major order, so it is correct for any
-    /// strides. Panics when shapes differ.
-    ///
-    /// # Panics
-    /// Panics when `rhs.shape() != self.shape()`.
-    pub fn assign<Rhs>(&mut self, rhs: &Rhs)
-    where
-        T: Copy,
-        Rhs: crate::application::array::AssignSource<T, N>,
-    {
-        let shape = self.shape();
-        assert_eq!(shape, rhs.assign_shape(), "assign: shape mismatch");
-        let size = shape.iter().product::<usize>();
-        let mut index = [0usize; N];
-        for _ in 0..size {
-            let src = rhs.assign_get(index).expect("rhs element in bounds");
-            *self.get_mut(index).expect("dst element in bounds") = *src;
-            // Row-major odometer increment.
-            for d in (0..N).rev() {
-                index[d] += 1;
-                if index[d] < shape[d] {
-                    break;
-                }
-                index[d] = 0;
-            }
-        }
-    }
 }
 
 // ── Index / IndexMut for ArrayView and ArrayViewMut ──────────────────────────

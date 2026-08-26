@@ -1221,9 +1221,10 @@ and oracle parity, the allocation census, and no statistically significant
 regression at accepted shapes. Risk: public additive API and
 throughput-sensitive memory ordering. Integrator: Codex
 `01a0253c-6013-7552-99cc-36bbbcf77f6d`. Dependencies: merged Hermes provider
-revision `bbc7bdb` and Apollo PR #125. Lease: `crates/leto-ops/Cargo.toml`,
-`crates/leto-ops/benches/layout_copy.rs`, and this item entry through the
-baseline-instrument commit. Baseline: checked `assign` is 15.3–29.0× slower
+revision `bbc7bdb` and Apollo PR #125. Lease:
+`crates/leto/src/application/{assign,array,view,mod}.rs`,
+`crates/leto/tests/core/{assignment,mod}.rs`, and this item entry through the
+assignment-kernel commit. Baseline: checked `assign` is 15.3–29.0× slower
 than Apollo's same-address tiled loop across four FFT shapes, with disjoint 95%
 confidence intervals in both directions; see `gap_audit.md`. Last update:
 2026-08-26.
