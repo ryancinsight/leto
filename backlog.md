@@ -1,5 +1,25 @@
 # Leto Work Backlog
 
+## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [minor, in progress]
+
+**Outcome:** let allocation-sensitive consumers initialize final
+`MnemosyneStorage` directly without an intermediate `Vec` or default-fill pass.
+
+**Scope:** the Mnemosyne storage constructor, Leto array construction boundary,
+generic value-semantic and drop-safety tests, Rustdoc/ADR/CHANGELOG, and Apollo's
+3-D GPU consumer. No allocator replacement, uninitialized public storage, or
+GPU orchestration changes.
+
+**Acceptance:** one panic-safe generic initializer writes each element exactly
+once; `from_mnemosyne_shape_fn` uses it; values, zero length, non-Copy drops, and
+generator panic cleanup are verified; strict provider gates and SemVer pass;
+Apollo consumes the merged provider without an intermediate output allocation.
+
+**Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
+**Lease:** `crates/leto/src/infrastructure/storage/mnemosyne.rs`,
+`crates/leto/src/application/constructors.rs`, their focused tests, and this
+item through the next verified provider commit. **Last update:** 2026-08-27.
+
 ## ATLAS-LETO-STACK-STORAGE-ORACLE-2026-08-20 — Assert valid stack construction [patch, complete]
 
 **Finding:** `from_stack_validates_capacity` asserted only `is_ok()` for the

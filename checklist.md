@@ -1,5 +1,14 @@
 # Leto Development Checklist
 
+## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 [minor] — Codex
+
+- [ ] Add a panic-safe generic Mnemosyne storage initializer that writes each
+      element exactly once without an intermediate allocation.
+- [ ] Route rank-polymorphic `from_mnemosyne_shape_fn` through the initializer
+      and verify values, zero length, non-Copy drops, and panic cleanup.
+- [ ] Synchronize API docs, ADR, and changelog; pass strict focused/full gates,
+      SemVer, consumer verification, and provider-first delivery.
+
 ## ATLAS-LETO-STACK-STORAGE-ORACLE-2026-08-20 [patch] — complete
 
 - [x] Replace both capacity-path existence assertions with value-semantic
