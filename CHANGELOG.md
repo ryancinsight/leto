@@ -22,6 +22,17 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   (`as_slice`, `as_mut_slice`, `as_slice_memory_order`,
   `as_mut_slice_memory_order`) remain available; the new
   `ArrayViewMut::has_exclusive_window` reports the state.
+- [patch] Every leto-ops mutable-output entry point (element-wise maps, zip,
+  scan, random, reductions, matmul, convolution) now rejects non-injective
+  output layouts and iterator-yielded interleaved sub-views with a typed
+  error; serial kernels previously double-applied such outputs and parallel
+  kernels raced on them.
+- [patch] `sum` validates its view's storage up front and panics on a
+  malformed (storage-exceeding) view instead of silently skipping rows and
+  returning a truncated total.
+- [patch] `kron` computes its output dimensions with checked multiplication,
+  returning a typed overflow error instead of wrapping in release builds and
+  under-allocating the buffer its unchecked writes assume.
 
 ### Removed
 

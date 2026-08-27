@@ -1,4 +1,4 @@
-use crate::application::index::RowMajorTraversal;
+use crate::application::index::{validate_mutable_output, RowMajorTraversal};
 use leto::{ArrayView, ArrayViewMut, Layout, LetoError, Result};
 
 /// Fold two read-only views into one accumulator.
@@ -159,12 +159,7 @@ pub fn indexed_map_inplace<T, F, const N: usize>(
 where
     F: FnMut([usize; N], &mut T),
 {
-    view.layout().validate_storage_len(view.data().len())?;
-    if view.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "indexed mutable map layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_mutable_output(view, "indexed mutable map")?;
 
     let size = view.layout().checked_size()?;
     let shape = view.shape();
@@ -205,13 +200,7 @@ pub fn coordinate_map_inplace<T, F, const N: usize>(
 where
     F: FnMut(usize, [usize; N], &mut T),
 {
-    view.layout().validate_storage_len(view.data().len())?;
-    if view.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "coordinate mutable map layout must not contain zero-stride aliasing"
-                .to_string(),
-        });
-    }
+    validate_mutable_output(view, "coordinate mutable map")?;
 
     let shape = view.shape();
     let layout = view.layout();
@@ -264,13 +253,7 @@ impl<const N: usize> CoordinateMapPlan<N> {
     /// contains mutable zero-stride aliasing, or any coordinate is outside the
     /// view's logical shape.
     pub fn new<T>(view: &ArrayViewMut<'_, T, N>, coordinates: &[[usize; N]]) -> Result<Self> {
-        view.layout().validate_storage_len(view.data().len())?;
-        if view.layout().has_zero_stride_aliasing() {
-            return Err(LetoError::StorageError {
-                reason: "coordinate map plan layout must not contain zero-stride aliasing"
-                    .to_string(),
-            });
-        }
+        validate_mutable_output(view, "coordinate map plan")?;
 
         let shape = view.shape();
         let layout = view.layout();
@@ -326,13 +309,7 @@ impl<const N: usize> CoordinateMapPlan<N> {
     where
         F: FnMut(usize, [usize; N], &mut T),
     {
-        view.layout().validate_storage_len(view.data().len())?;
-        if view.layout().has_zero_stride_aliasing() {
-            return Err(LetoError::StorageError {
-                reason: "coordinate map plan target layout must not contain zero-stride aliasing"
-                    .to_string(),
-            });
-        }
+        validate_mutable_output(view, "coordinate map plan target")?;
         if view.layout() != self.layout {
             return Err(LetoError::StorageError {
                 reason: "coordinate map plan target layout differs from planned layout".to_string(),
@@ -402,20 +379,10 @@ where
         });
     }
 
-    a.layout().validate_storage_len(a.data().len())?;
-    b.layout().validate_storage_len(b.data().len())?;
-    c.layout().validate_storage_len(c.data().len())?;
-    d.layout().validate_storage_len(d.data().len())?;
-    if a.layout().has_zero_stride_aliasing()
-        || b.layout().has_zero_stride_aliasing()
-        || c.layout().has_zero_stride_aliasing()
-        || d.layout().has_zero_stride_aliasing()
-    {
-        return Err(LetoError::StorageError {
-            reason: "indexed multi-output map layouts must not contain zero-stride aliasing"
-                .to_string(),
-        });
-    }
+    validate_mutable_output(a, "indexed multi-output map")?;
+    validate_mutable_output(b, "indexed multi-output map")?;
+    validate_mutable_output(c, "indexed multi-output map")?;
+    validate_mutable_output(d, "indexed multi-output map")?;
 
     let size = a.layout().checked_size()?;
     let shape = a.shape();
@@ -677,13 +644,7 @@ impl_zip_sources_for_tuple!(A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8
 
 #[inline]
 fn validate_output<T, const N: usize>(output: &ArrayViewMut<'_, T, N>) -> Result<()> {
-    output.layout().validate_storage_len(output.data().len())?;
-    if output.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "zip mutable output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
-    Ok(())
+    validate_mutable_output(output, "zip mutable")
 }
 
 fn zip_one<T, S, F, const N: usize>(

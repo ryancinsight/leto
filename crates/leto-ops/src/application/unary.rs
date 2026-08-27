@@ -1,4 +1,6 @@
-use crate::application::index::{line_elements, RowMajorTraversal, TileGeometry};
+use crate::application::index::{
+    line_elements, validate_mutable_output, RowMajorTraversal, TileGeometry,
+};
 use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -25,12 +27,7 @@ fn validate_unary_storage<T, U, const N: usize>(
     output: &ArrayViewMut<'_, U, N>,
 ) -> Result<()> {
     input.layout().validate_storage_len(input.data().len())?;
-    output.layout().validate_storage_len(output.data().len())?;
-    if output.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "map output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_mutable_output(output, "map")?;
     Ok(())
 }
 
@@ -251,12 +248,7 @@ where
     T: Copy + Send + Sync + 'static,
     F: Fn(T) -> T + Copy + Send + Sync + 'static,
 {
-    view.layout().validate_storage_len(view.data().len())?;
-    if view.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "in-place map layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_mutable_output(view, "in-place map")?;
 
     if let Some(slice) = view.as_mut_slice_memory_order() {
         #[cfg(feature = "parallel")]

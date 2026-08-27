@@ -1,7 +1,7 @@
 //! Kronecker (tensor) product of two matrices.
 
 use crate::domain::scalar::Scalar;
-use leto::{Array2, ArrayView2, Result};
+use leto::{Array2, ArrayView2, LetoError, Result};
 
 /// Kronecker product `A ⊗ B`.
 ///
@@ -45,9 +45,18 @@ pub fn kron<T: Scalar>(a: &ArrayView2<'_, T>, b: &ArrayView2<'_, T>) -> Result<A
     // paths, but is validated too so both operands carry the same contract.
     a.layout().validate_storage_len(a.data().len())?;
     b.layout().validate_storage_len(b.data().len())?;
-    let rows = a_rows * b_rows;
-    let cols = a_cols * b_cols;
-    let mut values = vec![T::ZERO; rows * cols];
+    // Checked dimension products: a wrapped multiply would under-allocate
+    // `values` and turn the unchecked writes below out of bounds.
+    let rows = a_rows.checked_mul(b_rows).ok_or(LetoError::Overflow {
+        reason: "kronecker output row count",
+    })?;
+    let cols = a_cols.checked_mul(b_cols).ok_or(LetoError::Overflow {
+        reason: "kronecker output column count",
+    })?;
+    let total = rows.checked_mul(cols).ok_or(LetoError::Overflow {
+        reason: "kronecker output element count",
+    })?;
+    let mut values = vec![T::ZERO; total];
 
     // Cache b in a contiguous vector to eliminate 2D bounds checks and layout offset calculations
     // in the hot innermost loops.

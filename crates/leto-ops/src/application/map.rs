@@ -1,8 +1,8 @@
 use crate::application::index::{
-    line_elements, unit_stride_row_slice, RowMajorTraversal, TileGeometry,
+    line_elements, unit_stride_row_slice, validate_mutable_output, RowMajorTraversal, TileGeometry,
 };
 use crate::domain::scalar::Scalar;
-use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
+use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
 
 /// Whether a bandwidth-bound elementwise op over `len` elements of `T` should
 /// run in parallel. A binary map reads two operands and writes one, so its
@@ -172,7 +172,7 @@ fn validate_binary_storage<T, const N: usize>(
 ) -> Result<()> {
     lhs.layout().validate_storage_len(lhs.data().len())?;
     rhs.layout().validate_storage_len(rhs.data().len())?;
-    out.layout().validate_storage_len(out.data().len())?;
+    validate_mutable_output(out, "binary map")?;
     Ok(())
 }
 
@@ -210,11 +210,6 @@ where
     }
 
     validate_binary_storage(lhs, rhs, out)?;
-    if out.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "binary output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
 
     let size = out.layout().checked_size()?;
     let shape = out.shape();
@@ -228,7 +223,9 @@ where
 
     #[cfg(feature = "parallel")]
     {
-        if parallelize_bandwidth_bound::<T>(size, 3) && !out_layout.has_zero_stride_aliasing() {
+        // Output injectivity is established by `validate_binary_storage`, so
+        // parallel workers' logical rows map to disjoint physical elements.
+        if parallelize_bandwidth_bound::<T>(size, 3) {
             parallel_binary_map_strided::<Op, T, N>(StridedBinaryContext {
                 size,
                 shape,
@@ -572,7 +569,18 @@ where
 // -- Reductions --
 
 /// Sum reduction over all elements of the view.
+///
+/// # Panics
+///
+/// Panics when the view's layout addresses offsets outside its storage (a
+/// malformed view built by [`ArrayView::new`] without validation); a silently
+/// truncated sum is never returned. Validated construction via
+/// [`ArrayView::try_new`] cannot reach this panic.
 pub fn sum<T: Scalar, const N: usize>(arr: &ArrayView<'_, T, N>) -> T {
+    arr.layout()
+        .validate_storage_len(arr.data().len())
+        .expect("sum requires a view whose layout fits its storage");
+
     // Sum is logically order-independent, so any dense memory-order slice
     // (C, F, or permuted-contiguous) feeds the vectorized reduction directly.
     if let Some(slice) = arr.as_slice_memory_order() {
@@ -589,19 +597,23 @@ pub fn sum<T: Scalar, const N: usize>(arr: &ArrayView<'_, T, N>) -> T {
         let step = traversal.last_axis_stride(layout);
         for row in 0..traversal.rows() {
             let base_idx = traversal.base_index(row);
-            if let Ok(mut offset) = layout.offset_of(base_idx).map(|offset| offset as isize) {
-                if let Some(slice) = unit_stride_row_slice(data, offset, step, traversal.inner()) {
-                    total = total.add(T::sum_slice(slice));
-                    continue;
-                }
-                for _ in 0..traversal.inner() {
-                    if let Ok(index) = usize::try_from(offset) {
-                        if let Some(value) = data.get(index) {
-                            total = total.add(*value);
-                        }
-                    }
-                    offset += step;
-                }
+            let mut offset = layout
+                .offset_of(base_idx)
+                .expect("invariant: validated layout resolves every logical index")
+                as isize;
+            if let Some(slice) = unit_stride_row_slice(data, offset, step, traversal.inner()) {
+                total = total.add(T::sum_slice(slice));
+                continue;
+            }
+            for _ in 0..traversal.inner() {
+                let index = usize::try_from(offset)
+                    .expect("invariant: validated layout yields non-negative offsets");
+                total = total.add(
+                    *data
+                        .get(index)
+                        .expect("invariant: validated offset is in bounds"),
+                );
+                offset += step;
             }
         }
     }
