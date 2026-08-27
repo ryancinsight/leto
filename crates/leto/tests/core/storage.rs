@@ -9,6 +9,12 @@ use leto::{
 };
 
 #[cfg(feature = "mnemosyne-alloc")]
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+
+#[cfg(feature = "mnemosyne-alloc")]
 use leto::MnemosyneStorage;
 
 #[test]
@@ -150,6 +156,97 @@ fn test_mnemosyne_storage_zst_drop() {
         let _storage = MnemosyneStorage::from_vec(vec);
     }
     assert_eq!(DROP_COUNT.load(std::sync::atomic::Ordering::SeqCst), 3);
+}
+
+#[cfg(feature = "mnemosyne-alloc")]
+#[test]
+fn test_mnemosyne_shape_generator_drops_non_copy_values_once() {
+    struct Payload {
+        index: usize,
+        drops: Arc<AtomicUsize>,
+    }
+
+    impl Drop for Payload {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let drops = Arc::new(AtomicUsize::new(0));
+    {
+        let array = Array::<Payload, MnemosyneStorage<Payload>, 2>::from_mnemosyne_shape_fn(
+            [2, 2],
+            |[row, column]| Payload {
+                index: row * 2 + column,
+                drops: Arc::clone(&drops),
+            },
+        );
+        assert_eq!(
+            array
+                .storage()
+                .as_slice()
+                .iter()
+                .map(|value| value.index)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+    }
+    assert_eq!(drops.load(Ordering::SeqCst), 4);
+}
+
+#[cfg(feature = "mnemosyne-alloc")]
+#[test]
+fn test_mnemosyne_shape_generator_cleans_initialized_prefix_on_panic() {
+    struct Payload(Arc<AtomicUsize>);
+
+    impl Drop for Payload {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let drops = Arc::new(AtomicUsize::new(0));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe({
+        let calls = Arc::clone(&calls);
+        let drops = Arc::clone(&drops);
+        move || {
+            let _ = Array::<Payload, MnemosyneStorage<Payload>, 1>::from_mnemosyne_shape_fn(
+                [4],
+                |_| {
+                    let call = calls.fetch_add(1, Ordering::SeqCst);
+                    if call == 2 {
+                        panic!("intentional generator panic");
+                    }
+                    Payload(Arc::clone(&drops))
+                },
+            );
+        }
+    }));
+
+    let Err(payload) = result else {
+        panic!("the third generator call must panic");
+    };
+    assert_eq!(
+        payload.downcast_ref::<&str>().copied(),
+        Some("intentional generator panic")
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    assert_eq!(drops.load(Ordering::SeqCst), 2);
+}
+
+#[cfg(feature = "mnemosyne-alloc")]
+#[test]
+fn test_mnemosyne_empty_shape_does_not_call_generator() {
+    let calls = AtomicUsize::new(0);
+    let array = Array::<usize, MnemosyneStorage<usize>, 2>::from_mnemosyne_shape_fn([0, 4], |_| {
+        calls.fetch_add(1, Ordering::SeqCst)
+    });
+
+    assert_eq!(array.shape(), [0, 4]);
+    assert!(array.storage().as_slice().is_empty());
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
 #[test]

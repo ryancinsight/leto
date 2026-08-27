@@ -282,21 +282,28 @@ impl<T, const N: usize> Array<T, MnemosyneStorage<T>, N> {
         Self::from_mnemosyne_vec(shape, vec)
     }
 
-    /// Create a Mnemosyne-backed array by calling a generator for each coordinate.
+    /// Create a Mnemosyne-backed array by initializing final storage in place.
+    ///
+    /// The generator is called once per coordinate in C-contiguous logical
+    /// order. No intermediate collection is allocated. If the generator panics,
+    /// the initialized prefix is dropped and the Mnemosyne allocation is freed.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the shape cannot form a C-contiguous layout, Mnemosyne cannot
+    /// allocate the result, or the generator panics.
     pub fn from_mnemosyne_shape_fn<F>(shape: impl IntoShape<N>, mut f: F) -> Self
     where
         F: FnMut([usize; N]) -> T,
     {
         let shape = shape.into_shape();
         let layout = Layout::c_contiguous(shape).expect("C-contiguous layout must construct");
-        let size = layout.size();
-        let mut vec: Vec<T> = Vec::with_capacity(size);
         let mut index = [0usize; N];
-        for _ in 0..size {
-            vec.push(f(index));
+        let storage = MnemosyneStorage::from_fn(layout.size(), |_| {
+            let value = f(index);
             increment_index(&mut index, &shape);
-        }
-        let storage = MnemosyneStorage::from_vec(vec);
+            value
+        });
         Self::new(layout, storage).expect("Valid layout bounds")
     }
 

@@ -46,6 +46,8 @@ impl<T> Drop for MnemosyneInitGuard<T> {
     fn drop(&mut self) {
         if self.initialized > 0 && std::mem::needs_drop::<T>() {
             for idx in 0..self.initialized {
+                // SAFETY: indices below `initialized` were written exactly once
+                // by the guarded constructor and have not yet been dropped.
                 unsafe {
                     std::ptr::drop_in_place(self.ptr.add(idx));
                 }
@@ -53,6 +55,8 @@ impl<T> Drop for MnemosyneInitGuard<T> {
         }
         if self.layout.size() > 0 {
             use std::alloc::GlobalAlloc;
+            // SAFETY: the guard exclusively owns the allocation after a
+            // constructor panic and deallocates it with its original layout.
             unsafe {
                 mnemosyne::Mnemosyne.dealloc(self.ptr as *mut u8, self.layout);
             }
@@ -62,28 +66,47 @@ impl<T> Drop for MnemosyneInitGuard<T> {
 
 impl<T: Default> MnemosyneStorage<T> {
     /// Allocate storage via Mnemosyne and initialize each element with `T::default()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the allocation size overflows, Mnemosyne cannot allocate the
+    /// requested storage, or `T::default()` panics. A default panic drops the
+    /// initialized prefix and releases the allocation.
     pub fn new(len: usize) -> Self {
-        let storage = Self::allocate_raw(len);
-        if !storage.ptr.is_null() && len > 0 {
-            let mut guard = MnemosyneInitGuard {
-                ptr: storage.ptr,
-                initialized: 0,
-                layout: storage.layout,
-            };
-            for index in 0..len {
-                // SAFETY: `index < len`; allocation holds `len` elements.
-                unsafe {
-                    guard.ptr.add(index).write(T::default());
-                }
-                guard.initialized += 1;
-            }
-            std::mem::forget(guard);
-        }
-        storage
+        Self::from_fn(len, |_| T::default())
     }
 }
 
 impl<T> MnemosyneStorage<T> {
+    pub(crate) fn from_fn<F>(len: usize, mut generate: F) -> Self
+    where
+        F: FnMut(usize) -> T,
+    {
+        let storage = std::mem::ManuallyDrop::new(Self::allocate_raw(len));
+        let mut guard = MnemosyneInitGuard {
+            ptr: storage.ptr,
+            initialized: 0,
+            layout: storage.layout,
+        };
+        for index in 0..len {
+            let value = generate(index);
+            // SAFETY: `index < len`; this slot is in the exclusive allocation
+            // and has not previously been initialized.
+            unsafe {
+                guard.ptr.add(index).write(value);
+            }
+            guard.initialized += 1;
+        }
+
+        let initialized = Self {
+            ptr: guard.ptr,
+            len,
+            layout: guard.layout,
+        };
+        std::mem::forget(guard);
+        initialized
+    }
+
     /// Allocate storage and copy elements from a slice.
     pub fn from_slice(slice: &[T]) -> Self
     where
