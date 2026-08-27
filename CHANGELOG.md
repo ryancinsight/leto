@@ -29,6 +29,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [patch] Mnemosyne-backed shape generators initialize final provider storage
+  in place. They no longer allocate an intermediate `Vec`, copy its elements,
+  and release its allocation; partial initialization is dropped and deallocated
+  if a generator panics.
+
 - [minor] Built-in `Array` and `ArrayView` assignment sources now expose their
   borrowed layout to one shared, allocation-free assignment kernel.
   C-dense copies use `copy_from_slice`; C-destination/F-source rank-2 copies
