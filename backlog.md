@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [patch, in progress]
+## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [patch, complete]
 
 **Outcome:** let allocation-sensitive consumers initialize final
 `MnemosyneStorage` directly without an intermediate `Vec` or default-fill pass.
@@ -16,14 +16,15 @@ generator panic cleanup are verified; strict provider gates and SemVer pass;
 Apollo consumes the merged provider without an intermediate output allocation.
 
 **Integrator:** Codex `01a0253c-6013-7552-99cc-36bbbcf77f6d`.
-**Lease:** provider regions discharged by `a3b7d44`; Apollo consumer integration
-remains in progress. **Last update:** 2026-08-27.
+**Lease:** none. **Last update:** 2026-08-27.
 
-**Evidence:** `a3b7d44` initializes final Mnemosyne storage once and makes
-partial construction panic-safe. Locked checks and strict Clippy pass; Nextest
-passes 326/326; doctests pass 2/2; Rustdoc is warning-clean; patch SemVer passes
-223/223. Focused Miri passes normal-drop, panic-cleanup, and zero-length cases;
-three exposed-provenance warnings originate in the pinned Mnemosyne allocator.
+**Evidence:** provider PR #127 merged as `fb70cb6`; `a3b7d44` initializes final
+Mnemosyne storage once and makes partial construction panic-safe. Locked checks
+and strict Clippy pass; Nextest passes 326/326; doctests pass 2/2; Rustdoc is
+warning-clean; patch SemVer passes 223/223. Consumer PR #150 merged in Apollo as
+`0536c9c8`, with its code revision passing 482/482 Nextest and public SemVer.
+Focused Miri passes normal-drop, panic-cleanup, and zero-length cases; three
+exposed-provenance warnings originate in the pinned Mnemosyne allocator.
 
 ## ATLAS-LETO-STACK-STORAGE-ORACLE-2026-08-20 — Assert valid stack construction [patch, complete]
 
