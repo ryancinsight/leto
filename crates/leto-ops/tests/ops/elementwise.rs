@@ -234,7 +234,9 @@ fn test_outputs_reject_non_injective_layouts() {
 
     let mut out = Array::new(aliased, VecStorage::fill(4, 0.0f32)).unwrap();
     assert!(map_into(&input.view(), &mut out.view_mut(), |v| v + 1.0).is_err());
-    assert!(binary_map::<AddOp, f32, 2>(&input.view(), &input.view(), &mut out.view_mut()).is_err());
+    assert!(
+        binary_map::<AddOp, f32, 2>(&input.view(), &input.view(), &mut out.view_mut()).is_err()
+    );
 }
 
 #[test]

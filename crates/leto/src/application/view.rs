@@ -208,12 +208,7 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
                     self.as_slice_memory_order().filter(|_| self.is_f_dense()),
                 ) {
                     let mut values = source.to_vec();
-                    crate::application::assign::transpose_c_from_f(
-                        source,
-                        &mut values,
-                        rows,
-                        cols,
-                    );
+                    crate::application::assign::transpose_c_from_f(source, &mut values, rows, cols);
                     values
                 } else {
                     let size = self.layout.size();
