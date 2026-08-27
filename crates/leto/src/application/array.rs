@@ -681,18 +681,36 @@ where
             shape,
             rhs.shape()
         );
+        // Matching dense memory order (both C or both F with equal shapes
+        // implies identical strides): one zipped slice pass replaces the
+        // per-element odometer with its three checked offset computations.
+        {
+            let rhs_view = rhs.view();
+            let mut lhs_view = self.view_mut();
+            let same_order = (lhs_view.is_c_dense() && rhs_view.is_c_dense())
+                || (lhs_view.is_f_dense() && rhs_view.is_f_dense());
+            if same_order {
+                if let (Some(dst), Some(src)) = (
+                    lhs_view.as_mut_slice_memory_order(),
+                    rhs_view.as_slice_memory_order(),
+                ) {
+                    for (target, source) in dst.iter_mut().zip(src) {
+                        *target = *target + alpha * *source;
+                    }
+                    return;
+                }
+            }
+        }
         for linear in 0..self.size() {
             let index = linear_to_index(linear, shape);
-            let value = *self
-                .get(index)
-                .expect("invariant: logical index is in bounds")
-                + alpha
-                    * *rhs
-                        .get(index)
-                        .expect("invariant: rhs logical index is in bounds");
-            *self
+            let scaled = alpha
+                * *rhs
+                    .get(index)
+                    .expect("invariant: rhs logical index is in bounds");
+            let target = self
                 .get_mut(index)
-                .expect("invariant: logical index is in bounds") = value;
+                .expect("invariant: logical index is in bounds");
+            *target = *target + scaled;
         }
     }
 }

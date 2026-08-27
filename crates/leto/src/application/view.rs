@@ -190,7 +190,8 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
 
     /// Materialize this view into C-contiguous row-major storage.
     ///
-    /// Dense row-major views clone the exposed slice. Strided, transposed, or
+    /// Dense row-major views clone the exposed slice; rank-2 Fortran-dense
+    /// views run the tiled transpose copy. Other strided, transposed, or
     /// broadcasted views are copied in logical row-major order.
     pub fn to_contiguous(&self) -> Array<T, VecStorage<T>, N>
     where
@@ -199,10 +200,27 @@ impl<'a, T, const N: usize> ArrayView<'a, T, N> {
         let data = match self.as_slice() {
             Some(slice) => slice.to_vec(),
             None => {
-                let size = self.layout.size();
-                let mut values: Vec<T> = Vec::with_capacity(size);
-                values.extend(self.iter().cloned());
-                values
+                // Rank-2 F-dense views transpose through the cache-blocked
+                // kernel instead of the per-element odometer (an order of
+                // magnitude fewer offset computations on large planes).
+                if let (&[rows, cols], Some(source)) = (
+                    self.shape().as_slice(),
+                    self.as_slice_memory_order().filter(|_| self.is_f_dense()),
+                ) {
+                    let mut values = source.to_vec();
+                    crate::application::assign::transpose_c_from_f(
+                        source,
+                        &mut values,
+                        rows,
+                        cols,
+                    );
+                    values
+                } else {
+                    let size = self.layout.size();
+                    let mut values: Vec<T> = Vec::with_capacity(size);
+                    values.extend(self.iter().cloned());
+                    values
+                }
             }
         };
         Array::<T, VecStorage<T>, N>::from_shape_vec(self.shape(), data)
