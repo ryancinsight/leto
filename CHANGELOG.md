@@ -34,6 +34,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   returning a typed overflow error instead of wrapping in release builds and
   under-allocating the buffer its unchecked writes assume.
 
+### Performance
+
+- [patch] `ArrayViewMut::fill` fills contiguous views through one dense
+  memory-order slice pass instead of a per-element odometer with checked
+  offset arithmetic per element.
+
 ### Removed
 
 - [major] The `LendingIterator` trait and the `application::iter::lending`

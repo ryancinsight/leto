@@ -580,12 +580,20 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     }
 
     /// Set every element of the view to a clone of `value` (leto `fill`
-    /// parity). Walks the view in logical row-major order, so it is correct for
-    /// any strides.
+    /// parity). Contiguous views fill their dense block directly; strided
+    /// views walk logical row-major order, so it is correct for any strides.
     pub fn fill(&mut self, value: T)
     where
         T: Clone,
     {
+        // Dense block in either memory order: one slice fill instead of a
+        // per-element odometer with checked offset arithmetic. The range is
+        // exactly the view's own elements, so this stays correct for
+        // iterator-yielded sub-views.
+        if let Some(slice) = self.as_mut_slice_memory_order() {
+            slice.fill(value);
+            return;
+        }
         let shape = self.shape();
         let size = self.size();
         if size == 0 {
