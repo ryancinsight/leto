@@ -21,7 +21,15 @@
 - **Acceptance:** aliasing repros rejected with typed errors (no two live
   `&mut` to one element constructible from safe code); existing suite green;
   new regression tests for each closed hole; clippy pedantic clean; doc sync.
-- **Last update:** 2026-08-27.
+- **Slice 1 (this PR):** injectivity gates + window-exclusivity flag + gated
+  whole-window accessors + leto-ops entry-contract consolidation (18 sites →
+  one `validate_mutable_output`) + `sum` storage validation + `kron` checked
+  size math + `fill` dense fast path. Gates: nextest 885/885, clippy
+  `-D warnings` clean, doctests green, lock untouched.
+- **Slice 2 (remaining, this item):** `scaled_add` slice fast path;
+  single-write `reduce_axis`/matmul scratch; `to_contiguous` through the
+  tiled assign kernels; memory-order fast paths for `binary_map`/`map_into`.
+- **Last update:** 2026-08-27 (slice 1 delivered).
 
 ## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [patch, complete]
 
