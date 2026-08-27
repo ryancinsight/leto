@@ -122,3 +122,74 @@ fn test_lanes_mut_collect_aliasing() {
         vec![1, 2, 0, 3, 0, 0]
     );
 }
+
+#[test]
+fn lanes_mut_rejects_non_injective_layout() {
+    // Shape [2, 2], strides [1, 1]: zero-stride-free yet non-injective —
+    // logical (0, 1) and (1, 0) share physical offset 1, so distinct lanes
+    // would write one element. The mutable iterator must reject it.
+    let layout = leto::Layout::try_new([2, 2], [1, 1], 0).unwrap();
+    let mut data = vec![0i32; 4];
+    let view = leto::ArrayViewMut::try_new(layout, data.as_mut_slice()).unwrap();
+    assert!(view.lanes_mut::<1>(0).is_err());
+
+    let layout = leto::Layout::try_new([2, 2], [1, 1], 0).unwrap();
+    let view = leto::ArrayViewMut::try_new(layout, data.as_mut_slice()).unwrap();
+    assert!(view.axis_iter_mut::<1>(0).is_err());
+}
+
+#[test]
+fn interleaved_lane_window_state_and_element_paths() {
+    // Column lanes of a C-order matrix have stride 3: each yielded window
+    // spans other lanes' elements, so it is not exclusively owned; row lanes
+    // (stride 1) own their window and keep whole-window slice access.
+    let mut a = leto2([2, 3], vec![1, 2, 3, 4, 5, 6]);
+    {
+        let mut cols = a.lanes_mut::<1>(0).unwrap();
+        let col0 = cols.next().unwrap();
+        assert!(!col0.has_exclusive_window());
+        // Element access, fill, assign, and to_contiguous stay available.
+        let materialized = col0.to_contiguous();
+        assert_eq!(materialized.iter().copied().collect::<Vec<_>>(), vec![1, 4]);
+    }
+    {
+        let mut col0 = a.lanes_mut::<1>(0).unwrap().next().unwrap();
+        col0.fill(9);
+        let rhs_store = [7i32, 8];
+        let rhs_layout = leto::Layout::try_new([2], [1], 0).unwrap();
+        let rhs = leto::ArrayView::try_new(rhs_layout, rhs_store.as_slice()).unwrap();
+        col0.try_assign(&rhs).unwrap();
+    }
+    assert_eq!(
+        a.iter().copied().collect::<Vec<_>>(),
+        vec![7, 2, 3, 8, 5, 6]
+    );
+
+    let mut row0 = a.lanes_mut::<1>(1).unwrap().next().unwrap();
+    assert!(row0.has_exclusive_window());
+    assert_eq!(*row0.as_mut_slice().unwrap(), [7, 2, 3]);
+}
+
+#[test]
+#[should_panic(expected = "window is shared with sibling lane/axis views")]
+fn interleaved_lane_data_mut_panics() {
+    let mut a = leto2([2, 3], vec![0; 6]);
+    let mut col0 = a.lanes_mut::<1>(0).unwrap().next().unwrap();
+    let _ = col0.data_mut();
+}
+
+#[test]
+#[should_panic(expected = "window is shared with sibling lane/axis views")]
+fn interleaved_lane_into_slice_panics() {
+    let mut a = leto2([2, 3], vec![0; 6]);
+    let col0 = a.lanes_mut::<1>(0).unwrap().next().unwrap();
+    let _ = col0.into_slice();
+}
+
+#[test]
+#[should_panic(expected = "window is shared with sibling lane/axis views")]
+fn interleaved_lane_as_view_panics() {
+    let mut a = leto2([2, 3], vec![0; 6]);
+    let col0 = a.lanes_mut::<1>(0).unwrap().next().unwrap();
+    let _ = col0.as_view();
+}

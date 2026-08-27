@@ -345,6 +345,15 @@ pub struct ArrayViewMut<'a, T, const N: usize> {
     pub(crate) layout: Layout<N>,
     pub(crate) ptr: std::ptr::NonNull<T>,
     pub(crate) len: usize,
+    /// Whether the physical window `[ptr, ptr + len)` may contain elements
+    /// owned by sibling views (mutable lane/axis iteration over an interleaved
+    /// layout). A shared window forbids materializing the window as a slice —
+    /// [`data`](Self::data), [`data_mut`](Self::data_mut),
+    /// [`into_slice`](Self::into_slice), and [`as_view`](Self::as_view) —
+    /// because a sibling's element references would alias it; per-element
+    /// access ([`get`](Self::get), [`get_mut`](Self::get_mut), indexing) stays
+    /// available since the layouts of sibling views address disjoint elements.
+    pub(crate) window_shared: bool,
     pub(crate) _marker: std::marker::PhantomData<&'a mut [T]>,
 }
 
@@ -354,8 +363,13 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     pub fn new(layout: Layout<N>, data: &'a mut [T]) -> Self {
         Self {
             layout,
+            // SAFETY: a slice's data pointer is never null, including for
+            // empty slices (it is dangling-but-aligned, still non-null).
             ptr: unsafe { std::ptr::NonNull::new_unchecked(data.as_mut_ptr()) },
             len: data.len(),
+            // The whole window comes from one exclusive `&mut [T]`, so no
+            // sibling view can own any part of it.
+            window_shared: false,
             _marker: std::marker::PhantomData,
         }
     }
@@ -374,16 +388,30 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             layout: self.layout,
             ptr: self.ptr,
             len: self.len,
+            window_shared: self.window_shared,
             _marker: std::marker::PhantomData,
         }
     }
 
     /// Borrow this mutable view as an immutable [`ArrayView`] (leto `.view()`
     /// parity), sharing the same layout and backing memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the view was yielded by a mutable lane/axis iterator over an
+    /// interleaved layout: its physical window contains sibling views' elements,
+    /// so materializing it as a shared slice would alias their `&mut` element
+    /// references. Use [`get`](Self::get) or indexing for element reads there.
     #[inline]
     pub fn as_view(&self) -> ArrayView<'_, T, N> {
+        assert!(
+            !self.window_shared,
+            "window is shared with sibling lane/axis views; a whole-window \
+             slice would alias their elements (use per-element access instead)"
+        );
         // SAFETY: `ptr` is valid for `len` elements for the duration of the
-        // borrow of `self`, matching the immutable-view contract.
+        // borrow of `self`, and the assertion above establishes the window is
+        // exclusively owned, so no sibling view can mint `&mut` into it.
         let data = unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) };
         ArrayView::new(self.layout, data)
     }
@@ -418,17 +446,51 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         self.layout
     }
 
+    /// Returns true when this view exclusively owns its physical window, so
+    /// whole-window accessors ([`data`](Self::data), [`data_mut`](Self::data_mut),
+    /// [`into_slice`](Self::into_slice), [`as_view`](Self::as_view)) are
+    /// available. Views constructed from a slice always own their window;
+    /// views yielded by mutable lane/axis iterators own it only when the
+    /// yielded window is dense (span equals logical size), because an
+    /// interleaved window still contains sibling views' elements.
+    #[inline]
+    pub const fn has_exclusive_window(&self) -> bool {
+        !self.window_shared
+    }
+
     /// Returns the raw data slice as read-only.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the view was yielded by a mutable lane/axis iterator over an
+    /// interleaved layout (see [`as_view`](Self::as_view)).
     #[inline]
     pub fn data(&self) -> &[T] {
-        // SAFETY: self.ptr is valid for self.len elements.
+        assert!(
+            !self.window_shared,
+            "window is shared with sibling lane/axis views; a whole-window \
+             slice would alias their elements (use per-element access instead)"
+        );
+        // SAFETY: self.ptr is valid for self.len elements, and the assertion
+        // above establishes the window is exclusively owned.
         unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
     }
 
     /// Returns the raw mutable data slice.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the view was yielded by a mutable lane/axis iterator over an
+    /// interleaved layout (see [`as_view`](Self::as_view)).
     #[inline]
     pub fn data_mut(&mut self) -> &mut [T] {
-        // SAFETY: self.ptr is valid for self.len elements.
+        assert!(
+            !self.window_shared,
+            "window is shared with sibling lane/axis views; a whole-window \
+             slice would alias their elements (use per-element access instead)"
+        );
+        // SAFETY: self.ptr is valid for self.len elements, and the assertion
+        // above establishes the window is exclusively owned.
         unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 
@@ -468,9 +530,20 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     }
 
     /// Consume the view and return the backing mutable slice with lifetime `'a`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the view was yielded by a mutable lane/axis iterator over an
+    /// interleaved layout (see [`as_view`](Self::as_view)).
     #[inline]
     pub fn into_slice(self) -> &'a mut [T] {
-        // SAFETY: self.ptr is valid for self.len elements and lifetime 'a.
+        assert!(
+            !self.window_shared,
+            "window is shared with sibling lane/axis views; a whole-window \
+             slice would alias their elements (use per-element access instead)"
+        );
+        // SAFETY: self.ptr is valid for self.len elements and lifetime 'a, and
+        // the assertion above establishes the window is exclusively owned.
         unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 
@@ -542,6 +615,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             layout: sliced_layout,
             ptr: self.ptr,
             len: self.len,
+            window_shared: self.window_shared,
             _marker: std::marker::PhantomData,
         })
     }
@@ -557,6 +631,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             layout: sliced_layout,
             ptr: self.ptr,
             len: self.len,
+            window_shared: self.window_shared,
             _marker: std::marker::PhantomData,
         })
     }
@@ -569,6 +644,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             layout: transposed_layout,
             ptr: self.ptr,
             len: self.len,
+            window_shared: self.window_shared,
             _marker: std::marker::PhantomData,
         })
     }
@@ -592,6 +668,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             layout: broadcasted_layout,
             ptr: self.ptr,
             len: self.len,
+            window_shared: self.window_shared,
             _marker: std::marker::PhantomData,
         })
     }
@@ -607,6 +684,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
             layout: reshaped_layout,
             ptr: self.ptr,
             len: self.len,
+            window_shared: self.window_shared,
             _marker: std::marker::PhantomData,
         })
     }
@@ -622,6 +700,30 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     where
         T: Clone,
     {
+        if self.window_shared {
+            // A whole-window borrow would alias sibling views' elements, so
+            // clone element-by-element through checked per-element access.
+            let size = self.size();
+            let shape = self.shape();
+            let mut values: Vec<T> = Vec::with_capacity(size);
+            let mut index = [0usize; N];
+            for _ in 0..size {
+                values.push(
+                    self.get(index)
+                        .expect("invariant: logical index is in bounds")
+                        .clone(),
+                );
+                for d in (0..N).rev() {
+                    index[d] += 1;
+                    if index[d] < shape[d] {
+                        break;
+                    }
+                    index[d] = 0;
+                }
+            }
+            return Array::<T, VecStorage<T>, N>::from_shape_vec(shape, values)
+                .expect("logical row-major materialization has matching shape and storage");
+        }
         let view = ArrayView::new(self.layout, self.data());
         view.to_contiguous()
     }
@@ -668,6 +770,11 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         if self.layout.is_c_dense() {
             let range = dense_block_range(&self.layout)?;
             if range.end <= self.len {
+                // SAFETY: `ptr` is valid for `len` elements and
+                // `range.end <= len`, so the sub-range is in bounds; a C-dense
+                // layout's block is exactly the view's own elements, so this
+                // slice never covers a sibling view's elements even when the
+                // window is shared.
                 unsafe {
                     Some(std::slice::from_raw_parts(
                         self.ptr.as_ptr().add(range.start),
@@ -689,6 +796,10 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         if self.layout.is_c_dense() {
             let range = dense_block_range(&self.layout)?;
             if range.end <= self.len {
+                // SAFETY: `ptr` is valid for `len` elements and
+                // `range.end <= len`; a C-dense block is exactly the view's own
+                // elements, which the view exclusively owns even when yielded
+                // by a mutable iterator (sibling views' elements are disjoint).
                 unsafe {
                     Some(std::slice::from_raw_parts_mut(
                         self.ptr.as_ptr().add(range.start),
@@ -710,6 +821,9 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         if self.layout.is_contiguous() {
             let range = dense_block_range(&self.layout)?;
             if range.end <= self.len {
+                // SAFETY: `ptr` is valid for `len` elements and
+                // `range.end <= len`; a contiguous layout's dense block is
+                // exactly the view's own elements (no sibling overlap).
                 unsafe {
                     Some(std::slice::from_raw_parts(
                         self.ptr.as_ptr().add(range.start),
@@ -733,6 +847,10 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         if self.layout.is_contiguous() {
             let range = dense_block_range(&self.layout)?;
             if range.end <= self.len {
+                // SAFETY: `ptr` is valid for `len` elements and
+                // `range.end <= len`; a contiguous layout's dense block is
+                // exactly the view's own elements, exclusively owned even for
+                // iterator-yielded sub-views (siblings are disjoint).
                 unsafe {
                     Some(std::slice::from_raw_parts_mut(
                         self.ptr.as_ptr().add(range.start),
