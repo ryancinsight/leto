@@ -196,6 +196,33 @@ fn test_map_into_uses_caller_owned_output() {
 }
 
 #[test]
+fn test_binary_map_same_order_f_dense_operands_match_reference() {
+    // Three F-dense operands with identical strides take the memory-order
+    // slice fast path; values must match the logical per-element reference.
+    let f_layout = Layout::f_contiguous([2, 3]).unwrap();
+    let lhs = Array::new(
+        f_layout,
+        VecStorage::new(vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    )
+    .unwrap();
+    let rhs = Array::new(
+        f_layout,
+        VecStorage::new(vec![10.0f32, 20.0, 30.0, 40.0, 50.0, 60.0]),
+    )
+    .unwrap();
+    let mut out = Array::new(f_layout, VecStorage::fill(6, 0.0f32)).unwrap();
+
+    binary_map::<AddOp, f32, 2>(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+
+    for r in 0..2 {
+        for c in 0..3 {
+            let expected = *lhs.get([r, c]).unwrap() + *rhs.get([r, c]).unwrap();
+            assert_eq!(*out.get([r, c]).unwrap(), expected, "diverges at [{r},{c}]");
+        }
+    }
+}
+
+#[test]
 fn test_outputs_reject_non_injective_layouts() {
     // Shape [2, 2], strides [1, 1] is zero-stride-free yet non-injective:
     // logical (0, 1) and (1, 0) share physical offset 1. Serial kernels would
@@ -207,7 +234,9 @@ fn test_outputs_reject_non_injective_layouts() {
 
     let mut out = Array::new(aliased, VecStorage::fill(4, 0.0f32)).unwrap();
     assert!(map_into(&input.view(), &mut out.view_mut(), |v| v + 1.0).is_err());
-    assert!(binary_map::<AddOp, f32, 2>(&input.view(), &input.view(), &mut out.view_mut()).is_err());
+    assert!(
+        binary_map::<AddOp, f32, 2>(&input.view(), &input.view(), &mut out.view_mut()).is_err()
+    );
 }
 
 #[test]

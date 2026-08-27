@@ -87,19 +87,27 @@ where
         });
     }
 
-    if let (Some(input_slice), Some(output_slice)) = (input.as_slice(), output.as_mut_slice()) {
-        #[cfg(feature = "parallel")]
-        {
-            if should_parallelize::<T>(input_slice.len(), compute_bound) {
-                parallel_map_slice(input_slice, output_slice, f);
-                return Ok(());
+    // Identical strides make both dense memory-order blocks enumerate the
+    // same logical element at each position, so any shared dense order (C, F,
+    // or permuted-contiguous) feeds the slice kernel — not only canonical C.
+    if input.strides() == output.strides() {
+        if let (Some(input_slice), Some(output_slice)) = (
+            input.as_slice_memory_order(),
+            output.as_mut_slice_memory_order(),
+        ) {
+            #[cfg(feature = "parallel")]
+            {
+                if should_parallelize::<T>(input_slice.len(), compute_bound) {
+                    parallel_map_slice(input_slice, output_slice, f);
+                    return Ok(());
+                }
             }
-        }
 
-        for (out, &value) in output_slice.iter_mut().zip(input_slice.iter()) {
-            *out = f(value);
+            for (out, &value) in output_slice.iter_mut().zip(input_slice.iter()) {
+                *out = f(value);
+            }
+            return Ok(());
         }
-        return Ok(());
     }
 
     validate_unary_storage(input, output)?;

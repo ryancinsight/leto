@@ -226,3 +226,63 @@ fn test_to_contiguous_materializes_broadcasted_views() {
     assert_eq!(contiguous.shape(), [2, 3]);
     assert_eq!(contiguous.storage().as_slice(), &[10, 20, 30, 10, 20, 30]);
 }
+
+#[test]
+fn test_to_contiguous_materializes_f_dense_views_through_tiled_transpose() {
+    // A transposed C-order matrix is F-dense and takes the tiled kernel; the
+    // result must match the logical row-major odometer materialization.
+    let source = Array::from_shape_vec([3, 4], (0..12).collect::<Vec<i32>>()).unwrap();
+    let transposed = source.view().transpose([1, 0]).unwrap();
+    assert!(transposed.is_f_dense());
+
+    let contiguous = transposed.to_contiguous();
+
+    assert_eq!(contiguous.shape(), [4, 3]);
+    let expected: Vec<i32> = (0..4)
+        .flat_map(|r| (0..3).map(move |c| *transposed.get([r, c]).unwrap()))
+        .collect();
+    assert_eq!(contiguous.storage().as_slice(), expected.as_slice());
+
+    // Larger-than-tile plane exercises the blocked loops across tile seams.
+    let big = Array::from_shape_vec([65, 130], (0..65 * 130).collect::<Vec<i32>>()).unwrap();
+    let big_t = big.view().transpose([1, 0]).unwrap();
+    let big_contig = big_t.to_contiguous();
+    for r in (0..130).step_by(37) {
+        for c in (0..65).step_by(13) {
+            assert_eq!(
+                *big_contig.get([r, c]).unwrap(),
+                *big_t.get([r, c]).unwrap(),
+                "tiled transpose diverges at [{r},{c}]"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_scaled_add_matches_reference_on_dense_and_strided_pairs() {
+    // Matching C-dense pair takes the zipped slice pass.
+    let mut lhs = Array::from_shape_vec([2, 3], vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let rhs = Array::from_shape_vec([2, 3], vec![10.0f64, 20.0, 30.0, 40.0, 50.0, 60.0]).unwrap();
+    lhs.scaled_add(0.5, &rhs);
+    assert_eq!(
+        lhs.storage().as_slice(),
+        &[6.0, 12.0, 18.0, 24.0, 30.0, 36.0]
+    );
+
+    // Mismatched layouts (C-dense lhs, strided rhs view wrapped as an array)
+    // take the checked per-element route; value semantics must agree.
+    let base = Array::from_shape_vec([2, 6], (0..12).map(f64::from).collect::<Vec<_>>()).unwrap();
+    let strided = base
+        .view()
+        .slice_with::<2>(&[SliceArg::All, SliceArg::range(Some(0), Some(6), 2)])
+        .unwrap();
+    let mut target =
+        Array::from_shape_vec([2, 3], vec![100.0f64, 100.0, 100.0, 100.0, 100.0, 100.0]).unwrap();
+    let strided_rhs = strided.as_array();
+    target.scaled_add(2.0, &strided_rhs);
+    // strided elements: rows [0,2,4] and [6,8,10] → target += 2*those.
+    assert_eq!(
+        target.storage().as_slice(),
+        &[100.0, 104.0, 108.0, 112.0, 116.0, 120.0]
+    );
+}

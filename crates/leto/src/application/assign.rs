@@ -226,7 +226,15 @@ fn transpose_tile<T>() -> usize {
     1usize << side.ilog2()
 }
 
-fn transpose_c_from_f<T: Copy>(source: &[T], destination: &mut [T], height: usize, width: usize) {
+/// Tiled C-from-F transpose copy shared by [`assign`] fast paths and
+/// [`ArrayView::to_contiguous`](crate::application::view::ArrayView::to_contiguous):
+/// blocked to the payload budget so both buffers stay cache-resident.
+pub(crate) fn transpose_c_from_f<T: Clone>(
+    source: &[T],
+    destination: &mut [T],
+    height: usize,
+    width: usize,
+) {
     let tile = transpose_tile::<T>();
     if width >= height {
         for row_start in (0..height).step_by(tile) {
@@ -243,7 +251,7 @@ fn transpose_c_from_f<T: Copy>(source: &[T], destination: &mut [T], height: usiz
                         .iter_mut()
                         .zip(source_columns.chunks_exact(height))
                     {
-                        *target = source_column[row];
+                        *target = source_column[row].clone();
                     }
                 }
             }
@@ -261,7 +269,7 @@ fn transpose_c_from_f<T: Copy>(source: &[T], destination: &mut [T], height: usiz
                 for (destination_row, value) in
                     destination_rows.chunks_exact_mut(width).zip(source_column)
                 {
-                    destination_row[column] = *value;
+                    destination_row[column] = value.clone();
                 }
             }
         }

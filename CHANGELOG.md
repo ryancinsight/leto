@@ -39,6 +39,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 - [patch] `ArrayViewMut::fill` fills contiguous views through one dense
   memory-order slice pass instead of a per-element odometer with checked
   offset arithmetic per element.
+- [patch] `Array::scaled_add` zips matching-order dense operands through
+  their memory-order slices (one pass, no per-element offset computation);
+  the strided route drops from three checked offset computations per element
+  to two.
+- [patch] `ArrayView::to_contiguous` materializes rank-2 Fortran-dense views
+  through the cache-blocked tiled transpose instead of the per-element
+  odometer, which also serves the strided-output matmul fallback.
+- [patch] `binary_map` and `map_into` accept any shared dense memory order
+  (identical strides, contiguous in C, F, or a permuted order) on their slice
+  fast paths instead of canonical C order only.
+- [patch] The strided-output matmul fallback accumulates into its pre-zeroed
+  scratch instead of asking the kernel to zero it a second time.
 
 ### Removed
 
