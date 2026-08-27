@@ -1,35 +1,53 @@
 # Leto Work Backlog
 
-## ATLAS-LETO-QUALITY-2026-08-27 — Mutable-iteration soundness + kernel fast paths [patch/minor] — in-progress
+## ATLAS-LETO-QUALITY-2026-08-27 — Mutable-iteration soundness + kernel fast paths [patch] — done 2026-08-27
 
-- **Outcome:** close the three confirmed aliasing holes (mutable lane/axis
-  iteration and parallel kernels gate on zero-stride only where the partition
-  argument requires layout injectivity; yielded lane views expose overlapping
-  whole-window `&mut [T]`), then land the audited perf/memory cluster: logical
-  `fill` fast path, `scaled_add` slice path, `sum` storage validation,
-  kronecker checked size math, single-write reduce/matmul scratch,
-  `to_contiguous` through the tiled assign kernels, memory-order fast paths
-  for binary maps, and SAFETY comments on the touched unsafe blocks.
+- **Delivered:** PR #129 (`dfea36f`..merge) — injectivity gates on
+  `lanes_mut`/`axis_iter_mut`, window-exclusivity tracking with gated
+  whole-window accessors, one shared `validate_mutable_output` across 18
+  leto-ops entry points, `sum` storage validation, `kron` checked size math,
+  dense `fill` fast path; PR #130 — `scaled_add` slice path, F-dense
+  `to_contiguous` via the tiled transpose, shared-dense-order map fast paths,
+  single-zero matmul scratch, rustfmt cure for #129's fmt red. Gates:
+  nextest 888/888, clippy `-D warnings` clean, fmt clean, doctests green.
 - **Integrator:** claude-fable session 03d80d33 (atlas
-  ATLAS-PROVIDER-CHAIN-QUALITY-2026-08-27). Branch
-  `fix/leto-quality-2026-08-27`.
-- **Lease:** `crates/leto/src/application/iter/{lanes,axis}.rs`,
-  `crates/leto/src/application/view.rs`, `crates/leto/src/array.rs` region
-  fill/scaled_add, `crates/leto-ops/src/application/{map,unary,reduction}.rs`,
-  `crates/leto-ops/src/application/linalg/products/kronecker.rs`,
-  `arithmetic.rs`, and this board entry, through the item's merge.
-- **Acceptance:** aliasing repros rejected with typed errors (no two live
-  `&mut` to one element constructible from safe code); existing suite green;
-  new regression tests for each closed hole; clippy pedantic clean; doc sync.
-- **Slice 1 (this PR):** injectivity gates + window-exclusivity flag + gated
-  whole-window accessors + leto-ops entry-contract consolidation (18 sites →
-  one `validate_mutable_output`) + `sum` storage validation + `kron` checked
-  size math + `fill` dense fast path. Gates: nextest 885/885, clippy
-  `-D warnings` clean, doctests green, lock untouched.
-- **Slice 2 (remaining, this item):** `scaled_add` slice fast path;
-  single-write `reduce_axis`/matmul scratch; `to_contiguous` through the
-  tiled assign kernels; memory-order fast paths for `binary_map`/`map_into`.
-- **Last update:** 2026-08-27 (slice 1 delivered).
+  ATLAS-PROVIDER-CHAIN-QUALITY-2026-08-27).
+
+## ATLAS-LETO-SUM-RESULT-UNIFICATION — `sum` panics where `reduce_all` returns Result [minor] — todo
+
+- Owner: unclaimed. Evidence: audit 2026-08-27 + PR #129 — `sum` keeps its
+  infallible `T` signature (now asserting storage validity) while
+  `reduce_all` returns `Result<T>` for the same input class; one reduction
+  surface should carry one failure contract. Breaking ([minor] 0.x); needs a
+  consumer sweep (coeus backend adapters) in the same co-evolution unit.
+
+## ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo
+
+- Owner: unclaimed. Evidence: audit 2026-08-27 — `reduce_axis` allocates
+  `VecStorage::fill(size, T::ZERO)` then `reduce_axis_into` writes every
+  element (both serial and parallel paths cover all offsets exactly once);
+  for small `axis_len` the memset is up to ~50% extra write traffic.
+  Direction: `MaybeUninit` storage with a written-everywhere proof spanning
+  the serial and parallel routes, miri-covered; not worth unsafe without
+  that coverage, hence filed rather than folded into the quality wave.
+
+## ATLAS-LETO-OPERATOR-OWNED-LHS — operator chains allocate per term [minor] — todo
+
+- Owner: unclaimed. Evidence: audit 2026-08-27 — `arithmetic.rs` operator
+  tier has only `&a op &b` impls, so an n-term expression allocates n−1
+  arrays and traverses twice per pair; no by-value `Array op &Array` impl
+  reuses the owned lhs buffer (the standard remedy, compatible with ADR
+  0004's two-tier split), and the closure traversal bypasses the leto-ops
+  SIMD `apply_slice` kernels.
+
+## ATLAS-LETO-MINMAX-NAN-CONTRACT — axis min/max NaN semantics undocumented and route-dependent [patch] — todo
+
+- Owner: unclaimed. Evidence: audit 2026-08-27 — `MinAxis`/`MaxAxis` strided
+  fold (`if value < acc`) ignores NaN after the first element but propagates
+  a first-element NaN, while the contiguous route delegates to hermes
+  `T::min_slice`/`max_slice`; if the SIMD contract differs, the same input
+  returns different results by layout. First step: pin the hermes kernel
+  contract, then document (or unify via `total_cmp` semantics) at this API.
 
 ## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [patch, complete]
 
