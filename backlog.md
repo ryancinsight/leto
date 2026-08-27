@@ -1,5 +1,28 @@
 # Leto Work Backlog
 
+## ATLAS-LETO-QUALITY-2026-08-27 — Mutable-iteration soundness + kernel fast paths [patch/minor] — in-progress
+
+- **Outcome:** close the three confirmed aliasing holes (mutable lane/axis
+  iteration and parallel kernels gate on zero-stride only where the partition
+  argument requires layout injectivity; yielded lane views expose overlapping
+  whole-window `&mut [T]`), then land the audited perf/memory cluster: logical
+  `fill` fast path, `scaled_add` slice path, `sum` storage validation,
+  kronecker checked size math, single-write reduce/matmul scratch,
+  `to_contiguous` through the tiled assign kernels, memory-order fast paths
+  for binary maps, and SAFETY comments on the touched unsafe blocks.
+- **Integrator:** claude-fable session 03d80d33 (atlas
+  ATLAS-PROVIDER-CHAIN-QUALITY-2026-08-27). Branch
+  `fix/leto-quality-2026-08-27`.
+- **Lease:** `crates/leto/src/application/iter/{lanes,axis}.rs`,
+  `crates/leto/src/application/view.rs`, `crates/leto/src/array.rs` region
+  fill/scaled_add, `crates/leto-ops/src/application/{map,unary,reduction}.rs`,
+  `crates/leto-ops/src/application/linalg/products/kronecker.rs`,
+  `arithmetic.rs`, and this board entry, through the item's merge.
+- **Acceptance:** aliasing repros rejected with typed errors (no two live
+  `&mut` to one element constructible from safe code); existing suite green;
+  new regression tests for each closed hole; clippy pedantic clean; doc sync.
+- **Last update:** 2026-08-27.
+
 ## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [patch, complete]
 
 **Outcome:** let allocation-sensitive consumers initialize final
