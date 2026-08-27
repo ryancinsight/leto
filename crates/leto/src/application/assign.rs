@@ -64,6 +64,12 @@ impl<T, const N: usize> ArrayViewMut<'_, T, N> {
         T: Copy,
         Rhs: AssignSource<T, N>,
     {
+        if self.window_shared {
+            // Iterator-yielded interleaved sub-views must not materialize
+            // their window as a slice (it contains sibling views' elements);
+            // assign through checked per-element access instead.
+            return assign_into_elements(self, rhs);
+        }
         let layout = self.layout;
         assign_into(layout, self.data_mut(), rhs)
     }
@@ -82,6 +88,33 @@ impl<T, const N: usize> ArrayViewMut<'_, T, N> {
         self.try_assign(rhs)
             .expect("invariant: assigned views have valid compatible layouts");
     }
+}
+
+/// Checked per-element assignment for views whose physical window is shared
+/// with sibling lane/axis views: every write goes through `get_mut`, never
+/// through a whole-window slice that would alias sibling elements.
+fn assign_into_elements<T, Rhs, const N: usize>(
+    destination: &mut ArrayViewMut<'_, T, N>,
+    source: &Rhs,
+) -> Result<()>
+where
+    T: Copy,
+    Rhs: AssignSource<T, N>,
+{
+    let destination_shape = destination.shape();
+    let source_shape = source.assign_shape();
+    if destination_shape != source_shape {
+        return Err(LetoError::ShapeMismatch {
+            lhs: destination_shape.to_vec(),
+            rhs: source_shape.to_vec(),
+        });
+    }
+    for linear in 0..destination.layout().checked_size()? {
+        let index = linear_to_index(linear, destination_shape);
+        let value = *source.assign_get(index)?;
+        *destination.get_mut(index)? = value;
+    }
+    Ok(())
 }
 
 fn assign_into<T, Rhs, const N: usize>(

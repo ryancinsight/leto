@@ -1,3 +1,36 @@
+use leto::{ArrayViewMut, LetoError, Result};
+
+/// Validate that `view` can serve as a mutable operation output.
+///
+/// Two requirements make slice-based output kernels sound: the view must
+/// exclusively own its physical window (an interleaved iterator-yielded
+/// sub-view still contains sibling views' elements, so materializing its
+/// window as `&mut [T]` would alias them), and its layout must be injective —
+/// a zero-stride check alone admits layouts (e.g. shape `[2, 2]`, strides
+/// `[1, 1]`) that map distinct logical indices onto one physical element,
+/// which double-applies serial kernels and races parallel ones.
+#[inline]
+pub(crate) fn validate_mutable_output<T, const N: usize>(
+    view: &ArrayViewMut<'_, T, N>,
+    role: &str,
+) -> Result<()> {
+    if !view.has_exclusive_window() {
+        return Err(LetoError::StorageError {
+            reason: format!(
+                "{role} output must exclusively own its storage window \
+                 (interleaved iterator-yielded sub-views are rejected)"
+            ),
+        });
+    }
+    view.layout().validate_storage_len(view.data().len())?;
+    if !view.layout().is_injective()? {
+        return Err(LetoError::StorageError {
+            reason: format!("{role} output layout must be injective (no aliasing)"),
+        });
+    }
+    Ok(())
+}
+
 /// Convert a flat row-major logical index into an N-dimensional index.
 #[inline(always)]
 pub(crate) fn index_from_flat<const N: usize>(flat: usize, shape: &[usize; N]) -> [usize; N] {

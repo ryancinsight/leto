@@ -6,6 +6,40 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [Unreleased]
 
+### Fixed
+
+- [patch] Mutable lane/axis iteration (`lanes_mut`, `axis_iter_mut`) now
+  requires full layout injectivity instead of only rejecting zero strides; a
+  zero-stride-free non-injective layout (for example shape `[2, 2]`, strides
+  `[1, 1]`) could previously hand out two live `&mut` to one element from safe
+  code.
+- [patch] Views yielded by mutable lane/axis iterators over interleaved
+  layouts no longer expose their physical window as a slice: `data`,
+  `data_mut`, `into_slice`, and `as_view` panic on such views (the window
+  contains sibling views' elements, so materializing it aliased their `&mut`
+  references — undefined behavior before this change). Per-element access,
+  `fill`, `try_assign`, `to_contiguous`, and the dense slice accessors
+  (`as_slice`, `as_mut_slice`, `as_slice_memory_order`,
+  `as_mut_slice_memory_order`) remain available; the new
+  `ArrayViewMut::has_exclusive_window` reports the state.
+- [patch] Every leto-ops mutable-output entry point (element-wise maps, zip,
+  scan, random, reductions, matmul, convolution) now rejects non-injective
+  output layouts and iterator-yielded interleaved sub-views with a typed
+  error; serial kernels previously double-applied such outputs and parallel
+  kernels raced on them.
+- [patch] `sum` validates its view's storage up front and panics on a
+  malformed (storage-exceeding) view instead of silently skipping rows and
+  returning a truncated total.
+- [patch] `kron` computes its output dimensions with checked multiplication,
+  returning a typed overflow error instead of wrapping in release builds and
+  under-allocating the buffer its unchecked writes assume.
+
+### Performance
+
+- [patch] `ArrayViewMut::fill` fills contiguous views through one dense
+  memory-order slice pass instead of a per-element odometer with checked
+  offset arithmetic per element.
+
 ### Removed
 
 - [major] The `LendingIterator` trait and the `application::iter::lending`

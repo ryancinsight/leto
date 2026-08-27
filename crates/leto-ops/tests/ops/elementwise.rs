@@ -196,6 +196,21 @@ fn test_map_into_uses_caller_owned_output() {
 }
 
 #[test]
+fn test_outputs_reject_non_injective_layouts() {
+    // Shape [2, 2], strides [1, 1] is zero-stride-free yet non-injective:
+    // logical (0, 1) and (1, 0) share physical offset 1. Serial kernels would
+    // double-apply and parallel kernels would race, so every mutable-output
+    // entry point must reject it with a typed error.
+    let aliased = Layout::try_new([2, 2], [1, 1], 0).unwrap();
+    let dense = Layout::c_contiguous([2, 2]).unwrap();
+    let input = Array::new(dense, VecStorage::new(vec![1.0f32, 2.0, 3.0, 4.0])).unwrap();
+
+    let mut out = Array::new(aliased, VecStorage::fill(4, 0.0f32)).unwrap();
+    assert!(map_into(&input.view(), &mut out.view_mut(), |v| v + 1.0).is_err());
+    assert!(binary_map::<AddOp, f32, 2>(&input.view(), &input.view(), &mut out.view_mut()).is_err());
+}
+
+#[test]
 fn special_unary_ops_match_eunomia_reference_values() {
     let input = Array::from_shape_vec([4], vec![0.0f64, 0.5, 1.0, 5.0]).unwrap();
 

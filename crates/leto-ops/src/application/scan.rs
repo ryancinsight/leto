@@ -1,3 +1,4 @@
+use crate::application::index::validate_mutable_output;
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
@@ -97,12 +98,7 @@ where
         });
     }
     input.layout().validate_storage_len(input.data().len())?;
-    output.layout().validate_storage_len(output.data().len())?;
-    if output.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "scan output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_mutable_output(output, "scan")?;
 
     let shape = input.shape();
     let len = shape[axis];

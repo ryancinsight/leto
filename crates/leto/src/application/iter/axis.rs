@@ -88,8 +88,14 @@ pub struct AxisIterMut<'a, T, const N: usize, const M: usize> {
 
 impl<'a, T, const N: usize, const M: usize> AxisIterMut<'a, T, N, M> {
     /// Create a new AxisIterMut from an ArrayViewMut and an axis.
+    ///
+    /// # Errors
+    /// [`crate::domain::error::LetoError`] if `axis >= N`, the layout does not
+    /// fit its storage, or the layout is not injective (any aliasing,
+    /// zero-stride or otherwise), which would make distinct subviews share
+    /// physical elements.
     pub fn new<R>(
-        mut view: ArrayViewMut<'a, T, N>,
+        view: ArrayViewMut<'a, T, N>,
         axis: usize,
         marker: R,
     ) -> crate::domain::error::Result<Self>
@@ -106,14 +112,20 @@ impl<'a, T, const N: usize, const M: usize> AxisIterMut<'a, T, N, M> {
         let sub_strides = marker.remove_strides(view.strides(), axis)?;
         let step_stride = view.strides()[axis];
         let current_offset = view.offset() as isize;
-        let data_len = view.data().len();
-        view.layout().validate_storage_len(data_len)?;
-        if view.layout().has_zero_stride_aliasing() {
+        view.layout().validate_storage_len(view.len)?;
+        // Distinct subviews are disjoint only under full injectivity: a
+        // zero-stride check alone admits layouts (e.g. shape [2, 2], strides
+        // [1, 1]) whose subviews map onto shared physical elements.
+        if !view.layout().is_injective()? {
             return Err(crate::domain::error::LetoError::StorageError {
-                reason: "axis mutable iterator requires non-aliasing layout".to_string(),
+                reason: "axis mutable iterator requires an injective (non-aliasing) layout"
+                    .to_string(),
             });
         }
-        let ptr = view.data_mut().as_mut_ptr();
+        // Raw base pointer, not `data_mut()`: materializing the whole window
+        // as `&mut [T]` is forbidden when `view` is itself an iterator-yielded
+        // sub-view over an interleaved layout (nested iteration stays legal).
+        let ptr = view.ptr.as_ptr();
 
         Ok(Self {
             ptr,
@@ -149,11 +161,22 @@ impl<'a, T, const N: usize, const M: usize> Iterator for AxisIterMut<'a, T, N, M
                 layout.offset() - min_offset,
             );
 
+            // SAFETY: the constructor validated the parent layout against its
+            // storage, and every subview offset is a parent element offset, so
+            // `[min_offset, max_offset]` lies inside the parent window and
+            // `ptr.add(min_offset)` is in bounds and non-null. Distinct
+            // subviews address disjoint elements (injective parent), so
+            // per-element access through the yielded view cannot alias a
+            // sibling; whole-window slice access is gated by `window_shared`.
             unsafe {
                 Some(ArrayViewMut {
                     layout: adjusted_layout,
                     ptr: std::ptr::NonNull::new_unchecked(self.ptr.add(min_offset)),
                     len: span_len,
+                    // An interleaved subview window still contains sibling
+                    // elements; only a dense window (span == logical size) is
+                    // exclusively owned.
+                    window_shared: span_len != adjusted_layout.size(),
                     _marker: std::marker::PhantomData,
                 })
             }

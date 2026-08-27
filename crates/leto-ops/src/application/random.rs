@@ -1,7 +1,7 @@
-use crate::application::index::RowMajorTraversal;
+use crate::application::index::{validate_mutable_output, RowMajorTraversal};
 use crate::domain::real::RealScalar;
 use crate::domain::rng::Xorshift64;
-use leto::{Array, ArrayViewMut, LetoError, Result, VecStorage};
+use leto::{Array, ArrayViewMut, Result, VecStorage};
 use std::sync::LazyLock;
 
 /// Fill a caller-owned view with i.i.d. uniform samples in `[low, high)`,
@@ -23,12 +23,7 @@ pub fn uniform_with_seed_into<T: RealScalar, const N: usize>(
         return Ok(());
     }
 
-    out.layout().validate_storage_len(out.data().len())?;
-    if out.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "random output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_mutable_output(out, "random")?;
     let size = out.layout().checked_size()?;
     let shape = out.shape();
     let out_layout = out.layout();
@@ -185,12 +180,7 @@ pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
         return Ok(());
     }
 
-    out.layout().validate_storage_len(out.data().len())?;
-    if out.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "random output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_mutable_output(out, "random")?;
     let size = out.layout().checked_size()?;
     let shape = out.shape();
     let out_layout = out.layout();

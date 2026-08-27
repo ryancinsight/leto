@@ -1,3 +1,4 @@
+use crate::application::index::validate_mutable_output;
 use leto::{ArrayView, ArrayViewMut, ConvolutionParameters, LetoError, Result};
 
 pub(super) struct ConvolutionPlan<const D: usize> {
@@ -23,13 +24,7 @@ impl<const D: usize> ConvolutionPlan<D> {
         parameters: ConvolutionParameters<D>,
         output: &ArrayViewMut<'_, T, R>,
     ) -> Result<Self> {
-        output.layout().validate_storage_len(output.data().len())?;
-        if output.layout().has_zero_stride_aliasing() {
-            return Err(LetoError::StorageError {
-                reason: "convolution output layout must not contain zero-stride aliasing"
-                    .to_string(),
-            });
-        }
+        validate_mutable_output(output, "convolution")?;
         Self::validate_readonly(input, weight, bias, parameters, &output.as_view())
     }
 
@@ -189,14 +184,7 @@ fn validate_gradient_target<T, const R: usize>(
     expected_shape: [usize; R],
     target_name: &str,
 ) -> Result<()> {
-    target.layout().validate_storage_len(target.data().len())?;
-    if target.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: format!(
-                "convolution {target_name} gradient layout must not contain zero-stride aliasing"
-            ),
-        });
-    }
+    validate_mutable_output(target, &format!("convolution {target_name} gradient"))?;
     if target.shape() != expected_shape {
         return Err(LetoError::ShapeMismatch {
             lhs: target.shape().to_vec(),

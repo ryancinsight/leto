@@ -1,4 +1,6 @@
-use crate::application::index::{index_from_flat, unit_stride_row_slice, RowMajorTraversal};
+use crate::application::index::{
+    index_from_flat, unit_stride_row_slice, validate_mutable_output, RowMajorTraversal,
+};
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
@@ -323,7 +325,7 @@ where
     }
 
     input.layout().validate_storage_len(input.data().len())?;
-    output.layout().validate_storage_len(output.data().len())?;
+    validate_mutable_output(output, "axis reduction")?;
 
     let axis_len = input.shape()[axis];
     if axis_len == 0 && !Op::ALLOW_EMPTY {
@@ -345,7 +347,6 @@ where
         && input_layout.strides()[0] == input.shape()[1] as isize
         && output_layout.strides()[1] == 1
         && output_layout.strides()[0] == out_shape[1] as isize
-        && !output_layout.has_zero_stride_aliasing()
     {
         let rows = input.shape()[0];
         let cols = input.shape()[1];
@@ -387,7 +388,9 @@ where
 
     #[cfg(feature = "parallel")]
     {
-        if out_size >= PARALLEL_THRESHOLD && !output_layout.has_zero_stride_aliasing() {
+        // Output injectivity is established by `validate_mutable_output`, so
+        // parallel workers' logical rows map to disjoint physical elements.
+        if out_size >= PARALLEL_THRESHOLD {
             parallel_reduce_axis_into::<Op, T, N>(AxisReductionContext {
                 out_size,
                 out_shape,

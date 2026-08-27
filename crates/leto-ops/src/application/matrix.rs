@@ -1,3 +1,4 @@
+use crate::application::index::validate_mutable_output;
 use crate::domain::scalar::Scalar;
 use crate::infrastructure::cache::MatmulTilePolicy;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result};
@@ -53,12 +54,7 @@ fn validate_matmul<T>(
 
     lhs.layout().validate_storage_len(lhs.data().len())?;
     rhs.layout().validate_storage_len(rhs.data().len())?;
-    out.layout().validate_storage_len(out.data().len())?;
-    if out.layout().has_zero_stride_aliasing() {
-        return Err(LetoError::StorageError {
-            reason: "matmul output layout must not contain zero-stride aliasing".to_string(),
-        });
-    }
+    validate_mutable_output(out, "matmul")?;
 
     Ok(MatmulLayout {
         rows,

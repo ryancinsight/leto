@@ -220,9 +220,10 @@ impl<'a, T, const N: usize, const M: usize> LanesMut<'a, T, N, M> {
     /// Build a mutable lane iterator over `view` along `axis`.
     ///
     /// # Errors
-    /// [`LetoError`] if `axis >= N`, the layout does not fit its storage, or the
-    /// layout aliases (a zero stride), which would make distinct lanes overlap.
-    pub(crate) fn new<R>(mut view: ArrayViewMut<'a, T, N>, axis: usize, marker: R) -> Result<Self>
+    /// [`LetoError`] if `axis >= N`, the layout does not fit its storage, or
+    /// the layout is not injective (any aliasing, zero-stride or otherwise),
+    /// which would make distinct lanes share physical elements.
+    pub(crate) fn new<R>(view: ArrayViewMut<'a, T, N>, axis: usize, marker: R) -> Result<Self>
     where
         R: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
     {
@@ -231,17 +232,23 @@ impl<'a, T, const N: usize, const M: usize> LanesMut<'a, T, N, M> {
                 reason: format!("Axis {axis} out of bounds for rank {N}"),
             });
         }
-        let data_len = view.data().len();
-        view.layout().validate_storage_len(data_len)?;
-        if view.layout().has_zero_stride_aliasing() {
+        view.layout().validate_storage_len(view.len)?;
+        // The partition theorem above requires full injectivity: a zero-stride
+        // check alone admits layouts (e.g. shape [2, 2], strides [1, 1]) whose
+        // distinct lanes map onto shared physical elements.
+        if !view.layout().is_injective()? {
             return Err(LetoError::StorageError {
-                reason: "lane mutable iterator requires non-aliasing layout".to_string(),
+                reason: "lane mutable iterator requires an injective (non-aliasing) layout"
+                    .to_string(),
             });
         }
         let (complement, axis_len, axis_stride) =
             lane_geometry(view.shape(), view.strides(), view.offset(), axis, marker)?;
         let back = complement.size();
-        let ptr = view.data_mut().as_mut_ptr();
+        // Raw base pointer, not `data_mut()`: materializing the whole window
+        // as `&mut [T]` is forbidden when `view` is itself an iterator-yielded
+        // sub-view over an interleaved layout (nested iteration stays legal).
+        let ptr = view.ptr.as_ptr();
         Ok(Self {
             ptr,
             complement,
@@ -282,11 +289,22 @@ impl<'a, T, const N: usize, const M: usize> Iterator for LanesMut<'a, T, N, M> {
             layout.offset() - min_offset,
         );
 
+        // SAFETY: the constructor validated the parent layout against its
+        // storage, and every lane offset is a parent element offset, so
+        // `[min_offset, max_offset]` lies inside the parent window and
+        // `ptr.add(min_offset)` is in bounds and non-null. Distinct lanes
+        // address disjoint elements (injective parent, partition theorem), so
+        // per-element access through the yielded view cannot alias a sibling;
+        // whole-window slice access is gated by `window_shared` below.
         unsafe {
             Some(ArrayViewMut {
                 layout: adjusted_layout,
                 ptr: std::ptr::NonNull::new_unchecked(self.ptr.add(min_offset)),
                 len: span_len,
+                // A non-unit lane stride leaves other lanes' elements inside
+                // this window; only a dense window (span == lane length) is
+                // exclusively owned.
+                window_shared: span_len != self.axis_len,
                 _marker: std::marker::PhantomData,
             })
         }
