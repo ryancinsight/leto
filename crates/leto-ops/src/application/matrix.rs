@@ -453,7 +453,9 @@ pub fn matmul_with_tile_policy<T: Scalar>(
     } else {
         let mut out_contig = Array::from_elem(out.shape(), T::ZERO);
         let mut out_view = out_contig.view_mut();
-        route_matmul(lhs, rhs, &mut out_view, false, tile_policy)?;
+        // The scratch is already zeroed; accumulating into it skips the
+        // kernel's own zero pass, so the output is written once, not twice.
+        route_matmul(lhs, rhs, &mut out_view, true, tile_policy)?;
         copy_back_to_out(&out_view, out)?;
         Ok(())
     }

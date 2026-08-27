@@ -189,10 +189,20 @@ where
     validate_binary_shapes(lhs, rhs, out)?;
     let out_shape = out.shape();
 
-    if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) =
-        (lhs.as_slice(), rhs.as_slice(), out.as_mut_slice())
+    // Equal shapes and identical strides make the three dense memory-order
+    // blocks enumerate the same logical element at each position, so any
+    // shared dense order (C, F, or permuted-contiguous) feeds the slice
+    // kernel — not only the canonical C order.
+    if lhs.shape() == out_shape
+        && rhs.shape() == out_shape
+        && lhs.strides() == out.strides()
+        && rhs.strides() == out.strides()
     {
-        if lhs.shape() == out_shape && rhs.shape() == out_shape {
+        if let (Some(lhs_slice), Some(rhs_slice), Some(out_slice)) = (
+            lhs.as_slice_memory_order(),
+            rhs.as_slice_memory_order(),
+            out.as_mut_slice_memory_order(),
+        ) {
             debug_assert_eq!(lhs_slice.len(), rhs_slice.len());
             debug_assert_eq!(lhs_slice.len(), out_slice.len());
 
