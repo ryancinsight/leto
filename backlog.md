@@ -1,5 +1,22 @@
 # Leto Work Backlog
 
+## LETO-MATMUL-PARITY-VERDICT-2026-08-28 — Dense matmul oracle parity re-measured and closed [patch] — done 2026-08-28
+
+- **Delivered:** the open "dense matmul remains slower than ndarray/nalgebra"
+  thread closes on fresh evidence, not new kernel work. A pinned same-binary
+  external probe (leto path-dep beside ndarray 0.16 / nalgebra 0.34, outside
+  the repo per the dependency policy; best-of-24 blocks, per-core pinning,
+  three-engine value agreement < 1e-6) at HEAD `f527685` measures the SERIAL
+  kernel 15–23 % ahead of ndarray at every oracle shape on the P-core (64²
+  0.77x … 512² 0.85x) and 2–3x ahead of nalgebra; the default parallel entry
+  is 1.8–15x ahead. The recorded deficit predated the re-landed dense
+  `T::tiled_gemm` route and the Hermes lane overhaul. Full table, method, and
+  limits: `gap_audit.md` (dense matmul oracle parity — CLOSED). The
+  packing-scratch / register-micro-kernel lever is retired; re-open trigger
+  is an `oracle_compare/matmul_leto_*` median regression or a fresh external
+  re-comparison, with the rejected-candidate list still binding.
+- **Integrator:** Claude session 5050c72a.
+
 ## ATLAS-LETO-QUALITY-2026-08-27 — Mutable-iteration soundness + kernel fast paths [patch] — done 2026-08-27
 
 - **Delivered:** PR #129 (`dfea36f`..merge) — injectivity gates on

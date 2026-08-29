@@ -1266,9 +1266,9 @@ Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul
   oracle shapes and are not retained. Hermes `axpy_rows_batch` improves the
   local themis-0.9 128x128 Leto oracle median from 212.64 µs to 98.853 µs when
   gated to that row regime, but broad depth-batched routing regressed other
-  oracle shapes and is not retained. Next work needs allocation-controlled
-  reusable packing scratch or a verified external micro-kernel provider with
-  profile evidence.
+  oracle shapes and is not retained. (The "next work needs packing scratch or
+  an external micro-kernel" conclusion here is superseded: the 2026-08-28
+  re-measurement below closed the parity gap without either lever.)
 - themis-0.9 migration + dependency resolution (re-diagnosed/MEASURED
   2026-06-15). Three coupled facts:
   1. **`Cargo.lock` is gitignored** in leto (`.gitignore`), so there is no
@@ -1619,12 +1619,25 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 - matmul output zeroing now uses dense and unit-stride row slice fills before
   the strided fallback. This is a memory-efficiency cleanup in the initialization
   phase, not a parity claim; the contraction bottleneck remains open.
-- dense matmul oracle parity: 64x64, 128x128, and 256x256 Leto medians remain
-  slower than ndarray/nalgebra after the fused multi-row AXPY improvement. Next
-  kernel work targets row/block/column micro-kernel shape, cache-geometry
-  selection, and allocation-controlled reusable packing scratch; no
-  replacement-performance claim is valid until this comparison is closed.
-  Rejected paths now include local row-loop rewrites, existing Hermes tiled
-  GEMM, reduced parallelism, smaller row blocks, and first-row initialization.
-  The next candidate needs a true register micro-kernel or an
-  allocation-controlled packing API with reusable scratch.
+- dense matmul oracle parity — CLOSED 2026-08-28, premise superseded by
+  measurement. The recorded deficit (64² 17.4 vs 8.5 µs, 128² 109 vs 66.5,
+  256² 1063 vs 496) predates the re-landed dense `T::tiled_gemm` route and
+  the Hermes lane-throughput overhaul (hermes ADR 017 + the dispatch fix);
+  re-measured at HEAD `f527685` with a pinned same-binary external probe
+  (leto path-dep beside ndarray 0.16 / nalgebra 0.34 — outside the repo, per
+  the no-external-comparator dependency policy; best of 24 blocks per call,
+  thread pinned per core type, three-engine value agreement asserted below
+  1e-6):
+  serial (leto-ops without `parallel`), leto/ndarray on the pinned P-core:
+  64² 12.1/15.8 µs = 0.77x, 128² 92.2/117.3 = 0.79x, 256² 764/898 = 0.85x,
+  512² 6574/7759 = 0.85x — the Leto serial kernel is 15–23 % ahead at every
+  oracle shape, and 2–3x ahead of nalgebra. E-core: parity within noise
+  except 128² at 1.28x, the one cell not won. The default (parallel) entry
+  is 1.8x ahead at 64² and up to 15x at 512² against the references'
+  single-threaded execution. The packing-scratch / register-micro-kernel
+  lever is retired with the gap: re-open only on a regression of the
+  `oracle_compare/matmul_leto_*` medians or a fresh external re-comparison,
+  not on the superseded numbers above. The rejected-candidate list stays
+  binding for any reopened work. Limits: one AVX2 host, one value
+  distribution, references at default features (matrixmultiply runtime
+  detection); the E-core 128² cell is recorded, not disputed.
