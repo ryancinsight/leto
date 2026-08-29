@@ -9,7 +9,10 @@
   three-engine value agreement < 1e-6) at HEAD `f527685` measures the SERIAL
   kernel 15–23 % ahead of ndarray at every oracle shape on the P-core (64²
   0.77x … 512² 0.85x) and 2–3x ahead of nalgebra; the default parallel entry
-  is 1.8–15x ahead. The recorded deficit predated the re-landed dense
+  is 1.8–15x ahead of the references' single-threaded execution (neither
+  reference threads at default features, so that ratio measures Leto's
+  runtime advantage, not kernel parity — the serial row above is the
+  kernel-parity evidence). The recorded deficit predated the re-landed dense
   `T::tiled_gemm` route and the Hermes lane overhaul. Full table, method, and
   limits: `gap_audit.md` (dense matmul oracle parity — CLOSED). The
   packing-scratch / register-micro-kernel lever is retired; re-open trigger
