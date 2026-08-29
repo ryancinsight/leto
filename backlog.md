@@ -25,29 +25,66 @@
 
 - **Integrator:** claude-fable session 03d80d33 subagent.
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
-  `crates/leto-ops/src/application/reduction.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.
-- **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS`, `ATLAS-LETO-REDUCE-SINGLE-WRITE`.
+- **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS` (done),
+  `ATLAS-LETO-REDUCE-SINGLE-WRITE` (stays filed — see its entry).
 
-### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — in-progress
+### ATLAS-LETO-OPERATOR-OWNED-LHS — operator chains allocate per term [minor] — done 2026-08-28
 
-- Owner: claude-fable session 03d80d33 subagent. Evidence: audit 2026-08-27 — `reduce_axis` allocates
-  `VecStorage::fill(size, T::ZERO)` then `reduce_axis_into` writes every
-  element (both serial and parallel paths cover all offsets exactly once);
-  for small `axis_len` the memset is up to ~50% extra write traffic.
-  Direction: `MaybeUninit` storage with a written-everywhere proof spanning
-  the serial and parallel routes, miri-covered; not worth unsafe without
-  that coverage, hence filed rather than folded into the quality wave.
+- **Delivered:** `62a0434` — owned-receiver `Add`/`Sub`/`Mul`/`Div`/`Neg` impls
+  writing through the consumed lhs allocation. Allocation counts (counting
+  global allocator, `crates/leto/tests/operator_allocations.rs`): 3-term chain
+  2 → 1, 5-term 4 → 1, owned scalar/neg → 0. Pinned criterion (P-cores 0-3):
+  3-term 64x64 1.505 → 1.323 us (−12%), 5-term 64x64 3.658 → 2.481 us (−32%);
+  3-term 256x256 unchanged within CI (bandwidth-bound). Miri clean over the
+  arithmetic suite (14/14).
+- **Correction to the filed evidence:** the audit's "closure traversal bypasses
+  the leto-ops SIMD `apply_slice` kernels" is not actionable in core —
+  `leto-ops` depends on `leto`, so the SIMD tier is strictly downstream and
+  core calling it would be circular. Routing operators through those kernels
+  needs the ADR 0001 kernel-relocation option that ADR 0004 explicitly
+  declined; not reopened here.
 
-### ATLAS-LETO-OPERATOR-OWNED-LHS — operator chains allocate per term [minor] — in-progress
+### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo
 
-- Owner: claude-fable session 03d80d33 subagent. Evidence: audit 2026-08-27 — `arithmetic.rs` operator
-  tier has only `&a op &b` impls, so an n-term expression allocates n−1
-  arrays and traverses twice per pair; no by-value `Array op &Array` impl
-  reuses the owned lhs buffer (the standard remedy, compatible with ADR
-  0004's two-tier split), and the closure traversal bypasses the leto-ops
-  SIMD `apply_slice` kernels.
+- Owner: unclaimed (examined 2026-08-28 under `ATLAS-LETO-OP-PERF-2026-08-28`;
+  deliberately not implemented). Original evidence: audit 2026-08-27 —
+  `reduce_axis` allocates `VecStorage::fill(size, T::ZERO)` then
+  `reduce_axis_into` writes every element; for small `axis_len` the memset is
+  up to ~50% extra write traffic.
+- **Coverage proof — established**, so a later attempt need not redo it. All
+  three routes of `reduce_axis_into` write each output offset exactly once:
+  (1) the `N == 2 && axis == 0` fast path writes `col in 0..cols` and output
+  shape is `[1, cols]`, in both the `rows == 0` and general branches;
+  (2) the serial route iterates `flat_idx in 0..out_size` through the
+  bijection `offset_of(index_from_flat(..))`, which for the fresh
+  offset-0 C-contiguous output is the identity onto `0..out_size`;
+  (3) the parallel route's `parallel_for_chunks` covers `0..len` disjointly
+  (`start = idx * chunk`, `end = min(start + chunk, len)`, `idx` over
+  `len.div_ceil(chunk)`) and each `flat_idx` writes once.
+- **Cost premise is weaker than filed.** `VecStorage::fill` is
+  `vec![value; len]`, and for a zero-valued primitive that hits std's
+  `SpecFromElem` specialization: measured `alloc_zeroed` +1 / plain alloc +0
+  for `f64` zero, versus plain +2 for a nonzero element. So the fill is a
+  `calloc`, not malloc-plus-memset — for a large fresh output the zero pages
+  come from the OS with no write traffic, and the first-touch page faults are
+  paid by the single write either way. Redundant write traffic is real only
+  for small or allocator-recycled blocks, well below the filed ~50%.
+- **Blocker (not the proof — the API shape).** `reduce_axis_into` is public and
+  writes through `&mut ArrayViewMut<'_, T, N>`, whose `data_mut()` yields
+  `&mut [T]`; the parallel route derives its `*mut T` from that same slice.
+  Constructing a `&mut [T]` over uninitialized memory is UB regardless of
+  coverage, so single-write construction requires either changing that public
+  signature to carry a `MaybeUninit<T>` output or duplicating the ~140-line
+  three-route body over an uninit output — the second being the duplication
+  the consolidation rules forbid. Both exceed [patch] scope.
+- **Direction if resumed:** reclassify as [minor] and make the output type a
+  parameter of one generic body (an output-slot abstraction implemented for
+  both `&mut [T]` and `&mut [MaybeUninit<T>]`) so there is still one
+  reduction traversal; then panic-safety for a partially-initialized buffer
+  and miri coverage become tractable. Weigh it against the corrected cost
+  model above — the win may not justify the unsafe surface.
 
 ## ATLAS-LETO-MINMAX-NAN-CONTRACT — axis min/max NaN semantics undocumented and route-dependent [patch] — todo
 
