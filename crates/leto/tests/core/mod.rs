@@ -2,6 +2,7 @@ pub mod arithmetic;
 pub mod array_api;
 pub mod assignment;
 pub mod chunks;
+pub mod consumer_contract;
 pub mod dynamic;
 pub mod geometry;
 pub mod indexing;
