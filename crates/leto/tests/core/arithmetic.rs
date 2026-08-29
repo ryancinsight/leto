@@ -163,3 +163,114 @@ fn shape_mismatch_panics() {
     let b = Array2::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
     let _ = &a + &b;
 }
+
+#[test]
+#[should_panic(expected = "equal shapes")]
+fn owned_lhs_shape_mismatch_panics() {
+    let a = Array2::from_shape_vec([2, 2], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+    let b = Array2::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let _ = a + &b;
+}
+
+#[test]
+fn owned_lhs_operators_match_borrowed_lhs() {
+    // The owned receiver writes into its own allocation; the observable value
+    // must equal the allocating borrowed form element for element.
+    let (la, lb) = leto_pair();
+    let a_slice = la.storage().as_slice().to_vec();
+    let b_slice = lb.storage().as_slice().to_vec();
+
+    assert_eq!(
+        (la.clone() + &lb).storage().as_slice(),
+        ref_add(&a_slice, &b_slice)
+    );
+    assert_eq!(
+        (la.clone() - &lb).storage().as_slice(),
+        ref_sub(&a_slice, &b_slice)
+    );
+    assert_eq!(
+        (la.clone() * &lb).storage().as_slice(),
+        ref_mul(&a_slice, &b_slice)
+    );
+    assert_eq!(
+        (la.clone() / &lb).storage().as_slice(),
+        ref_div(&a_slice, &b_slice)
+    );
+
+    // Both operands owned: the left allocation is kept, the right dropped.
+    assert_eq!(
+        (la.clone() + lb.clone()).storage().as_slice(),
+        ref_add(&a_slice, &b_slice)
+    );
+}
+
+#[test]
+fn owned_lhs_scalar_and_neg_match_borrowed_lhs() {
+    let (la, _) = leto_pair();
+    let a_slice = la.storage().as_slice().to_vec();
+
+    assert_eq!(
+        (la.clone() + 2.0).storage().as_slice(),
+        ref_scalar_add(&a_slice, 2.0)
+    );
+    assert_eq!(
+        (la.clone() - 1.5).storage().as_slice(),
+        ref_scalar_sub(&a_slice, 1.5)
+    );
+    assert_eq!(
+        (la.clone() * 3.0).storage().as_slice(),
+        ref_scalar_mul(&a_slice, 3.0)
+    );
+    assert_eq!(
+        (la.clone() / 2.0).storage().as_slice(),
+        ref_scalar_div(&a_slice, 2.0)
+    );
+    assert_eq!((-la).storage().as_slice(), ref_neg(&a_slice));
+}
+
+#[test]
+fn owned_lhs_reuses_the_left_allocation() {
+    // The buffer-reuse contract, observed directly: the owned operator returns
+    // the same heap allocation it consumed, so a chain adds no allocation.
+    let (la, lb) = leto_pair();
+    let before = la.storage().as_slice().as_ptr();
+    let sum = la + &lb;
+    assert_eq!(
+        sum.storage().as_slice().as_ptr(),
+        before,
+        "owned lhs must write into its existing allocation"
+    );
+}
+
+#[test]
+fn owned_lhs_accepts_a_strided_right_operand() {
+    // Right operand is a transposed (non-C-contiguous) source, so the owned
+    // route walks the logical-order element iterator rather than a slice.
+    let a = Array2::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let b = Array2::from_shape_vec([3, 2], vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0]).unwrap();
+    let b_t = b.transpose([1, 0]).unwrap();
+    let expected: Vec<f64> = a
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(b_t.iter())
+        .map(|(x, y)| x + y)
+        .collect();
+    let owned = a + &b_t.to_contiguous();
+    assert_eq!(owned.storage().as_slice(), &expected);
+}
+
+#[test]
+fn chained_operators_compose_without_intermediate_refs() {
+    // The owned receiver makes the natural chain syntax type-check: the middle
+    // term is an owned temporary reused in place rather than re-borrowed.
+    let (la, lb) = leto_pair();
+    let lc = Array2::from_shape_vec([3, 4], seq(12, 0.125, 0.5)).unwrap();
+    let a_slice = la.storage().as_slice().to_vec();
+    let b_slice = lb.storage().as_slice().to_vec();
+    let c_slice = lc.storage().as_slice().to_vec();
+
+    let chained = &la + &lb + &lc;
+    let expected = ref_add(&ref_add(&a_slice, &b_slice), &c_slice);
+    assert_eq!(chained.storage().as_slice(), &expected);
+}

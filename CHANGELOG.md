@@ -6,6 +6,19 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [Unreleased]
 
+### Added
+
+- [minor] Owned-receiver elementwise operators on `Array`: `a + &b`, `a + b`,
+  `a * scalar`, and `-a` consume the left operand and write the result into its
+  existing allocation. A chained expression now allocates once instead of once
+  per term — `&a + &b + &c` performs 1 allocation where the borrowed form
+  `&(&a + &b) + &c` performs 2, and a 5-term chain drops from 4 to 1 — and the
+  natural chain syntax type-checks, since Rust does not auto-borrow an operator's
+  left operand. Purely additive: the borrowed `&a op &b` tier, its allocating
+  behavior, and its shape-mismatch panic are unchanged, and no previously
+  compiling expression changes meaning. Owned-receiver forms are the follow-up
+  ADR 0004 records as additive.
+
 ### Fixed
 
 - [patch] Mutable lane/axis iteration (`lanes_mut`, `axis_iter_mut`) now
