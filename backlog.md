@@ -21,9 +21,18 @@
   surface should carry one failure contract. Breaking ([minor] 0.x); needs a
   consumer sweep (coeus backend adapters) in the same co-evolution unit.
 
-## ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo
+## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
 
-- Owner: unclaimed. Evidence: audit 2026-08-27 — `reduce_axis` allocates
+- **Integrator:** claude-fable session 03d80d33 subagent.
+- **Lease:** `crates/leto/src/application/arithmetic.rs`,
+  `crates/leto-ops/src/application/reduction.rs`,
+  `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
+- **Last-update:** 2026-08-28.
+- **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS`, `ATLAS-LETO-REDUCE-SINGLE-WRITE`.
+
+### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — in-progress
+
+- Owner: claude-fable session 03d80d33 subagent. Evidence: audit 2026-08-27 — `reduce_axis` allocates
   `VecStorage::fill(size, T::ZERO)` then `reduce_axis_into` writes every
   element (both serial and parallel paths cover all offsets exactly once);
   for small `axis_len` the memset is up to ~50% extra write traffic.
@@ -31,9 +40,9 @@
   the serial and parallel routes, miri-covered; not worth unsafe without
   that coverage, hence filed rather than folded into the quality wave.
 
-## ATLAS-LETO-OPERATOR-OWNED-LHS — operator chains allocate per term [minor] — todo
+### ATLAS-LETO-OPERATOR-OWNED-LHS — operator chains allocate per term [minor] — in-progress
 
-- Owner: unclaimed. Evidence: audit 2026-08-27 — `arithmetic.rs` operator
+- Owner: claude-fable session 03d80d33 subagent. Evidence: audit 2026-08-27 — `arithmetic.rs` operator
   tier has only `&a op &b` impls, so an n-term expression allocates n−1
   arrays and traverses twice per pair; no by-value `Array op &Array` impl
   reuses the owned lhs buffer (the standard remedy, compatible with ADR
