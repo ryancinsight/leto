@@ -96,6 +96,37 @@ impl<T: RealScalar> QrDecomposition<T> {
         (self.rows, self.cols)
     }
 
+    /// The row-major `m × n` packed factors: element `(i, j)` is at `i * n + j`.
+    ///
+    /// `R` occupies the upper triangle (`j ≥ i`). Reflector `k`'s vector spans
+    /// rows `k..m` of column `k`, but its **head** `v_k[k]` is *not* here: the
+    /// diagonal slot `k * n + k` holds `R[k][k]` instead, so the head comes from
+    /// [`Self::heads`] and only the tail entries `packed[r * n + k]`, `r > k`,
+    /// come from this slice. [`Self::q`] is the canonical application of the
+    /// three slices together.
+    #[must_use]
+    #[inline]
+    pub fn packed(&self) -> &[T] {
+        &self.packed
+    }
+
+    /// Householder vector head components `v_k[k]`, indexed by reflector `k`
+    /// (`k < min(m, n)`); the diagonal slots of [`Self::packed`] hold `R`
+    /// instead. Applied by [`Self::q`].
+    #[must_use]
+    #[inline]
+    pub fn heads(&self) -> &[T] {
+        &self.heads
+    }
+
+    /// Reflector coefficients `β_k = 2 / (v_kᵀ v_k)`, indexed by reflector `k`
+    /// (`k < min(m, n)`), for `H_k = I − β_k v_k v_kᵀ`. Applied by [`Self::q`].
+    #[must_use]
+    #[inline]
+    pub fn betas(&self) -> &[T] {
+        &self.betas
+    }
+
     /// Materialize the orthogonal factor `Q` (`m × m`).
     #[must_use]
     pub fn q(&self) -> Array2<T> {
@@ -145,5 +176,75 @@ impl<T: RealScalar> QrDecomposition<T> {
             }
         }
         Array2::from_shape_vec([m, n], r).expect("R shape matches storage")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pins the documented indexing of `packed`/`heads`/`betas`: a consumer that
+    /// applies the reflectors itself (the hephaestus device-side `Q` driver) must
+    /// reproduce `q()` exactly. Reconstruction is written out here rather than
+    /// delegated, so a storage-layout change breaks this test instead of silently
+    /// breaking consumers.
+    #[test]
+    fn reflector_accessors_reproduce_q() {
+        let a = Array2::from_vec(
+            [4, 3],
+            vec![
+                1.0, 2.0, 3.0, //
+                4.0, 5.0, 6.0, //
+                7.0, 8.0, 10.0, //
+                11.0, 13.0, 17.0,
+            ],
+        )
+        .expect("4x3 literal matches the declared shape");
+        let qr = qr_decompose(&a.view()).expect("full-rank 4x3 matrix factors");
+
+        let (m, n) = qr.shape();
+        let packed = qr.packed();
+        let heads = qr.heads();
+        let betas = qr.betas();
+
+        // Q = H_0 ⋯ H_{limit-1} applied to the identity, accumulated right to
+        // left: start from I and apply reflector k for k = limit-1 down to 0.
+        let mut q = vec![0.0_f64; m * m];
+        for i in 0..m {
+            q[i * m + i] = 1.0;
+        }
+
+        let limit = n.min(m);
+        for k in (0..limit).rev() {
+            let beta = betas[k];
+            if beta == 0.0 {
+                continue;
+            }
+            for col in 0..m {
+                // vᵀ q[:, col]: head from `heads[k]`, tail from column k of the
+                // packed factors below the diagonal.
+                let mut dot = heads[k] * q[k * m + col];
+                for r in (k + 1)..m {
+                    dot += packed[r * n + k] * q[r * m + col];
+                }
+                let scaled = beta * dot;
+                q[k * m + col] -= scaled * heads[k];
+                for r in (k + 1)..m {
+                    q[r * m + col] -= scaled * packed[r * n + k];
+                }
+            }
+        }
+
+        // Bitwise equality, no tolerance: this reconstruction performs the same
+        // IEEE-754 operations on the same values in the same order as `q()`, so
+        // every intermediate rounds identically. Any difference means the
+        // accessors do not expose what `q()` consumes — the defect this pins.
+        let expected = qr.q();
+        assert_eq!(
+            q.as_slice(),
+            expected
+                .as_slice()
+                .expect("q() returns dense row-major storage")
+        );
     }
 }
