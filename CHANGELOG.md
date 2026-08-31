@@ -8,6 +8,17 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] Read accessors for `QrDecomposition`'s compact Householder
+  representation: `packed()`, `heads()`, and `betas()` expose the factor slices
+  `from_raw_parts` already accepts, so a consumer can apply the reflectors
+  itself — the hephaestus WGPU backend accumulates `Q` device-side instead of
+  materializing it on the host via `q()`. Purely additive; no field, signature,
+  or behavior changes, and no setters. The `packed` docs state the one
+  non-obvious indexing rule (reflector `k` spans rows `k..m` of column `k`, but
+  its head comes from `heads()[k]` because the diagonal slot holds `R`), pinned
+  by a test that reconstructs `Q` from the three slices and matches `q()`
+  bitwise.
+
 - [minor] Owned-receiver elementwise operators on `Array`: `a + &b`, `a + b`,
   `a * scalar`, and `-a` consume the left operand and write the result into its
   existing allocation. A chained expression now allocates once instead of once

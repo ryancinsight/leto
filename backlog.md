@@ -1,5 +1,15 @@
 # Leto Work Backlog
 
+## ATLAS-LETO-QR-REFLECTOR-ACCESSORS-2026-08-31 — Read side for the QR compact reflector storage [minor] — in-progress
+
+- **Delivered:** `QrDecomposition::{packed, heads, betas}` — the read
+  counterpart to the existing `from_raw_parts`, so the hephaestus WGPU backend
+  accumulates `Q` device-side rather than materializing it host-side via `q()`.
+  Indexing pinned by `reflector_accessors_reproduce_q` (bitwise match to `q()`).
+  Gates: fmt clean, clippy `-D warnings` clean, nextest 535/535, doctests 20/20.
+  PR open, unmerged.
+- **Integrator:** Claude session 5050c72a.
+
 ## LETO-MATMUL-PARITY-VERDICT-2026-08-28 — Dense matmul oracle parity re-measured and closed [patch] — done 2026-08-28
 
 - **Delivered:** the open "dense matmul remains slower than ndarray/nalgebra"
