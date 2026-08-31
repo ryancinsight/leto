@@ -1647,6 +1647,8 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 - matmul output zeroing now uses dense and unit-stride row slice fills before
   the strided fallback. This is a memory-efficiency cleanup in the initialization
   phase, not a parity claim; the contraction bottleneck remains open.
+  **Superseded 2026-08-28** by the dense matmul parity closure below: the
+  serial kernel measures ahead of ndarray at every oracle shape.
 - dense matmul oracle parity — CLOSED 2026-08-28, premise superseded by
   measurement. The recorded deficit (64² 17.4 vs 8.5 µs, 128² 109 vs 66.5,
   256² 1063 vs 496) predates the re-landed dense `T::tiled_gemm` route and

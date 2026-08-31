@@ -80,7 +80,7 @@
   doctests, Rustdoc, and 196/196 minor SemVer checks; two local AVX2 Criterion
   runs retain the selected regime (ADR 0027). **Last-update:** 2026-09-01.
 
-## ATLAS-LETO-QR-REFLECTOR-ACCESSORS-2026-08-31 — Read side for the QR compact reflector storage [minor] — in-progress
+## ATLAS-LETO-QR-REFLECTOR-ACCESSORS-2026-08-31 — Read side for the QR compact reflector storage [minor] — done 2026-08-31
 
 - **Delivered:** `QrDecomposition::{packed, heads, betas}` — the read
   counterpart to the existing `from_raw_parts`, so the hephaestus WGPU backend
