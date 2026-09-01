@@ -703,6 +703,60 @@ its closed form; focused package gates pass. **Evidence:** all-target/all-featur
 check and warning-denied Clippy; configured Nextest 575/575; doctests 9/9; and
 warning-denied rustdoc.
 
+## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no intensity gate [minor] — ready
+
+- **Outcome:** give bandwidth-bound ops an in-place path that reaches the
+  cache-residency gate, as `unary_map_into` already does for the into-output
+  form. `UnaryOp::COMPUTE_BOUND` has no in-place consumer: `unary_map_into`
+  honors it, and nothing else does.
+- **Driver.** `LETO-PARALLEL-INTENSITY-1` (below) records acceptance as *"every
+  bandwidth-bound elementwise path gates on cache residency"*. That is not
+  true of `map_inplace`, which was outside the converted set — its scope named
+  `unary.rs`, but only the `_into` entries moved. `map_inplace` still gates on
+  the flat `PARALLEL_THRESHOLD` element count for every op and every scalar.
+  That item's "Remaining: none for the threshold policy" is therefore
+  overstated; this item carries the remainder rather than reopening it.
+- **Evidence** (36 MiB-L3 AVX2 host; `map_inplace` against a hand-written
+  sequential loop over the identical slice and the identical closure, both
+  monomorphized from the same generic `F: Fn(T) -> T`, best-of-9 blocks). The
+  control reads ratio 1.00 at every sub-threshold length, which is what
+  establishes that the comparison isolates dispatch:
+
+  | elems | KiB (f64) | f64 ratio | f32 ratio | dispatch |
+  |---|---|---|---|---|
+  | 16384-49152 | 128-384 | 1.00 | 1.00 | sequential |
+  | 65536 | 512 | **5.85** | **8.45** | parallel |
+  | 98304 | 768 | **4.85** | **7.82** | parallel |
+  | 131072 | 1024 | **6.44** | **9.80** | parallel |
+  | 262144 | 2048 | 2.14 | 5.37 | parallel |
+  | 524288 | 4096 | 1.09 | 3.71 | parallel |
+  | 1048576 | 8192 | 0.29 | 0.35 | parallel |
+  | 4194304 | 32768 | 0.16 | 0.31 | parallel |
+
+  Ratios above 1.0 are parallel losing. The bandwidth-bound crossover sits near
+  **1M elements for both scalars** — an element count, not a byte count, which
+  is itself worth noting against the LLC-byte model the `_into` gate uses. A
+  compute-bound control (`sin`, `f64`) inverts cleanly: 0.15 at the same 65536
+  gate, confirming the flat constant is right for the case it now serves.
+- **Scope/non-goals:** a typed in-place entry (`unary_map_inplace`) routing
+  through the existing `map_into_gated` policy. No change to `map_inplace`'s
+  raw-closure behavior — its eager default is deliberate and documented, and
+  changing it would regress compute-bound closures by the inverse factor. No
+  new threshold constant; no change to the `_into` or binary gates.
+- **Acceptance:** value-identical to `map_inplace` for the same op; a
+  `COMPUTE_BOUND = false` op stays sequential below the cache gate and matches
+  the sequential control within noise across 64 KiB-2 MiB; a `COMPUTE_BOUND`
+  op parallelizes exactly as today; zero allocations after caller storage.
+- **Deferred, with reason — no caller.** `AbsOp`/`NegOp` declare
+  `COMPUTE_BOUND = false` but no in-stack consumer maps them in place: a stack
+  sweep of `map_inplace(` finds no caller in leto, apollo, hephaestus, or
+  kwavers. Building the API now would be speculative generality. The hazard is
+  documented at the call site instead, so a consumer meets it in Rustdoc rather
+  than in a profile.
+- **Re-open trigger:** the first bandwidth-bound in-place caller in the stack,
+  or an external report against the published `map_inplace`.
+- **Integrator:** Claude session 03d80d33. **Last-update:** 2026-09-01.
+
 ## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, done]
 
 **Owner:** unclaimed
@@ -741,9 +795,17 @@ Intensity`.
 the raw-closure `map_into`/`mapv` default to bandwidth-bound — currently eager to
 avoid regressing rare compute-bound closures, which should use typed ops anyway.
 
-**Acceptance:** met — every bandwidth-bound elementwise path gates on cache
-residency; the sweep confirms parallel wins above L3 and is correctly avoided
-below; no compute-bound regression; full warning-denied gate green.
+**Acceptance:** met for the converted set — binary, `unary_map_into`,
+`scalar_map_into`, and reductions gate on cache residency; the sweep confirms
+parallel wins above L3 and is correctly avoided below; no compute-bound
+regression; full warning-denied gate green.
+
+**Correction (2026-09-01):** this previously read "every bandwidth-bound
+elementwise path", which overstated the converted set. `map_inplace` was not
+converted and still gates on the flat element count; measured at up to 9.8x
+slower for a bandwidth-bound closure while cache-resident. Carried by
+`LETO-INPLACE-INTENSITY-GATE-2026-09-01` above; "Remaining: none" above applies
+to the converted set only.
 
 ## LETO-EUNOMIA-PRECISION-1 — Reduced-precision ownership [major, done]
 
