@@ -1,5 +1,35 @@
 # Leto Work Backlog
 
+## LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01 [patch] — todo
+
+- **Context:** `ATLAS-LETO-CACHE-LINE-TOPOLOGY` (PR #137) made
+  `cache_line_bytes()` report the width themis actually observes instead of an
+  unconditional 64. That accessor has **no in-tree consumer**, so the merged
+  fix changes no kernel decision. The decision that does depend on line width
+  is `line_elements<T>()` (`crates/leto-ops/src/application/index.rs:178`),
+  which hardcodes `64 / size_of::<T>()` as the micro-tile side and is
+  documented as such at lines 105-113. It is a `const fn`, so it cannot read
+  runtime geometry without restructuring `TileGeometry` construction.
+- **Impact is bounded, not a defect.** Under-estimating is the conservative
+  direction for tiling: a 64-derived tile on a 128-byte-line part touches each
+  line twice rather than consuming it once — lost reuse, never wrong results.
+  Over-estimating is the harmful direction (a 128-assumption on a 64-byte part
+  quadruples a 2-D tile's working set and can overflow the L1 budget), which is
+  why 64 stays the fallback. So this item buys measured throughput on
+  wide-line parts; it does not fix a bug.
+- **Acceptance oracle:** a benchmark on a part reporting 128-byte lines shows
+  the runtime-geometry tile beating the const-64 tile beyond noise, on pinned
+  cores, with the baseline stored. **If the delta is inside noise, the correct
+  outcome is to close this item unfixed and record 64 as measured-adequate** —
+  do not land the restructuring on the strength of the reasoning above.
+- **Constraint:** this host reports 64-byte lines at every level, so it
+  **cannot** produce the discriminating measurement. Either source a
+  128-byte-line part or drive `TileGeometry` from an injected geometry in a
+  bench harness so the tile side varies without the topology varying. State
+  which was used; a 64-byte-host measurement is not evidence either way.
+- **Non-goals:** false-sharing padding — a different width whose safe error
+  direction is the opposite one, and which must not reuse this constant.
+
 ## ATLAS-LETO-CACHE-LINE-TOPOLOGY-2026-09-01 — Cache-line width read from topology [patch] — review
 
 - **Outcome:** `CacheGeometry::cache_line_bytes` reports the platform width
