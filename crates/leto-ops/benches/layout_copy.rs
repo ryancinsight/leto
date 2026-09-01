@@ -10,13 +10,17 @@
     reason = "benchmark setup treats a violated precondition as a failure"
 )]
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use leto::{Array2, Complex};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use eunomia::Pod;
+use hermes_simd::LaneScalar;
+use leto::{Array2, ArrayView2, ArrayViewMut2, Complex, Layout};
+use leto_ops::transpose_complex_matrices;
 use std::hint::black_box;
 use std::time::Duration;
 
 const TRANSPOSE_TILE: usize = 32;
 const SHAPES: [[usize; 2]; 4] = [[4_096, 16], [4_096, 64], [16_384, 16], [65_536, 4]];
+const COMPLEX_BATCHES: [(usize, usize, usize); 2] = [(1_024, 4, 4), (256, 16, 16)];
 
 fn input(shape: [usize; 2]) -> Array2<Complex<f64>> {
     Array2::from_shape_fn(shape, |[row, column]| {
@@ -149,6 +153,114 @@ fn bench_layout_copy(c: &mut Criterion) {
     }
 }
 
+fn expected_batch<T: Copy + Default>(
+    source: &[Complex<T>],
+    matrix_count: usize,
+    rows: usize,
+    columns: usize,
+) -> Vec<Complex<T>> {
+    let matrix_len = rows * columns;
+    let mut output = vec![Complex::default(); source.len()];
+    for matrix in 0..matrix_count {
+        let base = matrix * matrix_len;
+        for row in 0..rows {
+            for column in 0..columns {
+                output[base + column * rows + row] = source[base + row * columns + column];
+            }
+        }
+    }
+    output
+}
+
+fn generic_batch_assign<T: Copy>(
+    source: &[T],
+    destination: &mut [T],
+    matrix_len: usize,
+    source_layout: Layout<2>,
+    destination_layout: Layout<2>,
+) {
+    for (source_matrix, destination_matrix) in source
+        .chunks_exact(matrix_len)
+        .zip(destination.chunks_exact_mut(matrix_len))
+    {
+        let source_view = ArrayView2::try_new(source_layout, source_matrix).unwrap();
+        let mut destination_view =
+            ArrayViewMut2::try_new(destination_layout, destination_matrix).unwrap();
+        destination_view.assign(&source_view);
+    }
+}
+
+fn bench_complex_scalar<T>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    scalar: &str,
+    matrix_count: usize,
+    rows: usize,
+    columns: usize,
+    value: impl Fn(usize) -> Complex<T>,
+) where
+    T: LaneScalar + Pod + Default + PartialEq + core::fmt::Debug,
+{
+    let matrix_len = rows * columns;
+    let len = matrix_count * matrix_len;
+    let source = (0..len).map(value).collect::<Vec<_>>();
+    let expected = expected_batch(&source, matrix_count, rows, columns);
+    let source_layout = Layout::f_contiguous([columns, rows]).unwrap();
+    let destination_layout = Layout::c_contiguous([columns, rows]).unwrap();
+    let parameter = format!("{scalar}/{matrix_count}x{rows}x{columns}");
+
+    let mut provider_output = vec![Complex::default(); len];
+    transpose_complex_matrices(&source, &mut provider_output, matrix_count, rows, columns).unwrap();
+    assert_eq!(provider_output, expected);
+    group.bench_with_input(BenchmarkId::new("provider", &parameter), &(), |b, ()| {
+        b.iter(|| {
+            transpose_complex_matrices(
+                black_box(&source),
+                black_box(&mut provider_output),
+                matrix_count,
+                rows,
+                columns,
+            )
+            .unwrap();
+            black_box(provider_output[len - 1])
+        });
+    });
+
+    let mut generic_output = vec![Complex::default(); len];
+    generic_batch_assign(
+        &source,
+        &mut generic_output,
+        matrix_len,
+        source_layout,
+        destination_layout,
+    );
+    assert_eq!(generic_output, expected);
+    group.bench_with_input(BenchmarkId::new("generic", &parameter), &(), |b, ()| {
+        b.iter(|| {
+            generic_batch_assign(
+                black_box(&source),
+                black_box(&mut generic_output),
+                matrix_len,
+                source_layout,
+                destination_layout,
+            );
+            black_box(generic_output[len - 1])
+        });
+    });
+}
+
+fn bench_complex_batches(c: &mut Criterion) {
+    let mut group = c.benchmark_group("layout_copy/complex_batch");
+    for (matrix_count, rows, columns) in COMPLEX_BATCHES {
+        bench_complex_scalar(&mut group, "f32", matrix_count, rows, columns, |index| {
+            Complex::new(index as f32 + 0.25, -(index as f32) - 0.5)
+        });
+        bench_complex_scalar(&mut group, "f64", matrix_count, rows, columns, |index| {
+            Complex::new(index as f64 + 0.25, -(index as f64) - 0.5)
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = layout_copy;
     config = Criterion::default()
@@ -156,6 +268,6 @@ criterion_group! {
         .warm_up_time(Duration::from_millis(300))
         .measurement_time(Duration::from_millis(500))
         .without_plots();
-    targets = bench_layout_copy
+    targets = bench_layout_copy, bench_complex_batches
 }
 criterion_main!(layout_copy);

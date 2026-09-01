@@ -1,5 +1,33 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-09-01 Apollo complex matrix-batch transpose
+
+Apollo's retained 3-D FFT transpose phase exposed a distinct layout workload:
+hundreds of adjacent 4x4 or 16x16 complex matrices. A broad Hermes route was
+rejected because it regressed large rectangular 2-D matrices by 5-52% in the
+consumer attribution instrument. The accepted operation therefore lives in
+`leto-ops`, selects exact-width register tiles only at 256 or more matrices
+whose sides are at most 16, and retains Leto's generic tiled assignment for
+every other shape or unsupported hardware width. Leto core remains independent
+of Hermes.
+
+The bounded `layout_copy/complex_batch` Criterion instrument constructs and
+validates input/output storage outside timing, reuses the same buffers, returns
+a computed output sample through `black_box`, and pairs the provider with the
+unchanged generic assignment in one binary. Across two independently launched
+runs on the local Windows AVX2 workstation, provider median reductions were
+86.7-88.8% (`f32`) and 88.9-89.8% (`f64`) for 1,024x4x4, and 28.3-53.3%
+(`f32`) and 26.1-30.5% (`f64`) for 256x16x16. In the second run, provider and
+generic median 95% confidence intervals were respectively 9.453-9.584 us and
+71.189-73.286 us (`f32`, 1,024x4x4), 8.041-8.341 us and 71.258-75.256 us
+(`f64`, 1,024x4x4), 14.558-15.560 us and 32.313-33.234 us (`f32`, 256x16x16),
+and 22.273-25.176 us and 31.769-33.659 us (`f64`, 256x16x16). Every interval
+pair is disjoint. A warmed global-allocator census records zero allocations and
+zero reallocations for both scalar types. These are layout-operation results,
+not full FFT or cross-machine evidence; Apollo integration owns that closure.
+
+See [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md).
+
 ## 2026-08-26 Apollo FFT layout-copy baseline
 
 Apollo's non-contiguous 2-D and 3-D FFT axis passes use caller-owned scratch

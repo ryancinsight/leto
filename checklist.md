@@ -1,5 +1,18 @@
 # Leto Development Checklist
 
+## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [minor, perf] — Codex
+
+- [x] Attribute Apollo's 3-D transpose phase with a pinned value-checked
+      instrument and reject the Apollo-owned implementation under ADR 0040.
+- [x] Add the Leto-owned checked complex matrix-batch operation with Hermes
+      register tiles and a generic allocation-free fallback.
+- [x] Prove f32/f64 full, ragged, asymmetric, empty, invalid-length, capability,
+      and warm zero-allocation behavior; run cross-target warning-denied gates.
+- [ ] Bind Apollo to the exact provider revision, delete the consumer-local
+      experiment, and reproduce the allocation and performance evidence.
+- [ ] Complete independent review, hosted gates, provider-first merge, and
+      Apollo consumer delivery.
+
 ## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 [patch, complete] — Codex
 
 - [x] Add a panic-safe generic Mnemosyne storage initializer that writes each
