@@ -791,8 +791,14 @@ warning-denied rustdoc.
   | 4194304 | 32768 | 0.16 | 0.31 | parallel |
 
   Ratios above 1.0 are parallel losing. The bandwidth-bound crossover sits near
-  **1M elements for both scalars** — an element count, not a byte count, which
-  is itself worth noting against the LLC-byte model the `_into` gate uses. A
+  **1M elements for both scalars** here. **Correction (2026-09-01):** this
+  originally read as evidence against the LLC-byte model the `_into` and binary
+  gates use. Measured directly on the binary path with a same-binary three-arm
+  probe (gate / sequential / naive scoped threads), the byte model holds: naive
+  parallel breaks even at 1.57M for f64 and between 2.1M and 3.1M for f32 —
+  exactly the bytes-over-L3 prediction, and nowhere near the ~3x-early
+  crossover an element count would imply. The in-place figure does not transfer
+  to a three-stream operation and is not a finding against that gate. A
   compute-bound control (`sin`, `f64`) inverts cleanly: 0.15 at the same 65536
   gate, confirming the flat constant is right for the case it now serves.
 - **Scope/non-goals:** a typed in-place entry (`unary_map_inplace`) routing
@@ -839,6 +845,16 @@ Intensity`.
   the efficient parallel tree-reduction does not over-parallelize, so the existing
   threshold is kept (no change needed). 305/305 tests green throughout.
 
+- **f32 coverage (2026-09-01).** The sweep below validated f64 only, and the
+  committed `parallel_crossover` bench instantiated f64 only — a generic
+  instantiation gap in the instrument: the gate scales by `size_of::<T>()`, so
+  one scalar validates one row of its model. A same-binary three-arm probe
+  (gate / sequential slice loop / naive scoped-thread add; best of 9) confirms
+  the model at f32 as well. Naive-parallel over sequential: f64 1.29x at 1M,
+  **0.55x at 1.57M** (the model's f64 crossover); f32 2.84x at 1M, 1.69x at
+  1.57M, 1.06x at 2.1M, **0.63x at 3.1M** (the model's f32 crossover). The gate
+  is at most ~1.3x conservative for f32, not the 3x an element-driven model
+  would imply. The bench is now generic over the scalar and runs both rows.
 - Crossover sweep (`parallel_crossover` bench, `add` 512k → 8M, gate vs
   `--no-default` serial) validates the L3-working-set threshold on a 36 MiB-L3
   host: below L3 the gate is serial and matches the serial baseline (512k 942 vs
