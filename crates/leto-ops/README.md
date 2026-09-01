@@ -23,6 +23,10 @@ let qr = a.qr()?;
   and `div`, with broadcasting into a caller-owned output shape.
 - Native `f32`/`f64` paths route through Hermes SIMD, which runtime-dispatches
   AVX-512/AVX2/NEON with a scalar fallback. SIMD is not a build feature.
+- `transpose_complex_matrices` moves homogeneous row-major matrix batches into
+  transposed caller-owned storage. Measured high-count small matrices use
+  exact-width Hermes register tiles; other shapes retain Leto's generic tiled
+  assignment.
 - Keep-dim axis reductions (`sum_axis`, `mean_axis`, `min_axis`, `max_axis`)
   and their caller-owned `*_into` forms, sharing one ZST-selected traversal.
 - Unary math markers (`ExpOp`, `LnOp`, `SqrtOp`, …) over a `RealScalar` bound,

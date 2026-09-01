@@ -8,6 +8,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] `leto_ops::transpose_complex_matrices` adds a checked,
+  allocation-free, caller-owned layout operation for homogeneous complex
+  matrix batches. It validates both complete slice lengths before mutation,
+  preserves asymmetric and ragged tails, and selects exact-width Hermes
+  register tiles only for the measured high-count small-matrix regime.
+
 - [minor] Read accessors for `QrDecomposition`'s compact Householder
   representation: `packed()`, `heads()`, and `betas()` expose the factor slices
   `from_raw_parts` already accepts, so a consumer can apply the reflectors
@@ -59,6 +65,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   under-allocating the buffer its unchecked writes assume.
 
 ### Performance
+
+- [patch] The new complex matrix-batch operation reduces transpose medians by
+  86.7-88.8% (`f32`) and 88.9-89.8% (`f64`) for 1,024 batches of 4x4 matrices,
+  and by 28.3-53.3% (`f32`) and 26.1-30.5% (`f64`) for 256 batches of 16x16
+  matrices, across two independently launched same-binary Criterion runs on
+  the local Windows AVX2 workstation. The paired control is Leto's unchanged
+  generic assignment; the claim does not extend to other shapes or machines.
 
 - [patch] `ArrayViewMut::fill` fills contiguous views through one dense
   memory-order slice pass instead of a per-element odometer with checked

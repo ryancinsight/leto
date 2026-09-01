@@ -8,6 +8,8 @@ pub mod diff;
 pub(crate) mod index;
 /// 1-D interpolation (linear, cubic spline, Lagrange).
 pub mod interpolation;
+/// Value-preserving layout movement kernels.
+pub mod layout;
 /// Dense linear algebra: eigensolver and norms.
 pub mod linalg;
 /// Classification loss operations.

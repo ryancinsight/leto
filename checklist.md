@@ -4,9 +4,9 @@
 
 - [x] Attribute Apollo's 3-D transpose phase with a pinned value-checked
       instrument and reject the Apollo-owned implementation under ADR 0040.
-- [ ] Add the Leto-owned checked complex matrix-batch operation with Hermes
+- [x] Add the Leto-owned checked complex matrix-batch operation with Hermes
       register tiles and a generic allocation-free fallback.
-- [ ] Prove f32/f64 full, ragged, asymmetric, empty, invalid-length, capability,
+- [x] Prove f32/f64 full, ragged, asymmetric, empty, invalid-length, capability,
       and warm zero-allocation behavior; run cross-target warning-denied gates.
 - [ ] Bind Apollo to the exact provider revision, delete the consumer-local
       experiment, and reproduce the allocation and performance evidence.
