@@ -1,6 +1,6 @@
 # Leto Work Backlog
 
-## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Register-tiled complex matrix batches [minor, perf] — in-progress
+## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Register-tiled complex matrix batches [minor, perf] — review
 
 - **Outcome:** add one Leto-owned, allocation-free C-destination/F-source
   complex matrix-batch operation that uses Hermes register-resident square
@@ -16,12 +16,12 @@
   Hermes only at the operation boundary when native complex lanes are useful;
   retain a value-identical generic fallback; and reproduce the measured Apollo
   3-D improvement without regressing its warm allocation census.
-- **Integrator:** Codex `/root`; **lease:** `crates/leto-ops` layout
-  implementation/re-export/tests/bench, `Cargo.lock`, ADR/CHANGELOG and this
-  item's PM entries. **Evidence:** final provider placement passes 3/3 value
-  and failure-atomicity cases, 1/1 warmed zero-allocation census, and the
-  selector boundary; two local AVX2 Criterion runs retain the selected regime
-  (ADR 0027). **Last-update:** 2026-09-01.
+- **Integrator:** Codex `/root`; **lease:** none. **Evidence:** provider source
+  `63d5cab` passes 3/3 value and failure-atomicity cases for f32/f64/F16, 1/1
+  warmed zero-allocation census, release repeats, AArch64 warning-denied
+  compilation, all-target/all-feature Clippy, 540/540 package Nextest, 21/21
+  doctests, Rustdoc, and 196/196 minor SemVer checks; two local AVX2 Criterion
+  runs retain the selected regime (ADR 0027). **Last-update:** 2026-09-01.
 
 ## ATLAS-LETO-QR-REFLECTOR-ACCESSORS-2026-08-31 — Read side for the QR compact reflector storage [minor] — in-progress
 
