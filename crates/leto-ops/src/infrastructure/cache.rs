@@ -14,14 +14,24 @@ pub const FALLBACK_L2_BYTES: usize = 256 * 1024;
 /// over-parallelization of a too-small value and the missed parallelism of a
 /// too-large one when detection fails. Real topology overrides it.
 pub const FALLBACK_L3_BYTES: usize = 8 * 1024 * 1024;
-/// Cache-line byte count used by current line-tiling kernels.
+/// Cache-line byte count used when no cache level reports a line width.
+///
+/// 64 bytes is the *narrowest* line width in current mainstream targets
+/// (x86-64, and the aarch64 parts that do not use 128), which is the
+/// conservative direction for the line-tiling this value feeds: a micro-tile
+/// derived from a 64-byte line is fully consumed on a 64-byte part and merely
+/// touches each 128-byte line twice on a wider one, whereas assuming 128 on a
+/// 64-byte part quadruples a two-dimensional tile's working set and can
+/// overflow the L1 budget. It is not a false-sharing padding width — a
+/// consumer needing that must read the platform value and handle its absence
+/// explicitly rather than inherit this floor.
 pub const FALLBACK_CACHE_LINE_BYTES: usize = 64;
 
 /// CPU cache geometry used to derive cache-aware kernel tile shapes.
 ///
 /// Evidence tier: type-level contract plus value-semantic unit tests. With the
-/// `topology` feature enabled, L1/L2 capacities are read from `themis`
-/// `CacheLevel` values; otherwise the documented
+/// `topology` feature enabled, L1/L2/L3 capacities and the cache-line width are
+/// read from `themis` `CacheLevel` values; otherwise the documented
 /// fallback constants are returned. The production convenience route retains
 /// the measured 32-row specialization; the explicit geometry-derived policy is
 /// consumed by both dense C×C and generic row-block routes and remains available
@@ -176,6 +186,12 @@ fn detect_cache_geometry() -> CacheGeometry {
 #[cfg(feature = "topology")]
 fn geometry_from_cache_levels(levels: &[themis::CacheLevel]) -> CacheGeometry {
     let mut geometry = CacheGeometry::fallback();
+    // `themis` reports a per-level line width as typed absence: `None` when the
+    // platform exposes no `coherency_line_size` / `CacheRelationship::LineSize`.
+    // That absence is carried here as an `Option` and resolved exactly once,
+    // after the scan, so the fallback constant cannot silently stand in for a
+    // reported value at any individual level.
+    let mut reported_line_bytes: Option<usize> = None;
     for level in levels {
         match level.level {
             1 if level.size_bytes > 0 => geometry.l1_bytes = level.size_bytes,
@@ -183,7 +199,16 @@ fn geometry_from_cache_levels(levels: &[themis::CacheLevel]) -> CacheGeometry {
             3 if level.size_bytes > 0 => geometry.l3_bytes = level.size_bytes,
             _ => {}
         }
+        // Widest line reported by any level, including levels whose capacity
+        // this policy does not model. A tile sized to the widest line is fully
+        // consumed at every level; reading only L1 under-tiles the parts that
+        // motivate this at all — Apple M-series and several aarch64 server
+        // parts report 128 bytes, at outer levels on some of them.
+        if let Some(line) = level.line_bytes.filter(|&line| line > 0) {
+            reported_line_bytes = Some(reported_line_bytes.map_or(line, |widest| line.max(widest)));
+        }
     }
+    geometry.cache_line_bytes = reported_line_bytes.unwrap_or(FALLBACK_CACHE_LINE_BYTES);
     geometry
 }
 
@@ -198,6 +223,9 @@ mod tests {
         assert_eq!(geometry.l1_bytes(), 32 * 1024);
         assert_eq!(geometry.l2_bytes(), 256 * 1024);
         assert_eq!(geometry.l3_bytes(), 8 * 1024 * 1024);
+        // The narrowest mainstream line, not a guess at the local part: an
+        // under-estimate keeps a derived micro-tile inside the L1 budget on
+        // every target, while an over-estimate does not.
         assert_eq!(geometry.cache_line_bytes(), 64);
     }
 
@@ -260,27 +288,24 @@ mod tests {
     }
 
     #[cfg(feature = "topology")]
+    fn cache_level(level: u32, size_bytes: usize, line_bytes: Option<usize>) -> themis::CacheLevel {
+        themis::CacheLevel {
+            level,
+            size_bytes,
+            line_bytes,
+            shared_processors: [0, 1].into(),
+        }
+    }
+
+    #[cfg(feature = "topology")]
     #[test]
-    fn cache_levels_override_l1_l2_l3_without_allocating_copies() {
+    fn cache_levels_override_capacities_and_line_width() {
+        // A 128-byte-line part (Apple M-series class). Every reported field is
+        // distinct from its fallback, so no assertion can pass by coincidence.
         let levels = [
-            themis::CacheLevel {
-                level: 1,
-                size_bytes: 48 * 1024,
-                line_bytes: Some(FALLBACK_CACHE_LINE_BYTES),
-                shared_processors: [0, 1].into(),
-            },
-            themis::CacheLevel {
-                level: 2,
-                size_bytes: 1024 * 1024,
-                line_bytes: Some(FALLBACK_CACHE_LINE_BYTES),
-                shared_processors: [0, 1].into(),
-            },
-            themis::CacheLevel {
-                level: 3,
-                size_bytes: 32 * 1024 * 1024,
-                line_bytes: Some(FALLBACK_CACHE_LINE_BYTES),
-                shared_processors: [0, 1, 2, 3].into(),
-            },
+            cache_level(1, 48 * 1024, Some(128)),
+            cache_level(2, 1024 * 1024, Some(128)),
+            cache_level(3, 32 * 1024 * 1024, Some(128)),
         ];
 
         let geometry = geometry_from_cache_levels(&levels);
@@ -288,32 +313,55 @@ mod tests {
         assert_eq!(geometry.l1_bytes(), 48 * 1024);
         assert_eq!(geometry.l2_bytes(), 1024 * 1024);
         assert_eq!(geometry.l3_bytes(), 32 * 1024 * 1024);
-        assert_eq!(geometry.cache_line_bytes(), FALLBACK_CACHE_LINE_BYTES);
+        assert_eq!(geometry.cache_line_bytes(), 128);
+    }
+
+    #[cfg(feature = "topology")]
+    #[test]
+    fn widest_reported_line_width_wins_across_levels() {
+        // Mixed widths, absence, and a level the capacity policy ignores: the
+        // widest *reported* line still governs, so a tile derived from it is
+        // fully consumed at every level.
+        let levels = [
+            cache_level(1, 64 * 1024, Some(64)),
+            cache_level(2, 4 * 1024 * 1024, None),
+            cache_level(4, 128 * 1024 * 1024, Some(128)),
+        ];
+
+        let geometry = geometry_from_cache_levels(&levels);
+
+        assert_eq!(geometry.cache_line_bytes(), 128);
+        assert_eq!(geometry.l1_bytes(), 64 * 1024);
+        assert_eq!(geometry.l2_bytes(), 4 * 1024 * 1024);
+    }
+
+    #[cfg(feature = "topology")]
+    #[test]
+    fn reported_line_width_narrower_than_the_fallback_is_honoured() {
+        // The fallback is a floor for *absence*, never a floor for a reported
+        // value: a platform reporting 32 bytes gets 32, not 64.
+        let levels = [cache_level(1, 16 * 1024, Some(32))];
+
+        let geometry = geometry_from_cache_levels(&levels);
+
+        assert_eq!(geometry.cache_line_bytes(), 32);
     }
 
     #[cfg(feature = "topology")]
     #[test]
     fn zero_sized_or_unknown_cache_levels_keep_fallbacks() {
         let levels = [
-            // Zero-sized L1 (reported but unusable) keeps the L1 fallback.
-            themis::CacheLevel {
-                level: 1,
-                size_bytes: 0,
-                line_bytes: None,
-                shared_processors: [0].into(),
-            },
+            // Zero-sized L1 (reported but unusable) keeps the L1 fallback, and
+            // a zero line width is absence in numeric disguise — also fallback.
+            cache_level(1, 0, Some(0)),
             // A level the policy does not model (4) is ignored, keeping every
             // fallback — including the L3 fallback the geometry still reports.
-            themis::CacheLevel {
-                level: 4,
-                size_bytes: 128 * 1024 * 1024,
-                line_bytes: None,
-                shared_processors: [0].into(),
-            },
+            cache_level(4, 128 * 1024 * 1024, None),
         ];
 
         let geometry = geometry_from_cache_levels(&levels);
 
         assert_eq!(geometry, CacheGeometry::fallback());
+        assert_eq!(geometry.cache_line_bytes(), FALLBACK_CACHE_LINE_BYTES);
     }
 }

@@ -1,5 +1,32 @@
 # Leto Work Backlog
 
+## ATLAS-LETO-CACHE-LINE-TOPOLOGY-2026-09-01 — Cache-line width read from topology [patch] — review
+
+- **Outcome:** `CacheGeometry::cache_line_bytes` reports the platform width
+  `themis` already detects on both backends, instead of always returning the
+  64-byte fallback constant.
+- **Scope/non-goals:** `geometry_from_cache_levels` and its unit tests in
+  `crates/leto-ops/src/infrastructure/cache.rs`, plus CHANGELOG. No change to
+  `CacheGeometry`'s shape or accessors, to L1/L2/L3 capacity selection, or to
+  any tiling policy that consumes the geometry.
+- **Acceptance:** a reported `line_bytes` reaches `cache_line_bytes()`
+  (including widths narrower than the fallback); the widest width across levels
+  governs when several are reported; typed absence (`None` or zero) resolves to
+  `FALLBACK_CACHE_LINE_BYTES` at one documented site.
+- **Evidence:** the three line-width tests were run against the reverted
+  production path and all three fail there returning `64` (expected `128`,
+  `128`, `32`), so they discriminate the fix rather than pin the old behavior;
+  the two absence tests pass under both, which is their contract. Gates at
+  `HEAD`: fmt clean, Clippy `--all-targets -D warnings` clean, Nextest 542/542,
+  21/21 doctests.
+- **Residual:** `line_elements<T>()` in `crates/leto-ops/src/application/index.rs`
+  still hardcodes the 64-byte line as a `const fn`; it is the only consumer-side
+  cache-line constant found and is out of this item's scope. `cache_line_bytes()`
+  itself currently has no in-tree consumer, so this fix corrects the reported
+  value without changing any kernel decision yet.
+- **Integrator:** Claude session 5050c72a; **lease:** none.
+  **Last-update:** 2026-09-01.
+
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Register-tiled complex matrix batches [minor, perf] — review
 
 - **Outcome:** add one Leto-owned, allocation-free C-destination/F-source
