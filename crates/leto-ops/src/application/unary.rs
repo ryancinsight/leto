@@ -4,10 +4,16 @@ use crate::application::index::{
 use crate::domain::RealScalar;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
-// Parallel execution only pays off when the working set exceeds L2 cache
-// (~256 KB per core on modern x86). Below this threshold the thread-pool
-// overhead dominates; above it NUMA-aware parallel execution gains bandwidth.
-// 256 KB / 4 bytes (f32) = 65536 elements.
+// The compute-bound gate. Bandwidth-bound work no longer reaches this constant:
+// it routes through `parallelize_bandwidth_bound`, which scales by
+// `size_of::<T>()` against the runtime-detected L3 (LETO-PARALLEL-INTENSITY-1).
+//
+// An element count is the correct unit here precisely because the op is
+// compute-bound: its cost scales with the number of elements, not with the
+// working-set bytes, so the gate must not scale by scalar width. Measured on a
+// 36 MiB-L3 AVX2 host, in-place `sin` over `f64` at exactly this length runs
+// 0.186 ns/elem parallel against 1.210 ns/elem sequential — parallelism already
+// pays 6.5x at the gate, so it opens no later than it should.
 #[cfg(feature = "parallel")]
 const PARALLEL_THRESHOLD: usize = 65536;
 
@@ -251,6 +257,23 @@ where
 /// is memory-order independent, so the contiguous fast path accepts any dense
 /// block (C or F). Zero-stride write aliasing is rejected because it would
 /// apply `f` to a single physical element more than once.
+///
+/// # Parallel dispatch
+///
+/// A raw closure's arithmetic intensity is not knowable, so `f` is treated as
+/// compute-bound and parallelized past a fixed element count, matching
+/// [`map_into`]. There is no in-place counterpart to [`unary_map_into`], so a
+/// bandwidth-bound op cannot currently reach the cache-residency gate that
+/// [`UnaryOp::COMPUTE_BOUND`] selects for the into-output form.
+///
+/// This costs a bandwidth-bound closure real time while the data is still
+/// cache-resident. Measured on a 36 MiB-L3 AVX2 host against an identical
+/// sequential loop over the same slice and closure, `|x| x * c` runs
+/// **5.9-6.4x slower** for `f64` and **8.5-9.8x slower** for `f32` from 65536
+/// elements through roughly 512 KiB, and only becomes profitable past about
+/// 1M elements. Prefer [`unary_map_into`] with a `COMPUTE_BOUND = false` op
+/// when the destination may differ, or keep such a map sequential by slicing
+/// below the gate. Tracked as `LETO-INPLACE-INTENSITY-GATE-2026-09-01`.
 pub fn map_inplace<T, F, const N: usize>(view: &mut ArrayViewMut<'_, T, N>, f: F) -> Result<()>
 where
     T: Copy + Send + Sync + 'static,
