@@ -25,7 +25,7 @@
 //! exception, matching `leto`/`leto`). Scalar operators and `Neg` never
 //! fail. An owned-lhs operator additionally requires that the left operand's
 //! layout address each element exactly once, since it writes through that
-//! layout; see [`binary_elementwise_in_place`].
+//! layout; see `binary_elementwise_in_place` (private).
 
 use crate::application::array::Array;
 use crate::application::reduction::iter_elements;
