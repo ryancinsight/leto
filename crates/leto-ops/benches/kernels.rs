@@ -334,21 +334,52 @@ fn bench_elementwise(c: &mut Criterion) {
 }
 
 fn bench_parallel_crossover(c: &mut Criterion) {
-    // Sweep bandwidth-bound   across the LLC-residency crossover to
-    // validate the working-set-vs-L3 parallel gate. Working set = 3·N·8 bytes, so
-    // on a 36 MiB L3 the gate's crossover sits near N ≈ 1.5M. Run under default
-    // features for the gate's decision,  for an all-serial
-    // baseline, and with the gate temporarily forced parallel to locate the true
-    // crossover during threshold calibration.
+    // Sweep bandwidth-bound `add` across the LLC-residency crossover to
+    // validate the working-set-vs-L3 parallel gate, instantiated at every
+    // scalar the gate serves: the gate scales the working set by
+    // `size_of::<T>()`, so a sweep at one scalar validates one row of that
+    // model. Working set = 3·N·size_of::<T>(); on a 36 MiB L3 the crossover
+    // sits near N ≈ 1.5M for f64 and N ≈ 3M for f32. Run under default
+    // features for the gate's decision, `--no-default-features` for an
+    // all-serial baseline, and with the gate temporarily forced parallel to
+    // locate the true crossover during threshold calibration.
+    //
+    // A same-binary three-arm probe (gate / sequential slice loop / naive
+    // scoped-thread add, 2026-09-01) put the naive-parallel break-even at
+    // 1.57M for f64 and between 2.1M and 3.1M for f32 — the byte model, not
+    // an element count; the in-place unary crossover near 1M elements for
+    // both scalars does not transfer to this three-stream path.
     let mut group = c.benchmark_group("parallel_crossover");
-    for &n in &[524_288usize, 1_048_576, 2_097_152, 4_194_304, 8_388_608] {
-        let a = Array::from_shape_vec([n], pinned_values(n, 1.0)).unwrap();
-        let b = Array::from_shape_vec([n], pinned_values(n, 0.5)).unwrap();
-        group.bench_function(format!("add_{}k", n / 1024), |bencher| {
+    crossover_rows::<f64>(&mut group, "f64");
+    crossover_rows::<f32>(&mut group, "f32");
+    group.finish();
+}
+
+fn crossover_rows<T: leto_ops::Scalar>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    scalar: &str,
+) {
+    // Exact in every scalar the gate serves, unlike a fractional factor, so the
+    // f32 and f64 rows add identical values and differ only in width.
+    let pinned = |len: usize, offset: usize| -> Vec<T> {
+        (0..len).map(|i| T::from_usize(i % 997 + offset)).collect()
+    };
+    for &n in &[
+        524_288usize,
+        1_048_576,
+        1_572_864,
+        2_097_152,
+        3_145_728,
+        4_194_304,
+        8_388_608,
+    ] {
+        let a = Array::from_shape_vec([n], pinned(n, 1)).unwrap();
+        let b = Array::from_shape_vec([n], pinned(n, 3)).unwrap();
+        group.bench_function(format!("add/{scalar}/{}k", n / 1024), |bencher| {
             bencher.iter_batched(
-                || Array::zeros([n]),
+                || Array::<T, _, 1>::zeros([n]),
                 |mut out| {
-                    leto_ops::binary_map::<AddOp, f64, 1>(
+                    leto_ops::binary_map::<AddOp, T, 1>(
                         black_box(&a.view()),
                         black_box(&b.view()),
                         &mut out.view_mut(),
@@ -360,7 +391,6 @@ fn bench_parallel_crossover(c: &mut Criterion) {
             );
         });
     }
-    group.finish();
 }
 
 fn bench_unary_map(c: &mut Criterion) {
