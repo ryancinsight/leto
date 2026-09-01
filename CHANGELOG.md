@@ -38,6 +38,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [patch] `CacheGeometry::cache_line_bytes` now reports the platform's
+  cache-line width instead of always returning the 64-byte fallback.
+  `geometry_from_cache_levels` matched `themis` `CacheLevel` records on `level`
+  and `size_bytes` only and never read `line_bytes`, so a 128-byte-line target
+  (Apple M-series, several aarch64 server parts) silently received 64 with no
+  absence surfaced. The widest width reported by any level now governs, and
+  `themis`'s typed absence (`None`, or a zero width) resolves to
+  `FALLBACK_CACHE_LINE_BYTES` at exactly one documented site rather than
+  winning implicitly per level. Capacity selection (L1/L2/L3) is unchanged.
+
 - [patch] Mutable lane/axis iteration (`lanes_mut`, `axis_iter_mut`) now
   requires full layout injectivity instead of only rejecting zero strides; a
   zero-stride-free non-injective layout (for example shape `[2, 2]`, strides
