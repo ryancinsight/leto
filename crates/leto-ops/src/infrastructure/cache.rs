@@ -192,12 +192,33 @@ fn geometry_from_cache_levels(levels: &[themis::CacheLevel]) -> CacheGeometry {
     // after the scan, so the fallback constant cannot silently stand in for a
     // reported value at any individual level.
     let mut reported_line_bytes: Option<usize> = None;
+    // Smallest capacity reported at each level, carried as typed absence for the
+    // same reason the line width is: a fallback constant must not compete with
+    // reported values during the scan. Taking `min` against the fallback
+    // directly would clamp every real cache down to it — `fallback`'s 256 KiB L2
+    // would beat this host's 3 MiB.
+    //
+    // Smallest, rather than the last entry scanned, because a hybrid part
+    // reports one entry per distinct cache and a level therefore arrives
+    // several times with different sizes: this host reports a 48 KiB P-core L1d
+    // beside a 32 KiB E-core L1d, and a 3 MiB private L2 beside a 4 MiB
+    // per-cluster one. Assigning unconditionally made the result depend on
+    // enumeration order, which is not a policy.
+    //
+    // A task does not choose its core — under work stealing it may run on
+    // either class — so a tile sized to the larger cache overflows on the
+    // smaller, while the smallest fits everywhere. This mirrors the widest-line
+    // rule below: both resolve a multi-valued report by stating which value the
+    // policy wants.
+    let mut reported: [Option<usize>; 3] = [None; 3];
     for level in levels {
-        match level.level {
-            1 if level.size_bytes > 0 => geometry.l1_bytes = level.size_bytes,
-            2 if level.size_bytes > 0 => geometry.l2_bytes = level.size_bytes,
-            3 if level.size_bytes > 0 => geometry.l3_bytes = level.size_bytes,
-            _ => {}
+        let slot = level
+            .level
+            .checked_sub(1)
+            .and_then(|index| usize::try_from(index).ok())
+            .and_then(|index| reported.get_mut(index));
+        if let Some(slot) = slot.filter(|_| level.size_bytes > 0) {
+            *slot = Some(slot.map_or(level.size_bytes, |smallest| smallest.min(level.size_bytes)));
         }
         // Widest line reported by any level, including levels whose capacity
         // this policy does not model. A tile sized to the widest line is fully
@@ -207,6 +228,15 @@ fn geometry_from_cache_levels(levels: &[themis::CacheLevel]) -> CacheGeometry {
         if let Some(line) = level.line_bytes.filter(|&line| line > 0) {
             reported_line_bytes = Some(reported_line_bytes.map_or(line, |widest| line.max(widest)));
         }
+    }
+    if let Some(l1) = reported[0] {
+        geometry.l1_bytes = l1;
+    }
+    if let Some(l2) = reported[1] {
+        geometry.l2_bytes = l2;
+    }
+    if let Some(l3) = reported[2] {
+        geometry.l3_bytes = l3;
     }
     geometry.cache_line_bytes = reported_line_bytes.unwrap_or(FALLBACK_CACHE_LINE_BYTES);
     geometry
@@ -295,6 +325,49 @@ mod tests {
             line_bytes,
             shared_processors: [0, 1].into(),
         }
+    }
+
+    #[cfg(feature = "topology")]
+    #[test]
+    fn heterogeneous_levels_resolve_to_the_smallest_reported_capacity() {
+        // A hybrid part reports one entry per distinct cache, so a level
+        // arrives several times with different sizes. This is the shape of a
+        // real Arrow Lake report: a 48 KiB P-core L1d beside a 32 KiB E-core
+        // L1d, and a 3 MiB private L2 beside a 4 MiB per-cluster one.
+        //
+        // The larger value is listed last in each pair, so a last-wins scan
+        // would return it and this case would fail.
+        let levels = [
+            cache_level(1, 32 * 1024, Some(64)),
+            cache_level(2, 3 * 1024 * 1024, Some(64)),
+            cache_level(1, 48 * 1024, Some(64)),
+            cache_level(2, 4 * 1024 * 1024, Some(64)),
+            cache_level(3, 36 * 1024 * 1024, Some(64)),
+        ];
+
+        let geometry = geometry_from_cache_levels(&levels);
+
+        // A tile sized to the larger cache overflows on the smaller core, and
+        // a task does not choose its core under work stealing.
+        assert_eq!(geometry.l1_bytes(), 32 * 1024);
+        assert_eq!(geometry.l2_bytes(), 3 * 1024 * 1024);
+        assert_eq!(geometry.l3_bytes(), 36 * 1024 * 1024);
+    }
+
+    #[cfg(feature = "topology")]
+    #[test]
+    fn a_reported_capacity_is_never_clamped_to_the_fallback() {
+        // Selecting the smallest must range over reported values only. Folding
+        // the fallback into the same comparison would clamp every real cache
+        // down to it -- the fallback L2 is 256 KiB, far below any real one.
+        let levels = [cache_level(2, 3 * 1024 * 1024, Some(64))];
+
+        let geometry = geometry_from_cache_levels(&levels);
+
+        assert_eq!(geometry.l2_bytes(), 3 * 1024 * 1024);
+        // Levels absent from the report still fall back rather than collapsing.
+        assert_eq!(geometry.l1_bytes(), CacheGeometry::fallback().l1_bytes());
+        assert_eq!(geometry.l3_bytes(), CacheGeometry::fallback().l3_bytes());
     }
 
     #[cfg(feature = "topology")]
