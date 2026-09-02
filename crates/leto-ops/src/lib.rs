@@ -124,6 +124,7 @@ pub use application::map::{
 pub use application::matrix::{batched_matmul, matmul, matmul_accumulate, matmul_with_tile_policy};
 pub use application::nonlinear::{AndersonAccelerator, AndersonConfig, AndersonMethod};
 pub use application::optimization::{minimize, LbfgsConfig, LbfgsMemory, LbfgsResult};
+pub use application::pooling::{pooling_backward_accumulate, pooling_forward_into, PoolingMode};
 pub use application::random::{
     normal_with_seed, normal_with_seed_into, uniform_with_seed, uniform_with_seed_into,
 };
@@ -136,6 +137,7 @@ pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
 };
 pub use application::signal::{blackman, hamming, hann, tukey, wrap_to_pi};
+pub use application::sliding_window::{fold_into, unfold_into};
 pub use application::sparse::{
     csc_spmv, csc_spmv_into, csr_to_dense, factor_numeric, factor_symbolic,
     factor_symbolic_with_ordering, sparse_lu_solve, spgemm, spmm, spmm_into, spmv, spmv_into,
