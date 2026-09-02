@@ -131,13 +131,27 @@
 - **Integrator:** claude-fable session 03d80d33 (atlas
   ATLAS-PROVIDER-CHAIN-QUALITY-2026-08-27).
 
-## ATLAS-LETO-SUM-RESULT-UNIFICATION — `sum` panics where `reduce_all` returns Result [minor] — todo
+## ATLAS-LETO-SUM-RESULT-UNIFICATION — `sum` panics where `reduce_all` returns Result [minor] — done 2026-09-01
 
 - Owner: unclaimed. Evidence: audit 2026-08-27 + PR #129 — `sum` keeps its
   infallible `T` signature (now asserting storage validity) while
   `reduce_all` returns `Result<T>` for the same input class; one reduction
   surface should carry one failure contract. Breaking ([minor] 0.x); needs a
   consumer sweep (coeus backend adapters) in the same co-evolution unit.
+
+- **Resolved (2026-09-01, Claude) — one implementation, two honest signatures.**
+  The two surfaces differ in failure class, not by accident: `reduce_all`
+  returns `Err` for an empty input under an op with no identity (`MinAxis`,
+  `MaxAxis`), a genuine input-dependent failure; `sum` has an identity, so
+  its only failure was the malformed-view invariant that validated
+  construction cannot reach — a programmer error, which the panic policy
+  keeps as a panic. So the contract stays split, but the *implementation*
+  no longer is: `sum` was a second copy of `reduce_all`'s traversal (same
+  fast rows, same element order, so bitwise-identical results) and now
+  delegates to `reduce_all::<SumAxis>` with the impossible failure
+  `expect`ed at the boundary. Net −34 lines. No consumer sweep needed:
+  `coeus_ops::sum` already wraps in `Result` on its side. Workspace gate
+  clean: 910/910, Clippy, Rustdoc, fmt.
 
 ## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
 

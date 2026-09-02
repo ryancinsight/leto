@@ -1,5 +1,5 @@
 use crate::application::index::{
-    line_elements, unit_stride_row_slice, validate_mutable_output, RowMajorTraversal, TileGeometry,
+    line_elements, validate_mutable_output, RowMajorTraversal, TileGeometry,
 };
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
@@ -580,6 +580,13 @@ where
 
 /// Sum reduction over all elements of the view.
 ///
+/// One implementation with [`reduce_all`](crate::application::reduction::reduce_all): this is
+/// `reduce_all::<SumAxis>` with the failure that cannot happen removed from
+/// the signature. Sum has an identity, so an empty view is `T::ZERO` rather
+/// than an error, and the only remaining failure is a malformed view, which
+/// is a programmer error rather than an input class. `min`/`max` keep their
+/// `Result` because an empty input is a genuine domain failure for them.
+///
 /// # Panics
 ///
 /// Panics when the view's layout addresses offsets outside its storage (a
@@ -587,45 +594,6 @@ where
 /// truncated sum is never returned. Validated construction via
 /// [`ArrayView::try_new`] cannot reach this panic.
 pub fn sum<T: Scalar, const N: usize>(arr: &ArrayView<'_, T, N>) -> T {
-    arr.layout()
-        .validate_storage_len(arr.data().len())
-        .expect("sum requires a view whose layout fits its storage");
-
-    // Sum is logically order-independent, so any dense memory-order slice
-    // (C, F, or permuted-contiguous) feeds the vectorized reduction directly.
-    if let Some(slice) = arr.as_slice_memory_order() {
-        return T::sum_slice(slice);
-    }
-
-    let size = arr.size();
-    let shape = arr.shape();
-    let layout = arr.layout();
-    let data = arr.data();
-
-    let mut total = T::ZERO;
-    if let Some(traversal) = RowMajorTraversal::new(size, shape) {
-        let step = traversal.last_axis_stride(layout);
-        for row in 0..traversal.rows() {
-            let base_idx = traversal.base_index(row);
-            let mut offset = layout
-                .offset_of(base_idx)
-                .expect("invariant: validated layout resolves every logical index")
-                as isize;
-            if let Some(slice) = unit_stride_row_slice(data, offset, step, traversal.inner()) {
-                total = total.add(T::sum_slice(slice));
-                continue;
-            }
-            for _ in 0..traversal.inner() {
-                let index = usize::try_from(offset)
-                    .expect("invariant: validated layout yields non-negative offsets");
-                total = total.add(
-                    *data
-                        .get(index)
-                        .expect("invariant: validated offset is in bounds"),
-                );
-                offset += step;
-            }
-        }
-    }
-    total
+    crate::application::reduction::reduce_all::<crate::application::reduction::SumAxis, T, N>(arr)
+        .expect("invariant: sum requires a view whose layout fits its storage")
 }
