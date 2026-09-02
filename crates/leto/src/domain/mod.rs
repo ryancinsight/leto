@@ -12,6 +12,8 @@ pub mod layout;
 pub mod remove_axis;
 /// leto-style slicing arguments and normalization.
 pub mod slice;
+/// Validated spatial sliding-window parameters.
+pub mod window;
 
 pub use convolution::{ConvolutionParameters, TransposedConvolutionParameters};
 pub use dynamic::LayoutDyn;
@@ -20,3 +22,4 @@ pub use insert_axis::InsertAxis;
 pub use layout::Layout;
 pub use remove_axis::{RankMarker, RemoveAxis};
 pub use slice::SliceArg;
+pub use window::WindowParameters;

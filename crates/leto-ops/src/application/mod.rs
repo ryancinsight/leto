@@ -22,6 +22,8 @@ pub mod matrix;
 pub mod nonlinear;
 /// Numerical optimisation utilities.
 pub mod optimization;
+/// Generic CPU pooling kernels.
+pub mod pooling;
 /// Numerical quadrature (integration) rules.
 pub mod quadrature;
 /// Deterministic seeded random array constructors.
@@ -32,6 +34,8 @@ pub mod reduction;
 pub mod scan;
 /// Signal-processing mathematical primitives (window functions, phase wrapping).
 pub mod signal;
+/// Generic CPU unfold/fold sliding-window kernels.
+pub mod sliding_window;
 /// Sparse matrices (CSR) and sparsity-exploiting kernels.
 pub mod sparse;
 /// Special mathematical functions (sinc, erf, Bessel, Legendre).
@@ -47,6 +51,7 @@ pub mod stencil;
 pub mod unary;
 /// Rank-1 vector operations.
 pub mod vector;
+mod window;
 /// Mutable zip-map operations.
 pub mod zip;
 
