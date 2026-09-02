@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 
 /// Owned array storage backed by a standard heap `Vec`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[allow(clippy::unsafe_derive_deserialize)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "VecStorage derive is safe for POD storage"
+)]
 pub struct VecStorage<T> {
     data: Vec<T>,
 }
@@ -42,7 +45,7 @@ impl<T> VecStorage<T> {
     /// is safe when the caller fully overwrites the storage (e.g. a
     /// keep-dim reduction that writes every output element).
     #[inline]
-    #[allow(clippy::uninit_vec)]
+    #[expect(clippy::uninit_vec, reason = "caller fully overwrites uninit storage")]
     pub fn uninit(len: usize) -> Self {
         let mut data = Vec::with_capacity(len);
         // SAFETY: `Vec::with_capacity` allocates `len` elements, `set_len`
