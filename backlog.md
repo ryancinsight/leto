@@ -777,7 +777,7 @@ its closed form; focused package gates pass. **Evidence:** all-target/all-featur
 check and warning-denied Clippy; configured Nextest 575/575; doctests 9/9; and
 warning-denied rustdoc.
 
-## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no intensity gate [minor] — ready
+## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no intensity gate [minor] — blocked (re-open: first bandwidth-bound in-place caller)
 
 - **Outcome:** give bandwidth-bound ops an in-place path that reaches the
   cache-residency gate, as `unary_map_into` already does for the into-output
@@ -835,6 +835,10 @@ warning-denied rustdoc.
   than in a profile.
 - **Re-open trigger:** the first bandwidth-bound in-place caller in the stack,
   or an external report against the published `map_inplace`.
+- **Trigger re-checked 2026-09-02:** still unfired. The stack's only in-place
+  mappers are kwavers-boundary's `indexed_map_inplace` calls (CPML, adaptive
+  coupling), and that entry is a sequential row walk with no parallel gate, so
+  it neither pays nor needs the threshold this item concerns.
 - **Integrator:** Claude session 03d80d33. **Last-update:** 2026-09-01.
 
 ## LETO-PARALLEL-INTENSITY-1 — Arithmetic-intensity-aware parallel thresholds [minor, done]
