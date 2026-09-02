@@ -185,12 +185,16 @@ pub trait Scalar: NumericElement {
     }
 }
 
+/// Routes every slice operation through [`SimdStrategy`] first, falling back
+/// to the scalar loop when the strategy declines. `$from_usize` is the
+/// type's index conversion: a primitive cast for the machine floats, the
+/// widening constructor for the reduced-precision types.
 macro_rules! impl_scalar_simd {
-    ($t:ty) => {
+    ($t:ty, $from_usize:expr) => {
         impl Scalar for $t {
             #[inline(always)]
             fn from_usize(value: usize) -> Self {
-                value as $t
+                ($from_usize)(value)
             }
 
             #[inline]
@@ -419,15 +423,13 @@ macro_rules! impl_scalar_plain {
     };
 }
 
-impl_scalar_simd!(f32);
-impl_scalar_simd!(f64);
-
-impl Scalar for F16 {
-    #[inline(always)]
-    fn from_usize(value: usize) -> Self {
-        Self::from_f32(value as f32)
-    }
-}
+impl_scalar_simd!(f32, |value: usize| value as f32);
+impl_scalar_simd!(f64, |value: usize| value as f64);
+// hermes serves every routed operation at F16 (elementwise, reductions,
+// axpy, gemv, tiled GEMM), so the half-precision type takes the same path as
+// the machine floats; Bf16 waits on its provider kernels
+// (hermes HS-REDUCED-PRECISION-ELEMENTWISE-2026-09-01).
+impl_scalar_simd!(F16, |value: usize| F16::from_f32(value as f32));
 
 impl Scalar for Bf16 {
     #[inline(always)]
