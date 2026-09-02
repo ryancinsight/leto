@@ -70,7 +70,7 @@
   Merged as PR #137. The `line_elements<T>()` residual is tracked as
   `LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01`.
 
-## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Register-tiled complex matrix batches [minor, perf] — review
+## ✅ ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Register-tiled complex matrix batches [minor, perf] — done 2026-09-02
 
 - **Outcome:** add one Leto-owned, allocation-free C-destination/F-source
   complex matrix-batch operation that uses Hermes register-resident square
@@ -91,7 +91,16 @@
   warmed zero-allocation census, release repeats, AArch64 warning-denied
   compilation, all-target/all-feature Clippy, 540/540 package Nextest, 21/21
   doctests, Rustdoc, and 196/196 minor SemVer checks; two local AVX2 Criterion
-  runs retain the selected regime (ADR 0027). **Last-update:** 2026-09-01.
+  runs retain the selected regime (ADR 0027).
+- **Closed 2026-09-02.** The integrator's claim went stale in `review`;
+  re-verified against the current tree rather than re-run: the operation is
+  published (`leto_ops::transpose_complex_matrices`), routed through hermes
+  register tiles in `application/layout/complex_batch.rs`, covered by
+  `tests/complex_transpose_allocations.rs`, recorded in ADR 0027 and the
+  CHANGELOG, and consumed by apollo at
+  `apollo-fft/.../plan/fft/layout.rs:57`. `cargo nextest run -p leto-ops`:
+  546/546 pass. Every acceptance clause is satisfied by the merged tree, so
+  the item closes on evidence.
 
 ## ATLAS-LETO-QR-REFLECTOR-ACCESSORS-2026-08-31 — Read side for the QR compact reflector storage [minor] — done 2026-08-31
 
