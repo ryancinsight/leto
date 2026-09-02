@@ -1,7 +1,8 @@
 use crate::application::index::{
-    line_elements, validate_mutable_output, RowMajorTraversal, TileGeometry,
+    line_elements_for, validate_mutable_output, RowMajorTraversal, TileGeometry,
 };
 use crate::domain::RealScalar;
+use crate::infrastructure::cache::{cached_cache_geometry, CacheGeometry};
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
 // The compute-bound gate. Bandwidth-bound work no longer reaches this constant:
@@ -25,6 +26,7 @@ struct StridedMapContext<'a, T, U, const N: usize> {
     output_layout: leto::Layout<N>,
     input_data: &'a [T],
     output_data: &'a mut [U],
+    cache_line_bytes: usize,
 }
 
 #[inline]
@@ -72,12 +74,48 @@ where
     map_into_gated(input, output, f, true)
 }
 
+/// Apply `f` elementwise using an explicit cache geometry policy.
+///
+/// The geometry's cache-line width selects the micro-tile side for strided
+/// views. This is intended for callers with topology information that is more
+/// authoritative than the process-local [`cached_cache_geometry`] probe; the
+/// default [`map_into`] path remains automatically detected. Cache capacities
+/// in `geometry` do not affect this operation.
+pub fn map_into_with_cache_geometry<T, U, F, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    output: &mut ArrayViewMut<'_, U, N>,
+    f: F,
+    geometry: CacheGeometry,
+) -> Result<()>
+where
+    T: Copy + Send + Sync + 'static,
+    U: Copy + Send + Sync + 'static,
+    F: Fn(T) -> U + Copy + Send + Sync + 'static,
+{
+    map_into_gated_with_cache_line(input, output, f, true, Some(geometry.cache_line_bytes()))
+}
+
 /// [`map_into`] with an explicit compute-bound flag driving the parallel gate.
 pub(crate) fn map_into_gated<T, U, F, const N: usize>(
     input: &ArrayView<'_, T, N>,
     output: &mut ArrayViewMut<'_, U, N>,
     f: F,
     compute_bound: bool,
+) -> Result<()>
+where
+    T: Copy + Send + Sync + 'static,
+    U: Copy + Send + Sync + 'static,
+    F: Fn(T) -> U + Copy + Send + Sync + 'static,
+{
+    map_into_gated_with_cache_line(input, output, f, compute_bound, None)
+}
+
+fn map_into_gated_with_cache_line<T, U, F, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    output: &mut ArrayViewMut<'_, U, N>,
+    f: F,
+    compute_bound: bool,
+    cache_line_bytes: Option<usize>,
 ) -> Result<()>
 where
     T: Copy + Send + Sync + 'static,
@@ -123,6 +161,8 @@ where
     let output_layout = output.layout();
     let input_data = input.data();
     let output_data = output.data_mut();
+    let cache_line_bytes =
+        cache_line_bytes.unwrap_or_else(|| cached_cache_geometry().cache_line_bytes());
 
     #[cfg(feature = "parallel")]
     {
@@ -135,6 +175,7 @@ where
                     output_layout,
                     input_data,
                     output_data,
+                    cache_line_bytes,
                 },
                 f,
             );
@@ -150,8 +191,8 @@ where
     };
     let in_step = traversal.last_axis_stride(input_layout);
     let out_step = traversal.last_axis_stride(output_layout);
-    let input_tile = line_elements::<T>();
-    let output_tile = line_elements::<U>();
+    let input_tile = line_elements_for::<T>(cache_line_bytes);
+    let output_tile = line_elements_for::<U>(cache_line_bytes);
     if in_step.unsigned_abs() >= input_tile || out_step.unsigned_abs() >= output_tile {
         let tile = input_tile.min(output_tile);
         if let Some(geometry) = TileGeometry::new(size, shape, tile) {
@@ -483,8 +524,8 @@ where
     };
     let in_step = traversal.last_axis_stride(ctx.input_layout);
     let out_step = traversal.last_axis_stride(ctx.output_layout);
-    let input_tile = line_elements::<T>();
-    let output_tile = line_elements::<U>();
+    let input_tile = line_elements_for::<T>(ctx.cache_line_bytes);
+    let output_tile = line_elements_for::<U>(ctx.cache_line_bytes);
     if in_step.unsigned_abs() >= input_tile || out_step.unsigned_abs() >= output_tile {
         let tile = input_tile.min(output_tile);
         if let Some(geometry) = TileGeometry::new(ctx.size, ctx.shape, tile) {

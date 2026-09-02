@@ -60,8 +60,8 @@ pub use linalg::{
     SymmetricEigenDecomposition,
 };
 pub use map::{
-    add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp, EqOp,
-    GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
+    add, binary_map, binary_map_with_cache_geometry, div, mul, scalar_map, scalar_map_into, sub,
+    sum, AddOp, BinaryOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
 };
 pub use matrix::{batched_matmul, matmul};
 pub use optimization::{minimize, LbfgsConfig, LbfgsMemory, LbfgsResult};
@@ -83,8 +83,8 @@ pub use statistics::{
 };
 pub use stencil::laplacian_2d_into;
 pub use unary::{
-    map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ExpOp, LnOp, NegOp,
-    PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
+    map, map_inplace, map_into, map_into_with_cache_geometry, mapv, unary_map, unary_map_into,
+    AbsOp, CosOp, ExpOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
 };
 pub use vector::dot;
 pub use zip::{

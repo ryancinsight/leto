@@ -107,10 +107,10 @@ impl<const N: usize> RowMajorTraversal<N> {
 /// A column-strided operand (|last-axis stride| ≥ elements-per-line) touches
 /// a fresh cache line per element under plain row-walk, wasting
 /// `1 - 1/lane` of every line. Tiling the last two axes at
-/// `lane = 64 / size_of::<T>()` elements per side makes each touched line
-/// fully consumed before eviction: within a tile the strided operand revisits
-/// the same `tile` lines across `tile` rows. The tile size is derived from
-/// the 64-byte line, not tuned.
+/// `lane = cache_line_bytes / size_of::<T>()` elements per side makes each
+/// touched line fully consumed before eviction: within a tile the strided
+/// operand revisits the same `tile` lines across `tile` rows. The line width
+/// is detected once at the process boundary and supplied to this geometry.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct TileGeometry<const N: usize> {
     shape: [usize; N],
@@ -175,14 +175,14 @@ impl<const N: usize> TileGeometry<N> {
     }
 }
 
-/// Elements of `T` per 64-byte cache line (≥ 1): the analytic micro-tile side.
+/// Elements of `T` per cache line (≥ 1): the analytic micro-tile side.
 #[inline]
-pub(crate) const fn line_elements<T>() -> usize {
+pub(crate) const fn line_elements_for<T>(cache_line_bytes: usize) -> usize {
     let size = core::mem::size_of::<T>();
-    if size == 0 {
+    if size == 0 || cache_line_bytes == 0 {
         return usize::MAX;
     }
-    let lane = 64 / size;
+    let lane = cache_line_bytes / size;
     if lane == 0 {
         1
     } else {
