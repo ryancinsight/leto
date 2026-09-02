@@ -247,7 +247,7 @@ pub fn pooling_backward_accumulate<T: Scalar, const R: usize, const D: usize>(
 
 #[cfg(test)]
 mod tests {
-    use super::{PoolingMode, pooling_backward_accumulate, pooling_forward_into};
+    use super::{pooling_backward_accumulate, pooling_forward_into, PoolingMode};
     use leto::{Array, WindowParameters};
 
     fn parameters() -> WindowParameters<2> {
