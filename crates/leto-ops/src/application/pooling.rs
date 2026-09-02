@@ -5,7 +5,8 @@ use crate::domain::scalar::Scalar;
 use leto::{ArrayView, ArrayViewMut, LetoError, Result, WindowParameters};
 
 use super::window::{
-    geometry_from_view, tensor_index, validate_pool_output, window_input_coordinate,
+    geometry_from_shape, geometry_from_view, tensor_index, validate_mutable_layout,
+    validate_pool_output, window_input_coordinate,
 };
 
 /// Pooling reduction applied to each spatial window.
@@ -100,9 +101,11 @@ pub fn pooling_forward_into<T: Scalar, const R: usize, const D: usize>(
 /// Accumulate the gradient of a spatial pooling operation.
 ///
 /// The maximum path recomputes the first maximum selected by the forward
-/// operation. The average path distributes each output gradient over valid
-/// input points only. Both paths are serial gathers/scatters over validated
-/// injective output storage, so overlapping windows accumulate deterministically.
+/// operation and therefore requires `input`. The average path distributes
+/// each output gradient over valid input points and can derive its geometry
+/// from `grad_input`, so it accepts `None` for `input`. Both paths are serial
+/// gathers/scatters over validated injective output storage, so overlapping
+/// windows accumulate deterministically.
 ///
 /// # Errors
 ///
@@ -110,12 +113,23 @@ pub fn pooling_forward_into<T: Scalar, const R: usize, const D: usize>(
 /// validation fails.
 pub fn pooling_backward_accumulate<T: Scalar, const R: usize, const D: usize>(
     grad_output: &ArrayView<'_, T, R>,
-    input: &ArrayView<'_, T, R>,
+    input: Option<&ArrayView<'_, T, R>>,
     parameters: WindowParameters<D>,
     mode: PoolingMode,
     grad_input: &mut ArrayViewMut<'_, T, R>,
 ) -> Result<()> {
-    let geometry = geometry_from_view(input, parameters)?;
+    let geometry = match input {
+        Some(input) => geometry_from_view(input, parameters)?,
+        None if matches!(mode, PoolingMode::Average) => {
+            validate_mutable_layout(grad_input, "pooling gradient")?;
+            geometry_from_shape(grad_input.shape(), parameters)?
+        }
+        None => {
+            return Err(LetoError::InvalidInput(
+                "maximum pooling backward requires the forward input".to_owned(),
+            ));
+        }
+    };
     super::window::validate_output_layout(grad_output, "pooling gradient")?;
     super::window::validate_mutable_layout(grad_input, "pooling gradient")?;
     let grad_output_shape = grad_output.shape();
@@ -164,12 +178,20 @@ pub fn pooling_backward_accumulate<T: Scalar, const R: usize, const D: usize>(
             ) else {
                 continue;
             };
-            let input_index = tensor_index(batch, channel, input_spatial);
-            let input_value = *input
-                .get(input_index)
-                .expect("invariant: validated pooling input index is in bounds");
             match mode {
                 PoolingMode::Maximum => {
+                    let input = match input {
+                        Some(input) => input,
+                        None => {
+                            return Err(LetoError::InvalidInput(
+                                "maximum pooling backward requires the forward input".to_owned(),
+                            ));
+                        }
+                    };
+                    let input_index = tensor_index(batch, channel, input_spatial);
+                    let input_value = *input
+                        .get(input_index)
+                        .expect("invariant: validated pooling input index is in bounds");
                     let replace = match maximum {
                         None => true,
                         Some((current, _)) => input_value > current,
@@ -225,7 +247,7 @@ pub fn pooling_backward_accumulate<T: Scalar, const R: usize, const D: usize>(
 
 #[cfg(test)]
 mod tests {
-    use super::{pooling_backward_accumulate, pooling_forward_into, PoolingMode};
+    use super::{PoolingMode, pooling_backward_accumulate, pooling_forward_into};
     use leto::{Array, WindowParameters};
 
     fn parameters() -> WindowParameters<2> {
@@ -259,7 +281,7 @@ mod tests {
         let mut grad_input = Array::from_elem([1, 1, 3, 3], 0.0_f64);
         pooling_backward_accumulate(
             &grad_output.view(),
-            &input.view(),
+            Some(&input.view()),
             parameters(),
             PoolingMode::Average,
             &mut grad_input.view_mut(),

@@ -29,6 +29,13 @@ pub(super) fn geometry_from_view<T, const R: usize, const D: usize>(
     parameters: WindowParameters<D>,
 ) -> Result<WindowGeometry<R, D>> {
     validate_readonly(input, "window input")?;
+    geometry_from_shape(input.shape(), parameters)
+}
+
+pub(super) fn geometry_from_shape<const R: usize, const D: usize>(
+    input_shape: [usize; R],
+    parameters: WindowParameters<D>,
+) -> Result<WindowGeometry<R, D>> {
     let expected_rank = D.checked_add(2).ok_or(LetoError::Overflow {
         reason: "window tensor rank",
     })?;
@@ -39,7 +46,7 @@ pub(super) fn geometry_from_view<T, const R: usize, const D: usize>(
     }
 
     let mut input_spatial = [0_usize; D];
-    input_spatial.copy_from_slice(&input.shape()[2..]);
+    input_spatial.copy_from_slice(&input_shape[2..]);
     let output_spatial = parameters.output_shape(input_spatial)?;
     let output_locations = output_spatial.iter().try_fold(1_usize, |count, &extent| {
         count.checked_mul(extent).ok_or(LetoError::Overflow {
@@ -47,7 +54,7 @@ pub(super) fn geometry_from_view<T, const R: usize, const D: usize>(
         })
     })?;
     Ok(WindowGeometry {
-        input_shape: input.shape(),
+        input_shape,
         input_spatial,
         output_spatial,
         kernel_volume: parameters.kernel_volume()?,
