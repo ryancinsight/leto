@@ -87,6 +87,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Performance
 
+- [patch] Bf16 slice operations now take the existing runtime-dispatched
+  Hermes path for elementwise operations, reductions, AXPY, GEMV, and tiled
+  GEMM instead of the scalar fallback. The route preserves Eunomia's exact
+  f32-widening and round-to-nearest-even narrowing contract; no temporary
+  buffer or duplicate arithmetic implementation is introduced.
+
 - [patch] The new complex matrix-batch operation reduces transpose medians by
   86.7-88.8% (`f32`) and 88.9-89.8% (`f64`) for 1,024 batches of 4x4 matrices,
   and by 28.3-53.3% (`f32`) and 26.1-30.5% (`f64`) for 256 batches of 16x16
@@ -585,8 +591,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   unconditional dependency. SIMD is not a build-time toggle — Hermes already
   runtime-dispatches AVX-512/AVX2/NEON with a scalar fallback (CPUID), so it is
   the automated-SIMD layer and is always compiled in. `f32`/`f64` slice ops
-  always route through Hermes; the per-method scalar loop remains only as the
-  fallback for Hermes-uncovered types (`f16`/`bf16`). The dead
+  always route through Hermes; F16 and Bf16 now do as well, and the per-method
+  scalar loop remains only as the fallback for Hermes-uncovered types. The dead
   `impl_simd_ops_fallback!` "simd disabled" stub is deleted. **Breaking** for
   anyone selecting `--features simd` / `--no-default-features` expecting the flag;
   default builds are unaffected (it was a default feature).

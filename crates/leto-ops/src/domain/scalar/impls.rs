@@ -250,18 +250,11 @@ macro_rules! impl_scalar_plain {
 
 impl_scalar_simd!(f32, |value: usize| value as f32);
 impl_scalar_simd!(f64, |value: usize| value as f64);
-// hermes serves every routed operation at F16 (elementwise, reductions,
-// axpy, gemv, tiled GEMM), so the half-precision type takes the same path as
-// the machine floats; Bf16 waits on its provider kernels
-// (hermes HS-REDUCED-PRECISION-ELEMENTWISE-2026-09-01).
+// Hermes serves every routed operation at F16 and Bf16 (elementwise,
+// reductions, axpy, gemv, tiled GEMM), so both reduced-precision types take
+// the same path as the machine floats.
 impl_scalar_simd!(F16, |value: usize| F16::from_f32(value as f32));
-
-impl Scalar for Bf16 {
-    #[inline(always)]
-    fn from_usize(value: usize) -> Self {
-        Self::from_f32(value as f32)
-    }
-}
+impl_scalar_simd!(Bf16, |value: usize| Bf16::from_f32(value as f32));
 
 /// Complex scalars participate in the operation contract through the same
 /// element-wise defaults as the plain real and integer types.

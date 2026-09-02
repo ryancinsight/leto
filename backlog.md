@@ -2,8 +2,32 @@
 
 ## ✅ LETO-F16-HERMES-ROUTING-2026-09-02 — Route F16 slice operations through hermes [minor] [perf] — done 2026-09-02
 
-- **Finding:** `impl_simd_ops_unsupported!(F16)` was stale — hermes 0.7 serves every operation the `SimdStrategy` routes (elementwise add/sub/mul/div, sum, dot, axpy, axpy rows, gemv, tiled GEMM, abs-sum/abs-max, min/max, jaccard/hamming) at `F16` on the scalar, AVX2 (+F16C), AVX-512 and NEON backends; only `Bf16` still lacks provider kernels (hermes `HS-REDUCED-PRECISION-ELEMENTWISE-2026-09-01`).
+- **Finding:** `impl_simd_ops_unsupported!(F16)` was stale — hermes 0.7 serves every operation the `SimdStrategy` routes (elementwise add/sub/mul/div, sum, dot, axpy, axpy rows, gemv, tiled GEMM, abs-sum/abs-max, min/max, jaccard/hamming) at `F16` on the scalar, AVX2 (+F16C), AVX-512 and NEON backends. The follow-up Bf16 consumer route is tracked in `LETO-BF16-HERMES-ROUTING-2026-09-02` now that Hermes provides the same backend coverage.
 - **Delivered:** `F16` takes `impl_simd_ops_native!` and the SIMD-routing `Scalar` impl (`impl_scalar_simd!` now takes the index conversion, so the reduced-precision constructor fits it); `f16_slice_operations_route_through_hermes_and_match_scalar_semantics` pins bitwise equality for the elementwise ops (single rounding from the `f32` intermediate on every backend), an `n·u` bound for sum/dot, exact min/max, and the public `add` reaching the same route. leto-ops suite and clippy `-D warnings` green.
+
+## LETO-BF16-HERMES-ROUTING-2026-09-02 — Route Bf16 slice operations through Hermes [minor] [perf] — done 2026-09-02
+
+- **Integrator:** Codex atlas-session; **branch:** `perf/leto-bf16-hermes`;
+  **lease:** `crates/leto-ops/src/domain/strategy.rs`,
+  `crates/leto-ops/src/domain/scalar/impls.rs`,
+  `crates/leto-ops/tests/ops/elementwise.rs`; **last-update:** 2026-09-02.
+- **Finding:** Hermes 0.7 now exposes Bf16 `LaneScalar` and already supplies
+  the scalar, AVX2, AVX-512, and NEON `BackendKernel` implementations. Leto's
+  Bf16 `Scalar` implementation still bypasses `impl_scalar_simd!`, so every
+  Bf16 slice operation uses the scalar fallback while F16 takes Hermes.
+- **Acceptance:** Bf16 uses the existing generic `impl_simd_ops_native!` and
+  `impl_scalar_simd!` paths; elementwise results match the Bf16 scalar
+  contract bitwise, reductions satisfy the derived `n·u` bound with
+  `u = 2⁻⁸`, min/max remain exact, and the public operation path is covered.
+  No new arithmetic or allocation path is introduced.
+- **Non-goals:** Hermes provider implementation, GEMM algorithm changes,
+  runtime dispatch redesign, or allocator changes.
+- **Disposition:** completed by removing the Bf16 scalar-only implementation
+  and routing it through the existing generic Hermes path. The reduced-
+  precision conformance helper now instantiates both F16 and Bf16. Evidence:
+  `cargo nextest run --offline -p leto-ops --no-fail-fast` 549/549 passed;
+  doctests 21/21 passed; Rustdoc generated; Clippy and diff checks passed;
+  `cargo semver-checks` passed 196/196 applicable checks with 58 skipped.
 
 ## ✅ LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01 [minor] [perf] — done 2026-09-02
 
