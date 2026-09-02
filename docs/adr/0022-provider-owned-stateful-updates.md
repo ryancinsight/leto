@@ -1,4 +1,4 @@
-# ADR 0022 — Provider-owned CPU stateful updates
+# ADR 0022: Provider-owned CPU stateful updates
 
 - Status: Accepted
 - Date: 2026-08-01

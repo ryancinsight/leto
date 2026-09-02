@@ -1,4 +1,4 @@
-# ADR: Sparse Array Support in Leto and Hephaestus
+# ADR 0028: Sparse Array Support in Leto and Hephaestus
 
 ## Status
 

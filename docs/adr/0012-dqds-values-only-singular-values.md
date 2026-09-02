@@ -1,4 +1,4 @@
-# ADR 0012 — Values-only singular values: dqds vs the bidiagonal Givens QR sweep
+# ADR 0012: Values-only singular values: dqds vs the bidiagonal Givens QR sweep
 
 - Status: Proposed
 - Date: 2026-06-17

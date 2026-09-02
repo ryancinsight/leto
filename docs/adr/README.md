@@ -33,4 +33,4 @@
 | [0025](0025-layout-construction-boundary.md) | Encapsulate `Layout` construction and place storage bounds at the access site | Accepted |
 | [0026](0026-retire-lending-iterator-seam.md) | Retire the `LendingIterator` seam | Accepted |
 | [0027](0027-hermes-complex-batch-transpose.md) | Hermes complex matrix-batch transpose | Accepted |
-| [—](sparse-support-design.md) | ADR: Sparse Array Support in Leto and Hephaestus | Accepted |
+| [0028](0028-sparse-array-support.md) | Sparse Array Support in Leto and Hephaestus | Accepted |
