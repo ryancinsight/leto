@@ -216,3 +216,60 @@ fn unsigned_integer_reduction_handles_strided_transposed_input() {
     assert_eq!(row_sum.storage().as_slice(), &[9, 14, 18]);
     assert_eq!(row_max.storage().as_slice(), &[7, 11, 13]);
 }
+
+/// NaN lanes are ignored by `min_axis`/`max_axis` on both routes — the
+/// contiguous axis delegates to the SIMD `min_slice`/`max_slice`, the strided
+/// axis runs the scalar fold — and an all-NaN axis reduces to the identity
+/// (`+∞` for min, `−∞` for max), so the result never depends on layout or on
+/// where the NaN sits.
+fn nan_lanes_are_ignored_on_both_routes<T>()
+where
+    T: leto_ops::Scalar + From<f32> + PartialEq + core::fmt::Debug,
+{
+    let v = |x: f32| T::from(x);
+    let nan = f32::NAN;
+    #[rustfmt::skip]
+    let rows = [
+        [nan, 3.0, -1.0, 2.0],
+        [3.0, nan, -1.0, 2.0],
+        [3.0, -1.0, 2.0, nan],
+        [nan, nan, nan, nan],
+        [3.0, -1.0, 2.0, 0.5],
+    ];
+    let input =
+        Array::from_shape_vec([5, 4], rows.iter().flatten().map(|&x| v(x)).collect()).unwrap();
+
+    let row_min = min_axis(&input.view(), 1).unwrap();
+    let row_max = max_axis(&input.view(), 1).unwrap();
+    let inf = v(f32::INFINITY);
+    let neg_inf = v(f32::NEG_INFINITY);
+    assert_eq!(
+        row_min.storage().as_slice(),
+        &[v(-1.0), v(-1.0), v(-1.0), inf, v(-1.0)],
+        "contiguous min ignores NaN wherever it sits and returns +inf for an all-NaN row"
+    );
+    assert_eq!(
+        row_max.storage().as_slice(),
+        &[v(3.0), v(3.0), v(3.0), neg_inf, v(3.0)],
+        "contiguous max ignores NaN wherever it sits and returns -inf for an all-NaN row"
+    );
+
+    let col_min = min_axis(&input.view(), 0).unwrap();
+    let col_max = max_axis(&input.view(), 0).unwrap();
+    assert_eq!(
+        col_min.storage().as_slice(),
+        &[v(3.0), v(-1.0), v(-1.0), v(0.5)],
+        "strided min ignores a leading, interior, or trailing NaN"
+    );
+    assert_eq!(
+        col_max.storage().as_slice(),
+        &[v(3.0), v(3.0), v(2.0), v(2.0)],
+        "strided max ignores a leading, interior, or trailing NaN"
+    );
+}
+
+#[test]
+fn min_max_axis_ignore_nan_lanes_on_both_routes() {
+    nan_lanes_are_ignored_on_both_routes::<f32>();
+    nan_lanes_are_ignored_on_both_routes::<f64>();
+}
