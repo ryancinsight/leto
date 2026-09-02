@@ -30,7 +30,7 @@
 - **Non-goals:** false-sharing padding — a different width whose safe error
   direction is the opposite one, and which must not reuse this constant.
 
-## ATLAS-LETO-CACHE-LINE-TOPOLOGY-2026-09-01 — Cache-line width read from topology [patch] — review
+## ATLAS-LETO-CACHE-LINE-TOPOLOGY-2026-09-01 — Cache-line width read from topology [patch] — done 2026-09-01
 
 - **Outcome:** `CacheGeometry::cache_line_bytes` reports the platform width
   `themis` already detects on both backends, instead of always returning the
@@ -56,6 +56,14 @@
   value without changing any kernel decision yet.
 - **Integrator:** Claude session 5050c72a; **lease:** none.
   **Last-update:** 2026-09-01.
+- **Independent review (2026-09-01, Claude):** the evidence claim reproduced.
+  With `cache_line_bytes` reverted to the constant, exactly the three
+  line-width tests fail — `cache_levels_override_capacities_and_line_width`,
+  `widest_reported_line_width_wins_across_levels`,
+  `reported_line_width_narrower_than_the_fallback_is_honoured` — and the eight
+  others pass, so they discriminate the fix rather than pin old behaviour.
+  Merged as PR #137. The `line_elements<T>()` residual is tracked as
+  `LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01`.
 
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Register-tiled complex matrix batches [minor, perf] — review
 
