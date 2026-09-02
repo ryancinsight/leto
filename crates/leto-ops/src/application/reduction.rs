@@ -54,10 +54,19 @@ pub struct ProductAxis;
 pub struct MeanAxis;
 
 /// Minimum axis-reduction marker.
+///
+/// NaN lanes are ignored on every route: the fold starts from
+/// `T::MAX_VALUE` and only a value that compares below the accumulator
+/// replaces it, and the contiguous route inherits the same contract from
+/// [`Scalar::min_slice`]. An all-NaN axis therefore reduces to
+/// `T::MAX_VALUE`, the identity.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MinAxis;
 
 /// Maximum axis-reduction marker.
+///
+/// The mirror of [`MinAxis`]: NaN lanes are ignored, the fold starts from
+/// `T::MIN_VALUE`, and an all-NaN axis reduces to that identity.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MaxAxis;
 
@@ -148,9 +157,12 @@ impl<T: Scalar> AxisReduction<T> for MeanAxis {
 }
 
 impl<T: Scalar> AxisReduction<T> for MinAxis {
+    // Seeding from the identity sends the first element through the same
+    // NaN-rejecting comparison as every later one; a raw seed would carry a
+    // leading NaN through the whole fold.
     #[inline(always)]
     fn initial(first: T) -> T {
-        first
+        Self::fold(T::MAX_VALUE, first)
     }
 
     #[inline(always)]
@@ -179,7 +191,7 @@ impl<T: Scalar> AxisReduction<T> for MinAxis {
 impl<T: Scalar> AxisReduction<T> for MaxAxis {
     #[inline(always)]
     fn initial(first: T) -> T {
-        first
+        Self::fold(T::MIN_VALUE, first)
     }
 
     #[inline(always)]

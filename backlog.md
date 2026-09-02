@@ -218,15 +218,10 @@
   and miri coverage become tractable. Weigh it against the corrected cost
   model above — the win may not justify the unsafe surface.
 
-## ATLAS-LETO-MINMAX-NAN-CONTRACT — axis min/max NaN semantics undocumented and route-dependent [patch] — todo
+## ✅ ATLAS-LETO-MINMAX-NAN-CONTRACT — axis min/max NaN semantics undocumented and route-dependent [patch] — done 2026-09-02
 
-- Owner: unclaimed. Evidence: audit 2026-08-27 — `MinAxis`/`MaxAxis` strided
-  fold (`if value < acc`) ignores NaN after the first element but propagates
-  a first-element NaN, while the contiguous route delegates to hermes
-  `T::min_slice`/`max_slice`; if the SIMD contract differs, the same input
-  returns different results by layout. First step: pin the hermes kernel
-  contract, then document (or unify via `total_cmp` semantics) at this API.
-
+- **Delivered:** `MinAxis`/`MaxAxis` seed their fold from `T::MAX_VALUE`/`T::MIN_VALUE`, so a leading NaN is rejected like any other; hermes #129 gave `min_slice`/`max_slice` the same contract (NaN ignored, all-NaN → identity) and the lock advances to it. Contract documented on both markers.
+- **Evidence:** `min_max_axis_ignore_nan_lanes_on_both_routes` (f32, f64) — NaN leading/interior/trailing and an all-NaN lane, on the contiguous (SIMD) and strided (fold) routes, bitwise-equal expectations.
 ## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [patch, complete]
 
 **Outcome:** let allocation-sensitive consumers initialize final
