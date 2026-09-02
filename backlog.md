@@ -5,7 +5,9 @@
 - **Finding:** `impl_simd_ops_unsupported!(F16)` was stale — hermes 0.7 serves every operation the `SimdStrategy` routes (elementwise add/sub/mul/div, sum, dot, axpy, axpy rows, gemv, tiled GEMM, abs-sum/abs-max, min/max, jaccard/hamming) at `F16` on the scalar, AVX2 (+F16C), AVX-512 and NEON backends; only `Bf16` still lacks provider kernels (hermes `HS-REDUCED-PRECISION-ELEMENTWISE-2026-09-01`).
 - **Delivered:** `F16` takes `impl_simd_ops_native!` and the SIMD-routing `Scalar` impl (`impl_scalar_simd!` now takes the index conversion, so the reduced-precision constructor fits it); `f16_slice_operations_route_through_hermes_and_match_scalar_semantics` pins bitwise equality for the elementwise ops (single rounding from the `f32` intermediate on every backend), an `n·u` bound for sum/dot, exact min/max, and the public `add` reaching the same route. leto-ops suite and clippy `-D warnings` green.
 
-## LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01 [patch] — todo
+## LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01 [patch] — in progress
+
+- **Integrator:** Codex atlas-session; **branch:** `perf/leto-runtime-tile-geometry`; **lease:** `crates/leto-ops/src/application/{index,map,unary}.rs`, `crates/leto-ops/benches/kernels.rs`.
 
 - **Context:** `ATLAS-LETO-CACHE-LINE-TOPOLOGY` (PR #137) made
   `cache_line_bytes()` report the width themis actually observes instead of an
