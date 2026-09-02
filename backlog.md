@@ -1273,6 +1273,8 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   oracle medians improved: 64x64 21.443 µs → 17.430 µs, 128x128 127.63 µs →
   108.98 µs, and 256x256 2.4357 ms → 1.0631 ms. Dense matmul remains slower
   than ndarray/nalgebra, so replacement-performance parity is still open.
+  **Superseded 2026-08-28** by `LETO-MATMUL-PARITY-VERDICT-2026-08-28`: the
+  gap closed and the parity thread is no longer open.
 - [x] [patch] Consume Hermes batched row-panel AXPY
   (`hermes_simd::axpy_rows_batch`, delivered hermes `d4a01bd`) for the
   measured 128-row dense matmul regime. The path keeps caller-owned output,
@@ -1410,6 +1412,7 @@ no unmeasured "optimization" per performance_engineering.
   reverse-last-axis reductions against nalgebra/ndarray. Criterion oracle
   comparison shows reverse reductions at parity or faster than ndarray, while
   dense 128x128 matmul is slower than ndarray/nalgebra and remains open.
+  **Superseded 2026-08-28** — see `LETO-MATMUL-PARITY-VERDICT-2026-08-28`.
 - [x] [patch] `cargo test --all-features` passes: 34 `leto` core tests, 28 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, property, differential, PyO3 boundary, and downstream-shape migration fixture tests.
 - [x] [patch] The 2026-06-10 Apollo scan identified its public and internal
   `ndarray` usage; the completed migration replaces those array, shape, mapping,
