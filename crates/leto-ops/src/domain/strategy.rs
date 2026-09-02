@@ -352,5 +352,5 @@ macro_rules! impl_simd_ops_unsupported {
     };
 }
 
-impl_simd_ops_unsupported!(F16);
+impl_simd_ops_native!(F16);
 impl_simd_ops_unsupported!(Bf16);
