@@ -21,6 +21,10 @@ let qr = a.qr()?;
 
 - One generic `binary_map::<Op, T, N>` traversal behind `add`, `sub`, `mul`,
   and `div`, with broadcasting into a caller-owned output shape.
+- Strided map kernels derive cache-line micro-tiles from the process-cached
+  topology; `map_into_with_cache_geometry` and
+  `binary_map_with_cache_geometry` accept an explicit policy when external
+  topology is authoritative.
 - Native `f32`/`f64` paths route through Hermes SIMD, which runtime-dispatches
   AVX-512/AVX2/NEON with a scalar fallback. SIMD is not a build feature.
 - `transpose_complex_matrices` moves homogeneous row-major matrix batches into

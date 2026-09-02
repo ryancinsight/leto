@@ -22,9 +22,9 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
 use leto_ops::{
-    add, bunch_kaufman, cached_cache_geometry, dot, map_into, matmul, matmul_with_tile_policy,
-    norm_l1, norm_l2, norm_max, scalar_map_into, schur, sum, unary_map, zip_mut_with, AddOp, ExpOp,
-    MatmulTilePolicy,
+    add, bunch_kaufman, cached_cache_geometry, dot, map_into, map_into_with_cache_geometry, matmul,
+    matmul_with_tile_policy, norm_l1, norm_l2, norm_max, scalar_map_into, schur, sum, unary_map,
+    zip_mut_with, AddOp, CacheGeometry, ExpOp, MatmulTilePolicy,
 };
 use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
@@ -447,6 +447,35 @@ fn bench_unary_map(c: &mut Criterion) {
             BatchSize::LargeInput,
         );
     });
+    group.finish();
+}
+
+fn bench_runtime_tile_geometry(c: &mut Criterion) {
+    let mut group = c.benchmark_group("runtime_tile_geometry");
+    let n = 256usize;
+    let input = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0)).unwrap();
+    let transposed = input.transpose([1, 0]).unwrap();
+    let narrow = CacheGeometry::with_cache_line_bytes(64).expect("64-byte policy is valid");
+    let wide = CacheGeometry::with_cache_line_bytes(128).expect("128-byte policy is valid");
+
+    for (name, geometry) in [("line64", narrow), ("line128", wide)] {
+        group.bench_function(name, |bencher| {
+            bencher.iter_batched(
+                || Array::zeros([n, n]),
+                |mut output| {
+                    map_into_with_cache_geometry(
+                        black_box(&transposed),
+                        &mut output.view_mut(),
+                        |value| value + 0.5,
+                        geometry,
+                    )
+                    .unwrap();
+                    output
+                },
+                BatchSize::LargeInput,
+            );
+        });
+    }
     group.finish();
 }
 
@@ -1035,6 +1064,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_operator_chain, bench_parallel_crossover, bench_unary_map, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling, bench_qr_scaling, bench_svd_scaling, bench_udu_scaling
+    targets = bench_matmul, bench_elementwise, bench_operator_chain, bench_parallel_crossover, bench_unary_map, bench_runtime_tile_geometry, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling, bench_qr_scaling, bench_svd_scaling, bench_udu_scaling
 }
 criterion_main!(kernels);

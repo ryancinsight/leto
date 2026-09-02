@@ -8,6 +8,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] `map_into_with_cache_geometry` and
+  `binary_map_with_cache_geometry` accept an explicit cache-line policy for
+  strided elementwise kernels. The default `map_into` and `binary_map` paths
+  use the process-cached topology, while external topology providers and
+  reproducible policy measurements can supply a validated line width.
+
 - [minor] `leto_ops::transpose_complex_matrices` adds a checked,
   allocation-free, caller-owned layout operation for homogeneous complex
   matrix batches. It validates both complete slice lengths before mutation,
@@ -37,6 +43,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   ADR 0004 records as additive.
 
 ### Fixed
+
+- [patch] Strided unary and binary elementwise micro-tiles now derive their
+  side from the cached `CacheGeometry::cache_line_bytes()` value instead of
+  assuming 64 bytes. The 64-byte fallback remains in force when topology is
+  unavailable, and zero-width explicit policies are rejected.
 
 - [patch] `CacheGeometry::cache_line_bytes` now reports the platform's
   cache-line width instead of always returning the 64-byte fallback.

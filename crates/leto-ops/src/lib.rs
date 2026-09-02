@@ -118,8 +118,8 @@ pub use application::loss::{
     CrossEntropyOperand, CrossEntropyResult,
 };
 pub use application::map::{
-    add, binary_map, div, mul, scalar_map, scalar_map_into, sub, sum, AddOp, BinaryOp, DivOp, EqOp,
-    GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
+    add, binary_map, binary_map_with_cache_geometry, div, mul, scalar_map, scalar_map_into, sub,
+    sum, AddOp, BinaryOp, DivOp, EqOp, GeOp, GtOp, LeOp, LtOp, MulOp, NeOp, SubOp,
 };
 pub use application::matrix::{batched_matmul, matmul, matmul_accumulate, matmul_with_tile_policy};
 pub use application::nonlinear::{AndersonAccelerator, AndersonConfig, AndersonMethod};
@@ -155,8 +155,9 @@ pub use application::statistics::{
 };
 pub use application::stencil::laplacian_2d_into;
 pub use application::unary::{
-    map, map_inplace, map_into, mapv, unary_map, unary_map_into, AbsOp, CosOp, ErfOp, ErfcOp,
-    ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp, UnaryOp,
+    map, map_inplace, map_into, map_into_with_cache_geometry, mapv, unary_map, unary_map_into,
+    AbsOp, CosOp, ErfOp, ErfcOp, ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp,
+    UnaryOp,
 };
 pub use application::vector::{dot, hamming_distance, jaccard_distance, matvec};
 pub use application::zip::{

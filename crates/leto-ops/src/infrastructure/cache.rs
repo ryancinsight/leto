@@ -56,6 +56,25 @@ impl CacheGeometry {
         }
     }
 
+    /// Returns fallback capacities with an explicitly known cache-line width.
+    ///
+    /// This is useful when a caller has topology information from outside
+    /// [`themis`] or when evaluating a cache-line policy on a target that is
+    /// not the current host. The capacity fields remain conservative fallbacks
+    /// because this constructor only establishes the line-width policy.
+    #[must_use]
+    pub const fn with_cache_line_bytes(cache_line_bytes: usize) -> Option<Self> {
+        if cache_line_bytes == 0 {
+            return None;
+        }
+
+        let fallback = Self::fallback();
+        Some(Self {
+            cache_line_bytes,
+            ..fallback
+        })
+    }
+
     /// Returns detected cache geometry when `topology` is enabled, otherwise fallbacks.
     #[must_use]
     pub fn detect() -> Self {
@@ -257,6 +276,18 @@ mod tests {
         // under-estimate keeps a derived micro-tile inside the L1 budget on
         // every target, while an over-estimate does not.
         assert_eq!(geometry.cache_line_bytes(), 64);
+    }
+
+    #[test]
+    fn explicit_line_geometry_requires_a_positive_width() {
+        assert_eq!(CacheGeometry::with_cache_line_bytes(0), None);
+
+        let geometry = CacheGeometry::with_cache_line_bytes(128)
+            .expect("positive cache-line width is a valid explicit policy");
+        assert_eq!(geometry.cache_line_bytes(), 128);
+        assert_eq!(geometry.l1_bytes(), FALLBACK_L1_BYTES);
+        assert_eq!(geometry.l2_bytes(), FALLBACK_L2_BYTES);
+        assert_eq!(geometry.l3_bytes(), FALLBACK_L3_BYTES);
     }
 
     #[test]

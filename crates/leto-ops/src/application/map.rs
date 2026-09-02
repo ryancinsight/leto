@@ -1,7 +1,8 @@
 use crate::application::index::{
-    line_elements, validate_mutable_output, RowMajorTraversal, TileGeometry,
+    line_elements_for, validate_mutable_output, RowMajorTraversal, TileGeometry,
 };
 use crate::domain::scalar::Scalar;
+use crate::infrastructure::cache::{cached_cache_geometry, CacheGeometry};
 use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
 
 /// Whether a bandwidth-bound elementwise op over `len` elements of `T` should
@@ -38,6 +39,7 @@ struct StridedBinaryContext<'a, T, const N: usize> {
     lhs_data: &'a [T],
     rhs_data: &'a [T],
     out_data: &'a mut [T],
+    cache_line_bytes: usize,
 }
 
 /// Zero-sized binary operation contract for element-wise kernels.
@@ -186,6 +188,39 @@ where
     Op: BinaryOp<T>,
     T: Scalar,
 {
+    binary_map_with_cache_line::<Op, T, N>(lhs, rhs, out, None)
+}
+
+/// Apply a binary element-wise operation using an explicit cache geometry.
+///
+/// The geometry's cache-line width selects the micro-tile side for strided
+/// views. This is intended for callers with topology information that is more
+/// authoritative than the process-local [`cached_cache_geometry`] probe; the
+/// default [`binary_map`] path remains automatically detected. Cache
+/// capacities in `geometry` do not affect this operation.
+pub fn binary_map_with_cache_geometry<Op, T, const N: usize>(
+    lhs: &ArrayView<'_, T, N>,
+    rhs: &ArrayView<'_, T, N>,
+    out: &mut ArrayViewMut<'_, T, N>,
+    geometry: CacheGeometry,
+) -> Result<()>
+where
+    Op: BinaryOp<T>,
+    T: Scalar,
+{
+    binary_map_with_cache_line::<Op, T, N>(lhs, rhs, out, Some(geometry.cache_line_bytes()))
+}
+
+fn binary_map_with_cache_line<Op, T, const N: usize>(
+    lhs: &ArrayView<'_, T, N>,
+    rhs: &ArrayView<'_, T, N>,
+    out: &mut ArrayViewMut<'_, T, N>,
+    cache_line_bytes: Option<usize>,
+) -> Result<()>
+where
+    Op: BinaryOp<T>,
+    T: Scalar,
+{
     validate_binary_shapes(lhs, rhs, out)?;
     let out_shape = out.shape();
 
@@ -230,6 +265,8 @@ where
     let lhs_data = lhs.data();
     let rhs_data = rhs.data();
     let out_data = out.data_mut();
+    let cache_line_bytes =
+        cache_line_bytes.unwrap_or_else(|| cached_cache_geometry().cache_line_bytes());
 
     #[cfg(feature = "parallel")]
     {
@@ -245,6 +282,7 @@ where
                 lhs_data,
                 rhs_data,
                 out_data,
+                cache_line_bytes,
             });
             return Ok(());
         }
@@ -264,7 +302,7 @@ where
     // Cache-line micro-tiling pays exactly when some operand's last-axis
     // walk skips whole lines (|stride| >= elements-per-line); unit and
     // reverse-unit strides already consume lines fully and keep row-walk.
-    let tile = line_elements::<T>();
+    let tile = line_elements_for::<T>(cache_line_bytes);
     let column_walk = lhs_step.unsigned_abs() >= tile
         || rhs_step.unsigned_abs() >= tile
         || out_step.unsigned_abs() >= tile;
@@ -381,7 +419,7 @@ where
     // Cache-line micro-tiling for column walks (see the serial path): workers
     // own disjoint (slab, row-block) pairs, so no two workers share an output
     // row and the aliasing-rejection guarantee carries over unchanged.
-    let tile = line_elements::<T>();
+    let tile = line_elements_for::<T>(ctx.cache_line_bytes);
     let column_walk = lhs_step.unsigned_abs() >= tile
         || rhs_step.unsigned_abs() >= tile
         || out_step.unsigned_abs() >= tile;

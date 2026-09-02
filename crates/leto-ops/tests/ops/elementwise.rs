@@ -5,9 +5,9 @@
 
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
-    add, binary_map, div, indexed_zip_mut_with, map, map_into, mapv, mul, scalar_map, sub,
-    unary_map, zip_mut_with, AddOp, EqOp, ErfOp, ErfcOp, GeOp, GtOp, LeOp, LgammaOp, LtOp, MulOp,
-    NeOp,
+    add, binary_map, binary_map_with_cache_geometry, div, indexed_zip_mut_with, map, map_into,
+    map_into_with_cache_geometry, mapv, mul, scalar_map, sub, unary_map, zip_mut_with, AddOp,
+    CacheGeometry, EqOp, ErfOp, ErfcOp, GeOp, GtOp, LeOp, LgammaOp, LtOp, MulOp, NeOp,
 };
 
 fn assert_scalar_supertrait<T>()
@@ -326,6 +326,62 @@ fn test_map_into_handles_cache_line_transposed_input() {
         .flat_map(|row| (0..n).map(move |col| ((col * n + row) as f64) * 2.0 + 1.0))
         .collect::<Vec<_>>();
     assert_eq!(output.storage().as_slice(), expected.as_slice());
+}
+
+#[test]
+fn explicit_cache_geometry_preserves_strided_unary_and_binary_semantics() {
+    let n = 32usize;
+    let input = Array::from_shape_vec(
+        [n, n],
+        (0..n * n).map(|value| value as f64 + 0.25).collect(),
+    )
+    .unwrap();
+    let transposed = input.transpose([1, 0]).unwrap();
+    let rhs = Array::from_shape_vec([n, n], vec![2.0f64; n * n]).unwrap();
+    let narrow = CacheGeometry::with_cache_line_bytes(64).unwrap();
+    let wide = CacheGeometry::with_cache_line_bytes(128).unwrap();
+
+    let mut unary_narrow = Array::zeros([n, n]);
+    let mut unary_wide = Array::zeros([n, n]);
+    map_into_with_cache_geometry(
+        &transposed,
+        &mut unary_narrow.view_mut(),
+        |value| value.mul_add(2.0, 1.0),
+        narrow,
+    )
+    .unwrap();
+    map_into_with_cache_geometry(
+        &transposed,
+        &mut unary_wide.view_mut(),
+        |value| value.mul_add(2.0, 1.0),
+        wide,
+    )
+    .unwrap();
+    assert_eq!(
+        unary_narrow.storage().as_slice(),
+        unary_wide.storage().as_slice()
+    );
+
+    let mut binary_narrow = Array::zeros([n, n]);
+    let mut binary_wide = Array::zeros([n, n]);
+    binary_map_with_cache_geometry::<AddOp, _, 2>(
+        &transposed,
+        &rhs.view(),
+        &mut binary_narrow.view_mut(),
+        narrow,
+    )
+    .unwrap();
+    binary_map_with_cache_geometry::<AddOp, _, 2>(
+        &transposed,
+        &rhs.view(),
+        &mut binary_wide.view_mut(),
+        wide,
+    )
+    .unwrap();
+    assert_eq!(
+        binary_narrow.storage().as_slice(),
+        binary_wide.storage().as_slice()
+    );
 }
 
 #[test]
