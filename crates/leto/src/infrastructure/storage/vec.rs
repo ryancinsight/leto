@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// Owned array storage backed by a standard heap `Vec`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(clippy::unsafe_derive_deserialize)]
 pub struct VecStorage<T> {
     data: Vec<T>,
 }
@@ -30,6 +31,27 @@ impl<T> VecStorage<T> {
         Self {
             data: vec![value; len],
         }
+    }
+
+    /// Create uninitialized storage without zero-filling.
+    ///
+    /// # Safety
+    ///
+    /// The returned storage contains uninitialized memory. Every element must
+    /// be written before being read, otherwise the behavior is undefined. This
+    /// is safe when the caller fully overwrites the storage (e.g. a
+    /// keep-dim reduction that writes every output element).
+    #[inline]
+    #[allow(clippy::uninit_vec)]
+    pub fn uninit(len: usize) -> Self {
+        let mut data = Vec::with_capacity(len);
+        // SAFETY: `Vec::with_capacity` allocates `len` elements, `set_len`
+        // exposes them as initialized for the caller to overwrite. The caller
+        // must write every element before any read, which `reduce_axis` does.
+        unsafe {
+            data.set_len(len);
+        }
+        Self { data }
     }
 
     /// Wrap an existing Vec.

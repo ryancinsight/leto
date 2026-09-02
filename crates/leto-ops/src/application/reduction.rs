@@ -471,7 +471,7 @@ where
     let shape = output_shape(input.shape(), axis)?;
     let layout = Layout::c_contiguous(shape)?;
     let size = layout.checked_size()?;
-    let storage = VecStorage::fill(size, T::ZERO);
+    let storage = VecStorage::uninit(size);
     let mut output = Array::new(layout, storage)?;
     reduce_axis_into::<Op, T, N>(input, axis, &mut output.view_mut())?;
     Ok(output)
