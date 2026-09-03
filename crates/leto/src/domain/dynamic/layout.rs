@@ -80,6 +80,54 @@ impl LayoutDyn {
         kernels::shape_size(&self.shape)
     }
 
+    /// Return the minimum and maximum physical offsets addressed by this layout.
+    ///
+    /// # Errors
+    /// [`LetoError::Overflow`] on signed arithmetic overflow or
+    /// [`LetoError::StorageError`] when a negative stride reaches below offset
+    /// zero.
+    #[inline]
+    pub fn checked_min_max_offsets(&self) -> Result<(usize, usize)> {
+        kernels::min_max_offsets(&self.shape, &self.strides, self.offset)
+    }
+
+    /// Return whether distinct logical indices address distinct elements.
+    ///
+    /// The check shares the allocation-free separated-stride path and exact
+    /// fallback with const-rank [`Layout`](crate::Layout). It validates view
+    /// aliasing without materializing the addressed offsets.
+    ///
+    /// # Errors
+    /// [`LetoError::Overflow`] when exact difference arithmetic exceeds the
+    /// checked integer range.
+    #[inline]
+    pub fn is_injective(&self) -> Result<bool> {
+        kernels::is_injective(&self.shape, &self.strides)
+    }
+
+    /// Broadcast this layout to a compatible runtime-rank target shape.
+    ///
+    /// Only shape and stride metadata are allocated; any element storage
+    /// remains untouched and can continue to be shared by the resulting view.
+    ///
+    /// # Errors
+    /// [`LetoError::IncompatibleBroadcast`] when ranks or extents cannot be
+    /// aligned.
+    pub fn broadcast(&self, target_shape: &[usize]) -> Result<Self> {
+        let mut output_strides = vec![0isize; target_shape.len()];
+        kernels::broadcast_strides(
+            &self.shape,
+            &self.strides,
+            target_shape,
+            &mut output_strides,
+        )?;
+        Self::new(
+            target_shape.to_vec().into_boxed_slice(),
+            output_strides.into_boxed_slice(),
+            self.offset,
+        )
+    }
+
     /// Physical offset of `index` via the shared `physical_offset` kernel.
     ///
     /// # Errors

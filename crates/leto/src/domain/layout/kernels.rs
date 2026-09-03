@@ -148,6 +148,173 @@ pub(crate) fn min_max_offsets(
     Ok((min_offset as usize, max_offset as usize))
 }
 
+/// Write the strides produced by broadcasting `source_shape` to `target_shape`.
+///
+/// The caller owns the output storage so this rank-agnostic kernel performs no
+/// allocation. A zero stride is introduced only for a prepended axis or an
+/// expanded singleton source axis.
+pub(crate) fn broadcast_strides(
+    source_shape: &[usize],
+    source_strides: &[isize],
+    target_shape: &[usize],
+    output_strides: &mut [isize],
+) -> Result<()> {
+    debug_assert_eq!(source_shape.len(), source_strides.len());
+    debug_assert_eq!(target_shape.len(), output_strides.len());
+    if target_shape.len() < source_shape.len() {
+        return Err(LetoError::IncompatibleBroadcast {
+            from: source_shape.to_vec(),
+            to: target_shape.to_vec(),
+        });
+    }
+
+    output_strides.fill(0);
+    let shift = target_shape.len() - source_shape.len();
+    for axis in 0..source_shape.len() {
+        let target_axis = axis + shift;
+        let source_extent = source_shape[axis];
+        let target_extent = target_shape[target_axis];
+        if source_extent == target_extent {
+            output_strides[target_axis] = source_strides[axis];
+        } else if source_extent != 1 {
+            return Err(LetoError::IncompatibleBroadcast {
+                from: source_shape.to_vec(),
+                to: target_shape.to_vec(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Determine whether distinct logical indices address distinct elements.
+///
+/// Separated strides complete without allocation. Ambiguous layouts use an
+/// exact bounded integer-difference search over the same slices, preserving
+/// arbitrary injective views for both const and runtime ranks.
+///
+/// # Errors
+/// [`LetoError::Overflow`] when shape, stride, or exact-difference arithmetic
+/// cannot be represented by the checked integer types.
+pub(crate) fn is_injective(shape: &[usize], strides: &[isize]) -> Result<bool> {
+    debug_assert_eq!(shape.len(), strides.len());
+    if shape_size(shape)? <= 1 {
+        return Ok(true);
+    }
+
+    let mut covered_span = 0usize;
+    let mut previous_magnitude = 0usize;
+    loop {
+        let mut next = None;
+        for axis in 0..shape.len() {
+            if shape[axis] <= 1 {
+                continue;
+            }
+            let magnitude = strides[axis].unsigned_abs();
+            if magnitude == 0 {
+                return Ok(false);
+            }
+            if magnitude > previous_magnitude
+                && next.is_none_or(|(candidate, _)| magnitude < candidate)
+            {
+                next = Some((magnitude, axis));
+            }
+        }
+        let Some((magnitude, axis)) = next else {
+            break;
+        };
+        let same_stride_count = shape
+            .iter()
+            .zip(strides)
+            .filter(|&(dimension, stride)| *dimension > 1 && stride.unsigned_abs() == magnitude)
+            .count();
+        if same_stride_count > 1 || magnitude <= covered_span {
+            return exact_injectivity(shape, strides);
+        }
+        let axis_span = (shape[axis] - 1)
+            .checked_mul(magnitude)
+            .ok_or(LetoError::Overflow {
+                reason: "layout injectivity axis span",
+            })?;
+        covered_span = covered_span
+            .checked_add(axis_span)
+            .ok_or(LetoError::Overflow {
+                reason: "layout injectivity covered span",
+            })?;
+        previous_magnitude = magnitude;
+    }
+    Ok(true)
+}
+
+fn exact_injectivity(shape: &[usize], strides: &[isize]) -> Result<bool> {
+    let solve_axis = shape
+        .iter()
+        .enumerate()
+        .max_by_key(|&(_, dimension)| dimension.saturating_sub(1))
+        .map_or(0, |(axis, _)| axis);
+    let search = DifferenceSearch {
+        shape,
+        strides,
+        solve_axis,
+        solve_stride: strides[solve_axis],
+    };
+    Ok(!search.has_collision(0, 0, false)?)
+}
+
+struct DifferenceSearch<'a> {
+    shape: &'a [usize],
+    strides: &'a [isize],
+    solve_axis: usize,
+    solve_stride: isize,
+}
+
+impl DifferenceSearch<'_> {
+    fn has_collision(
+        &self,
+        axis: usize,
+        residual: i128,
+        has_nonzero_difference: bool,
+    ) -> Result<bool> {
+        if axis == self.shape.len() {
+            let solve_stride = self.solve_stride as i128;
+            if solve_stride == 0 || residual % solve_stride != 0 {
+                return Ok(false);
+            }
+            let solved = residual.checked_neg().ok_or(LetoError::Overflow {
+                reason: "layout injectivity solved difference",
+            })? / solve_stride;
+            let absolute = solved.checked_abs().ok_or(LetoError::Overflow {
+                reason: "layout injectivity solved difference magnitude",
+            })?;
+            let bound = i128::try_from(self.shape[self.solve_axis] - 1).map_err(|_| {
+                LetoError::Overflow {
+                    reason: "layout injectivity solved difference bound",
+                }
+            })?;
+            return Ok(absolute <= bound && (has_nonzero_difference || solved != 0));
+        }
+        if axis == self.solve_axis {
+            return self.has_collision(axis + 1, residual, has_nonzero_difference);
+        }
+
+        let bound = i128::try_from(self.shape[axis] - 1).map_err(|_| LetoError::Overflow {
+            reason: "layout injectivity difference bound",
+        })?;
+        let stride = self.strides[axis] as i128;
+        for difference in -bound..=bound {
+            let term = difference
+                .checked_mul(stride)
+                .and_then(|term| residual.checked_add(term))
+                .ok_or(LetoError::Overflow {
+                    reason: "layout injectivity difference sum",
+                })?;
+            if self.has_collision(axis + 1, term, has_nonzero_difference || difference != 0)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
 /// Validate that every addressable physical offset lies within `storage_len`.
 ///
 /// # Errors
