@@ -1,5 +1,26 @@
 # Leto Work Backlog
 
+## LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02 [minor] [arch] — in progress
+
+- **Outcome:** extend Leto's canonical layout arithmetic with runtime-rank
+  broadcast and injectivity contracts required by the Hephaestus fusion seam.
+- **Scope / non-goals:** `LayoutDyn`, the shared layout kernels, fixed-layout
+  delegation, focused layout contracts, ADR 0029, and synchronized crate
+  documentation. No accelerator code, tensor expression ownership, or CPU
+  algorithm changes.
+- **Acceptance oracle:** dynamic broadcast matches fixed-rank semantics;
+  runtime-rank injectivity matches an exhaustive small-domain oracle and
+  rejects zero-stride collisions; malformed rank, overflow, and negative
+  address cases remain typed failures; Hephaestus can consume the APIs without
+  a duplicate layout proof.
+- **Risk / delivery:** public additive layout surface, `[minor] [arch]`;
+  integrator=Codex `01a062a0-a790-7ce1-af31-82059f8a5264`;
+  branch=`feat/leto-fusion-seam`; lease=`crates/leto/src/domain/layout`,
+  `crates/leto/src/domain/dynamic`, `crates/leto/tests`, `docs/adr`;
+  last-update=2026-09-02.
+- **Dependency:** Hephaestus `HEPH-FUSION-SEAM-2026-09-02` consumes this
+  contract after the Leto increment lands.
+
 ## ✅ LETO-F16-HERMES-ROUTING-2026-09-02 — Route F16 slice operations through hermes [minor] [perf] — done 2026-09-02
 
 - **Finding:** `impl_simd_ops_unsupported!(F16)` was stale — hermes 0.7 serves every operation the `SimdStrategy` routes (elementwise add/sub/mul/div, sum, dot, axpy, axpy rows, gemv, tiled GEMM, abs-sum/abs-max, min/max, jaccard/hamming) at `F16` on the scalar, AVX2 (+F16C), AVX-512 and NEON backends. The follow-up Bf16 consumer route is tracked in `LETO-BF16-HERMES-ROUTING-2026-09-02` now that Hermes provides the same backend coverage.
