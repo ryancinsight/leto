@@ -1,25 +1,10 @@
 # Leto Work Backlog
 
-## LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02 [minor] [arch] — in progress
+## ✅ LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02 [minor] [arch] — done 2026-09-02
 
-- **Outcome:** extend Leto's canonical layout arithmetic with runtime-rank
-  broadcast and injectivity contracts required by the Hephaestus fusion seam.
-- **Scope / non-goals:** `LayoutDyn`, the shared layout kernels, fixed-layout
-  delegation, focused layout contracts, ADR 0029, and synchronized crate
-  documentation. No accelerator code, tensor expression ownership, or CPU
-  algorithm changes.
-- **Acceptance oracle:** dynamic broadcast matches fixed-rank semantics;
-  runtime-rank injectivity matches an exhaustive small-domain oracle and
-  rejects zero-stride collisions; malformed rank, overflow, and negative
-  address cases remain typed failures; Hephaestus can consume the APIs without
-  a duplicate layout proof.
-- **Risk / delivery:** public additive layout surface, `[minor] [arch]`;
-  integrator=Codex `01a062a0-a790-7ce1-af31-82059f8a5264`;
-  branch=`feat/leto-fusion-seam`; lease=`crates/leto/src/domain/layout`,
-  `crates/leto/src/domain/dynamic`, `crates/leto/tests`, `docs/adr`;
-  last-update=2026-09-02.
-- **Dependency:** Hephaestus `HEPH-FUSION-SEAM-2026-09-02` consumes this
-  contract after the Leto increment lands.
+- **Delivered:** Runtime-rank broadcast and injectivity laws share Leto's canonical layout kernels; [ADR 0029](docs/adr/0029-runtime-rank-fusion-layout-contract.md).
+- **Evidence:** commit `ef78173`; Leto nextest `344/344`, clippy, doctests, and rustdoc pass.
+- **Dependency:** consumed by Hephaestus commit `219d701`.
 
 ## ✅ LETO-F16-HERMES-ROUTING-2026-09-02 — Route F16 slice operations through hermes [minor] [perf] — done 2026-09-02
 
