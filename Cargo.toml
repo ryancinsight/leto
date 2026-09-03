@@ -21,7 +21,7 @@ leto = { version = "0.43.0", path = "crates/leto" }
 leto-ops = { version = "0.43.0", path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne", features = ["eunomia"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne", rev = "cdf3363db2ff31337c531b24d0025d945ac59a23", features = ["eunomia"] }
 moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
