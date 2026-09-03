@@ -80,6 +80,59 @@ impl LayoutDyn {
         kernels::shape_size(&self.shape)
     }
 
+    /// Broadcast this layout to a target runtime-rank shape.
+    ///
+    /// Equal trailing extents retain their strides. A source extent of one
+    /// becomes a zero-stride view, and prepended axes are zero-stride views.
+    /// The backing storage is never copied.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::IncompatibleBroadcast`]
+    /// when a source extent cannot broadcast to the corresponding target
+    /// extent, or a layout arithmetic error from the validating constructor.
+    pub fn broadcast(&self, target_shape: &[usize]) -> Result<Self> {
+        let mut shape = vec![0usize; target_shape.len()];
+        let mut strides = vec![0isize; target_shape.len()];
+        kernels::broadcast_layout(
+            &self.shape,
+            &self.strides,
+            target_shape,
+            &mut shape,
+            &mut strides,
+        )?;
+        Self::new(
+            shape.into_boxed_slice(),
+            strides.into_boxed_slice(),
+            self.offset,
+        )
+    }
+
+    /// Returns the minimum and maximum physical offsets addressed by this
+    /// layout with signed overflow validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::Overflow`] when the physical address bounds
+    /// overflow, or [`LetoError::StorageError`]
+    /// when a negative stride reaches below zero.
+    pub fn checked_min_max_offsets(&self) -> Result<(usize, usize)> {
+        kernels::min_max_offsets(&self.shape, &self.strides, self.offset)
+    }
+
+    /// Returns whether distinct logical indices address distinct elements.
+    ///
+    /// The proof is shared with fixed-rank layouts, including its exact
+    /// bounded search for ambiguous interleaved strides.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::Overflow`] if the
+    /// exact difference proof exceeds its integer bounds.
+    pub fn is_injective(&self) -> Result<bool> {
+        kernels::is_injective(&self.shape, &self.strides)
+    }
+
     /// Physical offset of `index` via the shared `physical_offset` kernel.
     ///
     /// # Errors
@@ -112,5 +165,70 @@ impl LayoutDyn {
         // A zero-extent axis makes its stride irrelevant to addressing; the
         // canonical comparison still holds because both sides set it to 0.
         self.strides.as_ref() == expected.as_slice()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::LayoutDyn;
+
+    #[test]
+    fn broadcast_preserves_strides_and_zeroes_broadcast_axes() {
+        let source = LayoutDyn::new(Box::from([2usize, 1, 3]), Box::from([3isize, 3, 1]), 4)
+            .expect("invariant: source layout has matching ranks");
+        let broadcasted = source
+            .broadcast(&[5, 2, 4, 3])
+            .expect("invariant: target is broadcastable");
+
+        assert_eq!(broadcasted.shape.as_ref(), &[5, 2, 4, 3]);
+        assert_eq!(broadcasted.strides.as_ref(), &[0, 3, 0, 1]);
+        assert_eq!(broadcasted.offset, 4);
+    }
+
+    #[test]
+    fn dynamic_injectivity_matches_exhaustive_small_rank_two_oracle() {
+        for first_dimension in 1..=3 {
+            for second_dimension in 1..=3 {
+                let shape = [first_dimension, second_dimension];
+                for first_stride in -3..=3 {
+                    for second_stride in -3..=3 {
+                        let strides = [first_stride, second_stride];
+                        let mut offsets = BTreeSet::new();
+                        for first in 0..first_dimension {
+                            for second in 0..second_dimension {
+                                offsets.insert(
+                                    first as isize * first_stride + second as isize * second_stride,
+                                );
+                            }
+                        }
+                        let expected = offsets.len() == first_dimension * second_dimension;
+                        let layout = LayoutDyn::new(
+                            shape.to_vec().into_boxed_slice(),
+                            strides.to_vec().into_boxed_slice(),
+                            0,
+                        )
+                        .expect("invariant: dynamic ranks match");
+                        assert_eq!(
+                            layout.is_injective().expect("invariant: proof fits"),
+                            expected,
+                            "shape={shape:?}, strides={strides:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn dynamic_injectivity_accepts_interleaved_and_rejects_broadcast_writes() {
+        let interleaved = LayoutDyn::new(Box::from([2usize, 3]), Box::from([3isize, 2]), 0)
+            .expect("invariant: valid interleaved layout");
+        assert!(interleaved.is_injective().expect("invariant: proof fits"));
+
+        let broadcast = LayoutDyn::new(Box::from([3usize, 4]), Box::from([4isize, 0]), 0)
+            .expect("invariant: valid broadcast layout");
+        assert!(!broadcast.is_injective().expect("invariant: proof fits"));
     }
 }

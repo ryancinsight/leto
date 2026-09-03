@@ -1,5 +1,11 @@
 # Leto Work Backlog
 
+## LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02 [minor] [arch] — in review
+
+- **Delivered:** Runtime-rank broadcast and injectivity laws share Leto's canonical layout kernels; [ADR 0029](docs/adr/0029-runtime-rank-fusion-layout-contract.md).
+- **Evidence:** commit `ef78173`; Leto nextest `344/344`, clippy, doctests, and rustdoc pass.
+- **Delivery:** Draft [PR #159](https://github.com/ryancinsight/leto/pull/159); independent architecture review is required before merge. Consumed by Hephaestus commit `219d701`.
+
 ## ✅ LETO-F16-HERMES-ROUTING-2026-09-02 — Route F16 slice operations through hermes [minor] [perf] — done 2026-09-02
 
 - **Finding:** `impl_simd_ops_unsupported!(F16)` was stale — hermes 0.7 serves every operation the `SimdStrategy` routes (elementwise add/sub/mul/div, sum, dot, axpy, axpy rows, gemv, tiled GEMM, abs-sum/abs-max, min/max, jaccard/hamming) at `F16` on the scalar, AVX2 (+F16C), AVX-512 and NEON backends. The follow-up Bf16 consumer route is tracked in `LETO-BF16-HERMES-ROUTING-2026-09-02` now that Hermes provides the same backend coverage.

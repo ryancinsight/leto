@@ -37,3 +37,4 @@
 | [0026](0026-retire-lending-iterator-seam.md) | Retire the `LendingIterator` seam | Accepted |
 | [0027](0027-hermes-complex-batch-transpose.md) | Hermes complex matrix-batch transpose | Accepted |
 | [0028](0028-sparse-array-support.md) | Sparse Array Support in Leto and Hephaestus | Accepted |
+| [0029](0029-runtime-rank-fusion-layout-contract.md) | Runtime-rank fusion layout contract | Accepted |

@@ -38,3 +38,10 @@ These rules explain why a view is cheap: it contains a layout and a borrow of
 the original storage, not a second element buffer. They also explain why a
 layout should be preserved through provider boundaries instead of flattened
 into a temporary vector.
+
+## Runtime-rank layout metadata
+
+`LayoutDyn` stores shape and strides in boxed slices when rank is data-dependent.
+Its broadcast and injectivity operations use the same shared kernels as
+`Layout<N>`. A provider can therefore validate a runtime-rank zero-copy view
+without creating a second layout algorithm or materializing the values.

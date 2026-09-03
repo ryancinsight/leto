@@ -174,6 +174,178 @@ pub(crate) fn validate_storage(
     Ok(())
 }
 
+/// Broadcast `shape` and `strides` into `target_shape`, writing the resulting
+/// metadata into caller-provided buffers.
+///
+/// The buffers must both have the same length as `target_shape`. Keeping this
+/// operation rank-agnostic lets fixed and runtime-rank layouts share the
+/// broadcast law without moving either representation to the heap.
+pub(crate) fn broadcast_layout(
+    shape: &[usize],
+    strides: &[isize],
+    target_shape: &[usize],
+    out_shape: &mut [usize],
+    out_strides: &mut [isize],
+) -> Result<()> {
+    debug_assert_eq!(shape.len(), strides.len());
+    debug_assert_eq!(target_shape.len(), out_shape.len());
+    debug_assert_eq!(target_shape.len(), out_strides.len());
+
+    if shape.len() > target_shape.len() {
+        return Err(LetoError::IncompatibleBroadcast {
+            from: shape.to_vec(),
+            to: target_shape.to_vec(),
+        });
+    }
+
+    let shift = target_shape.len() - shape.len();
+    out_shape[..shift].copy_from_slice(&target_shape[..shift]);
+    out_strides[..shift].fill(0);
+
+    for (axis, (&source_dim, &source_stride)) in shape.iter().zip(strides).enumerate() {
+        let target_axis = axis + shift;
+        let target_dim = target_shape[target_axis];
+        match source_dim {
+            dim if dim == target_dim => {
+                out_shape[target_axis] = target_dim;
+                out_strides[target_axis] = source_stride;
+            }
+            1 => {
+                out_shape[target_axis] = target_dim;
+                out_strides[target_axis] = 0;
+            }
+            _ => {
+                return Err(LetoError::IncompatibleBroadcast {
+                    from: shape.to_vec(),
+                    to: target_shape.to_vec(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Return whether distinct logical indices address distinct physical offsets.
+///
+/// Separated strides are proved in `O(rank log rank)` time. Ambiguous layouts
+/// use the exact bounded difference search below, preserving legal interleaved
+/// views without allocating an offset set.
+pub(crate) fn is_injective(shape: &[usize], strides: &[isize]) -> Result<bool> {
+    debug_assert_eq!(shape.len(), strides.len());
+    if shape_size(shape)? <= 1 {
+        return Ok(true);
+    }
+
+    let mut axes = Vec::with_capacity(shape.len());
+    for (&dimension, &stride) in shape.iter().zip(strides) {
+        if dimension <= 1 {
+            continue;
+        }
+        let magnitude = stride.unsigned_abs();
+        if magnitude == 0 {
+            return Ok(false);
+        }
+        axes.push((magnitude, dimension));
+    }
+    axes.sort_unstable_by_key(|&(stride, _)| stride);
+
+    let mut covered_span = 0usize;
+    for &(stride, dimension) in &axes {
+        if stride <= covered_span {
+            return exact_injectivity(shape, strides);
+        }
+        covered_span = covered_span
+            .checked_add(
+                dimension
+                    .checked_sub(1)
+                    .and_then(|extent| extent.checked_mul(stride))
+                    .ok_or(LetoError::Overflow {
+                        reason: "layout injectivity axis span",
+                    })?,
+            )
+            .ok_or(LetoError::Overflow {
+                reason: "layout injectivity covered span",
+            })?;
+    }
+    Ok(true)
+}
+
+fn exact_injectivity(shape: &[usize], strides: &[isize]) -> Result<bool> {
+    let bounds = shape
+        .iter()
+        .map(|&dimension| {
+            i128::try_from(dimension.saturating_sub(1)).map_err(|_| LetoError::Overflow {
+                reason: "layout injectivity bound conversion",
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let strides = strides
+        .iter()
+        .map(|&stride| {
+            i128::try_from(stride).map_err(|_| LetoError::Overflow {
+                reason: "layout injectivity stride conversion",
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let solve_axis = bounds
+        .iter()
+        .enumerate()
+        .max_by_key(|&(_, bound)| bound)
+        .map(|(axis, _)| axis)
+        .ok_or(LetoError::Overflow {
+            reason: "layout injectivity solve axis",
+        })?;
+    let search = DifferenceSearch {
+        bounds: &bounds,
+        strides: &strides,
+        solve_axis,
+        solve_stride: strides[solve_axis],
+    };
+    Ok(!search.has_collision(0, 0, false)?)
+}
+
+struct DifferenceSearch<'a> {
+    bounds: &'a [i128],
+    strides: &'a [i128],
+    solve_axis: usize,
+    solve_stride: i128,
+}
+
+impl DifferenceSearch<'_> {
+    fn has_collision(
+        &self,
+        axis: usize,
+        residual: i128,
+        has_nonzero_difference: bool,
+    ) -> Result<bool> {
+        if axis == self.bounds.len() {
+            if residual % self.solve_stride != 0 {
+                return Ok(false);
+            }
+            let solved = residual.checked_neg().ok_or(LetoError::Overflow {
+                reason: "layout injectivity solved difference",
+            })? / self.solve_stride;
+            return Ok(solved.abs() <= self.bounds[self.solve_axis]
+                && (has_nonzero_difference || solved != 0));
+        }
+        if axis == self.solve_axis {
+            return self.has_collision(axis + 1, residual, has_nonzero_difference);
+        }
+        for difference in -self.bounds[axis]..=self.bounds[axis] {
+            let term = difference
+                .checked_mul(self.strides[axis])
+                .and_then(|term| residual.checked_add(term))
+                .ok_or(LetoError::Overflow {
+                    reason: "layout injectivity difference sum",
+                })?;
+            if self.has_collision(axis + 1, term, has_nonzero_difference || difference != 0)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
 /// Decompose a flat row-major index into per-axis coordinates, writing into
 /// `out` (`out.len()` must equal `shape.len()`).
 #[inline]

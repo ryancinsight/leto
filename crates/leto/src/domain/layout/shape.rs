@@ -77,42 +77,7 @@ impl<const N: usize> Layout<N> {
     /// Returns [`LetoError::Overflow`] when exact difference arithmetic exceeds
     /// `i128`.
     pub fn is_injective(&self) -> Result<bool> {
-        if self.checked_size()? <= 1 {
-            return Ok(true);
-        }
-        let mut axes = [(0usize, 0usize); N];
-        let mut count = 0;
-        for (&dimension, &stride) in self.shape.iter().zip(self.strides.iter()) {
-            if dimension <= 1 {
-                continue;
-            }
-            let magnitude = stride.unsigned_abs();
-            if magnitude == 0 {
-                return Ok(false);
-            }
-            axes[count] = (magnitude, dimension);
-            count += 1;
-        }
-        axes[..count].sort_unstable_by_key(|&(stride, _)| stride);
-        let mut covered_span = 0usize;
-        for &(stride, dimension) in &axes[..count] {
-            if stride <= covered_span {
-                return exact_injectivity(&self.shape, &self.strides);
-            }
-            covered_span = covered_span
-                .checked_add(
-                    dimension
-                        .checked_sub(1)
-                        .and_then(|extent| extent.checked_mul(stride))
-                        .ok_or(LetoError::Overflow {
-                            reason: "layout injectivity axis span",
-                        })?,
-                )
-                .ok_or(LetoError::Overflow {
-                    reason: "layout injectivity covered span",
-                })?;
-        }
-        Ok(true)
+        kernels::is_injective(&self.shape, &self.strides)
     }
 
     /// Reinterpret a dense row-major layout with a new shape.
@@ -135,65 +100,6 @@ impl<const N: usize> Layout<N> {
         }
 
         Layout::try_new(shape, target.strides, self.offset)
-    }
-}
-
-fn exact_injectivity<const N: usize>(shape: &[usize; N], strides: &[isize; N]) -> Result<bool> {
-    let bounds = shape.map(|dimension| dimension.saturating_sub(1) as i128);
-    let strides = strides.map(|stride| stride as i128);
-    let solve_axis = bounds
-        .iter()
-        .enumerate()
-        .max_by_key(|&(_, bound)| bound)
-        .map_or(0, |(axis, _)| axis);
-    let search = DifferenceSearch {
-        bounds: &bounds,
-        strides: &strides,
-        solve_axis,
-        solve_stride: strides[solve_axis],
-    };
-    Ok(!search.has_collision(0, 0, false)?)
-}
-
-struct DifferenceSearch<'a, const N: usize> {
-    bounds: &'a [i128; N],
-    strides: &'a [i128; N],
-    solve_axis: usize,
-    solve_stride: i128,
-}
-
-impl<const N: usize> DifferenceSearch<'_, N> {
-    fn has_collision(
-        &self,
-        axis: usize,
-        residual: i128,
-        has_nonzero_difference: bool,
-    ) -> Result<bool> {
-        if axis == N {
-            if residual % self.solve_stride != 0 {
-                return Ok(false);
-            }
-            let solved = residual.checked_neg().ok_or(LetoError::Overflow {
-                reason: "layout injectivity solved difference",
-            })? / self.solve_stride;
-            return Ok(solved.abs() <= self.bounds[self.solve_axis]
-                && (has_nonzero_difference || solved != 0));
-        }
-        if axis == self.solve_axis {
-            return self.has_collision(axis + 1, residual, has_nonzero_difference);
-        }
-        for difference in -self.bounds[axis]..=self.bounds[axis] {
-            let term = difference
-                .checked_mul(self.strides[axis])
-                .and_then(|term| residual.checked_add(term))
-                .ok_or(LetoError::Overflow {
-                    reason: "layout injectivity difference sum",
-                })?;
-            if self.has_collision(axis + 1, term, has_nonzero_difference || difference != 0)? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 }
 
