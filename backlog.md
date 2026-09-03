@@ -1,10 +1,10 @@
 # Leto Work Backlog
 
-## ✅ LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02 [minor] [arch] — done 2026-09-02
+## LETO-DYNAMIC-LAYOUT-PROVIDER-SEAM-2026-09-02 [minor] [arch] — in review
 
 - **Delivered:** Runtime-rank broadcast and injectivity laws share Leto's canonical layout kernels; [ADR 0029](docs/adr/0029-runtime-rank-fusion-layout-contract.md).
 - **Evidence:** commit `ef78173`; Leto nextest `344/344`, clippy, doctests, and rustdoc pass.
-- **Dependency:** consumed by Hephaestus commit `219d701`.
+- **Delivery:** Draft [PR #159](https://github.com/ryancinsight/leto/pull/159); independent architecture review is required before merge. Consumed by Hephaestus commit `219d701`.
 
 ## ✅ LETO-F16-HERMES-ROUTING-2026-09-02 — Route F16 slice operations through hermes [minor] [perf] — done 2026-09-02
 
