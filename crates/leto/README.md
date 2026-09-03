@@ -31,6 +31,8 @@ assert_eq!(view.shape(), [1, 2]);
 
 - Const-rank `Layout` with C- and Fortran-contiguous construction, physical
   offset calculation, and contiguity queries.
+- Runtime-rank `LayoutDyn` with the same broadcast and injectivity laws as
+  const-rank layouts, used by provider seams without copying storage.
 - `Array` / `ArrayView` / `ArrayViewMut` with rank-readable aliases
   (`Array1`..`Array3` and view variants).
 - Slicing with signed bounds, negative indices and steps, axis-dropping integer
