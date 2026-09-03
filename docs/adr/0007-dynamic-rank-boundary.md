@@ -7,6 +7,16 @@
 - Supersedes: refines ADR 0002's option-2 rejection (see *Relationship to ADR
   0002*).
 
+## Revision 2026-09-03
+
+`LayoutDyn` now exposes checked physical-span bounds, exact injectivity
+validation, and metadata-only broadcasting. These operations remain
+rank-agnostic layout validation and view construction; they do not add a
+dynamic-rank compute substrate. Their arithmetic is shared with `Layout<N>`
+through `domain::layout::kernels`, so Hephaestus can validate runtime-rank
+fusion views without copying element storage or maintaining a parallel layout
+algorithm.
+
 ## Context
 
 ndarray exposes `IxDyn` — a first-class array whose **rank is a runtime value**
@@ -46,8 +56,9 @@ is unknown at compile time. The concrete drivers:
 Adopt **option 3**. Leto remains const-rank for all computation. `ArrayD` is a
 **boundary type**, not a compute substrate: it owns a `LayoutDyn`
 (`Box<[usize]>` shape/strides + offset) and exposes only the operations that are
-genuinely independent of compile-time rank. Numeric work is performed after a
-one-line recovery to a typed rank.
+genuinely independent of compile-time rank, including checked span and alias
+validation plus metadata-only broadcast construction. Numeric work is
+performed after a one-line recovery to a typed rank.
 
 The offset/size/validation arithmetic is **not duplicated**: it is extracted into
 slice-based domain kernels (`domain::layout::kernels`) that both `Layout<N>` and

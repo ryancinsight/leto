@@ -192,3 +192,101 @@ fn dynamic_rank_dispatch_pattern() {
     assert_eq!(dyn_sum(r1).unwrap(), 6.0);
     assert_eq!(dyn_sum(r2).unwrap(), 10.0);
 }
+
+#[test]
+fn layout_dyn_validates_spans_and_injectivity_without_materializing_offsets() {
+    let dense = LayoutDyn::new(
+        vec![2usize, 3].into_boxed_slice(),
+        vec![3isize, 1].into_boxed_slice(),
+        0,
+    )
+    .unwrap();
+    assert_eq!(dense.checked_min_max_offsets().unwrap(), (0, 5));
+    assert!(dense.is_injective().unwrap());
+
+    let transposed = LayoutDyn::new(
+        vec![2usize, 3].into_boxed_slice(),
+        vec![1isize, 2].into_boxed_slice(),
+        0,
+    )
+    .unwrap();
+    assert_eq!(transposed.checked_min_max_offsets().unwrap(), (0, 5));
+    assert!(transposed.is_injective().unwrap());
+
+    let aliased = LayoutDyn::new(
+        vec![2usize, 2].into_boxed_slice(),
+        vec![1isize, 1].into_boxed_slice(),
+        0,
+    )
+    .unwrap();
+    assert!(!aliased.is_injective().unwrap());
+
+    let reverse = LayoutDyn::new(
+        vec![3usize].into_boxed_slice(),
+        vec![-1isize].into_boxed_slice(),
+        2,
+    )
+    .unwrap();
+    assert_eq!(reverse.checked_min_max_offsets().unwrap(), (0, 2));
+
+    let negative = LayoutDyn::new(
+        vec![3usize].into_boxed_slice(),
+        vec![-1isize].into_boxed_slice(),
+        1,
+    )
+    .unwrap();
+    assert_storage_reason(
+        negative.checked_min_max_offsets(),
+        "layout accesses negative physical offset -1",
+    );
+}
+
+#[test]
+fn layout_dyn_broadcast_preserves_storage_and_marks_expanded_axes() {
+    let source = LayoutDyn::new(
+        vec![1usize, 3].into_boxed_slice(),
+        vec![0isize, 1].into_boxed_slice(),
+        4,
+    )
+    .unwrap();
+    let expanded = source.broadcast(&[2, 3]).unwrap();
+    assert_eq!(expanded.shape.as_ref(), &[2, 3]);
+    assert_eq!(expanded.strides.as_ref(), &[0, 1]);
+    assert_eq!(expanded.offset, 4);
+    assert_eq!(expanded.checked_min_max_offsets().unwrap(), (4, 6));
+    assert!(!expanded.is_injective().unwrap());
+
+    let incompatible = source.broadcast(&[2, 4]);
+    match incompatible {
+        Err(LetoError::IncompatibleBroadcast { from, to }) => {
+            assert_eq!(from, vec![1, 3]);
+            assert_eq!(to, vec![2, 4]);
+        }
+        other => panic!("expected incompatible broadcast, got {other:?}"),
+    }
+}
+
+#[test]
+fn layout_dyn_empty_and_overflow_contracts_are_explicit() {
+    let empty = LayoutDyn::new(
+        vec![0usize, 3].into_boxed_slice(),
+        vec![3isize, 1].into_boxed_slice(),
+        7,
+    )
+    .unwrap();
+    assert_eq!(empty.checked_min_max_offsets().unwrap(), (7, 7));
+    assert!(empty.is_injective().unwrap());
+
+    let overflowing = LayoutDyn::new(
+        vec![usize::MAX, 2].into_boxed_slice(),
+        vec![1isize, 1].into_boxed_slice(),
+        0,
+    )
+    .unwrap();
+    match overflowing.checked_min_max_offsets() {
+        Err(LetoError::Overflow { reason }) => {
+            assert_eq!(reason, "layout dimension bound conversion")
+        }
+        other => panic!("expected layout overflow, got {other:?}"),
+    }
+}
