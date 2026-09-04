@@ -1,6 +1,10 @@
 # Leto Work Backlog
 
-## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — todo <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
+## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — in-progress <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
+
+- **Integrator:** Claude on `feat/leto-fd-mutable-view-dst`; **lease:**
+  `crates/leto-ops/src/application/diff/three_dimensional/`, `backlog.md` —
+  2026-09-04.
 
 - **Outcome:** `FiniteDifference3D::apply_{x,y,z}_into` and
   `StaggeredLeapfrog3D::{gradient_into, divergence_into}` accept a mutable
