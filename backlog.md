@@ -1,5 +1,57 @@
 # Leto Work Backlog
 
+## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
+
+- **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
+  `crates/leto-ops/src/application/diff/three_dimensional/`,
+  `crates/leto-ops/src/lib.rs`, `backlog.md` — 2026-09-04.
+- **Outcome:** Leto owns the derived-coefficient staggered first-derivative
+  family at any even order `2N`, `N = 1..=8`, so the Yee gradient/divergence
+  pair has one implementation in the stack. Closes the provider gap that keeps
+  `kwavers-math` carrying `StaggeredLeapfrogOperator`,
+  `StaggeredGridOperator`, and the Fornberg coefficient derivation.
+- **Scope:** coefficient derivation (Fornberg 1988) over `leto_ops` LU;
+  generic `T: FloatElement`; gradient (cell-centred to face-centred) and
+  divergence (face-centred back to cell-centred) forming a negative-adjoint
+  pair. Non-goals: device kernels (Hephaestus), the Coeus backend-generic
+  seam, and the kwavers deletion — each its own increment.
+- **Acceptance:** derived coefficients match the published rationals for
+  orders 2-8 to `1e-13` relative; measured order of accuracy matches the
+  nominal order; `D = -G^T` holds to the derived tolerance on non-degenerate
+  fields; the `N = 1` gradient is bitwise identical to the existing
+  `StaggeredForward` kernel wherever both are defined; check, Clippy, nextest,
+  doctests, and rustdoc pass.
+- **Acceptance correction (2026-09-04):** the claim first read "`N = 1` is
+  bitwise identical to `StaggeredForward` / `StaggeredBackward`", which is
+  false at the walls and was never true. The fixed kernels write one cell fewer
+  on the differentiated axis and impose no wall closure; the leapfrog pair is
+  grid-shaped and reflects taps about the wall to give the rigid
+  `∂p/∂n = 0` the conservative pair needs. Equality holds on the overlap and is
+  tested there; the far face is separately tested to be an unforced zero.
+- **Consumer driver:** kwavers FDTD `SolverState::leapfrog_operator` runs
+  `config.spatial_order` up to 8 (Fullwave 2.5 parity); atlas
+  `docs/audit/math-ssot-ledger.md` rows 137-140.
+- **Evidence (2026-09-04):** delivered on `feat/leto-arbitrary-order-staggered`.
+  New `leto_ops::{staggered_first_derivative_coefficients,
+  central_first_derivative_coefficients, TapCoefficients, MAX_HALF_ORDER}` and
+  `leto_ops::{Axis, StaggeredLeapfrog3D}`. Coefficients derive through the
+  crate's own LU rather than a second dense solver; taps live in inline
+  `[T; 8]` storage so the operator stays `Copy` and the sweep allocation-free.
+  Gate at this revision: `cargo fmt --check`, `cargo check --locked -p leto
+  -p leto-ops --no-default-features`, `cargo clippy --locked -p leto -p leto-ops
+  --all-targets -- -D warnings`, `cargo nextest run --locked -p leto -p leto-ops`
+  917/917, `cargo test --doc` 26 passed, `cargo doc --no-deps` — all clean.
+  15 new tests: published rationals for staggered orders 2-8 and collocated
+  2-6, measured order of accuracy at 2/4/6/8, the negative-adjoint identity on
+  all three axes at every order, wall closure, traversal agreement across the
+  three axis kernels, the Courant derivation, and an f32/f64 instantiation
+  pair.
+- **Next:** `KW-*` deletes `kwavers-math`'s `staggered_leapfrog`,
+  `staggered_grid`, and `central_difference_2/4/6` against this provider
+  surface; the Coeus `FiniteDifference3DOps` seam and the Hephaestus device
+  kernels follow as their own increments.
+- **Last-update:** 2026-09-04.
+
 ## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
 
 - **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.

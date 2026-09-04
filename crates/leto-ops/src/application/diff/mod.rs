@@ -25,4 +25,8 @@ pub mod three_dimensional;
 
 pub use finite_difference::FiniteDifference;
 pub use schemes::FiniteDifferenceScheme;
-pub use three_dimensional::{FiniteDifference3D, FiniteDifference3DScheme};
+pub use three_dimensional::{
+    central_first_derivative_coefficients, staggered_first_derivative_coefficients, Axis,
+    FiniteDifference3D, FiniteDifference3DScheme, StaggeredLeapfrog3D, TapCoefficients,
+    MAX_HALF_ORDER,
+};

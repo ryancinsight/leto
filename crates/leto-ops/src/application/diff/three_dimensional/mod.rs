@@ -34,6 +34,8 @@
 use eunomia::FloatElement;
 
 mod central;
+mod coefficients;
+mod leapfrog;
 mod operator;
 mod staggered;
 #[cfg(test)]
@@ -72,4 +74,9 @@ pub enum FiniteDifference3DScheme {
     StaggeredBackward,
 }
 
+pub use coefficients::{
+    central_first_derivative_coefficients, staggered_first_derivative_coefficients,
+    TapCoefficients, MAX_HALF_ORDER,
+};
+pub use leapfrog::{Axis, StaggeredLeapfrog3D};
 pub use operator::FiniteDifference3D;

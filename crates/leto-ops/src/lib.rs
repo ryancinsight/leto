@@ -179,6 +179,13 @@ pub use application::interpolation::{
 };
 
 // ── Finite-difference differentiation (SSOT) ─────────────────────────────────
+/// Derived staggered/collocated first-derivative taps to arbitrary even order.
+pub use application::diff::{
+    central_first_derivative_coefficients, staggered_first_derivative_coefficients,
+    TapCoefficients, MAX_HALF_ORDER,
+};
+/// Arbitrary-even-order staggered gradient/divergence pair for a Yee leapfrog.
+pub use application::diff::{Axis, StaggeredLeapfrog3D};
 /// Generic 1-D finite-difference operator.
 pub use application::diff::{FiniteDifference, FiniteDifferenceScheme};
 /// Generic 3-D finite-difference operator (provider-SSOT for kwavers/CFDrs/helios
