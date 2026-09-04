@@ -1,5 +1,17 @@
 # Leto Work Backlog
 
+## LETO-EUNOMIA-IDENTITY-2026-09-04 — Follow merged Eunomia source [patch] [arch] — in-progress <a id="leto-eunomia-identity-2026-09-04"></a>
+
+- **Integrator:** Codex on `build/leto-eunomia-source-identity`; **lease:**
+  `Cargo.toml`, `Cargo.lock`, `docs/adr/0029-provider-source-identity-during-coevolution.md`,
+  `backlog.md`.
+- **Outcome:** remove Leto's temporary Eunomia PR #87 revision pin after merge
+  so Gaia and Leto resolve one Eunomia trait identity in downstream consumers.
+- **Acceptance:** standalone lock resolves one Eunomia source; workspace check,
+  warning-denied Clippy, nextest, doctests, rustdoc, and diff checks pass; a
+  Leoneuro consumer check no longer reports duplicate Eunomia trait identities.
+- **Dependency:** Eunomia PR #87 merged at `27237595`; **Last-update:** 2026-09-04.
+
 ## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
 
 - **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**
