@@ -33,6 +33,13 @@
   draft written and held), and behind it the Hephaestus 3-D device kernels and
   the deletion of `kwavers-gpu`'s FDTD shader copy (ADR 128, "What this does
   not yet do").
+- **Feasibility, checked against `application/view.rs` (2026-09-04):**
+  `ArrayViewMut` already carries everything the kernels use — `shape`, `fill`,
+  `slice_mut`, `as_mut_slice`, `IndexMut`, and `reborrow`. Two mechanical
+  adaptations: the owned path's `as_slice_mut` is `as_mut_slice` on the view,
+  and `slice_mut` consumes `self`, so each of the repeated interior/boundary
+  slices needs a `reborrow()` first. No missing capability; this is a signature
+  and call-site change, not a new kernel.
 - **Last-update:** 2026-09-04.
 
 ## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
