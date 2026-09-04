@@ -1,5 +1,31 @@
 # Leto Work Backlog
 
+## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
+
+- **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
+  `crates/leto-ops/src/application/diff/three_dimensional/`,
+  `crates/leto-ops/src/lib.rs`, `backlog.md` — 2026-09-04.
+- **Outcome:** Leto owns the derived-coefficient staggered first-derivative
+  family at any even order `2N`, `N = 1..=8`, so the Yee gradient/divergence
+  pair has one implementation in the stack. Closes the provider gap that keeps
+  `kwavers-math` carrying `StaggeredLeapfrogOperator`,
+  `StaggeredGridOperator`, and the Fornberg coefficient derivation.
+- **Scope:** coefficient derivation (Fornberg 1988) over `leto_ops` LU;
+  generic `T: FloatElement`; gradient (cell-centred to face-centred) and
+  divergence (face-centred back to cell-centred) forming a negative-adjoint
+  pair. Non-goals: device kernels (Hephaestus), the Coeus backend-generic
+  seam, and the kwavers deletion — each its own increment.
+- **Acceptance:** derived coefficients match the published rationals for
+  orders 2-8 to `1e-13` relative; measured order of accuracy matches the
+  nominal order; `D = -G^T` holds to the derived tolerance on random fields;
+  `N = 1` is bitwise identical to the existing `StaggeredForward` /
+  `StaggeredBackward` kernels; check, Clippy, nextest, doctests, and rustdoc
+  pass.
+- **Consumer driver:** kwavers FDTD `SolverState::leapfrog_operator` runs
+  `config.spatial_order` up to 8 (Fullwave 2.5 parity); atlas
+  `docs/audit/math-ssot-ledger.md` rows 137-140.
+- **Last-update:** 2026-09-04.
+
 ## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
 
 - **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.
