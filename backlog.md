@@ -15,7 +15,8 @@
   compiles against the locked source.
 - **Integrator:** Codex atlas-session; **lease:** `crates/leto/src/domain/layout/`,
   `crates/leto/src/domain/dynamic/`, `crates/leto/tests/core/dynamic.rs`,
-  `docs/adr/0007-dynamic-rank-boundary.md`, `crates/leto/README.md`;
+  `docs/adr/0007-dynamic-rank-boundary.md`, `crates/leto/README.md`,
+  `Cargo.toml`, `Cargo.lock`;
   **last-update:** 2026-09-03.
 
 ## ✅ LETO-F16-HERMES-ROUTING-2026-09-02 — Route F16 slice operations through hermes [minor] [perf] — done 2026-09-02
