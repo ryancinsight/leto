@@ -9,9 +9,9 @@
 - **Acceptance:** Standalone lock resolves Hermes `5a399ee`, Mnemosyne
   `da5c6be`, and Eunomia `fdbf122`; workspace check, Clippy, nextest,
   doctests, rustdoc, and diff checks pass; no adapter or compatibility layer.
-- **Follow-up source edge:** Moirai PR #256 (`773c117`) is temporarily pinned
-  so Leto does not reintroduce its pre-Mnemosyne-identity graph; remove that
-  pin after the PR merges and regenerate `Cargo.lock`.
+- **Follow-up source edge:** Moirai PR #256 merged at `70d201a`; this increment
+  removes its temporary revision pin and regenerates `Cargo.lock`. Hermes,
+  Mnemosyne, and Eunomia remain pinned until their provider increments merge.
 - **Dependency:** Hermes PR #155 (`5a399ee`); **Last-update:** 2026-09-04.
 
 ## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress
