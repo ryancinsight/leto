@@ -1,7 +1,7 @@
 //! Yee staggered stencil kernels (forward and backward) behind
 //! [`super::FiniteDifference3D`].
 use eunomia::{FloatElement, NumericElement, RealField};
-use leto::{Array3, ArrayView3, LetoError, Result};
+use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use crate::application::zip::zip_mut_with;
 
@@ -9,7 +9,7 @@ use crate::application::zip::zip_mut_with;
 
 pub(super) fn staggered_forward_x_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -25,6 +25,7 @@ where
     }
     let inv_h = <T as NumericElement>::ONE / hx;
     let mut dst_slice = dst
+        .reborrow()
         .slice_mut(&[(0, nx - 1, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
     let field_hi = field.slice(&[(1, nx, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
@@ -40,7 +41,7 @@ where
 
 pub(super) fn staggered_forward_y_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -56,6 +57,7 @@ where
     }
     let inv_h = <T as NumericElement>::ONE / hy;
     let mut dst_slice = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (0, ny - 1, 1), (0, nz, 1)])
         .unwrap();
     let field_hi = field.slice(&[(0, nx, 1), (1, ny, 1), (0, nz, 1)]).unwrap();
@@ -71,7 +73,7 @@ where
 
 pub(super) fn staggered_forward_z_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -87,6 +89,7 @@ where
     }
     let inv_h = <T as NumericElement>::ONE / hz;
     let mut dst_slice = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (0, ny, 1), (0, nz - 1, 1)])
         .unwrap();
     let field_hi = field.slice(&[(0, nx, 1), (0, ny, 1), (1, nz, 1)]).unwrap();
@@ -104,7 +107,7 @@ where
 
 pub(super) fn staggered_backward_x_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -122,6 +125,7 @@ where
 
     // Backward on i ∈ [1, nx-1]
     let mut dst_int = dst
+        .reborrow()
         .slice_mut(&[(1, nx, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
     let field_hi = field.slice(&[(1, nx, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
@@ -133,7 +137,10 @@ where
     })
     .unwrap();
     // Forward fall-back at i=0
-    let mut dst_left = dst.slice_mut(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
+    let mut dst_left = dst
+        .reborrow()
+        .slice_mut(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)])
+        .unwrap();
     let field_hi_left = field.slice(&[(1, 2, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     let field_lo_left = field.slice(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     zip_mut_with(
@@ -147,7 +154,7 @@ where
 
 pub(super) fn staggered_backward_y_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -164,6 +171,7 @@ where
     let inv_h = <T as NumericElement>::ONE / hy;
 
     let mut dst_int = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (1, ny, 1), (0, nz, 1)])
         .unwrap();
     let field_hi = field.slice(&[(0, nx, 1), (1, ny, 1), (0, nz, 1)]).unwrap();
@@ -174,7 +182,10 @@ where
         *r = (hi - lo) * inv_h
     })
     .unwrap();
-    let mut dst_bot = dst.slice_mut(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
+    let mut dst_bot = dst
+        .reborrow()
+        .slice_mut(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)])
+        .unwrap();
     let field_hi_bot = field.slice(&[(0, nx, 1), (1, 2, 1), (0, nz, 1)]).unwrap();
     let field_lo_bot = field.slice(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
     zip_mut_with(
@@ -188,7 +199,7 @@ where
 
 pub(super) fn staggered_backward_z_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -205,6 +216,7 @@ where
     let inv_h = <T as NumericElement>::ONE / hz;
 
     let mut dst_int = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (0, ny, 1), (1, nz, 1)])
         .unwrap();
     let field_hi = field.slice(&[(0, nx, 1), (0, ny, 1), (1, nz, 1)]).unwrap();
@@ -215,7 +227,10 @@ where
         *r = (hi - lo) * inv_h
     })
     .unwrap();
-    let mut dst_near = dst.slice_mut(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
+    let mut dst_near = dst
+        .reborrow()
+        .slice_mut(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)])
+        .unwrap();
     let field_hi_near = field.slice(&[(0, nx, 1), (0, ny, 1), (1, 2, 1)]).unwrap();
     let field_lo_near = field.slice(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
     zip_mut_with(

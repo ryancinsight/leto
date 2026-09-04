@@ -1,6 +1,10 @@
 # Leto Work Backlog
 
-## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — todo <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
+## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
+
+- **Integrator:** Claude on `feat/leto-fd-mutable-view-dst`; **lease:**
+  `crates/leto-ops/src/application/diff/three_dimensional/`, `backlog.md` —
+  2026-09-04.
 
 - **Outcome:** `FiniteDifference3D::apply_{x,y,z}_into` and
   `StaggeredLeapfrog3D::{gradient_into, divergence_into}` accept a mutable
@@ -33,6 +37,17 @@
   draft written and held), and behind it the Hephaestus 3-D device kernels and
   the deletion of `kwavers-gpu`'s FDTD shader copy (ADR 128, "What this does
   not yet do").
+- **Delivered 2026-09-04.** `FiniteDifference3D::apply_{x,y,z}_into` and
+  `StaggeredLeapfrog3D::{gradient_into, divergence_into}` take
+  `&mut ArrayViewMut3<'_, T>`. The kernels needed only the two adaptations the
+  feasibility check predicted. Two new tests write through a view over a plain
+  `Vec<f64>` this crate does not own and compare bitwise against the owned
+  path — the fixed-scheme case and, on all three axes for both operators, the
+  leapfrog pair, whose contiguous fast path through `as_mut_slice` is the one
+  that would have degraded silently. Gate: `cargo fmt --check`,
+  `cargo check --locked --no-default-features`, `cargo clippy --locked
+  --all-targets -- -D warnings`, `cargo nextest run --locked` **919/919**,
+  `cargo test --doc` 26, `cargo doc --no-deps` — all clean.
 - **Feasibility, checked against `application/view.rs` (2026-09-04):**
   `ArrayViewMut` already carries everything the kernels use — `shape`, `fill`,
   `slice_mut`, `as_mut_slice`, `IndexMut`, and `reborrow`. Two mechanical

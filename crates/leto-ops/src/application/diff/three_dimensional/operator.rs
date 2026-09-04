@@ -5,7 +5,7 @@
 //! drives them and checks the destination shape.
 
 use eunomia::{FloatElement, NumericElement, RealField};
-use leto::{Array3, ArrayView3, LetoError, Result};
+use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use super::central::{
     central2_x_into, central2_y_into, central2_z_into, central4_x_into, central4_y_into,
@@ -97,7 +97,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
     /// - [`LetoError::InvalidInput`] when the diff axis has fewer than the
     ///   minimum required points for the chosen scheme, or when the dst shape
     ///   does not match the scheme's documented contract.
-    pub fn apply_x_into(&self, field: ArrayView3<T>, dst: &mut Array3<T>) -> Result<()> {
+    pub fn apply_x_into(&self, field: ArrayView3<T>, dst: &mut ArrayViewMut3<'_, T>) -> Result<()> {
         let [nx, ny, nz] = field.shape();
         match self.scheme {
             FiniteDifference3DScheme::CentralSecondOrder => {
@@ -126,7 +126,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
     /// Apply ∂/∂y into a pre-allocated destination.
     /// # Errors
     /// See [`Self::apply_x_into`].
-    pub fn apply_y_into(&self, field: ArrayView3<T>, dst: &mut Array3<T>) -> Result<()> {
+    pub fn apply_y_into(&self, field: ArrayView3<T>, dst: &mut ArrayViewMut3<'_, T>) -> Result<()> {
         let [nx, ny, nz] = field.shape();
         match self.scheme {
             FiniteDifference3DScheme::CentralSecondOrder => {
@@ -155,7 +155,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
     /// Apply ∂/∂z into a pre-allocated destination.
     /// # Errors
     /// See [`Self::apply_x_into`].
-    pub fn apply_z_into(&self, field: ArrayView3<T>, dst: &mut Array3<T>) -> Result<()> {
+    pub fn apply_z_into(&self, field: ArrayView3<T>, dst: &mut ArrayViewMut3<'_, T>) -> Result<()> {
         let [nx, ny, nz] = field.shape();
         match self.scheme {
             FiniteDifference3DScheme::CentralSecondOrder => {
