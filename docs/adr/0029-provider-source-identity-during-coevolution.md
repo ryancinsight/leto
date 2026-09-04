@@ -15,16 +15,17 @@ boundaries. The owning dependency edge must be corrected at the provider, not
 worked around in consumers.
 
 This decision is tracked by
-[LETO-EUNOMIA-IDENTITY-2026-09-04](../../backlog.md#leto-eunomia-identity-2026-09-04).
+[LETO-MNEMOSYNE-DEFAULT-2026-09-04](../../backlog.md#leto-mnemosyne-default-2026-09-04).
 
 ## Decision
 
-During the current co-evolution window, Leto pins the exact revisions that
-define its source graph:
+Leto follows reviewed provider default branches, while `Cargo.lock` records
+the exact revisions that define its reproducible source graph:
 
 - Hermes PR #155 is merged; its temporary `rev` pin is removed and the
   standalone lockfile records the merged default-branch source;
-- Mnemosyne PR #123 remains pinned at its current head, `a07f999`;
+- Mnemosyne `main` already contains the Eunomia source correction, so obsolete
+  PR #123 is closed and its temporary `rev` pin is removed;
 - Eunomia PR #87 is merged; its temporary `rev` pin is removed and the
   standalone lockfile records the merged default-branch source;
 - Aequitas PR #51 is merged; its temporary `rev` pin is removed and the
@@ -32,11 +33,8 @@ define its source graph:
 - Moirai PR #256 at `70d201a`; its temporary `rev` pin is now removed and the
   standalone lockfile records the merged default-branch source.
 
-The remaining Mnemosyne pin stays in the workspace manifest as documented,
-temporary co-evolution state and advances when the reviewed PR head changes.
-After the upstream PR merges, its `rev` is removed and the standalone lockfile
-is regenerated. Consumers then follow the resulting Leto revision rather than
-adding an override of their own.
+Consumers follow the resulting Leto revision rather than adding an override of
+their own.
 
 ## Alternatives Rejected
 
@@ -53,9 +51,8 @@ adding an override of their own.
 
 At the decision revision, Leto's standalone lock check, workspace check,
 warning-denied Clippy, nextest, doctests, rustdoc, and diff checks pass. The
-nextest run executes 923 tests. The lockfile resolves the retained Mnemosyne
-pin and merged provider defaults through one Eunomia identity without a
-compatibility layer.
+nextest run executes 923 tests. The lockfile resolves provider defaults through
+one Eunomia identity without a compatibility layer.
 
 ## Revision Note
 
@@ -76,3 +73,8 @@ and its temporary pin removed; Mnemosyne remains pinned while PR #123 is open.
 `a07f999`, after dependency-tree inspection showed the previous `da5c6be`
 revision still selected pre-merge Eunomia types. That head removes Mnemosyne's
 obsolete Eunomia PR #87 revision after the provider merge.
+
+2026-09-04: Closed obsolete Mnemosyne PR #123 after confirming its source-only
+correction already exists on `main`; independent review rejected the stale PR's
+unrelated conflicting allocator changes. Removed Leto's temporary Mnemosyne
+revision pin and restored provider-default resolution.
