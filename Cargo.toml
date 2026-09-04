@@ -23,7 +23,7 @@ leto-ops = { version = "0.43.0", path = "crates/leto-ops" }
 # ── Systems and Parallelization ──
 # Mnemosyne main already follows Eunomia's merged provider source; the lockfile
 # records the reviewed default revision without retaining the obsolete PR.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne", rev = "3ec77f4798bd3a3ef82ad419ff7e6f3bca522bf1", features = ["eunomia"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne", rev = "3e550bee866bb8af8f9adaa537f54ec4880ac4f8", features = ["eunomia"] }
 # Moirai PR #256 merged to the default branch; the lockfile records its
 # resolved source identity without a temporary revision pin.
 moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
