@@ -1,5 +1,40 @@
 # Leto Work Backlog
 
+## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — todo <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
+
+- **Outcome:** `FiniteDifference3D::apply_{x,y,z}_into` and
+  `StaggeredLeapfrog3D::{gradient_into, divergence_into}` accept a mutable
+  3-D view rather than `&mut Array3<T>`, so a caller whose destination is not
+  a Leto-owned array can write into it without a copy. `laplacian_2d_into`
+  already takes `&mut ArrayViewMut1`; this brings the 3-D surface to the same
+  contract.
+- **Driver (found 2026-09-04, drafting the Coeus seam):** the Coeus backend
+  seam hands a CPU kernel `&mut [T]` out of a `DeviceBuffer` through
+  `CpuAddressableStorageMut::as_mut_slice`. A `&mut Array3<T>` parameter cannot
+  receive that slice — `Array3` owns its storage — so a `coeus-leto`
+  implementation of a finite-difference op would have to allocate an `Array3`
+  per sweep and copy the result back. That is an allocation inside an FDTD
+  timestep: the exact defect class the kwavers consolidation
+  (`KW-LETO-FD-SSOT`, ADR 128) just removed. The seam is blocked on this and
+  should not be built around a copy.
+- **Scope:** the destination parameter only. Interior kernels already work
+  through `slice_mut`/`as_slice_mut`/`fill`/index, all of which a mutable view
+  provides. Non-goals: the input side (already a view), the fixed 2-D
+  Laplacian (already correct), and the Coeus/Hephaestus seams themselves.
+- **Acceptance:** every 3-D FD entry point takes a mutable view; a test writes
+  through a view over a plain `&mut [T]` and gets the same values as the
+  owned-array path; existing behaviour is unchanged elsewhere; check, Clippy,
+  nextest, doctests, and rustdoc pass.
+- **Change class:** `[major]`. Call sites pass `&mut dst.view_mut()` instead of
+  `&mut dst`. In-repo call sites and the kwavers consumer migrate in the same
+  co-evolution cycle — no borrowed/owned sibling methods, which would fork the
+  surface this row exists to unify.
+- **Blocks:** the Coeus `FiniteDifference3DOps<T>: ComputeBackend` seam (trait
+  draft written and held), and behind it the Hephaestus 3-D device kernels and
+  the deletion of `kwavers-gpu`'s FDTD shader copy (ADR 128, "What this does
+  not yet do").
+- **Last-update:** 2026-09-04.
+
 ## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
 
 - **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
