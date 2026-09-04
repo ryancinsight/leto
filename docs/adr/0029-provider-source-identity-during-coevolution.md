@@ -25,9 +25,10 @@ define its source graph:
 - Hermes PR #155 at `5a399ee`;
 - Mnemosyne PR #123 at `da5c6be`;
 - Eunomia PR #87 at `fdbf122`; and
-- Moirai PR #256 at `773c117`.
+- Moirai PR #256 at `70d201a`; its temporary `rev` pin is now removed and the
+  standalone lockfile records the merged default-branch source.
 
-The pins remain in the workspace manifest as temporary, documented
+The remaining pins stay in the workspace manifest as temporary, documented
 co-evolution state. After each upstream PR merges, its `rev` is removed and
 the standalone lockfile is regenerated. Consumers then follow the resulting
 Leto revision rather than adding an override of their own.
@@ -39,8 +40,9 @@ Leto revision rather than adding an override of their own.
   drift.
 - Converting values between duplicate crate instances would be a compatibility
   adapter and would preserve the duplicate graph instead of correcting it.
-- Leaving Moirai on its default branch reproduces the older Mnemosyne source
-  and defeats the Hermes/Mnemosyne identity correction.
+- Before PR #256 merged, leaving Moirai on its default branch reproduced the
+  older Mnemosyne source and defeated the Hermes/Mnemosyne identity correction;
+  the merged provider now carries the corrected source identity.
 
 ## Verification
 
@@ -54,3 +56,7 @@ edges without requiring a compatibility layer.
 2026-09-03: Added the Moirai source edge to the existing Hermes identity
 increment after the dependency graph audit found that Moirai's default-branch
 edge still selected the pre-Mnemosyne-identity graph.
+
+2026-09-04: Removed Moirai's temporary revision pin after PR #256 merged at
+`70d201a` and regenerated the standalone lockfile; the remaining provider pins
+stay until their corresponding upstream increments merge.
