@@ -25,9 +25,9 @@ leto-ops = { version = "0.43.0", path = "crates/leto-ops" }
 # Eunomia source-identity correction merges to main and regenerate Cargo.lock.
 mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne", rev = "da5c6be", features = ["eunomia"] }
 moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
-# Temporary co-evolution pin for Hermes PR #155; remove `rev` after the
-# unified Eunomia source identity merges to main and regenerate Cargo.lock.
-hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git", rev = "2ecace2" }
+# Temporary co-evolution pin for Hermes PR #155; remove `rev` after its
+# provider source-identity correction merges to main and regenerate Cargo.lock.
+hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git", rev = "5a399ee" }
 # Temporary co-evolution pin for Eunomia PR #87; remove `rev` after the
 # provider derive delivery merges to main and regenerate Cargo.lock.
 eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false }
