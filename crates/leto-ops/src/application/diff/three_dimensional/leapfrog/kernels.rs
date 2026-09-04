@@ -7,7 +7,7 @@
 //! the same sums in the same order.
 
 use eunomia::{FloatElement, NumericElement, RealField};
-use leto::{Array3, ArrayView3};
+use leto::{ArrayView3, ArrayViewMut3};
 
 use super::{Axis, StaggeredLeapfrog3D};
 
@@ -15,11 +15,11 @@ pub(super) fn gradient<T: RealField + FloatElement + Copy>(
     op: &StaggeredLeapfrog3D<T>,
     axis: Axis,
     field: ArrayView3<'_, T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     shape: [usize; 3],
 ) {
     let (index, extent, scale) = op.axis_geometry(axis, shape);
-    let (Some(source), Some(target)) = (field.as_slice(), dst.as_slice_mut()) else {
+    let (Some(source), Some(target)) = (field.as_slice(), dst.as_mut_slice()) else {
         gradient_indexed(op, index, extent, scale, field, dst, shape);
         return;
     };
@@ -56,13 +56,13 @@ pub(super) fn divergence<T: RealField + FloatElement + Copy>(
     op: &StaggeredLeapfrog3D<T>,
     axis: Axis,
     field: ArrayView3<'_, T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     shape: [usize; 3],
 ) {
     let (index, extent, scale) = op.axis_geometry(axis, shape);
     dst.fill(<T as NumericElement>::ZERO);
 
-    let (Some(source), Some(target)) = (field.as_slice(), dst.as_slice_mut()) else {
+    let (Some(source), Some(target)) = (field.as_slice(), dst.as_mut_slice()) else {
         divergence_indexed(op, index, extent, scale, field, dst, shape);
         return;
     };
@@ -182,7 +182,7 @@ fn gradient_indexed<T: RealField + FloatElement + Copy>(
     extent: isize,
     scale: T,
     field: ArrayView3<'_, T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     shape: [usize; 3],
 ) {
     for i in 0..shape[0] {
@@ -283,7 +283,7 @@ fn divergence_indexed<T: RealField + FloatElement + Copy>(
     extent: isize,
     scale: T,
     field: ArrayView3<'_, T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     shape: [usize; 3],
 ) {
     for i in 0..shape[0] {

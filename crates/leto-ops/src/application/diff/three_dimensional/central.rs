@@ -1,7 +1,7 @@
 //! Central-difference stencil kernels (2nd, 4th, and 6th order with
 //! boundary fall-back) behind [`super::FiniteDifference3D`].
 use eunomia::{FloatElement, NumericElement, RealField};
-use leto::{Array3, ArrayView3, LetoError, Result};
+use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use crate::application::zip::zip_mut_with;
 
@@ -11,7 +11,7 @@ use super::f;
 
 pub(super) fn central2_x_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -31,6 +31,7 @@ where
 
     // Interior: central difference via leto slice pair (contiguous on innermost Z).
     let mut dst_int = dst
+        .reborrow()
         .slice_mut(&[(1, nx - 1, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
     let field_hi = field.slice(&[(2, nx, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
@@ -43,7 +44,10 @@ where
     .unwrap();
 
     // Boundaries: forward / backward one-sided.
-    let mut dst_left = dst.slice_mut(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
+    let mut dst_left = dst
+        .reborrow()
+        .slice_mut(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)])
+        .unwrap();
     let field_hi_left = field.slice(&[(1, 2, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     let field_lo_left = field.slice(&[(0, 1, 1), (0, ny, 1), (0, nz, 1)]).unwrap();
     zip_mut_with(
@@ -53,6 +57,7 @@ where
     )
     .unwrap();
     let mut dst_right = dst
+        .reborrow()
         .slice_mut(&[(nx - 1, nx, 1), (0, ny, 1), (0, nz, 1)])
         .unwrap();
     let field_hi_right = field
@@ -72,7 +77,7 @@ where
 
 pub(super) fn central2_y_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -91,6 +96,7 @@ where
     let inv_h = <T as NumericElement>::ONE / hy;
 
     let mut dst_int = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (1, ny - 1, 1), (0, nz, 1)])
         .unwrap();
     let field_hi = field.slice(&[(0, nx, 1), (2, ny, 1), (0, nz, 1)]).unwrap();
@@ -101,7 +107,10 @@ where
         *r = (hi - lo) * inv_2h
     })
     .unwrap();
-    let mut dst_bot = dst.slice_mut(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
+    let mut dst_bot = dst
+        .reborrow()
+        .slice_mut(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)])
+        .unwrap();
     let field_hi_bot = field.slice(&[(0, nx, 1), (1, 2, 1), (0, nz, 1)]).unwrap();
     let field_lo_bot = field.slice(&[(0, nx, 1), (0, 1, 1), (0, nz, 1)]).unwrap();
     zip_mut_with(
@@ -111,6 +120,7 @@ where
     )
     .unwrap();
     let mut dst_top = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (ny - 1, ny, 1), (0, nz, 1)])
         .unwrap();
     let field_hi_top = field
@@ -130,7 +140,7 @@ where
 
 pub(super) fn central2_z_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -149,6 +159,7 @@ where
     let inv_h = <T as NumericElement>::ONE / hz;
 
     let mut dst_int = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (0, ny, 1), (1, nz - 1, 1)])
         .unwrap();
     let field_hi = field.slice(&[(0, nx, 1), (0, ny, 1), (2, nz, 1)]).unwrap();
@@ -159,7 +170,10 @@ where
         *r = (hi - lo) * inv_2h
     })
     .unwrap();
-    let mut dst_near = dst.slice_mut(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
+    let mut dst_near = dst
+        .reborrow()
+        .slice_mut(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)])
+        .unwrap();
     let field_hi_near = field.slice(&[(0, nx, 1), (0, ny, 1), (1, 2, 1)]).unwrap();
     let field_lo_near = field.slice(&[(0, nx, 1), (0, ny, 1), (0, 1, 1)]).unwrap();
     zip_mut_with(
@@ -169,6 +183,7 @@ where
     )
     .unwrap();
     let mut dst_far = dst
+        .reborrow()
         .slice_mut(&[(0, nx, 1), (0, ny, 1), (nz - 1, nz, 1)])
         .unwrap();
     let field_hi_far = field
@@ -196,7 +211,7 @@ where
 
 pub(super) fn central4_x_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -247,7 +262,7 @@ where
 
 pub(super) fn central4_y_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -292,7 +307,7 @@ where
 
 pub(super) fn central4_z_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -339,7 +354,7 @@ where
 
 pub(super) fn central6_x_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -407,7 +422,7 @@ where
 
 pub(super) fn central6_y_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,
@@ -468,7 +483,7 @@ where
 
 pub(super) fn central6_z_into<T>(
     field: ArrayView3<T>,
-    dst: &mut Array3<T>,
+    dst: &mut ArrayViewMut3<'_, T>,
     nx: usize,
     ny: usize,
     nz: usize,

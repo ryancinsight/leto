@@ -125,8 +125,12 @@ fn a_shape_mismatch_is_reported_not_asserted() {
     let op = StaggeredLeapfrog3D::<f64>::new(2, 1.0, 1.0, 1.0).unwrap();
     let field = Array3::<f64>::zeros([4, 4, 4]);
     let mut dst = Array3::<f64>::zeros([4, 4, 3]);
-    assert!(op.gradient_into(Axis::X, field.view(), &mut dst).is_err());
-    assert!(op.divergence_into(Axis::X, field.view(), &mut dst).is_err());
+    assert!(op
+        .gradient_into(Axis::X, field.view(), &mut dst.view_mut())
+        .is_err());
+    assert!(op
+        .divergence_into(Axis::X, field.view(), &mut dst.view_mut())
+        .is_err());
 }
 
 // ── Value semantics ──────────────────────────────────────────────────────────
@@ -137,7 +141,8 @@ fn second_order_reduces_to_the_plain_half_grid_difference() {
     let field = seeded(shape, 0.3);
     let op = StaggeredLeapfrog3D::<f64>::new(2, 1.0, 1.0, 1.0).unwrap();
     let mut dst = Array3::zeros(shape);
-    op.gradient_into(Axis::Z, field.view(), &mut dst).unwrap();
+    op.gradient_into(Axis::Z, field.view(), &mut dst.view_mut())
+        .unwrap();
 
     for i in 0..shape[0] {
         for j in 0..shape[1] {
@@ -167,10 +172,12 @@ fn second_order_interior_agrees_with_the_fixed_staggered_forward_kernel() {
 
     let mut from_leapfrog = Array3::zeros(shape);
     leapfrog
-        .gradient_into(Axis::X, field.view(), &mut from_leapfrog)
+        .gradient_into(Axis::X, field.view(), &mut from_leapfrog.view_mut())
         .unwrap();
     let mut from_fixed = Array3::zeros([shape[0] - 1, shape[1], shape[2]]);
-    fixed.apply_x_into(field.view(), &mut from_fixed).unwrap();
+    fixed
+        .apply_x_into(field.view(), &mut from_fixed.view_mut())
+        .unwrap();
 
     for i in 0..shape[0] - 1 {
         for j in 0..shape[1] {
@@ -193,7 +200,8 @@ fn a_uniform_field_has_no_gradient_on_any_axis_or_order() {
         let op = StaggeredLeapfrog3D::<f64>::new(order, 1e-3, 1e-3, 1e-3).unwrap();
         for axis in AXES {
             let mut dst = Array3::zeros(shape);
-            op.gradient_into(axis, field.view(), &mut dst).unwrap();
+            op.gradient_into(axis, field.view(), &mut dst.view_mut())
+                .unwrap();
             for &value in dst.as_slice().unwrap() {
                 assert_eq!(value, 0.0, "order {order} axis {axis:?}");
             }
@@ -209,7 +217,8 @@ fn the_far_wall_is_rigid_without_being_forced() {
     let field = seeded(shape, 2.0);
     let op = StaggeredLeapfrog3D::<f64>::new(4, 1.0, 1.0, 1.0).unwrap();
     let mut dst = Array3::zeros(shape);
-    op.gradient_into(Axis::X, field.view(), &mut dst).unwrap();
+    op.gradient_into(Axis::X, field.view(), &mut dst.view_mut())
+        .unwrap();
     for j in 0..shape[1] {
         for k in 0..shape[2] {
             assert_eq!(dst[[shape[0] - 1, j, k]], 0.0);
@@ -236,7 +245,8 @@ fn each_order_converges_at_its_claimed_rate() {
         }
         let op = StaggeredLeapfrog3D::<f64>::new(order, dx, dx, dx).unwrap();
         let mut dst = Array3::zeros(shape);
-        op.gradient_into(Axis::X, field.view(), &mut dst).unwrap();
+        op.gradient_into(Axis::X, field.view(), &mut dst.view_mut())
+            .unwrap();
 
         let halo = op.halo_width();
         let mut worst: f64 = 0.0;
@@ -272,9 +282,11 @@ fn gradient_and_divergence_are_negative_adjoints() {
             let u = seeded(shape, 1.9 - index as f64);
 
             let mut grad_p = Array3::zeros(shape);
-            op.gradient_into(axis, p.view(), &mut grad_p).unwrap();
+            op.gradient_into(axis, p.view(), &mut grad_p.view_mut())
+                .unwrap();
             let mut div_u = Array3::zeros(shape);
-            op.divergence_into(axis, u.view(), &mut div_u).unwrap();
+            op.divergence_into(axis, u.view(), &mut div_u.view_mut())
+                .unwrap();
 
             let left = dot(&grad_p, &u);
             let right = -dot(&p, &div_u);
@@ -302,7 +314,8 @@ fn the_adjointness_fields_are_non_degenerate() {
     assert!(dot(&u, &u) > 1.0);
     let op = StaggeredLeapfrog3D::<f64>::new(4, 1.0, 1.0, 1.0).unwrap();
     let mut grad_p = Array3::zeros(shape);
-    op.gradient_into(Axis::Y, p.view(), &mut grad_p).unwrap();
+    op.gradient_into(Axis::Y, p.view(), &mut grad_p.view_mut())
+        .unwrap();
     assert!(dot(&grad_p, &u).abs() > 1e-3);
 }
 
@@ -319,7 +332,7 @@ fn the_block_kernels_agree_with_the_contiguous_one() {
     let op = StaggeredLeapfrog3D::<f64>::new(6, 1.0, 1.0, 1.0).unwrap();
 
     let mut along_z = Array3::zeros(shape);
-    op.gradient_into(Axis::Z, field.view(), &mut along_z)
+    op.gradient_into(Axis::Z, field.view(), &mut along_z.view_mut())
         .unwrap();
 
     // Transpose x <-> z, differentiate along x, transpose back.
@@ -332,7 +345,7 @@ fn the_block_kernels_agree_with_the_contiguous_one() {
         }
     }
     let mut along_x = Array3::zeros(shape);
-    op.gradient_into(Axis::X, transposed.view(), &mut along_x)
+    op.gradient_into(Axis::X, transposed.view(), &mut along_x.view_mut())
         .unwrap();
 
     for i in 0..n {
@@ -391,10 +404,10 @@ fn the_operator_runs_at_every_supported_scalar() {
     }
 
     let mut dst32 = Array3::<f32>::zeros(shape);
-    op32.gradient_into(Axis::Y, field32.view(), &mut dst32)
+    op32.gradient_into(Axis::Y, field32.view(), &mut dst32.view_mut())
         .unwrap();
     let mut dst64 = Array3::<f64>::zeros(shape);
-    op64.gradient_into(Axis::Y, field64.view(), &mut dst64)
+    op64.gradient_into(Axis::Y, field64.view(), &mut dst64.view_mut())
         .unwrap();
 
     // f32 carries about 2^-24 relative; the stencil sums 2N taps, so the
@@ -410,6 +423,60 @@ fn the_operator_runs_at_every_supported_scalar() {
                     (narrow - wide).abs() <= bound * scale,
                     "({i}, {j}, {k}): f32 {narrow} vs f64 {wide}"
                 );
+            }
+        }
+    }
+}
+
+/// The leapfrog pair writes into a mutable view over storage this crate does
+/// not own, matching the owned path bitwise on both operators.
+///
+/// The pair takes the contiguous fast path through `as_mut_slice`, which is the
+/// one that would silently fall back to indexed addressing — or fail to see the
+/// buffer at all — if the view's slice access did not carry through.
+#[test]
+fn the_pair_writes_through_a_view_over_a_foreign_slice() {
+    use leto::{ArrayViewMut3, Layout};
+
+    let shape = [6usize, 5, 7];
+    let count = shape[0] * shape[1] * shape[2];
+    let strides = [(shape[1] * shape[2]) as isize, shape[2] as isize, 1_isize];
+    let field = seeded(shape, 0.8);
+    let op = StaggeredLeapfrog3D::<f64>::new(4, 1.5e-3, 2.5e-3, 0.5e-3).unwrap();
+
+    for axis in AXES {
+        let mut owned_gradient = Array3::zeros(shape);
+        op.gradient_into(axis, field.view(), &mut owned_gradient.view_mut())
+            .unwrap();
+        let mut owned_divergence = Array3::zeros(shape);
+        op.divergence_into(axis, field.view(), &mut owned_divergence.view_mut())
+            .unwrap();
+
+        let mut foreign_gradient = vec![f64::NAN; count];
+        let layout = Layout::<3>::try_new(shape, strides, 0).unwrap();
+        let mut view = ArrayViewMut3::try_new(layout, foreign_gradient.as_mut_slice()).unwrap();
+        op.gradient_into(axis, field.view(), &mut view).unwrap();
+
+        let mut foreign_divergence = vec![f64::NAN; count];
+        let layout = Layout::<3>::try_new(shape, strides, 0).unwrap();
+        let mut view = ArrayViewMut3::try_new(layout, foreign_divergence.as_mut_slice()).unwrap();
+        op.divergence_into(axis, field.view(), &mut view).unwrap();
+
+        for i in 0..shape[0] {
+            for j in 0..shape[1] {
+                for k in 0..shape[2] {
+                    let index = (i * shape[1] + j) * shape[2] + k;
+                    assert_eq!(
+                        foreign_gradient[index],
+                        owned_gradient[[i, j, k]],
+                        "gradient {axis:?} ({i}, {j}, {k})"
+                    );
+                    assert_eq!(
+                        foreign_divergence[index],
+                        owned_divergence[[i, j, k]],
+                        "divergence {axis:?} ({i}, {j}, {k})"
+                    );
+                }
             }
         }
     }

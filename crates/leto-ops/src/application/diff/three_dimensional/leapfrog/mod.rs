@@ -48,7 +48,7 @@ mod kernels;
 mod tests;
 
 use eunomia::{FloatElement, NumericElement, RealField};
-use leto::{Array3, ArrayView3, LetoError, Result};
+use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use super::coefficients::{staggered_first_derivative_coefficients, TapCoefficients};
 
@@ -94,7 +94,7 @@ impl Axis {
 /// // A constant field has zero gradient everywhere, walls included.
 /// let field = Array3::from_elem([6, 6, 6], 2.5);
 /// let mut dst = Array3::zeros([6, 6, 6]);
-/// op.gradient_into(Axis::Z, field.view(), &mut dst).unwrap();
+/// op.gradient_into(Axis::Z, field.view(), &mut dst.view_mut()).unwrap();
 /// assert!(dst.as_slice().unwrap().iter().all(|&v| v == 0.0));
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -199,7 +199,7 @@ impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
         &self,
         axis: Axis,
         field: ArrayView3<'_, T>,
-        dst: &mut Array3<T>,
+        dst: &mut ArrayViewMut3<'_, T>,
     ) -> Result<()> {
         let shape = field.shape();
         assert_grid_shaped(dst.shape(), shape, "gradient")?;
@@ -218,7 +218,7 @@ impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
         &self,
         axis: Axis,
         field: ArrayView3<'_, T>,
-        dst: &mut Array3<T>,
+        dst: &mut ArrayViewMut3<'_, T>,
     ) -> Result<()> {
         let shape = field.shape();
         assert_grid_shaped(dst.shape(), shape, "divergence")?;
