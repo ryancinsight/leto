@@ -1,8 +1,24 @@
 # Leto Work Backlog
 
+## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
+
+- **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.
+- **Outcome:** remove the obsolete Mnemosyne PR #123 pin after confirming its
+  Eunomia source correction already exists on reviewed `main`.
+- **Acceptance:** standalone metadata resolves one Eunomia identity from
+  provider defaults; configured Leto gates pass; no stale Mnemosyne allocator
+  changes enter the graph. **Last-update:** 2026-09-04.
+- **Evidence:** one Eunomia/eunomia-derive source at `02397fa`; Mnemosyne
+  default resolves at `8d2f466`; all-target check and Clippy, format, 923/923
+  nextest, 23 executable doctests with one ignored, and rustdoc pass. Independent
+  upstream review rejected PR #123 while confirming its source correction is
+  already valid on `main`.
+
 ## LETO-EUNOMIA-IDENTITY-2026-09-04 — Follow merged Eunomia source [patch] [arch] — done 2026-09-04 <a id="leto-eunomia-identity-2026-09-04"></a>
 
-- Merged-provider pins removed; Mnemosyne PR #123 advanced to `a07f999`. One Eunomia source; check, Clippy, 923/923 nextest, 23 doctests, and rustdoc pass.
+- Merged-provider pins removed; the temporary Mnemosyne pin was closed by
+  `LETO-MNEMOSYNE-DEFAULT-2026-09-04`. One Eunomia source; check, Clippy,
+  923/923 nextest, 23 doctests, and rustdoc pass.
 
 ## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
 
