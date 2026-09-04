@@ -1,5 +1,9 @@
 # Leto Work Backlog
 
+## LETO-EUNOMIA-IDENTITY-2026-09-04 — Follow merged Eunomia source [patch] [arch] — done 2026-09-04 <a id="leto-eunomia-identity-2026-09-04"></a>
+
+- Merged-provider pins removed; Mnemosyne PR #123 advanced to `a07f999`. One Eunomia source; check, Clippy, 923/923 nextest, 23 doctests, and rustdoc pass.
+
 ## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
 
 - **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**

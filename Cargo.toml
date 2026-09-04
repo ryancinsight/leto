@@ -23,19 +23,15 @@ leto-ops = { version = "0.43.0", path = "crates/leto-ops" }
 # ── Systems and Parallelization ──
 # Temporary co-evolution pin for Mnemosyne PR #123; remove `rev` after the
 # Eunomia source-identity correction merges to main and regenerate Cargo.lock.
-mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne", rev = "da5c6be", features = ["eunomia"] }
+mnemosyne = { package = "mnemosyne-memory", version = "0.7.0", git = "https://github.com/ryancinsight/Mnemosyne", rev = "a07f999d1924b450c29fd14cc281efc664fbd1b9", features = ["eunomia"] }
 # Moirai PR #256 merged to the default branch; the lockfile records its
 # resolved source identity without a temporary revision pin.
 moirai = { package = "moirai-runtime", version = "0.5.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
-# Temporary co-evolution pin for Hermes PR #155; remove `rev` after its
-# provider source-identity correction merges to main and regenerate Cargo.lock.
-hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git", rev = "5a399ee" }
-# Temporary co-evolution pin for Eunomia PR #87; remove `rev` after the
-# provider derive delivery merges to main and regenerate Cargo.lock.
-eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", rev = "fdbf12275d35aa1545060a4277644c497ddcda37", default-features = false }
-# Temporary co-evolution pin for Aequitas PR #51; remove `rev` after the
-# Eunomia source-identity correction merges to main and regenerate Cargo.lock.
-aequitas = { package = "aequitas", version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", rev = "29fb70b", default-features = false }
+# Hermes PR #155, Eunomia PR #87, and Aequitas PR #51 are merged;
+# default-branch resolution preserves their shared trait source identity.
+hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
+eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
+aequitas = { package = "aequitas", version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
 themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Dev-only compatibility deps were removed per LETO-NDARRAY-BOUNDARY-1 ──
