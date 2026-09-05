@@ -1,0 +1,63 @@
+[build-system]
+requires = ["maturin>=1.9.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "leto-python"
+# Single source of truth: maturin reads the version from Cargo.toml, which
+# inherits the workspace version.
+dynamic = ["version"]
+description = "NumPy-compatible array kernels and dense linear algebra over the Leto Rust substrate"
+readme = "README.md"
+# Matches the wheel matrix in .github/workflows/python-release.yml. The
+# bindings are not abi3, so this floor is the lowest interpreter built rather
+# than an abi3 minimum.
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+authors = [
+    { name = "Ryan Clanton", email = "ryanclanton@outlook.com" },
+]
+keywords = ["numpy", "linear-algebra", "array", "rust", "simd"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = [
+    "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+# The parity suite differences every binding against NumPy/SciPy.
+test = [
+    "pytest>=7.0",
+    "scipy>=1.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/ryancinsight/leto"
+Repository = "https://github.com/ryancinsight/leto"
+Documentation = "https://docs.rs/leto"
+Issues = "https://github.com/ryancinsight/leto/issues"
+
+[tool.maturin]
+module-name = "leto_python"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
