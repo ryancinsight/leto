@@ -219,3 +219,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_dyn_py, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
