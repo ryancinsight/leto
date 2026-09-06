@@ -321,6 +321,7 @@ pub fn transpose_copy<T: Clone>(
     Ok(())
 }
 
+#[inline]
 fn transpose_extent(
     source_len: usize,
     destination_len: usize,

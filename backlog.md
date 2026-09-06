@@ -14,7 +14,8 @@
 - API/review: both public packages pass 196 SemVer checks against `a2006ad` (58 inapplicable checks each); independent source review finds no production defect.
 - Evidence: `output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json` records the exact 14-file hash set and unchanged lock. No timing or size acceptance follows from provider gates.
 - Experiment state: earlier builds fail size or regression acceptance; tile-span iteration additionally introduces AVX-512 division and payload spills and is removed. ADR 0027 owns those findings.
-- Next: build the unchanged Apollo census against this dense-copy revision and verify codegen, size, allocation and performance acceptance.
+- Next: expose the existing small preflight boundaries to callers and verify eliminated chunk-count division without error duplication or executable growth; consumer census audit remains separate.
+- Preflight verification: unchanged 30 focused tests pass in debug and release; all-target Clippy, format and independent source review pass. Only two inline annotations change production; consumer acceptance remains pending.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 

@@ -106,6 +106,7 @@ where
     Ok(())
 }
 
+#[inline]
 fn validate_length(role: &str, actual: usize, expected: usize) -> Result<()> {
     if actual == expected {
         return Ok(());

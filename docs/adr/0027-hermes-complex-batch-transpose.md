@@ -325,6 +325,30 @@ commands and limitations are retained in
 `output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json`.
 Consumer codegen, executable size and timing remain separate acceptance gates.
 
+### Preflight visibility revision, 2026-09-06
+
+The dense-copy consumer emits 6,872,576 bytes, 10,752 above the ISA baseline.
+Its generic assignment and cleanup family is gone, and no ordinary successful
+path retains the prior eager error drops. The count-one batch body nevertheless
+divides both slice lengths by the checked matrix product: its opaque length
+validator hides their equality. Core extent preflight also remains external.
+The emitted evidence is `output/apollo-square-transpose/dense-copy/codegen.md`.
+
+The next bounded experiment adds `#[inline]` only to the existing
+`validate_length` and `transpose_extent` helpers. All checks, their order,
+error values, traversal bodies and workloads remain unchanged. The hypothesis
+is removal of chunk-count division and redundant batch/preflight bookkeeping.
+Retained division, new payload spills, duplicated error formatting or text
+and executable growth reject this form. No count-one specialization, new
+error helper, algorithm copy or recovery of the entire size residual is
+assumed; codegen and size checks precede a performance claim.
+
+The two-annotation revision passes format, all-target Clippy and the unchanged
+30 focused tests in both debug and release. Independent source review finds
+no contract change. Its fourteen source hashes match the retained
+`output/apollo-square-transpose/preflight-inline/final-checks.json` record;
+the preceding dense-copy full-suite and API coverage remains applicable.
+
 ## Established batch evidence
 
 This is one additive public function in `leto-ops`; existing assignment APIs
