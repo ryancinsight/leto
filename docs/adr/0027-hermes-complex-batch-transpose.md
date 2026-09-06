@@ -153,8 +153,49 @@ coverage. The narrow error contract also removes formatted error allocation
 and unrelated diagnostic dependencies. Existing successful workloads remain
 unchanged; invalid short, long and overflowing submissions additionally check
 exact error dimensions, unchanged bytes and zero allocations/reallocations on
-their first and repeated calls across all four scalar types. These revisions
-await their own gates and downstream codegen/size comparison.
+their first and repeated calls across all four scalar types. The extent
+revision (`ce9d02b`) passes the recorded provider gates and emits one scalar
+tail, allocation-free dimension errors and register-resident tile pairs.
+Its 6,868,992-byte executable remains 7,168 bytes above baseline and is rejected
+on size; the counterbalanced full-engine comparison supplies no acceptance
+basis. Evidence remains in Atlas's `output/apollo-square-transpose`, with the
+fourth codegen inspection under `extent-contract/codegen.md`.
+
+### Cache-blocking revision, 2026-09-06
+
+The fourth candidate's phase diagnostic attributes 546–567 microseconds per
+call to the final transpose at double-precision length 262,144 on the selected
+performance core (`phase-profile.txt`). Those phase envelopes include the
+operation's work; they are not cache-miss measurements or a baseline comparison.
+The source traversal nevertheless establishes a locality difference: its
+two-element AVX2 tile consumes half of a 64-byte line in each lower row, then
+sweeps the remaining matrix width before revisiting adjacent samples. For an
+aligned 512-square, the early strip touches approximately
+`510 * 64 + 2 * 510 * 16 = 48,960` bytes between those uses.
+
+The next experiment restores Apollo baseline `9da1f9f7`'s 16-by-16 outer
+blocking while retaining the existing register-tile movement. Two blocks hold
+`2 * 16^2 * size_of::<Complex<T>>()` payload bytes, at most 8 KiB across the
+four supported scalars. This is a payload bound, not a promise of cache
+residency; split lines, associativity and neighboring state still matter.
+The fixed outer block adds no specialization dimension or runtime topology
+probe. Register side 2, 4 or 8 divides 16, and clipping the final block to the
+complete register square preserves tile alignment.
+
+Diagonal register tiles run once in a separate traversal of `full_side / SIDE`
+tiles. A single blocked strict-upper-triangle traversal handles every remaining
+tile pair; it covers both diagonal cache blocks and off-diagonal cache-block
+pairs without cloning their exchange body. These regions are disjoint, and
+each pair still loads both source tiles before either destination write. The
+unchanged scalar tail covers the complement of the complete register square.
+No volume copy, allocation, error-contract change or workload change occurs.
+Independent review finds no coverage or bounds defect. The unchanged 923
+native tests, nine focused release cases, Clippy, minimal-feature compilation,
+27 doctests and 24 benchmark smoke cases pass. All 15 captured source hashes
+remain unchanged through the run. Evidence is retained under Atlas
+`output/apollo-square-transpose/cache-blocking/leto-gates`. Emitted code,
+executable size and the unchanged full-engine census still determine adoption;
+no speedup is claimed.
 
 ## Established batch evidence
 

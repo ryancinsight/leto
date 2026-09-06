@@ -10,6 +10,11 @@ use leto::Complex;
 mod error;
 pub use error::SquareTransposeError;
 
+// Preserve Apollo's baseline 16-by-16 cache blocks around the register tiles.
+// Two blocks contain 2 * 16^2 * size_of::<Complex<T>>() payload bytes: at most
+// 8 KiB for the four supported scalars. This bounds payload, not cache residency.
+const CACHE_BLOCK_SIDE: usize = 16;
+
 /// Transposes a row-major complex square in its existing storage.
 ///
 /// Every sample at `(row, column)` moves to `(column, row)` without arithmetic
@@ -130,16 +135,27 @@ where
         let diagonal = row * side + row;
         let tile = load_tile::<T, A, SIDE>(simd, matrix, side, diagonal);
         store_tile(simd, matrix, side, diagonal, &tile);
+    }
 
-        for column in (row + SIDE..full_side).step_by(SIDE) {
-            let upper = row * side + column;
-            let lower = column * side + row;
-            // Both source tiles become owned register values before either
-            // destination is overwritten. Each unordered tile pair occurs once.
-            let upper_tile = load_tile::<T, A, SIDE>(simd, matrix, side, upper);
-            let lower_tile = load_tile::<T, A, SIDE>(simd, matrix, side, lower);
-            store_tile(simd, matrix, side, lower, &upper_tile);
-            store_tile(simd, matrix, side, upper, &lower_tile);
+    // SIDE is 2, 4 or 8, so every block boundary and clipped full-side boundary
+    // is a register-tile boundary. The strict upper triangle excludes the
+    // diagonal tiles above and assigns every remaining tile pair exactly once.
+    for block_row in (0..full_side).step_by(CACHE_BLOCK_SIDE) {
+        let row_end = (block_row + CACHE_BLOCK_SIDE).min(full_side);
+        for block_column in (block_row..full_side).step_by(CACHE_BLOCK_SIDE) {
+            let column_end = (block_column + CACHE_BLOCK_SIDE).min(full_side);
+            for row in (block_row..row_end).step_by(SIDE) {
+                for column in (block_column.max(row + SIDE)..column_end).step_by(SIDE) {
+                    let upper = row * side + column;
+                    let lower = column * side + row;
+                    // Both source tiles become owned register values before
+                    // either destination is overwritten.
+                    let upper_tile = load_tile::<T, A, SIDE>(simd, matrix, side, upper);
+                    let lower_tile = load_tile::<T, A, SIDE>(simd, matrix, side, lower);
+                    store_tile(simd, matrix, side, lower, &upper_tile);
+                    store_tile(simd, matrix, side, upper, &lower_tile);
+                }
+            }
         }
     }
 
