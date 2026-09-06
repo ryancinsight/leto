@@ -37,9 +37,11 @@ pub fn transpose_square_inplace<T>(matrix: &mut [Complex<T>], side: usize) -> Re
 where
     T: LaneScalar + Pod,
 {
-    let expected = side.checked_mul(side).ok_or(LetoError::Overflow {
-        reason: "complex square matrix element count",
-    })?;
+    let Some(expected) = side.checked_mul(side) else {
+        return Err(LetoError::Overflow {
+            reason: "complex square matrix element count",
+        });
+    };
     if matrix.len() != expected {
         return Err(LetoError::StorageError {
             reason: format!(

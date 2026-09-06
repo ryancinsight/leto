@@ -104,6 +104,20 @@ cover the selected host backend and the explicit scalar path, not every ISA;
 register residency, whole-engine latency and executable size remain separate
 downstream acceptance checks.
 
+The first Apollo build with provider `9672ddc` grows by 14,336 executable
+bytes and is not accepted. Assembly `914754C9...2225269433` shows an AVX2
+tile pair in registers, but AVX-512 outlines `array::from_fn` construction
+and inherits Hermes's generic row-buffer permutation. The latter emits a
+1,272-byte helper frame; source-level register types do not establish register
+residency. Successful extent validation also destroys an eagerly constructed
+`LetoError`. The next bounded experiment seeds an exact Copy array with its
+first loaded row, fills the remaining rows in the kernel and constructs an
+overflow error only on failure. It preserves the same permutation, extents,
+hardware selection and tests. Any remaining permutation capability gap belongs
+in Hermes. Timing remains unmeasured until the size/code-generation condition
+is met; the initial artifacts are retained under
+`output/apollo-square-transpose/array-construction`.
+
 ## Established batch evidence
 
 This is one additive public function in `leto-ops`; existing assignment APIs

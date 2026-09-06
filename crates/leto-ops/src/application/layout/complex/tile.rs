@@ -25,7 +25,7 @@ where
 {
     const { assert!(SIDE >= 2 && SIDE <= MAX_COMPLEX_TILE_SIDE) };
     assert_eq!(SIDE, ComplexReg::<T, A>::COMPLEX_COUNT);
-    let mut tile = core::array::from_fn(|row| {
+    let load_row = |row| {
         let start = offset + row * stride;
         let scalars: &[T] = cast_slice(&matrix[start..start + SIDE]);
         let view = simd.view(scalars);
@@ -36,7 +36,14 @@ where
             .next()
             .expect("invariant: complex tile row fills one register");
         ComplexReg::from_interleaved(chunk.load())
-    });
+    };
+    // Array construction through `from_fn` outlines across the AVX-512
+    // capability boundary on the pinned compiler. Exact Copy storage keeps
+    // row loads in the kernel; only the first row is read before the fill.
+    let mut tile = [load_row(0); SIDE];
+    for (row, register) in tile.iter_mut().enumerate().skip(1) {
+        *register = load_row(row);
+    }
     ComplexReg::transpose_square(&mut tile);
     tile
 }
