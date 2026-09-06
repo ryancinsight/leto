@@ -1,5 +1,17 @@
 # Leto Work Backlog
 
+<a id="leto-square-transpose"></a>
+## LETO-SQUARE-TRANSPOSE — Own in-place complex square movement [minor] [arch]
+
+- Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-06.
+- Outcome: expose allocation-free, bit-preserving square transpose over borrowed complex storage for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
+- Scope: `leto-ops` complex layout kernels, shared register tiles, generic scalar coverage and allocation tests; preserve existing batch dispatch and all FFT arithmetic.
+- Acceptance: checked exact extent before mutation; coordinate and byte oracles across all four scalars, offsets, tails and special payloads; focused debug/release gates, docs, semver, codegen and unchanged Apollo engine census with no supported regression or executable growth.
+- Design: revise [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md); Leto owns movement, Hermes register representation, Apollo scheduling and scratch.
+- Dependency: locked Hermes `e6e0821` and Eunomia `02397fa`; no new dependency or version bump.
+- Source reconciliation: prior consumer pin-only branch is superseded by ADR 0029; unmerged Mnemosyne changes remain on its local and remote `perf/mnemosyne-scratch-release` branch.
+- Verification: committed Leto CI commands and Nextest 30/60-second budgets; provider tests precede downstream integration and controlled performance acceptance.
+
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 
 - **Integrator:** Claude on `feat/leto-fd-mutable-view-dst`; **lease:**
