@@ -5,463 +5,225 @@
 - Class: [major] [arch]
 
 Revision 2026-09-06: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
-extends the movement boundary to an in-place square and a checked core dense
-copy. The iterator-based tile-span experiment is rejected on executable size
-and AVX-512 spills; the dense-copy revision remains under verification. Batch
-measurements below do not establish a square-transform speedup.
+extends the accepted batch-layout decision to in-place square movement and a
+checked core dense copy. Acceptance of the original batch regime does not
+accept the square-movement campaign. Every measured consumer candidate below
+fails at least one unchanged adoption gate. The `843febc` all-operation provider
+boundary is rejected on size; the batch-inline correction is underway and has
+no acceptance result. No release or manifest version change is authorized.
 
-## Provider instantiation boundary (2026-09-06 experiment)
+## Ownership and current experiment
 
-The restored consumer passes behavioral gates but retains 10,752 bytes over
-baseline. Linked maps show separate consumer and library instantiation roots
-for identical square kernels, including their private diagnostic and constant
-relocations. Sharing the failure diagnostic is rejected after a supported
-small-transform regression; its code is restored in `00665a4`.
+Apollo's 3-D FFT executes hundreds of adjacent small complex matrices. Its
+phase probe supports register tiles for that regime, but routing large
+rectangular 2-D matrices through them regresses by 5–52%. Apollo ADR 0040 assigns
+layout movement to Leto: core owns layout, storage and generic view copies;
+`leto-ops` owns SIMD movement through its existing Hermes dependency.
 
-A bounded next experiment makes `ComplexLayout` the scalar role for the two
-existing complex movement operations. The domain owns the contract and square
-error. Four concrete provider implementations bind f32, f64, F16 and Bf16 to
-one private generic checked algorithm per operation. Non-generic entry methods
-remain uninlined to preserve that instantiation boundary under ThinLTO. No
-arithmetic, traversal, dispatch width, allocation, error order or workload
-changes. This is a code-ownership hypothesis, not a measured zero-cost claim.
+The provider-entry experiment introduces the scalar role `ComplexLayout` for
+the two complex movement operations. The domain owns its contract and square
+error. Four concrete implementations bind f32, f64, F16 and Bf16 to one private
+generic checked body per operation. A generic default or blanket implementation
+would preserve consumer instantiation roots; arithmetic scalar traits impose
+unrelated operations, and moving the role to Hermes reverses layout ownership.
+No new dependency, dynamic dispatch, scalar arithmetic or algorithm copy enters.
 
-Migration: import `leto_ops::ComplexLayout`; generic callers replace the old
-free calls with `T::transpose_complex_matrices(...)` and
-`T::transpose_square_inplace(...)`, adding `T: ComplexLayout` where required.
-Concrete callers use the scalar type as receiver, for example
+The initial experiment keeps both non-generic methods uninlined under ThinLTO.
+Its linked map establishes one provider square entry and one square kernel per
+used ISA, but the executable remains 4,608 bytes above baseline. The next bounded
+correction retains `#[inline(never)]` on square methods and applies `#[inline]`
+to batch methods, preserving the same role and generic bodies. FourStep passes
+immediate count one; the all-operation anchor retains count-256 dispatch and
+chunk-count division that its former specialization eliminated. Batch-plus-core
+map intervals total 5,936 bytes before and after, so this is caller/callee
+evidence for a specialization experiment, not the cause of whole-file growth.
+
+Reject the batch-inline correction if count-one execution retains batch-count
+dispatch/division, square kernels regain consumer instantiations, or the original
+size and full-engine acceptance conditions fail. No new public entry, role split,
+compiler flag, workload or expected byte recovery is assumed.
+
+The batch-inline source passes format, Clippy, warning-denied rustdoc, 30
+focused debug tests, 30 release tests and 25 doctests, with all 316 captured
+build inputs fixed. Evidence is retained under Atlas
+`output/apollo-square-transpose/batch-specialization/leto-gates`.
+Consumer codegen, executable size and timing remain unverified for this change.
+
+### Migration and classification
+
+Import `leto_ops::ComplexLayout`. Generic callers replace free operations with
+`T::transpose_complex_matrices(...)` and `T::transpose_square_inplace(...)`,
+adding `T: ComplexLayout`; concrete callers use the scalar receiver, for example
 `f32::transpose_square_inplace(...)`. Root `SquareTransposeError` remains the
-same type; its defining module moves to `domain::layout`. The old
-`application::layout` module becomes private; import its former error from
-the crate root. Old public operation free functions are removed, with no
-compatibility facade or blanket impl.
-The new bound is source-breaking even with the same four admitted scalars.
-No release or manifest version change is authorized by this experiment.
+same type, with its defining module moved to `domain::layout`. The former
+`application::layout` module is private; import its error from the crate root.
+The old public free functions are removed without a compatibility facade.
 
-The strongest rejected alternative is a generic default or blanket role
-implementation: it preserves the old bound implication but also the consumer
-instantiation roots. Existing arithmetic scalar traits impose unrelated
-operations; moving the role into Hermes reverses layout ownership.
+The new bound and removed paths are source-breaking even with the same four
+admitted scalars, hence [major] [arch]. SemVer confirms those intended removals;
+it does not verify behavior or performance. A Rust-source search across other
+registered stack members finds callers only in Leto and Apollo. Their inputs
+and timed regions remain unchanged; Leto's benchmark changes only its call.
 
-Acceptance requires all generic payload/extent/allocation oracles, affected
-consumer gates and an expected SemVer-breaking report. An unchanged-profile
-linked map must show one provider kernel per used scalar/ISA, without new
-payload spills or division. Loss of count-one specialization is a timing risk.
-Reject if the original executable no-growth or complete-engine no-regression
-conditions still fail. Benchmark code and budgets remain unchanged.
+## Movement contracts
 
-Provider verification passes 930 native tests, 366 selected release tests,
-28 doctests (one existing ignored), all-target Clippy, minimal configuration,
-warning-denied rustdoc and 24 bounded benchmark smoke cases. The captured 316
-build inputs and lockfile remain fixed across those runs. SemVer against
-`00665a4` identifies the intentional removed free functions and former error
-import path; no behavioral or performance inference follows from that check.
-The final implementation-module visibility change passes supplemental format,
-Clippy and rustdoc checks; SemVer adds only the intended module removal.
-Evidence lives in
-`output/apollo-square-transpose/provider-entry/leto-gates` at the stack root.
-A Rust-source search across other registered stack members finds no callers
-of either operation outside Leto and Apollo. Their existing benchmark inputs
-and timed regions remain unchanged; Leto's benchmark only migrates its call.
+### Complex batches
 
-## Context
+`ComplexLayout::transpose_complex_matrices` borrows `Complex<T>` input and
+caller-owned output. Validation checks matrix product, batch product, exact
+source length, then exact destination length before mutation, retaining the
+role-specific overflow and length diagnostics. Empty batches and zero-sized
+matrices are no-ops.
 
-Apollo's retained 3-D fast Fourier transform (FFT) executes layout phases over
-hundreds of adjacent small complex matrices. Its pinned phase probe showed
-that register-resident square transposes reduce this workload, while applying
-the same route broadly regressed large rectangular 2-D matrices by 5-52%.
+For at least 256 matrices with both sides at most 16, request exact Hermes
+scalar widths 16, 8, then 4. Select the widest available width whose complex
+register fits a complete square tile once at the operation boundary. Load,
+transpose with `ComplexReg::transpose_square`, then store each register tile;
+copy every ragged row/column tail. Unsupported exact widths and other shapes
+use core `transpose_copy`. Scalar fallback is not classified as SIMD.
+Both paths preserve matrix order and allocate no successful-copy storage.
 
-Apollo ADR 0040 assigns layout movement to Leto. Leto core owns layout, storage
-and the generic copies its views require; SIMD kernels belong in `leto-ops`,
-which already depends on Hermes. An Apollo-local kernel or a new Hermes
-dependency in Leto core would violate those boundaries.
+Exact-width descent matters: an AVX-512 host can still require an AVX2-sized
+4x4 tile. Selecting only its widest width, applying register tiles to every
+shape, keeping another Apollo kernel, or adding Hermes to Leto core are rejected
+respectively on coverage, measured regression, duplicate ownership and layering.
 
-## Decision
+### In-place squares
 
-Expose `ComplexLayout::transpose_complex_matrices`, a scalar-generic operation over
-borrowed `Complex<T>` slices and caller-owned output. It validates checked
-matrix and batch lengths plus both exact slice lengths before mutation. Empty
-batches and zero-sized matrices are no-ops.
+`ComplexLayout::transpose_square_inplace(&mut [Complex<T>], side)` checks
+`side * side`, then exact storage length before writing; side zero with empty
+storage succeeds. `SquareTransposeError` is Copy/Eq and retains `side` on
+overflow or `side`, `expected`, `actual` on length mismatch. Success and rejection
+allocate nothing; errors preserve the whole input and do not import unrelated
+solver diagnostics from `LetoError`.
 
-For at least 256 matrices with both sides at most 16, the operation requests
-exact Hermes scalar widths 16, 8, then 4. The widest available width whose
-complex register fits a complete square tile is selected once at the operation
-boundary. Each kernel loads a square tile into registers, transposes it with
-`ComplexReg::transpose_square`, stores it once, and copies every ragged row or
-column tail. No scalar fallback is classified as SIMD capability.
+For coordinates `(r, c)`, exchange offsets `r * side + c` and `c * side + r`.
+Diagonal register tiles transpose once internally; each strict-upper tile pair
+loads both sources before either store. Every position outside the complete
+register square is exchanged once above the diagonal. Hardware kernels return
+`full_side`; one shared scalar tail handles its complement when `full_side <
+side`. Unsupported hardware returns zero and uses that same pairwise traversal.
+This keeps the complete square and border disjoint without cloning the tail.
 
-All other shapes and unsupported exact widths use Leto's existing generic
-tiled mover through `transpose_copy`. Both paths preserve matrix order and
-allocate no storage for successful complex copies.
+The 16-by-16 outer block follows Apollo baseline `9da1f9f7`. Two blocks contain
+`2 * 16^2 * size_of::<Complex<T>>()` payload bytes, at most 8 KiB for the four
+scalars. Register sides 2, 4 or 8 divide 16; clipping to the complete register
+square preserves tile alignment. A separate `full_side / SIDE` diagonal pass
+and one blocked strict-upper traversal cover diagonal and off-diagonal cache
+blocks without cloning exchange logic. Payload footprint is not cache residency:
+split lines, associativity and neighboring state still matter.
 
-Rejected alternatives:
+Batch and square share one register load/transpose/store leaf. Hermes
+capability-carrying views provide safe exact-width chunks over Eunomia's borrowed
+complex/scalar layout casts. Only register side specializes the tile arrays.
+There is no extra matrix, scratch allocation or volume copy. Movement performs
+no scalar arithmetic: signed zeros, subnormals and NaN payloads survive bitwise.
+Reduced-precision hardware frames do not imply native shuffles on every backend.
 
-- Keep the register kernel in Apollo. Rejected because layout movement is a
-  Leto responsibility and a second implementation would duplicate the
-  provider contract.
-- Add Hermes to Leto core. Rejected because it would collapse the established
-  storage/compute dependency boundary.
-- Route every shape through register tiles. Rejected because the Apollo phase
-  probe measured 5-52% regressions for large rectangular 2-D matrices.
-- Request only the host's widest width. Rejected because an AVX-512 host may
-  need an exact AVX2-sized 4x4 tile; exact-width descent preserves that route.
+The final-permutation hypothesis requires both tiles to remain in registers.
+A second Apollo implementation, matrix allocation or payload widening would
+violate ownership, memory or bit-preservation requirements. Batch thresholds
+and batch timings do not establish square dispatch or FFT performance.
 
-## In-place square movement
+### Checked core dense copy
 
-Apollo's FourStep final permutation currently exchanges scalar pairs. The
-operation contains no FFT arithmetic, and its square shape permits in-place
-tile exchange without an additional matrix buffer. The provider surface is
-`ComplexLayout::transpose_square_inplace(&mut [Complex<T>], side)` with `T: ComplexLayout`.
-It checks `side * side` and exact storage length before mutation; empty storage
-with side zero is valid. Overflow and length errors preserve the entire input.
-`SquareTransposeError` retains `side` on overflow and `side`, `expected` and
-`actual` on length mismatch. Its Copy/Eq variants contain only dimensions;
-success and rejection allocate no storage. The operation does not inherit
-unrelated solver diagnostics from `LetoError`.
-
-For element coordinates `(r, c)`, the permutation exchanges offsets
-`r * side + c` and `c * side + r`. Diagonal tiles transpose internally;
-off-diagonal tile pairs load both sources before either destination is written.
-Every position outside the complete tiled square is exchanged once above the
-diagonal. Unsupported hardware widths use the same pairwise permutation.
-No arithmetic touches the scalar payload, so all bits, including signed zeros,
-subnormals and NaN payloads, must survive exactly. Reduced-precision hardware
-frames do not imply native register shuffles on every backend.
-
-Batch and square traversals share one complex register load/transpose/store
-leaf. Hermes capability-carrying views provide safe exact-width chunks over
-Eunomia's borrowed complex/scalar layout casts. The existing batch thresholds
-remain unchanged; they do not supply evidence for square dispatch. Only the
-actual register side specializes the tile arrays. No allocation, additional
-scratch, dynamic dispatch or new dependency is introduced.
-
-The working hypothesis is reduced strided scalar movement in the final
-FourStep permutation. Two tiles must remain register-resident for the expected
-benefit; emitted code checks spills and bounds checks before an unchanged
-complete-engine census evaluates latency, allocation and executable size.
-The experiment is rejected on supported regression, absent supported benefit
-or executable growth. A provider microbenchmark alone cannot establish an
-Apollo speedup. Keeping a second Apollo implementation, allocating a matrix,
-and widening reduced-precision payloads are rejected on ownership, memory and
-bit-preservation grounds respectively.
-
-Tests compare the coordinate permutation and entire byte representation across
-`f32`, `f64`, `F16` and `Bf16`, including offsets, ragged sides, special payloads,
-invalid lengths and overflow. The entry baseline at `a2006ad` passes all five
-existing focused movement tests under the committed Nextest budget. Debug and
-release suites, the allocation observer, documentation and SemVer checks cover
-the provider change; Apollo retains independent FFT and full-engine checks.
-
-The 2026-09-06 provider diff passes 923 native tests, nine focused release
-tests, 27 doctests (one existing ignored), minimal-feature compilation,
-warning-denied Clippy, rustdoc and all 196 applicable minor SemVer checks
-against `a2006ad`. The unchanged layout benchmark smoke passes 24 cases under
-the 60-second supervisor. First and repeated successful square submissions
-record zero calling-thread allocations/reallocations across all four scalars.
-Evidence and source hashes are retained in Atlas's
-`output/leto-square-transpose` under its 14-day/10-GiB policy. Runtime tests
-cover the selected host backend and the explicit scalar path, not every ISA;
-register residency, whole-engine latency and executable size remain separate
-downstream acceptance checks.
-
-The first Apollo build with provider `9672ddc` grows by 14,336 executable
-bytes and is not accepted. Assembly `914754C9...2225269433` shows an AVX2
-tile pair in registers, but AVX-512 outlines `array::from_fn` construction
-and inherits Hermes's generic row-buffer permutation. The latter emits a
-1,272-byte helper frame; source-level register types do not establish register
-residency. Successful extent validation also destroys an eagerly constructed
-`LetoError`. The next bounded experiment seeds an exact Copy array with its
-first loaded row, fills the remaining rows in the kernel and constructs an
-overflow error only on failure. It preserves the same permutation, extents,
-hardware selection and tests. Any remaining permutation capability gap belongs
-in Hermes. Timing remains unmeasured until the size/code-generation condition
-is met; the initial artifacts are retained under
-`output/apollo-square-transpose/array-construction`.
-
-The seeded-array build (`07bd618`) removes the constructor helper and eager
-error destruction, shrinking the executable by 1,536 bytes, but remains 12,800
-bytes above baseline. Its AVX2 fill also emits redundant Skip-iterator control
-flow and tile spills. The next revision iterates the structurally exact tail
-slice and evaluates the [Hermes forwarding correction](../../../hermes/backlog.md#hermes-complex-permutation-inlining),
-which is intended to keep the existing permutation in the proven target-feature frame.
-This does not introduce a Leto-local native backend or weaken the acceptance
-conditions. The second candidate is retained under
-`output/apollo-square-transpose/seeded-array`.
-
-The combined Leto `00fd88e` / Hermes `07c5e5f` candidate emits 6,873,600
-executable bytes: 11,776 above baseline and 1,024 below the seeded-array build.
-Assembly `CD76ED04...A8B57BA` removes the outlined array constructor and
-permutation helper. Its emitted double-precision AVX2 and AVX-512 complete
-tile pairs remain in registers; remaining slice bounds branches persist.
-The 200-byte AVX2 and 488-byte AVX-512 frames include scalar remainder code,
-which is duplicated with the public entry's scalar fallback. No batch or
-single-precision square symbols occur in this library artifact, so it cannot
-attribute the entire executable delta. The comparison remains rejected on
-size, with no timing claim; detailed instruction counts and locators are in
-Atlas's `output/apollo-square-transpose/feature-frame/codegen.md`.
-
-The next source revision returns the completed square side from each hardware
-kernel, then applies one scalar remainder traversal at the operation boundary
-only when that side is smaller than the matrix side. Unsupported hardware
-returns zero and reaches the same traversal. The full square and its border
-are disjoint, so this changes code placement without changing permutation
-coverage. The narrow error contract also removes formatted error allocation
-and unrelated diagnostic dependencies. Existing successful workloads remain
-unchanged; invalid short, long and overflowing submissions additionally check
-exact error dimensions, unchanged bytes and zero allocations/reallocations on
-their first and repeated calls across all four scalar types. The extent
-revision (`ce9d02b`) passes the recorded provider gates and emits one scalar
-tail, allocation-free dimension errors and register-resident tile pairs.
-Its 6,868,992-byte executable remains 7,168 bytes above baseline and is rejected
-on size; the counterbalanced full-engine comparison supplies no acceptance
-basis. Evidence remains in Atlas's `output/apollo-square-transpose`, with the
-fourth codegen inspection under `extent-contract/codegen.md`.
-
-### Cache-blocking revision, 2026-09-06
-
-The fourth candidate's phase diagnostic attributes 546–567 microseconds per
-call to the final transpose at double-precision length 262,144 on the selected
-performance core (`phase-profile.txt`). Those phase envelopes include the
-operation's work; they are not cache-miss measurements or a baseline comparison.
-The source traversal nevertheless establishes a locality difference: its
-two-element AVX2 tile consumes half of a 64-byte line in each lower row, then
-sweeps the remaining matrix width before revisiting adjacent samples. For an
-aligned 512-square, the early strip touches approximately
-`510 * 64 + 2 * 510 * 16 = 48,960` bytes between those uses.
-
-The next experiment restores Apollo baseline `9da1f9f7`'s 16-by-16 outer
-blocking while retaining the existing register-tile movement. Two blocks hold
-`2 * 16^2 * size_of::<Complex<T>>()` payload bytes, at most 8 KiB across the
-four supported scalars. This is a payload bound, not a promise of cache
-residency; split lines, associativity and neighboring state still matter.
-The fixed outer block adds no specialization dimension or runtime topology
-probe. Register side 2, 4 or 8 divides 16, and clipping the final block to the
-complete register square preserves tile alignment.
-
-Diagonal register tiles run once in a separate traversal of `full_side / SIDE`
-tiles. A single blocked strict-upper-triangle traversal handles every remaining
-tile pair; it covers both diagonal cache blocks and off-diagonal cache-block
-pairs without cloning their exchange body. These regions are disjoint, and
-each pair still loads both source tiles before either destination write. The
-unchanged scalar tail covers the complement of the complete register square.
-No volume copy, allocation, error-contract change or workload change occurs.
-Independent review finds no coverage or bounds defect. The unchanged 923
-native tests, nine focused release cases, Clippy, minimal-feature compilation,
-27 doctests and 24 benchmark smoke cases pass. All 15 captured source hashes
-remain unchanged through the run. Evidence is retained under Atlas
-`output/apollo-square-transpose/cache-blocking/leto-gates`. Matching assembly
-keeps complete tile payloads in registers, while traversal state grows. The
-6,871,552-byte executable exceeds baseline by 9,728 bytes. The unchanged
-16-run census and independent raw-sample audit find one supported gain, the
-efficiency-core 262,144-point real half-spectrum transform: paired medians
-decrease 17.40–35.35%, with no supported regression. Warm allocation records
-and retained bytes match; cold peaks overlap but are not identical. This is
-local AVX2 evidence with endpoint-load observation limits, not cache-miss
-attribution or physical AVX-512 coverage. Size still rejects adoption.
-
-Apollo next consolidates its remaining pure-copy FourStep passes on the
-existing `transpose_complex_matrices` API and deletes its private copy
-kernels and scalar trait hook. This consumer experiment changes no provider
-threshold or algorithm. It must retain the gain and satisfy the same memory
-and executable-size bounds; source deletion alone does not establish that.
-
-That direct batch-API consumer candidate grows the executable to 6,892,544
-bytes, 30,720 above baseline. Apollo's full correctness and allocation gates
-pass, but its census reports two performance-core regressions. Assembly
-retains a 1,476-instruction generic layout/assignment body and 354 cleanup
-instructions around a 370-instruction canonical mover; these compilation-unit
-counts do not fully attribute linked size. A checked public dense-operation
-boundary over the existing canonical mover is the next provider design under
-review. It preserves the public batch contract and avoids duplicating movement
-or suppressing invariant diagnostics.
-
-### Register tile span revision, 2026-09-06
-
-The cache-block candidate retains eight AVX2 and sixteen AVX-512 tile bounds
-branches in the inspected kernels, alongside the 9,728-byte executable growth.
-These are code-generation findings, not measured bounds-check latency. The
-next provider experiment changes only the shared register tile's row access.
-It checks `stride >= SIDE` and the tile span's arithmetic, clips that span
-once, then splits `(SIDE - 1) * stride` elements from the final `SIDE` elements.
-The prefix contains exactly `SIDE - 1` complete stride chunks and no remainder.
-Both the prefix's row width and the final row therefore cover one register.
-
-Loads seed the existing exact register array from the final row and fill its
-preceding entries from those chunks. Stores use the same disjoint span split;
-stride padding remains untouched. The existing tile permutation and callers'
-load-both-before-store ordering do not change. This introduces no unsafe code,
-signature, scalar or ISA variant, allocation, dispatch or workload change.
-The bounded hypothesis is fewer repeated row-offset calculations and extent
-checks. Emitted division, outlined helpers, payload spills, larger frames or
-text growth reject this form; unchanged value and allocation suites still
-precede downstream performance acceptance.
-
-Provider validation passes: 923 native tests, nine focused tests in both debug
-and release, Clippy, minimal features, 27 doctests (one existing ignored),
-warning-denied rustdoc and the unchanged 24-case bounded smoke. All fifteen
-source hashes match; tile SHA256 is
-`A06AE5B7BF4AF37DB56797A56D52AB6BF56063C88206DE574F705B994243F45B`.
-The retained evidence is
-`output/apollo-square-transpose/tile-span/leto-gates/final-checks.json`
-under Atlas output retention. These checks establish behavior separately
-from consumer codegen and performance acceptance.
-
-Consumer codegen rejects the tile-span form. Against the pure-copy candidate,
-the executable grows by 9,728 bytes, including 7,120 text bytes. AVX2 improves
-from 303 to 270 instructions and from a 248-byte to a 216-byte frame, without
-division or payload spills. AVX-512 instead introduces runtime division,
-register payload staging and a 1,016-byte frame, up from 472 bytes. That fails
-the existing all-ISA spill and size stop conditions. The next source revision
-therefore restores the canonical per-row tile access from `6013768`; it adds
-no ISA-specific alternative. The checked dense-copy change below targets a
-separate, independently observed assignment cost.
-
-### Checked dense-copy boundary, 2026-09-06
-
-The pure-copy consumer build emits 6,892,544 bytes, 30,720 above the ISA
-baseline. Its library assembly contains a 1,476-instruction generic assignment
-function and twelve cleanup funclets totaling 354 instructions, while the
-canonical dense mover contains 370 instructions. These counts identify the
-retained layout/view round trip, not exact linked-byte ownership or latency;
-the evidence is `output/apollo-square-transpose/pure-copy/codegen.md`.
-
-Expose that mover in place as the additive core operation
+The additive core operation is
 `transpose_copy<T: Clone>(source, destination, rows, columns) -> Result<()>`.
-It copies row-major `[rows, columns]` into row-major `[columns, rows]`, with
-destination offset `column * rows + row` receiving a clone of source offset
-`row * columns + column`. The two internal callers, assignment and view
-materialization, use the same body. The old private name and the complex
-batch's general-view construction are removed; no forwarding API or second
-movement algorithm remains. No dependency or version change is needed.
+Row-major `[rows, columns]` becomes `[columns, rows]`: destination
+`column * rows + row` receives a clone of source `row * columns + column`.
+Assignment and view materialization use this same body. The old private name
+and batch's general-view construction are removed, with no forwarding API,
+second mover, dependency or version change.
 
-The scalar-independent preflight checks the unsigned product, exact source
-length, exact destination length, then the signed dense-layout extent, in
-that order. Zero products with empty slices succeed without converting their
-unused dimensions. Nonempty zero-sized slices still require a signed count
-bound; element size alone cannot establish it. Validation errors execute no
-clones or writes. Successful movement invokes Clone once per element, including
-zero-sized elements; user Clone or Drop implementations may allocate or panic,
-so failure atomicity does not promise rollback after an element panic.
+Preflight checks unsigned product, exact source length, exact destination
+length, then signed dense-layout extent. A zero product with empty slices
+succeeds without converting unused dimensions. Nonempty zero-sized elements
+still require the signed count bound. Validation performs no clones or writes;
+success invokes Clone once per element, including zero-sized elements. User
+Clone/Drop can allocate or panic, so validation atomicity does not promise
+rollback after an element panic.
 
-Complex batches keep their original matrix/batch overflow and role-specific
-length diagnostics and precedence. Their admitted scalar representations
-are nonzero-sized, so exact nonempty safe slices already imply each matrix
-fits the signed layout extent. The direct core call therefore introduces no
-reachable batch failure or changed hardware threshold. Measured eager error
-sites in the batch products and traversed core layout arithmetic construct
-the same errors lazily; no error is discarded or replaced by a fallback.
+Complex batches retain their original error precedence and hardware threshold.
+Their nonzero-sized representations and exact safe nonempty slices already
+bound each matrix's signed extent; direct core use adds no reachable batch
+failure. Measured batch/core layout arithmetic constructs the same errors
+lazily, never discarding them or substituting a fallback.
 
-Clippy classifies the static Overflow payloads as unnecessary lazy evaluation,
-but retained assembly shows successful arithmetic constructing and calling
-the broad enum's drop glue: batch products at lines 33200/33206, shape and
-stride products at 33267/33273 and 33320/33326, physical offset arithmetic
-at 428769–428797, min/max bounds at 428578–428630, and dense destination
-extent at 31481. The Overflow arm returns without heap deallocation; the
-observed cost is construction, call and discriminant dispatch. Statement-level
-lint expectations preserve lazy construction at these sites. The new dense
-extent check uses the same enum ownership mechanism, but has no pre-change
-instance in that assembly; its own codegen remains to be measured. No
-function-wide or crate-wide lint exception is introduced.
+Statement-level Clippy expectations retain lazy static Overflow construction
+because prior successful arithmetic invokes broad-enum drop glue. Evidence in
+`output/apollo-square-transpose/pure-copy/codegen.md`: batch products at
+33200/33206; shape at 33267/33273; strides at 33320/33326; physical offsets at
+428769–428797; min/max bounds at 428578–428630; dense destination extent at
+31481. Overflow's drop arm returns without heap deallocation: the observed cost
+is construction, call and discriminant dispatch. The new dense extent has no
+pre-change instance there, only the same enum mechanism. No function/crate-wide
+lint exception is introduced; later candidate codegen verifies its success path.
 
-Existing numerical workloads remain unchanged. New core tests cover both
-traversal orientations, tile boundaries, offsets and canaries, non-Copy Clone
-values and clone counts, exact error precedence, empty dimensions and huge
-zero-sized extents. Provider debug/release, allocation, documentation and
-SemVer gates precede fresh consumer codegen, size and unchanged census checks.
-Neither source deletion nor instruction counts establish an accepted speedup.
+## Acceptance and verification
 
-The final dense-copy source passes 930 native tests, 366 release tests,
-28 doctests (one existing ignored), all-target Clippy, minimal features,
-warning-denied rustdoc and 24 unchanged bounded smoke cases. Both packages
-pass 196 SemVer checks against `a2006ad`, with 58 inapplicable checks each.
-Independent source review finds no production defect. Exact source hashes,
-commands and limitations are retained in
-`output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json`.
-Consumer codegen, executable size and timing remain separate acceptance gates.
+Retention requires supported complete-engine benefit, no supported regression,
+no executable growth and unchanged allocation bounds under the original census
+and budgets. A provider microbenchmark, source deletion, instruction count or
+phase envelope alone does not establish an Apollo speedup. Linked normal/map
+.text identity binds ownership evidence; maps must show one provider square
+kernel per used scalar/ISA, with no new payload spills or division. Expected
+SemVer breaks and all affected consumer gates are mandatory.
 
-### Preflight visibility revision, 2026-09-06
+Square tests instantiate f32, f64, F16 and Bf16 with coordinate and entire-byte
+oracles over offsets, ragged sides, special payloads, invalid lengths and
+overflow. First/repeated valid and short/long/overflowing calls assert zero
+allocations/reallocations; invalid calls also assert exact dimensions and
+unchanged bytes. Core tests cover both traversal orientations, tile boundaries,
+canaries, non-Copy values/clone counts, error precedence, empty dimensions and
+huge zero-sized extents. Existing numerical workloads and tolerances remain.
 
-The dense-copy consumer emits 6,872,576 bytes, 10,752 above the ISA baseline.
-Its generic assignment and cleanup family is gone, and no ordinary successful
-path retains the prior eager error drops. The count-one batch body nevertheless
-divides both slice lengths by the checked matrix product: its opaque length
-validator hides their equality. Core extent preflight also remains external.
-The emitted evidence is `output/apollo-square-transpose/dense-copy/codegen.md`.
+Host tests cover selected hardware plus the explicit scalar path, not physical
+execution of every ISA. Codegen, whole-engine latency and footprint remain
+separate gates. Output uses Atlas retention, including the recorded
+`output/leto-square-transpose` 14-day/10-GiB policy. Paths in the evidence table
+are relative to Atlas's `output/apollo-square-transpose/` unless stated otherwise.
 
-The next bounded experiment adds `#[inline]` only to the existing
-`validate_length` and `transpose_extent` helpers. All checks, their order,
-error values, traversal bodies and workloads remain unchanged. The hypothesis
-is removal of chunk-count division and redundant batch/preflight bookkeeping.
-Retained division, new payload spills, duplicated error formatting or text
-and executable growth reject this form. No count-one specialization, new
-error helper, algorithm copy or recovery of the entire size residual is
-assumed; codegen and size checks precede a performance claim.
+## Experimental evidence and decisions
 
-The two-annotation revision passes format, all-target Clippy and the unchanged
-30 focused tests in both debug and release. Independent source review finds
-no contract change. Its fourteen source hashes match the retained
-`output/apollo-square-transpose/preflight-inline/final-checks.json` record;
-the preceding dense-copy full-suite and API coverage remains applicable.
+All consumer size deltas use the unchanged 6,861,824-byte ISA baseline. Historical
+results remain evidence at their captured revision, not acceptance of current
+source. Provider correctness gates do not override consumer rejection.
 
-### Tile bounds diagnostic revision, 2026-09-06
+| Revision / experiment | Decisive observation and decision | Verification / retained evidence |
+|---|---|---|
+| Entry `a2006ad`; initial square provider | Five existing focused movement tests establish entry baseline. Square's initial additive contract passes provider checks; downstream acceptance remains separate. | 923 native tests; 9 focused release; 27 doctests (1 existing ignored); minimal features; warning-denied Clippy/rustdoc; 196 applicable minor SemVer checks; 24 unchanged smoke cases under 60 seconds. Four scalars have zero first/repeated successful allocations/reallocations. Atlas `output/leto-square-transpose` retains hashes. |
+| `9672ddc`, array construction | Executable +14,336 B: rejected. Assembly `914754C9...2225269433` keeps AVX2 pairs in registers, but outlines AVX-512 `array::from_fn` and Hermes row-buffer permutation (1,272-byte helper frame); successful extent checks destroy eager LetoError. Seeded Copy-array fill and failure-only error construction are the next hypothesis, not a timing claim. | `array-construction/`; no timing acceptance before size/codegen checks. |
+| `07bd618`, seeded array | Removes constructor helper and eager drop; -1,536 B versus preceding build but +12,800 B baseline: rejected. AVX2 Skip-iterator control and tile spills remain. Exact-tail iteration and the [Hermes forwarding correction](../../../hermes/backlog.md#hermes-complex-permutation-inlining) target those mechanisms without a Leto backend fork. | `seeded-array/`. |
+| Leto `00fd88e` / Hermes `07c5e5f`, feature frame | 6,873,600 B (+11,776; -1,024 versus seeded array): rejected. Assembly `CD76ED04...A8B57BA` removes both outlined helpers; f64 AVX2/AVX-512 pairs stay in registers but retain bounds checks. Frames 200/488 B include duplicated scalar remainder; this library artifact contains no batch or f32 square symbols and cannot attribute whole-file growth. | `feature-frame/codegen.md`; no timing claim. |
+| `ce9d02b`, shared tail and narrow extent error | One scalar tail, allocation-free dimension errors and register tile pairs; 6,868,992 B (+7,168): rejected. Counterbalanced full-engine comparison supplies no acceptance basis. Invalid allocation workloads extend, not replace, successful workloads. | Recorded provider gates; `extent-contract/codegen.md`. |
+| Cache blocking, canonical tile source `6013768` | Phase attribution is 546–567 us for f64 N=262,144 final transpose on the selected P core; not cache-miss or comparative evidence. Restored 16-by-16 outer blocks keep payloads in registers with larger traversal state. Executable 6,871,552 B (+9,728): rejected on size despite one supported E-core real-half/262,144 gain, paired medians -17.40–35.35%, no supported regression. | 923 native; 9 focused release; Clippy/minimal features; 27 doctests; 24 smokes; all 15 source hashes fixed, independent bounds/coverage review clean. `cache-blocking/leto-gates`, `phase-profile.txt`; unchanged 16-run census/raw audit. Warm allocations/retained bytes match; cold peaks overlap, not identical. Local AVX2/end-point load limits, no physical AVX-512 or miss claim. |
+| Apollo pure-copy consolidation | Deletes remaining private copy kernels/trait hook through existing batch API without provider threshold/body change. Executable 6,892,544 B (+30,720); correctness/allocation pass but census has two P-core regressions: rejected. Library retains 1,476 generic assignment instructions plus 12 cleanup funclets/354 instructions around a 370-instruction mover; these are not exact linked bytes. | `pure-copy/codegen.md`; motivates checked canonical core entry. |
+| `f3a6dd8`, iterator tile span | Checks stride/span, splits `(SIDE-1)*stride` prefix from exact final SIDE row, seeds from final row and fills via exact chunks; stores use the same split with no remainder/padding loss. No unsafe/API/ISA/workload change. Consumer +9,728 B versus pure-copy, including +7,120 text: rejected. AVX2 303→270 instructions, frame 248→216 B, no division/spill; AVX-512 introduces division/payload staging and frame 472→1,016 B. Forward correction restores per-row `6013768`, without ISA-specific alternative. | Stop on division, outlining, payload spills, frame or text growth. 923 native; 9 focused debug/release; Clippy/minimal features; 27 doctests (1 ignored); warning-denied rustdoc; 24 smokes; 15 hashes fixed. Tile SHA `A06AE5B7BF4AF37DB56797A56D52AB6BF56063C88206DE574F705B994243F45B`; `tile-span/leto-gates/final-checks.json`. |
+| `3ad43b73`, checked dense copy | Removes the view/assignment and cleanup family, with no ordinary success eager-error drops. Executable 6,872,576 B (+10,752): not accepted. Count-one batch still divides slice lengths by product because opaque validation hides equality; core preflight remains external. | Independent source review clean; 930 native/366 release; 28 doctests (1 ignored); all-target Clippy/minimal features/warning-denied rustdoc/24 smokes. Both packages: 196 SemVer checks against `a2006ad`, 58 inapplicable each. `dense-copy/leto-gates/final-checks.json`, `dense-copy/codegen.md`. |
+| `9a47d6b`, preflight visibility | Adds only `#[inline]` to `validate_length` and `transpose_extent`; preserves checks/order/errors/body. Targeted batch chunk-count division and external preflight are the hypothesis; no count-one clone or promised full residual recovery. Executable remains +10,752 B. Linked square copies have identical instructions/call targets after relocation normalization, but distinct equivalent panic locations and AVX-512 constants. This does not prove ThinLTO import caused duplication. | Reject retained targeted division, new spills, duplicated formatting or text/file growth. Format/all-target Clippy; unchanged 30 debug and 30 release; 14 hashes fixed; source review finds no contract change; prior dense-copy full/API coverage applies. `preflight-inline/final-checks.json`, `preflight-inline/map/`. |
+| `437b5028`, shared tile diagnostic | Checked row extraction sends failures to one non-generic cold diagnostic. AVX2 copies fold; AVX-512 remains duplicated through equal constants at different addresses. No new division/payload spill; -2,560 B versus prior, +8,192 baseline: rejected. E-core complex/1,024 regression: paired medians +0.59–4.22%, candidate lower bound 2,977,157 ps exceeds baseline upper 2,975,000 ps. Gains at complex/65,536 and real-half/262,144 do not override regression; no supported P-core direction. | Format/Clippy, unchanged 30 debug/release including allocation checks; independent source review clean. [Linked-code review](../../../../output/apollo-square-transpose/tile-diagnostics/codegen.md), [census audit](../../../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json), unchanged 16-run census. |
+| `00665a4`, forward restoration | Restores tile to exact `9a47d6b` source/SHA. Experiment remains reproducible at `437b5028`; validation/errors/dispatch/traversal/workloads unchanged, no rerun of rejected immutable timing. Restored comparison still +10,752 B; campaign remains in progress. | Format/all-target Clippy, unchanged 30 debug/release; 14 hashes fixed during gates, later changes only results/lease release. `tile-diagnostics/restoration/`. |
+| `843febc`, all-operation provider entries | One provider square entry/kernel per ISA, normal/map .text identical. Executable 6,866,432 B (-6,144 restored; +4,608 baseline): rejected on size, no timing run. Two consumer error-Debug addresses remain. Batch/core intervals unchanged at 5,936 B; the general count-one call motivates the current inline correction, not a proven cause of residual size. | 930 native/366 selected release; 28 doctests (1 ignored); all-target Clippy/minimal configuration/warning-denied rustdoc/24 smokes; 316 build inputs and lock fixed. SemVer against `00665a4` reports intended free functions/error path/module removals; final module visibility passes supplemental format/Clippy/rustdoc. `provider-entry/leto-gates`; Apollo focused Clippy and 13 movement/workspace tests pass. |
 
-The preflight-inline executable remains 10,752 bytes above the ISA baseline.
-Its linked map retains separate Apollo-library and census copies of the
-complex square AVX2 and AVX-512 kernels. Independent byte comparison finds
-identical instructions after normalizing relocations, including identical
-call targets. Distinct panic-location records reference the same tile-row
-indexing site; AVX-512 also retains equal shuffle constants at different
-addresses. These findings do not establish ThinLTO import as the cause.
-The map and byte evidence live under
-`output/apollo-square-transpose/preflight-inline/map/`.
-
-The checked tile-row extraction experiment in `437b5028` routes failures
-through one non-generic cold diagnostic. Provider format, Clippy and the
-unchanged 30 focused debug/release tests pass, including allocation checks;
-independent source review finds no correctness defect. Linked code folds
-the AVX2 square copies and removes per-kernel panic-location references,
-but AVX-512 copies remain distinct through equal shuffle constants at
-different addresses. No new division or payload spill appears. The executable
-shrinks by 2,560 bytes against the preceding candidate but remains 8,192
-bytes above the ISA baseline, failing the unchanged size acceptance.
-
-The 16-run census additionally establishes an efficiency-core regression
-for complex forward length 1,024: paired median increases span 0.59–4.22%,
-and the candidate lower bound of 2,977,157 ps exceeds the baseline upper
-bound of 2,975,000 ps. Supported gains at complex length 65,536 and real-half
-length 262,144 do not override the no-regression requirement. No supported
-performance-core direction appears. The codegen and independent census
-evidence are [linked-code review](../../../../output/apollo-square-transpose/tile-diagnostics/codegen.md)
-and [census audit](../../../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json).
-
-The experiment is rejected and the tile file is restored through a forward
-change to its exact `9a47d6b` source. The experiment remains reproducible from
-`437b5028` and its retained artifacts. Public validation, errors, dispatch,
-traversal and every workload remain unchanged; no timing rerun is required
-to confirm the rejected immutable candidate. Restoration gates and source
-hashes live under `output/apollo-square-transpose/tile-diagnostics/restoration/`.
-The prior preflight-inline candidate remains the comparison source and still
-exceeds the overall size budget by 10,752 bytes. The square-movement campaign
-remains in progress; restoring that source does not accept the campaign.
-
-The restored tile file matches the recorded `9a47d6b` SHA256 exactly. Format,
-all-target Clippy and the unchanged 30 focused tests in both debug and release
-pass. Fourteen source hashes remain fixed during the gates; the final record
-identifies only subsequent result documentation and lease-release edits.
+The cache-blocking hypothesis also has a source locality basis: before outer
+blocking, a two-element AVX2 tile touches half a 64-byte line in each lower row
+and sweeps matrix width before adjacent samples. For an aligned 512-square,
+the early strip touches approximately `510 * 64 + 2 * 510 * 16 = 48,960` bytes
+between uses. This is an address-footprint model, not measured live cache
+occupancy or a miss count. The shared block contract above preserves the
+original derivation without inferring residency from its 8-KiB payload bound.
 
 ## Established batch evidence
 
-This is one additive public function in `leto-ops`; existing assignment APIs
-and behavior do not change. Full, ragged, asymmetric, empty, invalid-length,
-and overflow cases carry value-semantic coverage for `f32` and `f64`.
-Validation is failure-atomic, and a warmed allocator census records zero
-allocations and zero reallocations.
+The original addition leaves assignment APIs/behavior unchanged and covers full,
+ragged, asymmetric, empty, invalid-length and overflow cases for f32/f64.
+Validation is failure-atomic; the warmed census records zero allocations and
+reallocations. Its later breaking role migration is described separately above.
 
-Two independently launched same-binary Criterion runs on the local Windows
-AVX2 workstation place provider median reductions at 86.7-88.8% (`f32`) and
-88.9-89.8% (`f64`) for 1,024 batches of 4x4 matrices, and 28.3-53.3% (`f32`)
-and 26.1-30.5% (`f64`) for 256 batches of 16x16 matrices. Every provider/control
-95% confidence-interval pair in the second run is disjoint. The control is
-Leto's unchanged generic assignment in the same benchmark binary. These
-measurements establish only the selected local layout regime; Apollo must
-independently verify full FFT values, allocation behavior, and throughput.
+Two independent same-binary Criterion runs on the local Windows AVX2 workstation
+show provider median reductions of 86.7–88.8% (f32) and 88.9–89.8% (f64) for
+1,024 batches of 4x4 matrices; 28.3–53.3% (f32) and 26.1–30.5% (f64) for
+256 batches of 16x16 matrices. Every provider/control 95% confidence-interval
+pair in the second run is disjoint. The control is unchanged generic assignment
+in the same binary. This establishes only that local layout regime; Apollo
+must independently verify FFT values, allocation behavior and throughput.

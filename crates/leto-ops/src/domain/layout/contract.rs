@@ -8,9 +8,10 @@ use super::SquareTransposeError;
 
 /// Provider-owned complex layout operations for supported scalar representations.
 ///
-/// The four scalar implementations bind one checked generic algorithm per
-/// operation inside Leto. Selection is static; no trait object or allocation
-/// is introduced. Scalar bits, including NaN payloads, are preserved.
+/// The four scalar implementations share one checked generic algorithm per
+/// operation. Square kernels instantiate in Leto; batch entries permit known
+/// counts to specialize at the caller. Selection is static and introduces no
+/// trait object or allocation. Scalar bits, including NaN payloads, survive.
 #[diagnostic::on_unimplemented(
     message = "complex matrix movement requires a scalar implementing leto_ops::ComplexLayout"
 )]

@@ -1,6 +1,7 @@
-//! Concrete entry points keep generic layout instantiations in the provider.
+//! Scalar entry points control layout operation specialization.
 //!
-//! The uninlined methods preserve this ownership boundary under ThinLTO.
+//! Square entries bind one provider instantiation. Batch entries expose known
+//! counts to callers so a single matrix eliminates batch dispatch and division.
 //! ADR 0027 requires linked-map and timing evidence before retaining it.
 
 use eunomia::{Bf16, Complex, F16};
@@ -11,7 +12,7 @@ use crate::domain::layout::{ComplexLayout, SquareTransposeError};
 use super::{batch, square};
 
 impl ComplexLayout for f32 {
-    #[inline(never)]
+    #[inline]
     fn transpose_complex_matrices(
         source: &[Complex<Self>],
         destination: &mut [Complex<Self>],
@@ -32,7 +33,7 @@ impl ComplexLayout for f32 {
 }
 
 impl ComplexLayout for f64 {
-    #[inline(never)]
+    #[inline]
     fn transpose_complex_matrices(
         source: &[Complex<Self>],
         destination: &mut [Complex<Self>],
@@ -53,7 +54,7 @@ impl ComplexLayout for f64 {
 }
 
 impl ComplexLayout for F16 {
-    #[inline(never)]
+    #[inline]
     fn transpose_complex_matrices(
         source: &[Complex<Self>],
         destination: &mut [Complex<Self>],
@@ -74,7 +75,7 @@ impl ComplexLayout for F16 {
 }
 
 impl ComplexLayout for Bf16 {
-    #[inline(never)]
+    #[inline]
     fn transpose_complex_matrices(
         source: &[Complex<Self>],
         destination: &mut [Complex<Self>],
