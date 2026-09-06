@@ -118,6 +118,16 @@ in Hermes. Timing remains unmeasured until the size/code-generation condition
 is met; the initial artifacts are retained under
 `output/apollo-square-transpose/array-construction`.
 
+The seeded-array build (`07bd618`) removes the constructor helper and eager
+error destruction, shrinking the executable by 1,536 bytes, but remains 12,800
+bytes above baseline. Its AVX2 fill also emits redundant Skip-iterator control
+flow and tile spills. The next revision iterates the structurally exact tail
+slice and evaluates the [Hermes forwarding correction](../../../hermes/backlog.md#hermes-complex-permutation-inlining),
+which is intended to keep the existing permutation in the proven target-feature frame.
+This does not introduce a Leto-local native backend or weaken the acceptance
+conditions. The second candidate is retained under
+`output/apollo-square-transpose/seeded-array`.
+
 ## Established batch evidence
 
 This is one additive public function in `leto-ops`; existing assignment APIs

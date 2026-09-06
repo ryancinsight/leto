@@ -41,8 +41,8 @@ where
     // capability boundary on the pinned compiler. Exact Copy storage keeps
     // row loads in the kernel; only the first row is read before the fill.
     let mut tile = [load_row(0); SIDE];
-    for (row, register) in tile.iter_mut().enumerate().skip(1) {
-        *register = load_row(row);
+    for (row, register) in tile[1..].iter_mut().enumerate() {
+        *register = load_row(row + 1);
     }
     ComplexReg::transpose_square(&mut tile);
     tile
