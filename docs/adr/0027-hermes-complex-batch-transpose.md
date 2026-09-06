@@ -361,30 +361,39 @@ addresses. These findings do not establish ThinLTO import as the cause.
 The map and byte evidence live under
 `output/apollo-square-transpose/preflight-inline/map/`.
 
-The bounded source experiment replaces only the shared tile loader/store's
-range indexing with checked slice extraction. Both failures enter one
-non-generic cold function that owns its panic location and reports start,
-width and matrix length without computing a new extent. It deliberately
-does not forward the caller location. Public shape validation and typed
-errors, seeded register arrays, dispatch, traversal and workloads are unchanged.
-Search of the layout and core operation families found no existing diagnostic
-with this tile-row contract.
+The checked tile-row extraction experiment in `437b5028` routes failures
+through one non-generic cold diagnostic. Provider format, Clippy and the
+unchanged 30 focused debug/release tests pass, including allocation checks;
+independent source review finds no correctness defect. Linked code folds
+the AVX2 square copies and removes per-kernel panic-location references,
+but AVX-512 copies remain distinct through equal shuffle constants at
+different addresses. No new division or payload spill appears. The executable
+shrinks by 2,560 bytes against the preceding candidate but remains 8,192
+bytes above the ISA baseline, failing the unchanged size acceptance.
 
-The hypothesis is removal of per-instantiation panic-location references,
-allowing otherwise equal linked kernels to fold. Equal shuffle constants may
-still prevent folding, so neither deduplication nor a size reduction is
-assumed. Unchanged focused debug/release and allocation tests precede consumer
-codegen: new division or payload spills, retained duplicated kernels, or text
-growth reject this form. Full consumer regression and baseline executable
-no-growth acceptance remain unchanged. Commands, hashes and source-gate
-results belong under `output/apollo-square-transpose/tile-diagnostics/`.
+The 16-run census additionally establishes an efficiency-core regression
+for complex forward length 1,024: paired median increases span 0.59–4.22%,
+and the candidate lower bound of 2,977,157 ps exceeds the baseline upper
+bound of 2,975,000 ps. Supported gains at complex length 65,536 and real-half
+length 262,144 do not override the no-regression requirement. No supported
+performance-core direction appears. The codegen and independent census
+evidence are [linked-code review](../../../../output/apollo-square-transpose/tile-diagnostics/codegen.md)
+and [census audit](../../../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json).
 
-The source revision passes format, all-target Clippy and the unchanged 30
-focused tests in both debug and release, including allocation checks.
-Independent source review finds no defect. Fourteen tracked source hashes
-remain unchanged during the gates; the final record separately identifies
-the subsequent documentation-only result update and lease release. These
-results establish behavior on the tested paths, not linked-code reduction.
+The experiment is rejected and the tile file is restored through a forward
+change to its exact `9a47d6b` source. The experiment remains reproducible from
+`437b5028` and its retained artifacts. Public validation, errors, dispatch,
+traversal and every workload remain unchanged; no timing rerun is required
+to confirm the rejected immutable candidate. Restoration gates and source
+hashes live under `output/apollo-square-transpose/tile-diagnostics/restoration/`.
+The prior preflight-inline candidate remains the comparison source and still
+exceeds the overall size budget by 10,752 bytes. The square-movement campaign
+remains in progress; restoring that source does not accept the campaign.
+
+The restored tile file matches the recorded `9a47d6b` SHA256 exactly. Format,
+all-target Clippy and the unchanged 30 focused tests in both debug and release
+pass. Fourteen source hashes remain fixed during the gates; the final record
+identifies only subsequent result documentation and lease-release edits.
 
 ## Established batch evidence
 

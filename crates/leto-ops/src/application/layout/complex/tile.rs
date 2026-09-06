@@ -27,10 +27,7 @@ where
     assert_eq!(SIDE, ComplexReg::<T, A>::COMPLEX_COUNT);
     let load_row = |row| {
         let start = offset + row * stride;
-        let Some(row) = matrix.get(start..start + SIDE) else {
-            tile_row_out_of_bounds(start, SIDE, matrix.len());
-        };
-        let scalars: &[T] = cast_slice(row);
+        let scalars: &[T] = cast_slice(&matrix[start..start + SIDE]);
         let view = simd.view(scalars);
         // Two scalars per complex sample give exactly one full register,
         // so this iterator has one chunk and no remainder.
@@ -67,11 +64,7 @@ pub(super) fn store_tile<T, A, const SIDE: usize>(
     assert_eq!(SIDE, ComplexReg::<T, A>::COMPLEX_COUNT);
     for (row, register) in tile.iter().copied().enumerate() {
         let start = offset + row * stride;
-        let len = matrix.len();
-        let Some(row) = matrix.get_mut(start..start + SIDE) else {
-            tile_row_out_of_bounds(start, SIDE, len);
-        };
-        let scalars: &mut [T] = cast_slice_mut(row);
+        let scalars: &mut [T] = cast_slice_mut(&mut matrix[start..start + SIDE]);
         let view = simd.view_mut(scalars);
         let mut chunk = view
             .simd_chunks_mut()
@@ -79,14 +72,4 @@ pub(super) fn store_tile<T, A, const SIDE: usize>(
             .expect("invariant: complex tile row fills one register");
         chunk.store(register.into_interleaved());
     }
-}
-
-// One failure site keeps panic-location data outside scalar/ISA instantiations.
-// Caller locations must not be forwarded into this cold diagnostic boundary.
-#[cold]
-#[inline(never)]
-fn tile_row_out_of_bounds(start: usize, width: usize, len: usize) -> ! {
-    panic!(
-        "invariant: complete complex tile row fits matrix storage: start={start}, width={width}, len={len}"
-    );
 }

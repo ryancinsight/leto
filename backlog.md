@@ -14,9 +14,10 @@
 - API/review: both public packages pass 196 SemVer checks against `a2006ad` (58 inapplicable checks each); independent source review finds no production defect.
 - Evidence: `output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json` records the exact 14-file hash set and unchanged lock. No timing or size acceptance follows from provider gates.
 - Experiment state: earlier builds fail size or regression acceptance; tile-span iteration additionally introduces AVX-512 division and payload spills and is removed. ADR 0027 owns those findings.
-- Next: consolidate private tile-row bounds diagnostics and verify eliminated per-instantiation panic-location references without spills, division or executable growth; consumer acceptance remains separate.
+- Next: integrate the verified forward restoration; the square-movement campaign remains in-progress with no accepted consumer candidate.
 - Preflight verification: unchanged 30 focused tests pass in debug and release; all-target Clippy, format and independent source review pass. Only two inline annotations change production; consumer acceptance remains pending.
-- Tile-diagnostic verification: format, all-target Clippy and the same 30 focused debug/release tests pass; independent source review is clean. Source is frozen; linked folding, size and consumer timing remain unverified. Evidence: `output/apollo-square-transpose/tile-diagnostics/final-checks.json`.
+- Tile-diagnostic outcome: rejected despite clean source gates; executable +8,192 bytes and supported efficiency-core complex/1,024 regression of 0.59–4.22%. [Codegen](../../output/apollo-square-transpose/tile-diagnostics/codegen.md) and [census](../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json) trigger restoration; prior candidate still fails size acceptance.
+- Restoration verification: tile source exactly matches `9a47d6b`; format, Clippy and unchanged 30 focused debug/release tests pass. Evidence: `output/apollo-square-transpose/tile-diagnostics/restoration/final-checks.json`; no timing rerun or lock change.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 
