@@ -32,6 +32,7 @@ pub use aliases::{
 };
 pub use arithmetic::ScalarOperand;
 pub use array::Array;
+pub use assign::transpose_copy;
 pub use dynamic::ArrayD;
 pub use fixed::{FixedMatrix, FixedVector};
 pub use iter::{

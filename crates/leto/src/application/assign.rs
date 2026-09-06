@@ -188,13 +188,12 @@ fn assign_view_into<T: Copy, const N: usize>(
                     reason: "assignment source memory-order range exceeds its storage".to_string(),
                 })?;
         let destination_values = dense_destination(&destination_layout, destination_data, size)?;
-        transpose_c_from_f(
+        return transpose_copy(
             source_values,
             destination_values,
-            destination_layout.shape()[0],
             destination_layout.shape()[1],
+            destination_layout.shape()[0],
         );
-        return Ok(());
     }
 
     let destination = ArrayViewMut::try_new(destination_layout, destination_data)?;
@@ -210,7 +209,11 @@ fn dense_destination<'a, T, const N: usize>(
     size: usize,
 ) -> Result<&'a mut [T]> {
     let start = layout.offset();
-    let end = start.checked_add(size).ok_or(LetoError::Overflow {
+    #[expect(
+        clippy::unnecessary_lazy_evaluations,
+        reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+    )]
+    let end = start.checked_add(size).ok_or_else(|| LetoError::Overflow {
         reason: "assignment destination dense range",
     })?;
     data.get_mut(start..end)
@@ -226,15 +229,56 @@ fn transpose_tile<T>() -> usize {
     1usize << side.ilog2()
 }
 
-/// Tiled C-from-F transpose copy shared by [`assign`] fast paths and
-/// [`ArrayView::to_contiguous`](crate::application::view::ArrayView::to_contiguous):
-/// blocked to the payload budget so both buffers stay cache-resident.
-pub(crate) fn transpose_c_from_f<T: Clone>(
+/// Copies a row-major matrix into its row-major transpose.
+///
+/// `source` has shape `[rows, columns]` and `destination` has shape
+/// `[columns, rows]`. Both slices must contain exactly `rows * columns`
+/// elements. Each destination at `column * rows + row` receives a clone of
+/// `source[row * columns + column]`. Offsets are supplied by borrowing the
+/// desired subslices; elements outside those slices remain untouched.
+///
+/// The cache-blocked traversal creates no intermediate storage. It clones
+/// each source element once, including zero-sized types; a user-defined
+/// [`Clone`] implementation may itself allocate. Copy scalar payloads undergo
+/// no arithmetic, preserving signed zeros and NaN representations.
+///
+/// # Errors
+///
+/// Returns [`LetoError::Overflow`] if the element count overflows `usize` or
+/// a nonempty matrix exceeds the signed extent supported by dense layouts.
+/// Returns [`LetoError::StorageError`] for an inexact slice length. Validation
+/// proceeds in this order: product, source length, destination length, then
+/// signed extent. A zero product with empty slices succeeds even when the
+/// other dimension exceeds `isize::MAX`. Errors leave both slices unchanged.
+///
+/// # Panics
+///
+/// Element cloning or destruction may panic after earlier destination values
+/// have been replaced. Validation errors do not execute either operation.
+///
+/// # Examples
+///
+/// ```
+/// use leto::transpose_copy;
+/// let source = [1, 2, 3, 4, 5, 6];
+/// let mut destination = [0; 6];
+/// transpose_copy(&source, &mut destination, 2, 3)?;
+/// assert_eq!(destination, [1, 4, 2, 5, 3, 6]);
+/// # Ok::<(), leto::LetoError>(())
+/// ```
+pub fn transpose_copy<T: Clone>(
     source: &[T],
     destination: &mut [T],
-    height: usize,
-    width: usize,
-) {
+    rows: usize,
+    columns: usize,
+) -> Result<()> {
+    if transpose_extent(source.len(), destination.len(), rows, columns)? == 0 {
+        return Ok(());
+    }
+    // The traversal addresses destination rows and source columns. Nonzero
+    // dimensions and their product fit isize, bounding every slice product
+    // and tile endpoint; all exact chunks below have nonzero widths.
+    let (height, width) = (columns, rows);
     let tile = transpose_tile::<T>();
     if width >= height {
         for row_start in (0..height).step_by(tile) {
@@ -256,7 +300,7 @@ pub(crate) fn transpose_c_from_f<T: Clone>(
                 }
             }
         }
-        return;
+        return Ok(());
     }
 
     for column_start in (0..width).step_by(tile) {
@@ -274,4 +318,35 @@ pub(crate) fn transpose_c_from_f<T: Clone>(
             }
         }
     }
+    Ok(())
+}
+
+fn transpose_extent(
+    source_len: usize,
+    destination_len: usize,
+    rows: usize,
+    columns: usize,
+) -> Result<usize> {
+    #[expect(
+        clippy::unnecessary_lazy_evaluations,
+        reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+    )]
+    let elements = rows
+        .checked_mul(columns)
+        .ok_or_else(|| LetoError::Overflow {
+            reason: "dense transpose element count",
+        })?;
+    for (role, actual) in [("source", source_len), ("destination", destination_len)] {
+        if actual != elements {
+            return Err(LetoError::StorageError {
+                reason: format!(
+                    "dense transpose {role} length {actual} does not match expected {elements}"
+                ),
+            });
+        }
+    }
+    isize::try_from(elements).map_err(|_| LetoError::Overflow {
+        reason: "dense transpose signed layout extent",
+    })?;
+    Ok(elements)
 }

@@ -2,12 +2,13 @@
 
 - Status: Accepted
 - Date: 2026-09-01
-- Class: [minor, perf]
+- Class: [minor] [arch]
 
 Revision 2026-09-06: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
-extends the existing movement boundary to an in-place square. Provider gates
-pass; downstream timing remains under verification. No square-transform speedup is
-established by the earlier batch measurements below.
+extends the movement boundary to an in-place square and a checked core dense
+copy. The iterator-based tile-span experiment is rejected on executable size
+and AVX-512 spills; the dense-copy revision remains under verification. Batch
+measurements below do not establish a square-transform speedup.
 
 ## Context
 
@@ -16,10 +17,10 @@ hundreds of adjacent small complex matrices. Its pinned phase probe showed
 that register-resident square transposes reduce this workload, while applying
 the same route broadly regressed large rectangular 2-D matrices by 5-52%.
 
-Apollo ADR 0040 assigns layout movement to Leto. Leto core also deliberately
-owns only layout and storage types; SIMD kernels belong in `leto-ops`, which
-already depends on Hermes. An Apollo-local kernel or a new Hermes dependency in
-Leto core would violate those boundaries.
+Apollo ADR 0040 assigns layout movement to Leto. Leto core owns layout, storage
+and the generic copies its views require; SIMD kernels belong in `leto-ops`,
+which already depends on Hermes. An Apollo-local kernel or a new Hermes
+dependency in Leto core would violate those boundaries.
 
 ## Decision
 
@@ -35,8 +36,9 @@ boundary. Each kernel loads a square tile into registers, transposes it with
 `ComplexReg::transpose_square`, stores it once, and copies every ragged row or
 column tail. No scalar fallback is classified as SIMD capability.
 
-All other shapes and unsupported exact widths retain Leto's existing generic
-tiled assignment. Both paths preserve matrix order and allocate no storage.
+All other shapes and unsupported exact widths use Leto's existing generic
+tiled mover through `transpose_copy`. Both paths preserve matrix order and
+allocate no storage for successful complex copies.
 
 Rejected alternatives:
 
@@ -245,9 +247,83 @@ and release, Clippy, minimal features, 27 doctests (one existing ignored),
 warning-denied rustdoc and the unchanged 24-case bounded smoke. All fifteen
 source hashes match; tile SHA256 is
 `A06AE5B7BF4AF37DB56797A56D52AB6BF56063C88206DE574F705B994243F45B`.
-The retained evidence is `output/apollo-square-transpose/tile-span/leto-gates/
-final-checks.json` under Atlas output retention. These checks establish behavior,
-not the pending consumer codegen or performance acceptance.
+The retained evidence is
+`output/apollo-square-transpose/tile-span/leto-gates/final-checks.json`
+under Atlas output retention. These checks establish behavior separately
+from consumer codegen and performance acceptance.
+
+Consumer codegen rejects the tile-span form. Against the pure-copy candidate,
+the executable grows by 9,728 bytes, including 7,120 text bytes. AVX2 improves
+from 303 to 270 instructions and from a 248-byte to a 216-byte frame, without
+division or payload spills. AVX-512 instead introduces runtime division,
+register payload staging and a 1,016-byte frame, up from 472 bytes. That fails
+the existing all-ISA spill and size stop conditions. The next source revision
+therefore restores the canonical per-row tile access from `6013768`; it adds
+no ISA-specific alternative. The checked dense-copy change below targets a
+separate, independently observed assignment cost.
+
+### Checked dense-copy boundary, 2026-09-06
+
+The pure-copy consumer build emits 6,892,544 bytes, 30,720 above the ISA
+baseline. Its library assembly contains a 1,476-instruction generic assignment
+function and twelve cleanup funclets totaling 354 instructions, while the
+canonical dense mover contains 370 instructions. These counts identify the
+retained layout/view round trip, not exact linked-byte ownership or latency;
+the evidence is `output/apollo-square-transpose/pure-copy/codegen.md`.
+
+Expose that mover in place as the additive core operation
+`transpose_copy<T: Clone>(source, destination, rows, columns) -> Result<()>`.
+It copies row-major `[rows, columns]` into row-major `[columns, rows]`, with
+destination offset `column * rows + row` receiving a clone of source offset
+`row * columns + column`. The two internal callers, assignment and view
+materialization, use the same body. The old private name and the complex
+batch's general-view construction are removed; no forwarding API or second
+movement algorithm remains. No dependency or version change is needed.
+
+The scalar-independent preflight checks the unsigned product, exact source
+length, exact destination length, then the signed dense-layout extent, in
+that order. Zero products with empty slices succeed without converting their
+unused dimensions. Nonempty zero-sized slices still require a signed count
+bound; element size alone cannot establish it. Validation errors execute no
+clones or writes. Successful movement invokes Clone once per element, including
+zero-sized elements; user Clone or Drop implementations may allocate or panic,
+so failure atomicity does not promise rollback after an element panic.
+
+Complex batches keep their original matrix/batch overflow and role-specific
+length diagnostics and precedence. Their admitted scalar representations
+are nonzero-sized, so exact nonempty safe slices already imply each matrix
+fits the signed layout extent. The direct core call therefore introduces no
+reachable batch failure or changed hardware threshold. Measured eager error
+sites in the batch products and traversed core layout arithmetic construct
+the same errors lazily; no error is discarded or replaced by a fallback.
+
+Clippy classifies the static Overflow payloads as unnecessary lazy evaluation,
+but retained assembly shows successful arithmetic constructing and calling
+the broad enum's drop glue: batch products at lines 33200/33206, shape and
+stride products at 33267/33273 and 33320/33326, physical offset arithmetic
+at 428769–428797, min/max bounds at 428578–428630, and dense destination
+extent at 31481. The Overflow arm returns without heap deallocation; the
+observed cost is construction, call and discriminant dispatch. Statement-level
+lint expectations preserve lazy construction at these sites. The new dense
+extent check uses the same enum ownership mechanism, but has no pre-change
+instance in that assembly; its own codegen remains to be measured. No
+function-wide or crate-wide lint exception is introduced.
+
+Existing numerical workloads remain unchanged. New core tests cover both
+traversal orientations, tile boundaries, offsets and canaries, non-Copy Clone
+values and clone counts, exact error precedence, empty dimensions and huge
+zero-sized extents. Provider debug/release, allocation, documentation and
+SemVer gates precede fresh consumer codegen, size and unchanged census checks.
+Neither source deletion nor instruction counts establish an accepted speedup.
+
+The final dense-copy source passes 930 native tests, 366 release tests,
+28 doctests (one existing ignored), all-target Clippy, minimal features,
+warning-denied rustdoc and 24 unchanged bounded smoke cases. Both packages
+pass 196 SemVer checks against `a2006ad`, with 58 inapplicable checks each.
+Independent source review finds no production defect. Exact source hashes,
+commands and limitations are retained in
+`output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json`.
+Consumer codegen, executable size and timing remain separate acceptance gates.
 
 ## Established batch evidence
 

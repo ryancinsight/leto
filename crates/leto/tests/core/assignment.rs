@@ -1,6 +1,8 @@
 use leto::application::array::AssignSource;
 use leto::{Array2, ArrayView, ArrayViewMut, Complex, Layout, LetoError, Result, SliceArg};
 
+mod transpose;
+
 fn complex_input(shape: [usize; 2]) -> Array2<Complex<f64>> {
     Array2::from_shape_fn(shape, |[row, column]| {
         let linear = row * shape[1] + column;

@@ -1,21 +1,20 @@
 # Leto Work Backlog
 
 <a id="leto-square-transpose"></a>
-## LETO-SQUARE-TRANSPOSE — Own in-place complex square movement [minor] [arch]
+## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [minor] [arch]
 
 - Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-06.
-- Outcome: expose allocation-free, bit-preserving square transpose over borrowed complex storage for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
-- Scope: `leto-ops` complex layout kernels, shared register tiles, generic scalar coverage and allocation tests; preserve existing batch dispatch and all FFT arithmetic.
-- Acceptance: checked exact extent before mutation; coordinate and byte oracles across all four scalars, offsets, tails and special payloads; focused debug/release gates, docs, semver, codegen and unchanged Apollo engine census with no supported regression or executable growth.
-- Design: revise [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md); Leto owns movement, Hermes register representation, Apollo scheduling and scratch.
-- Dependency: locked Hermes `07c5e5f` and Eunomia `02397fa`; no new dependency or version bump.
-- Source reconciliation: prior consumer pin-only branch is superseded by ADR 0029; unmerged Mnemosyne changes remain on its local and remote `perf/mnemosyne-scratch-release` branch.
-- Verification: committed Leto CI commands and Nextest 30/60-second budgets; provider tests precede downstream integration and controlled performance acceptance.
-- Provider gates: 923 native tests, nine release tests, 27 doctests (one existing ignored), Clippy, minimal features, docs, 24 smoke cases and 196 SemVer checks pass; downstream performance acceptance remains in progress.
-- Construction revision: unchanged debug/release movement tests, Clippy, docs and 24 smoke cases pass; emitted-code and size comparison remain in progress after the initial 14,336-byte growth.
-- Combined verification with [Hermes `07c5e5f`](../hermes/backlog.md#hermes-complex-permutation-inlining): 923 native/nine release tests, docs, Clippy, minimal features and 24 smoke cases pass. Only five Hermes source entries change in the lock; review-branch selection is temporary until upstream merge.
-- Cache-block revision: provider gates and independent review pass. The unchanged census supports one E-core real-transform gain and no regression, with unchanged warm allocations/retained bytes; executable growth of 9,728 bytes blocks adoption. Apollo's remaining pure-copy consolidation is under verification.
-- Tile-span verification: 923 native tests, nine focused debug/release tests, Clippy, minimal features, 27 doctests (one existing ignored), rustdoc and 24 bounded smoke cases pass; all 15 source hashes match. Consumer codegen acceptance remains pending.
+- Outcome: checked borrowed dense transpose and allocation-free, bit-preserving complex square movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
+- Scope: core assignment/materialization and `transpose_copy`, complex layout kernels, generic Clone/scalar and allocation tests; preserve batch dispatch and FFT arithmetic.
+- Acceptance: exact extent validation before mutation, all four scalar payload/coordinate/offset/tail oracles, no supported consumer regression or executable growth, unchanged allocation bounds.
+- Design: [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md); Leto owns movement, Hermes registers, Apollo scheduling and scratch.
+- Dependencies: locked Hermes `07c5e5f` and Eunomia `02397fa`; no new dependency or version bump. Review pins merge upstream before final consumer delivery.
+- Source reconciliation: ADR 0029 supersedes the prior pin-only branch; unmerged Mnemosyne work remains on `perf/mnemosyne-scratch-release`.
+- Verification: committed CI commands and Nextest 30/60-second budgets; final dense-copy revision passes 930 native tests, 366 release tests, 28 doctests (one existing ignored), Clippy, minimal features, rustdoc and 24 smoke cases.
+- API/review: both public packages pass 196 SemVer checks against `a2006ad` (58 inapplicable checks each); independent source review finds no production defect.
+- Evidence: `output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json` records the exact 14-file hash set and unchanged lock. No timing or size acceptance follows from provider gates.
+- Experiment state: earlier builds fail size or regression acceptance; tile-span iteration additionally introduces AVX-512 division and payload spills and is removed. ADR 0027 owns those findings.
+- Next: build the unchanged Apollo census against this dense-copy revision and verify codegen, size, allocation and performance acceptance.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 

@@ -5,8 +5,8 @@ N-dimensional strided array layouts, zero-copy views, and storage backends.
 `leto` is the core crate of the [Leto workspace](../../README.md): it owns the
 type model that separates *layout* (shape, strides, offset) from *storage*
 (where the elements live), plus the slicing, transposition, broadcasting, and
-structural operations that reshape a view without touching memory. It carries
-no SIMD or threading dependency; kernels live in
+structural operations that reshape a view without touching memory. Generic
+storage copies also live here; SIMD and threaded kernels live in
 [`leto-ops`](../leto-ops/README.md).
 
 ```rust
@@ -40,6 +40,11 @@ assert_eq!(view.shape(), [1, 2]);
   indexing, inserted axes, ellipsis, and implicit trailing axes.
 - Zero-copy transposition and broadcasting; broadcast preserves source strides
   for same-shape axes and uses zero strides only for expanded singleton axes.
+- `transpose_copy` clones a dense row-major matrix into caller-owned transposed
+  storage. Checked products and exact lengths reject before mutation; the
+  existing cache-blocked mover also serves assignment and materialization.
+  It creates no intermediate storage, while an element's `Clone` may allocate
+  or panic independently.
 - Storage backends: `VecStorage` (owned), `SliceStorage` / `SliceStorageMut`
   (borrowed), and `MnemosyneStorage` behind the `mnemosyne-alloc` feature for
   aligned allocation.

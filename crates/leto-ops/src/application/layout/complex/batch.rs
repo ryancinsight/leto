@@ -5,7 +5,7 @@ use eunomia::Pod;
 use hermes_simd::{
     vectorize_hardware_lanes, ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel,
 };
-use leto::{ArrayView2, ArrayViewMut2, Complex, Layout, LetoError, Result};
+use leto::{transpose_copy, Complex, LetoError, Result};
 
 /// Pinned Apollo phase measurements show that dispatch amortizes at this batch
 /// count while smaller batches remain with Leto's generic tiled transpose.
@@ -22,16 +22,17 @@ const REGISTER_TRANSPOSE_MAX_MATRIX_SIDE: usize = 16;
 ///
 /// High-count batches of small matrices use the widest exact Hermes hardware
 /// width that fits a complete square tile. Other shapes and targets reuse
-/// Leto's cache-budgeted generic assignment. Neither route allocates after the
+/// Leto's cache-budgeted [`transpose_copy`]. Neither route allocates after the
 /// caller provides `source` and `destination`.
 ///
 /// # Errors
 ///
 /// Returns [`LetoError::Overflow`] when the matrix or batch element count does
 /// not fit `usize`. Returns [`LetoError::StorageError`] when either slice length
-/// differs from `matrix_count * rows * columns`. Returns another [`LetoError`]
-/// if the derived two-dimensional layouts are not representable. Validation
-/// completes before mutation.
+/// differs from `matrix_count * rows * columns`. Validation completes before
+/// mutation, in this order: matrix count, batch count, source length, then
+/// destination length. Exact nonempty complex slices already bound each
+/// matrix to the signed extent supported by [`transpose_copy`].
 ///
 /// # Examples
 ///
@@ -65,12 +66,22 @@ pub fn transpose_complex_matrices<T>(
 where
     T: LaneScalar + Pod,
 {
-    let matrix_len = rows.checked_mul(columns).ok_or(LetoError::Overflow {
-        reason: "complex matrix element count",
-    })?;
+    #[expect(
+        clippy::unnecessary_lazy_evaluations,
+        reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+    )]
+    let matrix_len = rows
+        .checked_mul(columns)
+        .ok_or_else(|| LetoError::Overflow {
+            reason: "complex matrix element count",
+        })?;
+    #[expect(
+        clippy::unnecessary_lazy_evaluations,
+        reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+    )]
     let total_len = matrix_count
         .checked_mul(matrix_len)
-        .ok_or(LetoError::Overflow {
+        .ok_or_else(|| LetoError::Overflow {
             reason: "complex matrix batch element count",
         })?;
     validate_length("source", source.len(), total_len)?;
@@ -80,21 +91,18 @@ where
         return Ok(());
     }
 
-    let source_layout = Layout::f_contiguous([columns, rows])?;
-    let destination_layout = Layout::c_contiguous([columns, rows])?;
     if uses_register_complex_tiles(matrix_count, rows, columns)
         && transpose_hardware(source, destination, matrix_len, rows, columns)
     {
         return Ok(());
     }
 
-    transpose_generic(
-        source,
-        destination,
-        matrix_len,
-        source_layout,
-        destination_layout,
-    );
+    for (source_matrix, destination_matrix) in source
+        .chunks_exact(matrix_len)
+        .zip(destination.chunks_exact_mut(matrix_len))
+    {
+        transpose_copy(source_matrix, destination_matrix, rows, columns)?;
+    }
     Ok(())
 }
 
@@ -236,25 +244,6 @@ where
                 destination_matrix[column * rows + row] = source_matrix[row * columns + column];
             }
         }
-    }
-}
-
-fn transpose_generic<T: Copy>(
-    source: &[T],
-    destination: &mut [T],
-    matrix_len: usize,
-    source_layout: Layout<2>,
-    destination_layout: Layout<2>,
-) {
-    for (source_matrix, destination_matrix) in source
-        .chunks_exact(matrix_len)
-        .zip(destination.chunks_exact_mut(matrix_len))
-    {
-        let source_view = ArrayView2::try_new(source_layout, source_matrix)
-            .expect("invariant: validated complex matrix source fits its layout");
-        let mut destination_view = ArrayViewMut2::try_new(destination_layout, destination_matrix)
-            .expect("invariant: validated complex matrix destination fits its layout");
-        destination_view.assign(&source_view);
     }
 }
 

@@ -29,8 +29,8 @@ let qr = a.qr()?;
   AVX-512/AVX2/NEON with a scalar fallback. SIMD is not a build feature.
 - `transpose_complex_matrices` moves homogeneous row-major matrix batches into
   transposed caller-owned storage. Measured high-count small matrices use
-  exact-width Hermes register tiles; other shapes retain Leto's generic tiled
-  assignment.
+  exact-width Hermes register tiles; other shapes call Leto's checked,
+  cache-blocked `transpose_copy` directly.
 - `transpose_square_inplace` exchanges a complex square's rows and columns in
   borrowed storage, with checked extents and no allocation on success or
   rejection. `SquareTransposeError` retains overflowing sides or mismatched
