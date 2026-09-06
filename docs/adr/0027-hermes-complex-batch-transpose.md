@@ -349,6 +349,43 @@ no contract change. Its fourteen source hashes match the retained
 `output/apollo-square-transpose/preflight-inline/final-checks.json` record;
 the preceding dense-copy full-suite and API coverage remains applicable.
 
+### Tile bounds diagnostic revision, 2026-09-06
+
+The preflight-inline executable remains 10,752 bytes above the ISA baseline.
+Its linked map retains separate Apollo-library and census copies of the
+complex square AVX2 and AVX-512 kernels. Independent byte comparison finds
+identical instructions after normalizing relocations, including identical
+call targets. Distinct panic-location records reference the same tile-row
+indexing site; AVX-512 also retains equal shuffle constants at different
+addresses. These findings do not establish ThinLTO import as the cause.
+The map and byte evidence live under
+`output/apollo-square-transpose/preflight-inline/map/`.
+
+The bounded source experiment replaces only the shared tile loader/store's
+range indexing with checked slice extraction. Both failures enter one
+non-generic cold function that owns its panic location and reports start,
+width and matrix length without computing a new extent. It deliberately
+does not forward the caller location. Public shape validation and typed
+errors, seeded register arrays, dispatch, traversal and workloads are unchanged.
+Search of the layout and core operation families found no existing diagnostic
+with this tile-row contract.
+
+The hypothesis is removal of per-instantiation panic-location references,
+allowing otherwise equal linked kernels to fold. Equal shuffle constants may
+still prevent folding, so neither deduplication nor a size reduction is
+assumed. Unchanged focused debug/release and allocation tests precede consumer
+codegen: new division or payload spills, retained duplicated kernels, or text
+growth reject this form. Full consumer regression and baseline executable
+no-growth acceptance remain unchanged. Commands, hashes and source-gate
+results belong under `output/apollo-square-transpose/tile-diagnostics/`.
+
+The source revision passes format, all-target Clippy and the unchanged 30
+focused tests in both debug and release, including allocation checks.
+Independent source review finds no defect. Fourteen tracked source hashes
+remain unchanged during the gates; the final record separately identifies
+the subsequent documentation-only result update and lease release. These
+results establish behavior on the tested paths, not linked-code reduction.
+
 ## Established batch evidence
 
 This is one additive public function in `leto-ops`; existing assignment APIs
