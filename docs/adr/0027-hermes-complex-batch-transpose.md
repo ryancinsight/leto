@@ -7,10 +7,11 @@
 Revision 2026-09-06: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
 extends the accepted batch-layout decision to in-place square movement and a
 checked core dense copy. Acceptance of the original batch regime does not
-accept the square-movement campaign. Every measured consumer candidate below
-fails at least one unchanged adoption gate. The `843febc` all-operation provider
-boundary is rejected on size; the batch-inline correction is underway and has
-no acceptance result. No release or manifest version change is authorized.
+accept the square-movement campaign. Earlier consumer candidates fail size or
+regression gates. Apollo's current cold-failure consolidation passes focused
+correctness and executable size with Leto `633acb7` unchanged; timing and full
+consumer verification remain pending. No release or manifest version change
+is authorized.
 
 ## Ownership and current experiment
 
@@ -38,16 +39,30 @@ chunk-count division that its former specialization eliminated. Batch-plus-core
 map intervals total 5,936 bytes before and after, so this is caller/callee
 evidence for a specialization experiment, not the cause of whole-file growth.
 
-Reject the batch-inline correction if count-one execution retains batch-count
-dispatch/division, square kernels regain consumer instantiations, or the original
-size and full-engine acceptance conditions fail. No new public entry, role split,
-compiler flag, workload or expected byte recovery is assumed.
+Require preservation of the measured count-one specialization, provider square
+ownership and the original size/full-engine gates. The initial all-callers
+specialization criterion exceeded the baseline evidence: its census-owned
+FourStep already called a general batch. The correction restores the earlier
+library-specialized/census-general split; it introduces no such residual call.
+Eliminating the remaining general call is a separate optimization hypothesis,
+not grounds to describe the baseline behavior as a new regression.
 
 The batch-inline source passes format, Clippy, warning-denied rustdoc, 30
 focused debug tests, 30 release tests and 25 doctests, with all 316 captured
 build inputs fixed. Evidence is retained under Atlas
 `output/apollo-square-transpose/batch-specialization/leto-gates`.
-Consumer codegen, executable size and timing remain unverified for this change.
+Consumer focused gates pass and the map confirms that specialization split and
+one provider square kernel per ISA. The executable grows to 6,867,456 bytes
+(+5,632 baseline), so size acceptance still fails; no timing run follows.
+
+Apollo subsequently owns invariant-failure formatting and error cleanup in
+concrete cold functions, preserving error values, context and caller locations.
+This consumer correction changes no Leto source. Its executable is 6,861,312
+bytes (-512 baseline; -6,144 versus batch specialization). Normalized movement
+instructions remain equal; that establishes codegen preservation, not latency
+equivalence. Focused correctness and size pass, while full verification and the
+unchanged census remain pending; the first census attempt aborts before native
+invocation because Cargo processes 11480 and 59608 are active.
 
 ### Migration and classification
 
@@ -204,6 +219,8 @@ source. Provider correctness gates do not override consumer rejection.
 | `437b5028`, shared tile diagnostic | Checked row extraction sends failures to one non-generic cold diagnostic. AVX2 copies fold; AVX-512 remains duplicated through equal constants at different addresses. No new division/payload spill; -2,560 B versus prior, +8,192 baseline: rejected. E-core complex/1,024 regression: paired medians +0.59–4.22%, candidate lower bound 2,977,157 ps exceeds baseline upper 2,975,000 ps. Gains at complex/65,536 and real-half/262,144 do not override regression; no supported P-core direction. | Format/Clippy, unchanged 30 debug/release including allocation checks; independent source review clean. [Linked-code review](../../../../output/apollo-square-transpose/tile-diagnostics/codegen.md), [census audit](../../../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json), unchanged 16-run census. |
 | `00665a4`, forward restoration | Restores tile to exact `9a47d6b` source/SHA. Experiment remains reproducible at `437b5028`; validation/errors/dispatch/traversal/workloads unchanged, no rerun of rejected immutable timing. Restored comparison still +10,752 B; campaign remains in progress. | Format/all-target Clippy, unchanged 30 debug/release; 14 hashes fixed during gates, later changes only results/lease release. `tile-diagnostics/restoration/`. |
 | `843febc`, all-operation provider entries | One provider square entry/kernel per ISA, normal/map .text identical. Executable 6,866,432 B (-6,144 restored; +4,608 baseline): rejected on size, no timing run. Two consumer error-Debug addresses remain. Batch/core intervals unchanged at 5,936 B; the general count-one call motivates the current inline correction, not a proven cause of residual size. | 930 native/366 selected release; 28 doctests (1 ignored); all-target Clippy/minimal configuration/warning-denied rustdoc/24 smokes; 316 build inputs and lock fixed. SemVer against `00665a4` reports intended free functions/error path/module removals; final module visibility passes supplemental format/Clippy/rustdoc. `provider-entry/leto-gates`; Apollo focused Clippy and 13 movement/workspace tests pass. |
+| Leto `633acb7`, batch specialization | Restores the baseline library-specialized/census-general split and retains one provider square kernel per ISA. Executable 6,867,456 B (+5,632): rejected on size; no timing run. | Provider format/Clippy/rustdoc, 30 debug/30 release tests and 25 doctests; 316 inputs fixed. Consumer focused gates and `batch-specialization/map/attribution.md`. |
+| Apollo cold failures; Leto `633acb7` unchanged | Consumer-owned cold diagnostics preserve complete errors and caller locations. Executable 6,861,312 B (-512 baseline; -6,144 preceding): size passes. Five normalized movement bodies match the preceding candidate (556/298/171 square and 549/226 batch instruction rows); three FourStep caller locations survive in both roots. No timing or full-gate acceptance yet. | [Focused gates](../../../../output/apollo-square-transpose/cold-failures/apollo-final-checks.json): format, all-target/all-feature Clippy, 15 debug/15 release tests; 311 inputs and lock fixed. [Normalized comparison](../../../../output/apollo-square-transpose/cold-failures/map/normalized-comparison.json), [caller locations](../../../../output/apollo-square-transpose/cold-failures/map/caller-locations.json), [census plan](../../../../output/apollo-square-transpose/cold-failures/census/plan.json): first attempt aborts before native invocation; no measurements. |
 
 The cache-blocking hypothesis also has a source locality basis: before outer
 blocking, a two-element AVX2 tile touches half a 64-byte line in each lower row
