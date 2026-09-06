@@ -1,17 +1,12 @@
 //! Allocation-free layout movement for homogeneous complex matrix batches.
 
-use eunomia::{
-    layout::{cast_slice, cast_slice_mut},
-    Pod,
-};
+use super::tile::{load_tile, store_tile};
+use eunomia::Pod;
 use hermes_simd::{
     vectorize_hardware_lanes, ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel,
-    Vector,
 };
 use leto::{ArrayView2, ArrayViewMut2, Complex, Layout, LetoError, Result};
 
-/// Largest complex-square side supported by the current Hermes backends.
-const MAX_COMPLEX_TILE_SIDE: usize = 8;
 /// Pinned Apollo phase measurements show that dispatch amortizes at this batch
 /// count while smaller batches remain with Leto's generic tiled transpose.
 const REGISTER_TRANSPOSE_MIN_MATRICES: usize = 256;
@@ -183,73 +178,55 @@ where
     type Output = ();
 
     #[inline(always)]
-    fn call<A: SimdArch + SimdKernel<T>>(self, _simd: Simd<T, A>) {
-        let side = ComplexReg::<T, A>::COMPLEX_COUNT;
-        debug_assert!((2..=MAX_COMPLEX_TILE_SIDE).contains(&side));
-        transpose_tiled::<T, A>(
-            self.source,
-            self.destination,
-            self.matrix_len,
-            self.rows,
-            self.columns,
-            side,
-        );
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
+        // Only the register side specializes storage; matrix dimensions stay
+        // runtime values so shapes do not multiply the emitted kernels.
+        match ComplexReg::<T, A>::COMPLEX_COUNT {
+            2 => transpose_tiled::<T, A, 2>(self, &simd),
+            4 => transpose_tiled::<T, A, 4>(self, &simd),
+            8 => transpose_tiled::<T, A, 8>(self, &simd),
+            _ => {
+                unreachable!("invariant: requested hardware widths hold 2, 4 or 8 complex samples")
+            }
+        }
     }
 }
 
 #[inline(always)]
-fn transpose_tiled<T, A>(
-    source: &[Complex<T>],
-    destination: &mut [Complex<T>],
-    matrix_len: usize,
-    rows: usize,
-    columns: usize,
-    side: usize,
-) where
+fn transpose_tiled<T, A, const SIDE: usize>(batch: ComplexTransposeKernel<'_, T>, simd: &Simd<T, A>)
+where
     T: LaneScalar + Pod,
     A: SimdArch + SimdKernel<T>,
 {
-    let full_rows = rows / side * side;
-    let full_columns = columns / side * side;
+    let ComplexTransposeKernel {
+        source,
+        destination,
+        matrix_len,
+        rows,
+        columns,
+    } = batch;
+    let full_rows = rows / SIDE * SIDE;
+    let full_columns = columns / SIDE * SIDE;
 
     for (source_matrix, destination_matrix) in source
         .chunks_exact(matrix_len)
         .zip(destination.chunks_exact_mut(matrix_len))
     {
-        for tile_row in (0..full_rows).step_by(side) {
-            for tile_column in (0..full_columns).step_by(side) {
-                let first_start = tile_row * columns + tile_column;
-                let first_scalars = cast_slice(&source_matrix[first_start..first_start + side]);
-                // SAFETY: the lane kernel runs inside A's proven target-feature
-                // scope. `side == A::LANE_COUNT / 2`, and the source segment is
-                // exactly one initialized interleaved complex register.
-                let first = ComplexReg::from_interleaved(unsafe {
-                    Vector::<T, A>::load_unaligned(first_scalars.as_ptr())
-                });
-                let mut tile = [first; MAX_COMPLEX_TILE_SIDE];
-                for (local_row, register) in tile[..side].iter_mut().enumerate().skip(1) {
-                    let start = (tile_row + local_row) * columns + tile_column;
-                    let scalars = cast_slice(&source_matrix[start..start + side]);
-                    // SAFETY: identical to the first-row load; every full tile
-                    // row exposes `side` complete complex samples.
-                    *register = ComplexReg::from_interleaved(unsafe {
-                        Vector::<T, A>::load_unaligned(scalars.as_ptr())
-                    });
-                }
-
-                ComplexReg::transpose_square(&mut tile[..side]);
-
-                for (local_column, register) in tile[..side].iter().copied().enumerate() {
-                    let start = (tile_column + local_column) * rows + tile_row;
-                    let scalars = cast_slice_mut(&mut destination_matrix[start..start + side]);
-                    // SAFETY: the lane kernel proves A, and the destination
-                    // segment is exactly one writable interleaved register.
-                    unsafe {
-                        register
-                            .into_interleaved()
-                            .store_unaligned(scalars.as_mut_ptr());
-                    }
-                }
+        for tile_row in (0..full_rows).step_by(SIDE) {
+            for tile_column in (0..full_columns).step_by(SIDE) {
+                let tile = load_tile::<T, A, SIDE>(
+                    simd,
+                    source_matrix,
+                    columns,
+                    tile_row * columns + tile_column,
+                );
+                store_tile(
+                    simd,
+                    destination_matrix,
+                    rows,
+                    tile_column * rows + tile_row,
+                    &tile,
+                );
             }
         }
 

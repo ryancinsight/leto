@@ -4,6 +4,11 @@
 - Date: 2026-09-01
 - Class: [minor, perf]
 
+Revision 2026-09-06: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
+extends the existing movement boundary to an in-place square. Provider gates
+pass; downstream timing remains under verification. No square-transform speedup is
+established by the earlier batch measurements below.
+
 ## Context
 
 Apollo's retained 3-D fast Fourier transform (FFT) executes layout phases over
@@ -45,7 +50,61 @@ Rejected alternatives:
 - Request only the host's widest width. Rejected because an AVX-512 host may
   need an exact AVX2-sized 4x4 tile; exact-width descent preserves that route.
 
-## Consequences
+## In-place square movement
+
+Apollo's FourStep final permutation currently exchanges scalar pairs. The
+operation contains no FFT arithmetic, and its square shape permits in-place
+tile exchange without an additional matrix buffer. The provider surface is
+`transpose_square_inplace(&mut [Complex<T>], side)` with `T: LaneScalar + Pod`.
+It checks `side * side` and exact storage length before mutation; empty storage
+with side zero is valid. Overflow and length errors preserve the entire input.
+
+For element coordinates `(r, c)`, the permutation exchanges offsets
+`r * side + c` and `c * side + r`. Diagonal tiles transpose internally;
+off-diagonal tile pairs load both sources before either destination is written.
+Every position outside the complete tiled square is exchanged once above the
+diagonal. Unsupported hardware widths use the same pairwise permutation.
+No arithmetic touches the scalar payload, so all bits, including signed zeros,
+subnormals and NaN payloads, must survive exactly. Reduced-precision hardware
+frames do not imply native register shuffles on every backend.
+
+Batch and square traversals share one complex register load/transpose/store
+leaf. Hermes capability-carrying views provide safe exact-width chunks over
+Eunomia's borrowed complex/scalar layout casts. The existing batch thresholds
+remain unchanged; they do not supply evidence for square dispatch. Only the
+actual register side specializes the tile arrays. No allocation, additional
+scratch, dynamic dispatch or new dependency is introduced.
+
+The working hypothesis is reduced strided scalar movement in the final
+FourStep permutation. Two tiles must remain register-resident for the expected
+benefit; emitted code checks spills and bounds checks before an unchanged
+complete-engine census evaluates latency, allocation and executable size.
+The experiment is rejected on supported regression, absent supported benefit
+or executable growth. A provider microbenchmark alone cannot establish an
+Apollo speedup. Keeping a second Apollo implementation, allocating a matrix,
+and widening reduced-precision payloads are rejected on ownership, memory and
+bit-preservation grounds respectively.
+
+Tests compare the coordinate permutation and entire byte representation across
+`f32`, `f64`, `F16` and `Bf16`, including offsets, ragged sides, special payloads,
+invalid lengths and overflow. The entry baseline at `a2006ad` passes all five
+existing focused movement tests under the committed Nextest budget. Debug and
+release suites, the allocation observer, documentation and SemVer checks cover
+the provider change; Apollo retains independent FFT and full-engine checks.
+
+The 2026-09-06 provider diff passes 923 native tests, nine focused release
+tests, 27 doctests (one existing ignored), minimal-feature compilation,
+warning-denied Clippy, rustdoc and all 196 applicable minor SemVer checks
+against `a2006ad`. The unchanged layout benchmark smoke passes 24 cases under
+the 60-second supervisor. First and repeated successful square submissions
+record zero calling-thread allocations/reallocations across all four scalars.
+Evidence and source hashes are retained in Atlas's
+`output/leto-square-transpose` under its 14-day/10-GiB policy. Runtime tests
+cover the selected host backend and the explicit scalar path, not every ISA;
+register residency, whole-engine latency and executable size remain separate
+downstream acceptance checks.
+
+## Established batch evidence
 
 This is one additive public function in `leto-ops`; existing assignment APIs
 and behavior do not change. Full, ragged, asymmetric, empty, invalid-length,

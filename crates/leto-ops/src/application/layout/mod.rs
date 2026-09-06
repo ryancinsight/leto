@@ -1,5 +1,5 @@
 //! Value-preserving layout movement into caller-owned storage.
 
-mod complex_batch;
+mod complex;
 
-pub use complex_batch::transpose_complex_matrices;
+pub use complex::{transpose_complex_matrices, transpose_square_inplace};

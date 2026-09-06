@@ -1,9 +1,13 @@
-//! Warm allocation census for complex matrix-batch layout movement.
+//! Allocation census for caller-owned complex layout movement.
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::Cell;
-use leto::Complex;
-use leto_ops::transpose_complex_matrices;
+use eunomia::{Bf16, F16};
+use leto_ops::{transpose_complex_matrices, transpose_square_inplace};
+
+#[path = "ops/layout/payloads.rs"]
+mod payloads;
+use payloads::{assert_bits, expected, values, PayloadScalar};
 
 thread_local! {
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
@@ -18,20 +22,24 @@ struct CountingAllocator;
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let _ = ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        // SAFETY: GlobalAlloc's caller supplies the valid, unchanged layout.
         unsafe { std::alloc::System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        // SAFETY: the pointer came from System and retains its allocation layout.
         unsafe { std::alloc::System.dealloc(ptr, layout) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         let _ = ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        // SAFETY: GlobalAlloc's caller supplies the valid, unchanged layout.
         unsafe { std::alloc::System.alloc_zeroed(layout) }
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         let _ = REALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        // SAFETY: System owns ptr; its layout and valid new size pass through unchanged.
         unsafe { std::alloc::System.realloc(ptr, layout, new_size) }
     }
 }
@@ -48,57 +56,54 @@ fn measured<R>(body: impl FnOnce() -> R) -> (R, usize, usize) {
     (output, allocations, reallocations)
 }
 
-fn expected<T: Copy + Default>(
-    source: &[Complex<T>],
-    matrix_count: usize,
-    rows: usize,
-    columns: usize,
-) -> Vec<Complex<T>> {
-    let matrix_len = rows * columns;
-    let mut output = vec![Complex::default(); source.len()];
-    for matrix in 0..matrix_count {
-        let base = matrix * matrix_len;
-        for row in 0..rows {
-            for column in 0..columns {
-                output[base + column * rows + row] = source[base + row * columns + column];
-            }
-        }
-    }
-    output
-}
-
-#[test]
-fn warmed_selected_batches_allocate_nothing() {
+fn assert_batch_allocations<T: PayloadScalar>() {
     const MATRICES: usize = 256;
     const ROWS: usize = 15;
     const COLUMNS: usize = 13;
     const LEN: usize = MATRICES * ROWS * COLUMNS;
 
-    let source_f32 = (0..LEN)
-        .map(|index| Complex::new(index as f32 + 0.25, -(index as f32) - 0.5))
-        .collect::<Vec<_>>();
-    let expected_f32 = expected(&source_f32, MATRICES, ROWS, COLUMNS);
-    let mut destination_f32 = vec![Complex::default(); LEN];
-    transpose_complex_matrices(&source_f32, &mut destination_f32, MATRICES, ROWS, COLUMNS)
-        .expect("warm f32 transpose succeeds");
-    let (result, allocations, reallocations) = measured(|| {
-        transpose_complex_matrices(&source_f32, &mut destination_f32, MATRICES, ROWS, COLUMNS)
-    });
-    result.expect("measured f32 transpose succeeds");
+    let source = values::<T>(LEN);
+    let oracle = expected(&source, MATRICES, ROWS, COLUMNS);
+    let mut destination = source.clone();
+    transpose_complex_matrices(&source, &mut destination, MATRICES, ROWS, COLUMNS)
+        .expect("warm batch transpose succeeds");
+    let (result, allocations, reallocations) =
+        measured(|| transpose_complex_matrices(&source, &mut destination, MATRICES, ROWS, COLUMNS));
+    result.expect("measured batch transpose succeeds");
     assert_eq!((allocations, reallocations), (0, 0));
-    assert_eq!(destination_f32, expected_f32);
+    assert_bits(&destination, &oracle);
+}
 
-    let source_f64 = (0..LEN)
-        .map(|index| Complex::new(index as f64 + 0.25, -(index as f64) - 0.5))
-        .collect::<Vec<_>>();
-    let expected_f64 = expected(&source_f64, MATRICES, ROWS, COLUMNS);
-    let mut destination_f64 = vec![Complex::default(); LEN];
-    transpose_complex_matrices(&source_f64, &mut destination_f64, MATRICES, ROWS, COLUMNS)
-        .expect("warm f64 transpose succeeds");
-    let (result, allocations, reallocations) = measured(|| {
-        transpose_complex_matrices(&source_f64, &mut destination_f64, MATRICES, ROWS, COLUMNS)
-    });
-    result.expect("measured f64 transpose succeeds");
-    assert_eq!((allocations, reallocations), (0, 0));
-    assert_eq!(destination_f64, expected_f64);
+#[test]
+fn warmed_selected_batches_allocate_nothing() {
+    assert_batch_allocations::<f32>();
+    assert_batch_allocations::<f64>();
+    assert_batch_allocations::<F16>();
+    assert_batch_allocations::<Bf16>();
+}
+
+fn assert_square_allocations<T: PayloadScalar>() {
+    for side in [0, 1, 3, 8, 17, 256, 512] {
+        let original = values::<T>(side * side);
+        let oracle = expected(&original, 1, side, side);
+        let mut matrix = original.clone();
+        let (result, allocations, reallocations) =
+            measured(|| transpose_square_inplace(&mut matrix, side));
+        result.expect("first square submission succeeds");
+        assert_eq!((allocations, reallocations), (0, 0));
+        assert_bits(&matrix, &oracle);
+        let (result, allocations, reallocations) =
+            measured(|| transpose_square_inplace(&mut matrix, side));
+        result.expect("repeated square submission succeeds");
+        assert_eq!((allocations, reallocations), (0, 0));
+        assert_bits(&matrix, &original);
+    }
+}
+
+#[test]
+fn square_submissions_allocate_nothing() {
+    assert_square_allocations::<f32>();
+    assert_square_allocations::<f64>();
+    assert_square_allocations::<F16>();
+    assert_square_allocations::<Bf16>();
 }

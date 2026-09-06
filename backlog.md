@@ -11,6 +11,7 @@
 - Dependency: locked Hermes `e6e0821` and Eunomia `02397fa`; no new dependency or version bump.
 - Source reconciliation: prior consumer pin-only branch is superseded by ADR 0029; unmerged Mnemosyne changes remain on its local and remote `perf/mnemosyne-scratch-release` branch.
 - Verification: committed Leto CI commands and Nextest 30/60-second budgets; provider tests precede downstream integration and controlled performance acceptance.
+- Provider gates: 923 native tests, nine release tests, 27 doctests (one existing ignored), Clippy, minimal features, docs, 24 smoke cases and 196 SemVer checks pass; downstream performance acceptance remains in progress.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 
@@ -310,7 +311,7 @@
 - **Closed 2026-09-02.** The integrator's claim went stale in `review`;
   re-verified against the current tree rather than re-run: the operation is
   published (`leto_ops::transpose_complex_matrices`), routed through hermes
-  register tiles in `application/layout/complex_batch.rs`, covered by
+  register tiles in `application/layout/complex/tile.rs`, covered by
   `tests/complex_transpose_allocations.rs`, recorded in ADR 0027 and the
   CHANGELOG, and consumed by apollo at
   `apollo-fft/.../plan/fft/layout.rs:57`. `cargo nextest run -p leto-ops`:
