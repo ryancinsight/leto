@@ -193,9 +193,61 @@ Independent review finds no coverage or bounds defect. The unchanged 923
 native tests, nine focused release cases, Clippy, minimal-feature compilation,
 27 doctests and 24 benchmark smoke cases pass. All 15 captured source hashes
 remain unchanged through the run. Evidence is retained under Atlas
-`output/apollo-square-transpose/cache-blocking/leto-gates`. Emitted code,
-executable size and the unchanged full-engine census still determine adoption;
-no speedup is claimed.
+`output/apollo-square-transpose/cache-blocking/leto-gates`. Matching assembly
+keeps complete tile payloads in registers, while traversal state grows. The
+6,871,552-byte executable exceeds baseline by 9,728 bytes. The unchanged
+16-run census and independent raw-sample audit find one supported gain, the
+efficiency-core 262,144-point real half-spectrum transform: paired medians
+decrease 17.40–35.35%, with no supported regression. Warm allocation records
+and retained bytes match; cold peaks overlap but are not identical. This is
+local AVX2 evidence with endpoint-load observation limits, not cache-miss
+attribution or physical AVX-512 coverage. Size still rejects adoption.
+
+Apollo next consolidates its remaining pure-copy FourStep passes on the
+existing `transpose_complex_matrices` API and deletes its private copy
+kernels and scalar trait hook. This consumer experiment changes no provider
+threshold or algorithm. It must retain the gain and satisfy the same memory
+and executable-size bounds; source deletion alone does not establish that.
+
+That direct batch-API consumer candidate grows the executable to 6,892,544
+bytes, 30,720 above baseline. Apollo's full correctness and allocation gates
+pass, but its census reports two performance-core regressions. Assembly
+retains a 1,476-instruction generic layout/assignment body and 354 cleanup
+instructions around a 370-instruction canonical mover; these compilation-unit
+counts do not fully attribute linked size. A checked public dense-operation
+boundary over the existing canonical mover is the next provider design under
+review. It preserves the public batch contract and avoids duplicating movement
+or suppressing invariant diagnostics.
+
+### Register tile span revision, 2026-09-06
+
+The cache-block candidate retains eight AVX2 and sixteen AVX-512 tile bounds
+branches in the inspected kernels, alongside the 9,728-byte executable growth.
+These are code-generation findings, not measured bounds-check latency. The
+next provider experiment changes only the shared register tile's row access.
+It checks `stride >= SIDE` and the tile span's arithmetic, clips that span
+once, then splits `(SIDE - 1) * stride` elements from the final `SIDE` elements.
+The prefix contains exactly `SIDE - 1` complete stride chunks and no remainder.
+Both the prefix's row width and the final row therefore cover one register.
+
+Loads seed the existing exact register array from the final row and fill its
+preceding entries from those chunks. Stores use the same disjoint span split;
+stride padding remains untouched. The existing tile permutation and callers'
+load-both-before-store ordering do not change. This introduces no unsafe code,
+signature, scalar or ISA variant, allocation, dispatch or workload change.
+The bounded hypothesis is fewer repeated row-offset calculations and extent
+checks. Emitted division, outlined helpers, payload spills, larger frames or
+text growth reject this form; unchanged value and allocation suites still
+precede downstream performance acceptance.
+
+Provider validation passes: 923 native tests, nine focused tests in both debug
+and release, Clippy, minimal features, 27 doctests (one existing ignored),
+warning-denied rustdoc and the unchanged 24-case bounded smoke. All fifteen
+source hashes match; tile SHA256 is
+`A06AE5B7BF4AF37DB56797A56D52AB6BF56063C88206DE574F705B994243F45B`.
+The retained evidence is `output/apollo-square-transpose/tile-span/leto-gates/
+final-checks.json` under Atlas output retention. These checks establish behavior,
+not the pending consumer codegen or performance acceptance.
 
 ## Established batch evidence
 

@@ -14,7 +14,8 @@
 - Provider gates: 923 native tests, nine release tests, 27 doctests (one existing ignored), Clippy, minimal features, docs, 24 smoke cases and 196 SemVer checks pass; downstream performance acceptance remains in progress.
 - Construction revision: unchanged debug/release movement tests, Clippy, docs and 24 smoke cases pass; emitted-code and size comparison remain in progress after the initial 14,336-byte growth.
 - Combined verification with [Hermes `07c5e5f`](../hermes/backlog.md#hermes-complex-permutation-inlining): 923 native/nine release tests, docs, Clippy, minimal features and 24 smoke cases pass. Only five Hermes source entries change in the lock; review-branch selection is temporary until upstream merge.
-- Cache-block revision: independent coverage review, 923 native/nine release tests, docs, Clippy, minimal features and 24 smoke cases pass with unchanged source hashes. Downstream size/timing acceptance remains open; the prior extent candidate fails both.
+- Cache-block revision: provider gates and independent review pass. The unchanged census supports one E-core real-transform gain and no regression, with unchanged warm allocations/retained bytes; executable growth of 9,728 bytes blocks adoption. Apollo's remaining pure-copy consolidation is under verification.
+- Tile-span verification: 923 native tests, nine focused debug/release tests, Clippy, minimal features, 27 doctests (one existing ignored), rustdoc and 24 bounded smoke cases pass; all 15 source hashes match. Consumer codegen acceptance remains pending.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 
