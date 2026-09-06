@@ -2,4 +2,4 @@
 
 mod complex;
 
-pub use complex::{transpose_complex_matrices, transpose_square_inplace};
+pub use complex::{transpose_complex_matrices, transpose_square_inplace, SquareTransposeError};

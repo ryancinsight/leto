@@ -5,7 +5,10 @@ use eunomia::Pod;
 use hermes_simd::{
     vectorize_hardware_lanes, ComplexReg, LaneKernel, LaneScalar, Simd, SimdArch, SimdKernel,
 };
-use leto::{Complex, LetoError, Result};
+use leto::Complex;
+
+mod error;
+pub use error::SquareTransposeError;
 
 /// Transposes a row-major complex square in its existing storage.
 ///
@@ -16,8 +19,9 @@ use leto::{Complex, LetoError, Result};
 ///
 /// # Errors
 ///
-/// Returns [`LetoError::Overflow`] if `side * side` cannot be represented, or
-/// [`LetoError::StorageError`] if `matrix.len()` differs from that extent.
+/// Returns [`SquareTransposeError::Overflow`] if `side * side` cannot be
+/// represented, or [`SquareTransposeError::Length`] if `matrix.len()` differs
+/// from that extent. Errors carry dimensions without allocating storage.
 /// Both errors leave the complete input unchanged. Side zero requires empty
 /// storage and performs no work.
 ///
@@ -31,57 +35,59 @@ use leto::{Complex, LetoError, Result};
 /// let original = matrix;
 /// transpose_square_inplace(&mut matrix, 2)?;
 /// assert_eq!(matrix, [original[0], original[2], original[1], original[3]]);
-/// # Ok::<(), leto::LetoError>(())
+/// # Ok::<(), leto_ops::SquareTransposeError>(())
 /// ```
-pub fn transpose_square_inplace<T>(matrix: &mut [Complex<T>], side: usize) -> Result<()>
+pub fn transpose_square_inplace<T>(
+    matrix: &mut [Complex<T>],
+    side: usize,
+) -> Result<(), SquareTransposeError>
 where
     T: LaneScalar + Pod,
 {
     let Some(expected) = side.checked_mul(side) else {
-        return Err(LetoError::Overflow {
-            reason: "complex square matrix element count",
-        });
+        return Err(SquareTransposeError::Overflow { side });
     };
     if matrix.len() != expected {
-        return Err(LetoError::StorageError {
-            reason: format!(
-                "complex square transpose storage length {} does not match expected {expected}",
-                matrix.len()
-            ),
+        return Err(SquareTransposeError::Length {
+            side,
+            expected,
+            actual: matrix.len(),
         });
     }
     if expected == 0 {
         return Ok(());
     }
 
-    if side >= 8
-        && vectorize_hardware_lanes::<16, T, _>(SquareTransposeKernel {
-            matrix: &mut *matrix,
-            side,
-        })
-        .is_some()
-    {
-        return Ok(());
+    let full_side = 'hardware: {
+        if side >= 8 {
+            if let Some(full_side) = vectorize_hardware_lanes::<16, T, _>(SquareTransposeKernel {
+                matrix: &mut *matrix,
+                side,
+            }) {
+                break 'hardware full_side;
+            }
+        }
+        if side >= 4 {
+            if let Some(full_side) = vectorize_hardware_lanes::<8, T, _>(SquareTransposeKernel {
+                matrix: &mut *matrix,
+                side,
+            }) {
+                break 'hardware full_side;
+            }
+        }
+        if side >= 2 {
+            if let Some(full_side) = vectorize_hardware_lanes::<4, T, _>(SquareTransposeKernel {
+                matrix: &mut *matrix,
+                side,
+            }) {
+                break 'hardware full_side;
+            }
+        }
+        0
+    };
+    if full_side < side {
+        transpose_tail(matrix, side, full_side);
     }
-    if side >= 4
-        && vectorize_hardware_lanes::<8, T, _>(SquareTransposeKernel {
-            matrix: &mut *matrix,
-            side,
-        })
-        .is_some()
-    {
-        return Ok(());
-    }
-    if side >= 2
-        && vectorize_hardware_lanes::<4, T, _>(SquareTransposeKernel {
-            matrix: &mut *matrix,
-            side,
-        })
-        .is_some()
-    {
-        return Ok(());
-    }
-    transpose_scalar(matrix, side);
     Ok(())
 }
 
@@ -94,10 +100,10 @@ impl<T> LaneKernel<T> for SquareTransposeKernel<'_, T>
 where
     T: LaneScalar + Pod,
 {
-    type Output = ();
+    type Output = usize;
 
     #[inline(always)]
-    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) {
+    fn call<A: SimdArch + SimdKernel<T>>(self, simd: Simd<T, A>) -> usize {
         match ComplexReg::<T, A>::COMPLEX_COUNT {
             2 => transpose_tiled::<T, A, 2>(self.matrix, self.side, &simd),
             4 => transpose_tiled::<T, A, 4>(self.matrix, self.side, &simd),
@@ -114,7 +120,8 @@ fn transpose_tiled<T, A, const SIDE: usize>(
     matrix: &mut [Complex<T>],
     side: usize,
     simd: &Simd<T, A>,
-) where
+) -> usize
+where
     T: LaneScalar + Pod,
     A: SimdArch + SimdKernel<T>,
 {
@@ -136,17 +143,13 @@ fn transpose_tiled<T, A, const SIDE: usize>(
         }
     }
 
-    // Outside the complete square, the larger coordinate is at least
-    // full_side. Visiting only row < column covers that border exactly once,
-    // including its bottom-right partial square; diagonal values stay put.
-    transpose_tail(matrix, side, full_side);
-}
-
-fn transpose_scalar<T>(matrix: &mut [T], side: usize) {
-    transpose_tail(matrix, side, 0);
+    full_side
 }
 
 fn transpose_tail<T>(matrix: &mut [T], side: usize, full_side: usize) {
+    // Outside the complete square, the larger coordinate is at least
+    // full_side. Visiting only row < column covers that border exactly once,
+    // including its bottom-right partial square; diagonal values stay put.
     for row in 0..side {
         for column in (row + 1).max(full_side)..side {
             matrix.swap(row * side + column, column * side + row);

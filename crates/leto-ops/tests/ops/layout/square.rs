@@ -1,6 +1,5 @@
 use eunomia::{Bf16, F16};
-use leto::LetoError;
-use leto_ops::transpose_square_inplace;
+use leto_ops::{transpose_square_inplace, SquareTransposeError};
 
 use super::payloads::{assert_bits, values, PayloadScalar};
 use super::square_contract::assert_squares;
@@ -33,7 +32,14 @@ fn assert_validation<T: PayloadScalar>() {
         let before = storage.clone();
         let error = transpose_square_inplace(&mut storage[1..=len], side)
             .expect_err("inexact square storage is rejected");
-        assert!(matches!(error, LetoError::StorageError { .. }));
+        assert_eq!(
+            error,
+            SquareTransposeError::Length {
+                side,
+                expected: side * side,
+                actual: len,
+            }
+        );
         assert_bits(&storage, &before);
     }
     // usize has an even bit width; this is the first side whose square overflows.
@@ -43,12 +49,7 @@ fn assert_validation<T: PayloadScalar>() {
         let before = storage.clone();
         let error = transpose_square_inplace(&mut storage[1..6], side)
             .expect_err("overflowing square extent is rejected");
-        assert_eq!(
-            error,
-            LetoError::Overflow {
-                reason: "complex square matrix element count"
-            }
-        );
+        assert_eq!(error, SquareTransposeError::Overflow { side });
         assert_bits(&storage, &before);
     }
 }

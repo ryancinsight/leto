@@ -58,6 +58,10 @@ tile exchange without an additional matrix buffer. The provider surface is
 `transpose_square_inplace(&mut [Complex<T>], side)` with `T: LaneScalar + Pod`.
 It checks `side * side` and exact storage length before mutation; empty storage
 with side zero is valid. Overflow and length errors preserve the entire input.
+`SquareTransposeError` retains `side` on overflow and `side`, `expected` and
+`actual` on length mismatch. Its Copy/Eq variants contain only dimensions;
+success and rejection allocate no storage. The operation does not inherit
+unrelated solver diagnostics from `LetoError`.
 
 For element coordinates `(r, c)`, the permutation exchanges offsets
 `r * side + c` and `c * side + r`. Diagonal tiles transpose internally;
@@ -127,6 +131,30 @@ which is intended to keep the existing permutation in the proven target-feature 
 This does not introduce a Leto-local native backend or weaken the acceptance
 conditions. The second candidate is retained under
 `output/apollo-square-transpose/seeded-array`.
+
+The combined Leto `00fd88e` / Hermes `07c5e5f` candidate emits 6,873,600
+executable bytes: 11,776 above baseline and 1,024 below the seeded-array build.
+Assembly `CD76ED04...A8B57BA` removes the outlined array constructor and
+permutation helper. Its emitted double-precision AVX2 and AVX-512 complete
+tile pairs remain in registers; remaining slice bounds branches persist.
+The 200-byte AVX2 and 488-byte AVX-512 frames include scalar remainder code,
+which is duplicated with the public entry's scalar fallback. No batch or
+single-precision square symbols occur in this library artifact, so it cannot
+attribute the entire executable delta. The comparison remains rejected on
+size, with no timing claim; detailed instruction counts and locators are in
+Atlas's `output/apollo-square-transpose/feature-frame/codegen.md`.
+
+The next source revision returns the completed square side from each hardware
+kernel, then applies one scalar remainder traversal at the operation boundary
+only when that side is smaller than the matrix side. Unsupported hardware
+returns zero and reaches the same traversal. The full square and its border
+are disjoint, so this changes code placement without changing permutation
+coverage. The narrow error contract also removes formatted error allocation
+and unrelated diagnostic dependencies. Existing successful workloads remain
+unchanged; invalid short, long and overflowing submissions additionally check
+exact error dimensions, unchanged bytes and zero allocations/reallocations on
+their first and repeated calls across all four scalar types. These revisions
+await their own gates and downstream codegen/size comparison.
 
 ## Established batch evidence
 

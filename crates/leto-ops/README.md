@@ -32,7 +32,9 @@ let qr = a.qr()?;
   exact-width Hermes register tiles; other shapes retain Leto's generic tiled
   assignment.
 - `transpose_square_inplace` exchanges a complex square's rows and columns in
-  borrowed storage, with checked extents and no matrix scratch allocation.
+  borrowed storage, with checked extents and no allocation on success or
+  rejection. `SquareTransposeError` retains overflowing sides or mismatched
+  storage dimensions without changing the input.
   Movement preserves every scalar bit, including NaN payloads and signed zero.
 - Keep-dim axis reductions (`sum_axis`, `mean_axis`, `min_axis`, `max_axis`)
   and their caller-owned `*_into` forms, sharing one ZST-selected traversal.

@@ -8,12 +8,13 @@
 - Scope: `leto-ops` complex layout kernels, shared register tiles, generic scalar coverage and allocation tests; preserve existing batch dispatch and all FFT arithmetic.
 - Acceptance: checked exact extent before mutation; coordinate and byte oracles across all four scalars, offsets, tails and special payloads; focused debug/release gates, docs, semver, codegen and unchanged Apollo engine census with no supported regression or executable growth.
 - Design: revise [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md); Leto owns movement, Hermes register representation, Apollo scheduling and scratch.
-- Dependency: locked Hermes `e6e0821` and Eunomia `02397fa`; no new dependency or version bump.
+- Dependency: locked Hermes `07c5e5f` and Eunomia `02397fa`; no new dependency or version bump.
 - Source reconciliation: prior consumer pin-only branch is superseded by ADR 0029; unmerged Mnemosyne changes remain on its local and remote `perf/mnemosyne-scratch-release` branch.
 - Verification: committed Leto CI commands and Nextest 30/60-second budgets; provider tests precede downstream integration and controlled performance acceptance.
 - Provider gates: 923 native tests, nine release tests, 27 doctests (one existing ignored), Clippy, minimal features, docs, 24 smoke cases and 196 SemVer checks pass; downstream performance acceptance remains in progress.
 - Construction revision: unchanged debug/release movement tests, Clippy, docs and 24 smoke cases pass; emitted-code and size comparison remain in progress after the initial 14,336-byte growth.
 - Combined verification with [Hermes `07c5e5f`](../hermes/backlog.md#hermes-complex-permutation-inlining): 923 native/nine release tests, docs, Clippy, minimal features and 24 smoke cases pass. Only five Hermes source entries change in the lock; review-branch selection is temporary until upstream merge.
+- Extent revision: one scalar tail outside ISA kernels and an allocation-free typed error pass 923 native/nine release tests, docs, Clippy and independent review; benchmark smoke, API comparison and downstream size/timing acceptance remain open.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 

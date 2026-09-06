@@ -3,7 +3,7 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::Cell;
 use eunomia::{Bf16, F16};
-use leto_ops::{transpose_complex_matrices, transpose_square_inplace};
+use leto_ops::{transpose_complex_matrices, transpose_square_inplace, SquareTransposeError};
 
 #[path = "ops/layout/payloads.rs"]
 mod payloads;
@@ -97,6 +97,34 @@ fn assert_square_allocations<T: PayloadScalar>() {
         result.expect("repeated square submission succeeds");
         assert_eq!((allocations, reallocations), (0, 0));
         assert_bits(&matrix, &original);
+    }
+
+    // The first overflowing side is representable without constructing its
+    // impossible matrix. Short and long valid extents exercise both directions.
+    let first_overflow = 1usize << (usize::BITS / 2);
+    for (side, len) in [
+        (16usize, 255),
+        (16, 257),
+        (first_overflow, 5),
+        (usize::MAX, 5),
+    ] {
+        let oracle = match side.checked_mul(side) {
+            Some(expected) => SquareTransposeError::Length {
+                side,
+                expected,
+                actual: len,
+            },
+            None => SquareTransposeError::Overflow { side },
+        };
+        let mut storage = values::<T>(len + 4);
+        let original = storage.clone();
+        for _ in 0..2 {
+            let (result, allocations, reallocations) =
+                measured(|| transpose_square_inplace(&mut storage[1..=len], side));
+            assert_eq!(result, Err(oracle));
+            assert_eq!((allocations, reallocations), (0, 0));
+            assert_bits(&storage, &original);
+        }
     }
 }
 

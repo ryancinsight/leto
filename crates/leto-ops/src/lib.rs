@@ -34,7 +34,9 @@ pub use application::convolution::{
     convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
     ConvolutionParameters, TransposedConvolutionGradients, TransposedConvolutionParameters,
 };
-pub use application::layout::{transpose_complex_matrices, transpose_square_inplace};
+pub use application::layout::{
+    transpose_complex_matrices, transpose_square_inplace, SquareTransposeError,
+};
 pub use application::linalg::{
     bidiagonalize,
     bunch_kaufman,
