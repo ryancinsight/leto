@@ -1,12 +1,12 @@
 use eunomia::{Bf16, F16};
-use leto_ops::{transpose_square_inplace, SquareTransposeError};
+use leto_ops::{ComplexLayout, SquareTransposeError};
 
 use super::payloads::{assert_bits, values, PayloadScalar};
 use super::square_contract::assert_squares;
 
-fn assert_dispatch<T: PayloadScalar>() {
+fn assert_dispatch<T: PayloadScalar + ComplexLayout>() {
     assert_squares::<T>(|matrix, side| {
-        transpose_square_inplace(matrix, side).expect("exact square storage transposes");
+        T::transpose_square_inplace(matrix, side).expect("exact square storage transposes");
     });
 }
 
@@ -18,7 +18,7 @@ fn square_transpose_preserves_coordinate_payloads_and_guards() {
     assert_dispatch::<Bf16>();
 }
 
-fn assert_validation<T: PayloadScalar>() {
+fn assert_validation<T: PayloadScalar + ComplexLayout>() {
     for (side, len) in [
         (0, 1),
         (1, 0),
@@ -30,7 +30,7 @@ fn assert_validation<T: PayloadScalar>() {
     ] {
         let mut storage = values::<T>(len + 4);
         let before = storage.clone();
-        let error = transpose_square_inplace(&mut storage[1..=len], side)
+        let error = T::transpose_square_inplace(&mut storage[1..=len], side)
             .expect_err("inexact square storage is rejected");
         assert_eq!(
             error,
@@ -47,7 +47,7 @@ fn assert_validation<T: PayloadScalar>() {
     for side in [first_overflow, usize::MAX] {
         let mut storage = values::<T>(7);
         let before = storage.clone();
-        let error = transpose_square_inplace(&mut storage[1..6], side)
+        let error = T::transpose_square_inplace(&mut storage[1..6], side)
             .expect_err("overflowing square extent is rejected");
         assert_eq!(error, SquareTransposeError::Overflow { side });
         assert_bits(&storage, &before);

@@ -3,7 +3,7 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::Cell;
 use eunomia::{Bf16, F16};
-use leto_ops::{transpose_complex_matrices, transpose_square_inplace, SquareTransposeError};
+use leto_ops::{ComplexLayout, SquareTransposeError};
 
 #[path = "ops/layout/payloads.rs"]
 mod payloads;
@@ -56,7 +56,7 @@ fn measured<R>(body: impl FnOnce() -> R) -> (R, usize, usize) {
     (output, allocations, reallocations)
 }
 
-fn assert_batch_allocations<T: PayloadScalar>() {
+fn assert_batch_allocations<T: PayloadScalar + ComplexLayout>() {
     const MATRICES: usize = 256;
     const ROWS: usize = 15;
     const COLUMNS: usize = 13;
@@ -65,10 +65,11 @@ fn assert_batch_allocations<T: PayloadScalar>() {
     let source = values::<T>(LEN);
     let oracle = expected(&source, MATRICES, ROWS, COLUMNS);
     let mut destination = source.clone();
-    transpose_complex_matrices(&source, &mut destination, MATRICES, ROWS, COLUMNS)
+    T::transpose_complex_matrices(&source, &mut destination, MATRICES, ROWS, COLUMNS)
         .expect("warm batch transpose succeeds");
-    let (result, allocations, reallocations) =
-        measured(|| transpose_complex_matrices(&source, &mut destination, MATRICES, ROWS, COLUMNS));
+    let (result, allocations, reallocations) = measured(|| {
+        T::transpose_complex_matrices(&source, &mut destination, MATRICES, ROWS, COLUMNS)
+    });
     result.expect("measured batch transpose succeeds");
     assert_eq!((allocations, reallocations), (0, 0));
     assert_bits(&destination, &oracle);
@@ -82,18 +83,18 @@ fn warmed_selected_batches_allocate_nothing() {
     assert_batch_allocations::<Bf16>();
 }
 
-fn assert_square_allocations<T: PayloadScalar>() {
+fn assert_square_allocations<T: PayloadScalar + ComplexLayout>() {
     for side in [0, 1, 3, 8, 17, 256, 512] {
         let original = values::<T>(side * side);
         let oracle = expected(&original, 1, side, side);
         let mut matrix = original.clone();
         let (result, allocations, reallocations) =
-            measured(|| transpose_square_inplace(&mut matrix, side));
+            measured(|| T::transpose_square_inplace(&mut matrix, side));
         result.expect("first square submission succeeds");
         assert_eq!((allocations, reallocations), (0, 0));
         assert_bits(&matrix, &oracle);
         let (result, allocations, reallocations) =
-            measured(|| transpose_square_inplace(&mut matrix, side));
+            measured(|| T::transpose_square_inplace(&mut matrix, side));
         result.expect("repeated square submission succeeds");
         assert_eq!((allocations, reallocations), (0, 0));
         assert_bits(&matrix, &original);
@@ -120,7 +121,7 @@ fn assert_square_allocations<T: PayloadScalar>() {
         let original = storage.clone();
         for _ in 0..2 {
             let (result, allocations, reallocations) =
-                measured(|| transpose_square_inplace(&mut storage[1..=len], side));
+                measured(|| T::transpose_square_inplace(&mut storage[1..=len], side));
             assert_eq!(result, Err(oracle));
             assert_eq!((allocations, reallocations), (0, 0));
             assert_bits(&storage, &original);

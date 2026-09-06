@@ -1,7 +1,7 @@
 # Leto Work Backlog
 
 <a id="leto-square-transpose"></a>
-## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [minor] [arch]
+## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]
 
 - Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-06.
 - Outcome: checked borrowed dense transpose and allocation-free, bit-preserving complex square movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
@@ -14,7 +14,7 @@
 - API/review: both public packages pass 196 SemVer checks against `a2006ad` (58 inapplicable checks each); independent source review finds no production defect.
 - Evidence: `output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json` records the exact 14-file hash set and unchanged lock. No timing or size acceptance follows from provider gates.
 - Experiment state: earlier builds fail size or regression acceptance; tile-span iteration additionally introduces AVX-512 division and payload spills and is removed. ADR 0027 owns those findings.
-- Next: integrate the verified forward restoration; the square-movement campaign remains in-progress with no accepted consumer candidate.
+- Provider-entry experiment: concrete `ComplexLayout` methods retain one generic implementation; full provider gates pass at 316 captured inputs. Supplemental visibility gates pass; SemVer confirms only intended function/error/module removals. [Evidence](../../output/apollo-square-transpose/provider-entry/leto-gates/visibility-final-checks.json); ADR 0027 records the migration. Consumer size and timing acceptance remain pending.
 - Preflight verification: unchanged 30 focused tests pass in debug and release; all-target Clippy, format and independent source review pass. Only two inline annotations change production; consumer acceptance remains pending.
 - Tile-diagnostic outcome: rejected despite clean source gates; executable +8,192 bytes and supported efficiency-core complex/1,024 regression of 0.59–4.22%. [Codegen](../../output/apollo-square-transpose/tile-diagnostics/codegen.md) and [census](../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json) trigger restoration; prior candidate still fails size acceptance.
 - Restoration verification: tile source exactly matches `9a47d6b`; format, Clippy and unchanged 30 focused debug/release tests pass. Evidence: `output/apollo-square-transpose/tile-diagnostics/restoration/final-checks.json`; no timing rerun or lock change.

@@ -1,3 +1,5 @@
+/// Complex layout operation contracts.
+pub mod layout;
 /// Real transcendental scalar contract.
 pub mod real;
 /// Deterministic seeded pseudo-random generator.

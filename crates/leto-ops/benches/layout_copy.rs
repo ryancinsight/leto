@@ -11,10 +11,8 @@
 )]
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use eunomia::Pod;
-use hermes_simd::LaneScalar;
 use leto::{Array2, ArrayView2, ArrayViewMut2, Complex, Layout};
-use leto_ops::transpose_complex_matrices;
+use leto_ops::ComplexLayout;
 use std::hint::black_box;
 use std::time::Duration;
 
@@ -198,7 +196,7 @@ fn bench_complex_scalar<T>(
     columns: usize,
     value: impl Fn(usize) -> Complex<T>,
 ) where
-    T: LaneScalar + Pod + Default + PartialEq + core::fmt::Debug,
+    T: ComplexLayout + Default + PartialEq + core::fmt::Debug,
 {
     let matrix_len = rows * columns;
     let len = matrix_count * matrix_len;
@@ -209,11 +207,12 @@ fn bench_complex_scalar<T>(
     let parameter = format!("{scalar}/{matrix_count}x{rows}x{columns}");
 
     let mut provider_output = vec![Complex::default(); len];
-    transpose_complex_matrices(&source, &mut provider_output, matrix_count, rows, columns).unwrap();
+    T::transpose_complex_matrices(&source, &mut provider_output, matrix_count, rows, columns)
+        .unwrap();
     assert_eq!(provider_output, expected);
     group.bench_with_input(BenchmarkId::new("provider", &parameter), &(), |b, ()| {
         b.iter(|| {
-            transpose_complex_matrices(
+            T::transpose_complex_matrices(
                 black_box(&source),
                 black_box(&mut provider_output),
                 matrix_count,

@@ -2,13 +2,67 @@
 
 - Status: Accepted
 - Date: 2026-09-01
-- Class: [minor] [arch]
+- Class: [major] [arch]
 
 Revision 2026-09-06: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
 extends the movement boundary to an in-place square and a checked core dense
 copy. The iterator-based tile-span experiment is rejected on executable size
 and AVX-512 spills; the dense-copy revision remains under verification. Batch
 measurements below do not establish a square-transform speedup.
+
+## Provider instantiation boundary (2026-09-06 experiment)
+
+The restored consumer passes behavioral gates but retains 10,752 bytes over
+baseline. Linked maps show separate consumer and library instantiation roots
+for identical square kernels, including their private diagnostic and constant
+relocations. Sharing the failure diagnostic is rejected after a supported
+small-transform regression; its code is restored in `00665a4`.
+
+A bounded next experiment makes `ComplexLayout` the scalar role for the two
+existing complex movement operations. The domain owns the contract and square
+error. Four concrete provider implementations bind f32, f64, F16 and Bf16 to
+one private generic checked algorithm per operation. Non-generic entry methods
+remain uninlined to preserve that instantiation boundary under ThinLTO. No
+arithmetic, traversal, dispatch width, allocation, error order or workload
+changes. This is a code-ownership hypothesis, not a measured zero-cost claim.
+
+Migration: import `leto_ops::ComplexLayout`; generic callers replace the old
+free calls with `T::transpose_complex_matrices(...)` and
+`T::transpose_square_inplace(...)`, adding `T: ComplexLayout` where required.
+Concrete callers use the scalar type as receiver, for example
+`f32::transpose_square_inplace(...)`. Root `SquareTransposeError` remains the
+same type; its defining module moves to `domain::layout`. The old
+`application::layout` module becomes private; import its former error from
+the crate root. Old public operation free functions are removed, with no
+compatibility facade or blanket impl.
+The new bound is source-breaking even with the same four admitted scalars.
+No release or manifest version change is authorized by this experiment.
+
+The strongest rejected alternative is a generic default or blanket role
+implementation: it preserves the old bound implication but also the consumer
+instantiation roots. Existing arithmetic scalar traits impose unrelated
+operations; moving the role into Hermes reverses layout ownership.
+
+Acceptance requires all generic payload/extent/allocation oracles, affected
+consumer gates and an expected SemVer-breaking report. An unchanged-profile
+linked map must show one provider kernel per used scalar/ISA, without new
+payload spills or division. Loss of count-one specialization is a timing risk.
+Reject if the original executable no-growth or complete-engine no-regression
+conditions still fail. Benchmark code and budgets remain unchanged.
+
+Provider verification passes 930 native tests, 366 selected release tests,
+28 doctests (one existing ignored), all-target Clippy, minimal configuration,
+warning-denied rustdoc and 24 bounded benchmark smoke cases. The captured 316
+build inputs and lockfile remain fixed across those runs. SemVer against
+`00665a4` identifies the intentional removed free functions and former error
+import path; no behavioral or performance inference follows from that check.
+The final implementation-module visibility change passes supplemental format,
+Clippy and rustdoc checks; SemVer adds only the intended module removal.
+Evidence lives in
+`output/apollo-square-transpose/provider-entry/leto-gates` at the stack root.
+A Rust-source search across other registered stack members finds no callers
+of either operation outside Leto and Apollo. Their existing benchmark inputs
+and timed regions remain unchanged; Leto's benchmark only migrates its call.
 
 ## Context
 
@@ -24,7 +78,7 @@ dependency in Leto core would violate those boundaries.
 
 ## Decision
 
-Add `leto_ops::transpose_complex_matrices`, a scalar-generic operation over
+Expose `ComplexLayout::transpose_complex_matrices`, a scalar-generic operation over
 borrowed `Complex<T>` slices and caller-owned output. It validates checked
 matrix and batch lengths plus both exact slice lengths before mutation. Empty
 batches and zero-sized matrices are no-ops.
@@ -57,7 +111,7 @@ Rejected alternatives:
 Apollo's FourStep final permutation currently exchanges scalar pairs. The
 operation contains no FFT arithmetic, and its square shape permits in-place
 tile exchange without an additional matrix buffer. The provider surface is
-`transpose_square_inplace(&mut [Complex<T>], side)` with `T: LaneScalar + Pod`.
+`ComplexLayout::transpose_square_inplace(&mut [Complex<T>], side)` with `T: ComplexLayout`.
 It checks `side * side` and exact storage length before mutation; empty storage
 with side zero is valid. Overflow and length errors preserve the entire input.
 `SquareTransposeError` retains `side` on overflow and `side`, `expected` and

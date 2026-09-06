@@ -7,42 +7,14 @@ use hermes_simd::{
 };
 use leto::Complex;
 
-mod error;
-pub use error::SquareTransposeError;
+use crate::domain::layout::SquareTransposeError;
 
 // Preserve Apollo's baseline 16-by-16 cache blocks around the register tiles.
 // Two blocks contain 2 * 16^2 * size_of::<Complex<T>>() payload bytes: at most
 // 8 KiB for the four supported scalars. This bounds payload, not cache residency.
 const CACHE_BLOCK_SIDE: usize = 16;
 
-/// Transposes a row-major complex square in its existing storage.
-///
-/// Every sample at `(row, column)` moves to `(column, row)` without arithmetic
-/// or allocation. All scalar bits survive, including signed zeros and NaN
-/// payloads. Complete hardware tiles exchange through registers; remaining
-/// pairs and targets without a suitable hardware width use scalar swaps.
-///
-/// # Errors
-///
-/// Returns [`SquareTransposeError::Overflow`] if `side * side` cannot be
-/// represented, or [`SquareTransposeError::Length`] if `matrix.len()` differs
-/// from that extent. Errors carry dimensions without allocating storage.
-/// Both errors leave the complete input unchanged. Side zero requires empty
-/// storage and performs no work.
-///
-/// # Examples
-///
-/// ```
-/// use leto::Complex;
-/// use leto_ops::transpose_square_inplace;
-///
-/// let mut matrix = [1.0_f32, 2.0, 3.0, 4.0].map(|re| Complex::new(re, -re));
-/// let original = matrix;
-/// transpose_square_inplace(&mut matrix, 2)?;
-/// assert_eq!(matrix, [original[0], original[2], original[1], original[3]]);
-/// # Ok::<(), leto_ops::SquareTransposeError>(())
-/// ```
-pub fn transpose_square_inplace<T>(
+pub(super) fn transpose_square_inplace<T>(
     matrix: &mut [Complex<T>],
     side: usize,
 ) -> Result<(), SquareTransposeError>

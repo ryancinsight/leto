@@ -14,49 +14,7 @@ const REGISTER_TRANSPOSE_MIN_MATRICES: usize = 256;
 /// dominated; larger matrices retain Leto's cache-budgeted generic kernel.
 const REGISTER_TRANSPOSE_MAX_MATRIX_SIDE: usize = 16;
 
-/// Transposes adjacent row-major complex matrices into adjacent row-major outputs.
-///
-/// Each source matrix has shape `[rows, columns]`; each destination matrix has
-/// shape `[columns, rows]`. Matrix order is preserved. The operation validates
-/// both complete slice lengths before writing any destination element.
-///
-/// High-count batches of small matrices use the widest exact Hermes hardware
-/// width that fits a complete square tile. Other shapes and targets reuse
-/// Leto's cache-budgeted [`transpose_copy`]. Neither route allocates after the
-/// caller provides `source` and `destination`.
-///
-/// # Errors
-///
-/// Returns [`LetoError::Overflow`] when the matrix or batch element count does
-/// not fit `usize`. Returns [`LetoError::StorageError`] when either slice length
-/// differs from `matrix_count * rows * columns`. Validation completes before
-/// mutation, in this order: matrix count, batch count, source length, then
-/// destination length. Exact nonempty complex slices already bound each
-/// matrix to the signed extent supported by [`transpose_copy`].
-///
-/// # Examples
-///
-/// ```
-/// use leto::Complex;
-/// use leto_ops::transpose_complex_matrices;
-///
-/// let source = [
-///     Complex::new(1.0_f32, 0.0),
-///     Complex::new(2.0, 0.0),
-///     Complex::new(3.0, 0.0),
-///     Complex::new(4.0, 0.0),
-///     Complex::new(5.0, 0.0),
-///     Complex::new(6.0, 0.0),
-/// ];
-/// let mut destination = [Complex::new(0.0_f32, 0.0); 6];
-/// transpose_complex_matrices(&source, &mut destination, 1, 2, 3)?;
-/// assert_eq!(
-///     destination,
-///     [source[0], source[3], source[1], source[4], source[2], source[5]]
-/// );
-/// # Ok::<(), leto::LetoError>(())
-/// ```
-pub fn transpose_complex_matrices<T>(
+pub(super) fn transpose_complex_matrices<T>(
     source: &[Complex<T>],
     destination: &mut [Complex<T>],
     matrix_count: usize,

@@ -27,11 +27,11 @@ let qr = a.qr()?;
   topology is authoritative.
 - Native `f32`/`f64` paths route through Hermes SIMD, which runtime-dispatches
   AVX-512/AVX2/NEON with a scalar fallback. SIMD is not a build feature.
-- `transpose_complex_matrices` moves homogeneous row-major matrix batches into
+- `ComplexLayout::transpose_complex_matrices` moves homogeneous row-major matrix batches into
   transposed caller-owned storage. Measured high-count small matrices use
   exact-width Hermes register tiles; other shapes call Leto's checked,
   cache-blocked `transpose_copy` directly.
-- `transpose_square_inplace` exchanges a complex square's rows and columns in
+- `ComplexLayout::transpose_square_inplace` exchanges a complex square's rows and columns in
   borrowed storage, with checked extents and no allocation on success or
   rejection. `SquareTransposeError` retains overflowing sides or mismatched
   storage dimensions without changing the input.
@@ -72,3 +72,7 @@ API docs: <https://docs.rs/leto-ops>
 
 Licensed under either of [Apache License, Version 2.0](../../LICENSE-APACHE) or
 [MIT license](../../LICENSE-MIT) at your option.
+
+Complex movement binds statically through `ComplexLayout`. Generic callers add
+`T: ComplexLayout` and invoke the operation on `T`; see
+[the migration contract](../../docs/adr/0027-hermes-complex-batch-transpose.md).
