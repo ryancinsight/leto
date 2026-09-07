@@ -3,6 +3,19 @@
 <a id="leto-ctc-loss"></a>
 ## LETO-CTC-LOSS — Evaluate temporal label alignment loss [minor] [arch]
 - Status: done; [PR 177](https://github.com/ryancinsight/leto/pull/177), merge ba8a879; native scalar loss/gradients and [ADR 0030](docs/adr/0030-temporal-label-alignment.md); full local gates pass, hosted checks pending.
+- Primary integration preserves Apollo source and uses main's lock: Hermes `9d68a9e`, Eunomia `8e18d6d`, Moirai `0.6.0` at `00fb0ae`. Lock guard, format, minimal features, strict Clippy, CTC debug/release (10 each; `3b80fee3`/`7de39bb0`), 30 doctests and strict Rustdoc pass; prior Apollo performance evidence does not cover this graph.
+
+<a id="leto-windows-source-identity"></a>
+## LETO-WINDOWS-SOURCE-IDENTITY — Preserve source identity across mapped checkouts [patch]
+- Status: todo; priority: correctness; updated: 2026-09-07.
+- Outcome: standalone Windows builds cannot reuse another checkout's crate metadata when drive aliases are recycled; keep the single shared target directory.
+- Scope: centralize the standalone Cargo mapping/freshness mechanism and adopt it in Leto's committed verification path; no mathematical or workload changes.
+- Evidence: merged primary exports `transpose_copy`, but release reused local `leto-2960c0092a779492` metadata without that export; its relative-path dep-info and 05:07 UTC artifact were newer than primary source. Debug compilation passed; release failed E0432 in `application/layout/complex/batch.rs:8`.
+- Current mechanism: verification borrows `../coeus/scripts/lockfile.py::unused_windows_drive`; alternating primary/lane sources can retain one relative-path Cargo identity. Changing Z: to Y: still produced artifact `2960c0092a779492`, so a different drive letter alone is insufficient. Leto's committed lock guard does not own build freshness.
+- Recovery: invalidate only that crate's release fingerprint and artifacts; unchanged source then rebuilds metadata containing `transpose_copy` and passes release CTC 10/10 (`7de39bb0`). No full-cache deletion or source workaround.
+- Acceptance: alternate the actual primary and lane source states under one shared cache; each build exposes exactly its own API and computes its expected values, including when the incoming source has older timestamps.
+- Verification: source-identity regression plus the existing locked debug/release CTC gate; no cache fork, Cargo flag suppression, test retries, or source workaround.
+- Dependencies/authority: Atlas-owned standalone runner integration; Change through merge. Prior Apollo performance evidence remains bound to its original dependency graph.
 
 <a id="leto-square-transpose"></a>
 ## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]

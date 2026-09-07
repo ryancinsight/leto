@@ -113,7 +113,7 @@ pub use application::linalg::{
     UduDecomposition,
 };
 pub use application::loss::{
-    cross_entropy_backward_accumulate, cross_entropy_forward_into, CrossEntropyError,
+    cross_entropy_backward_accumulate, cross_entropy_forward_into, ctc, CrossEntropyError,
     CrossEntropyOperand, CrossEntropyResult,
 };
 pub use application::map::{
