@@ -2,15 +2,7 @@
 
 <a id="leto-ctc-loss"></a>
 ## LETO-CTC-LOSS — Evaluate temporal label alignment loss [minor] [arch]
-
-- Status: in-progress; integrator: Codex review_plan; last-update: 2026-09-07.
-- Outcome: native-scalar CTC forward state and additive log-input gradients.
-- Scope: loss/ctc, its exports, tests and ADR; preserve transpose work and pins.
-- Acceptance: independent short-path oracles, empty/impossible paths, typed
-  length/index errors before writes, finite resource bounds and focused gates.
-- Driver: [Coeus sequence contract](../coeus/docs/backlog.md#coeus-ctc-sequence-contract).
-- Lane: `../../worktrees/leto-ctc-loss`, branch `feat/leto-ctc-loss` from main.
-- Non-goal: accelerator kernels or changes to existing movement operations.
+- Status: done; [PR 177](https://github.com/ryancinsight/leto/pull/177), merge ba8a879; native scalar loss/gradients and [ADR 0030](docs/adr/0030-temporal-label-alignment.md); full local gates pass, hosted checks pending.
 
 <a id="leto-square-transpose"></a>
 ## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]
