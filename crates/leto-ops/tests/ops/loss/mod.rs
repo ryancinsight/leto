@@ -414,3 +414,4 @@ fn probability_validation_rejects_large_mass_deficit() {
     .expect_err("a one-quarter probability-mass deficit is not rounding error");
     assert_eq!(error, CrossEntropyError::InvalidProbabilities { batch: 0 });
 }
+mod ctc;
