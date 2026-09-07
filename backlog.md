@@ -1,5 +1,20 @@
 # Leto Work Backlog
 
+<a id="leto-ctc-loss"></a>
+## LETO-CTC-LOSS — Evaluate temporal label alignment loss [minor] [arch]
+
+- Status: review; integrator: Codex review_plan; last-update: 2026-09-07.
+- Outcome: native-scalar CTC forward state and additive log-input gradients.
+- Scope: loss/ctc, its exports, tests and ADR; preserve transpose work and pins.
+- Design: [ADR 0030](docs/adr/0030-temporal-label-alignment.md).
+- Acceptance: independent short-path oracles, empty/impossible paths, typed
+  length/index errors before writes, finite resource bounds and focused gates.
+- Driver: [Coeus sequence contract](../coeus/docs/backlog.md#coeus-ctc-sequence-contract).
+- Lane: `../../worktrees/leto-ctc-loss`, branch `feat/leto-ctc-loss` from main.
+- Non-goal: accelerator kernels or changes to existing movement operations.
+- Evidence: locked standalone workspace 950 tests, release 10 CTC tests, clippy/docs and SemVer 223 checks pass; independent review closes both numeric findings.
+
+
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 
 - **Integrator:** Claude on `feat/leto-fd-mutable-view-dst`; **lease:**

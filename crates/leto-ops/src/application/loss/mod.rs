@@ -1,6 +1,7 @@
 //! Loss operations over borrowed Leto views.
 
 mod backward;
+pub mod ctc;
 mod error;
 mod forward;
 mod validation;
