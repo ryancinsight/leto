@@ -9,8 +9,8 @@ extends the accepted batch-layout decision to in-place square movement and a
 checked core dense copy. Acceptance of the original batch regime does not
 accept the square-movement campaign. Earlier consumer candidates fail size or
 regression gates. Apollo's current cold-failure consolidation passes focused
-correctness and executable size with Leto `633acb7` unchanged; timing and full
-consumer verification remain pending. No release or manifest version change
+correctness and executable size with Leto `633acb7` unchanged; timing and
+verification of the combined consumer source remain pending. No release or manifest version change
 is authorized.
 
 ## Ownership and current experiment
@@ -60,9 +60,18 @@ concrete cold functions, preserving error values, context and caller locations.
 This consumer correction changes no Leto source. Its executable is 6,861,312
 bytes (-512 baseline; -6,144 versus batch specialization). Normalized movement
 instructions remain equal; that establishes codegen preservation, not latency
-equivalence. Focused correctness and size pass, while full verification and the
-unchanged census remain pending; the first census attempt aborts before native
-invocation because Cargo processes 11480 and 59608 are active.
+equivalence. The frozen consumer source also passes 1,445 native tests, 555
+release FFT tests, seven doctests, workspace Clippy/rustdoc and seven benchmark
+smokes. Twenty baseline allocation windows match. The first census attempt
+aborts before native invocation because Cargo processes 11480 and 59608 are
+active, so no timing result follows.
+
+Revision 2026-09-07: [draft PR 175](https://github.com/ryancinsight/leto/pull/175)
+exposes the provider change for review. Hermes merges as `9d68a9e` without
+changing the locked forwarding implementation. Apollo is integrating main's
+prime-routing changes and a concurrent Rader experiment; its prior artifacts
+remain bound to the frozen source and do not verify the combined result.
+Provider source and consumer retention criteria remain unchanged.
 
 ### Migration and classification
 
