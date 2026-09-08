@@ -4,74 +4,59 @@
 - Date: 2026-09-01
 - Class: [major] [arch]
 
-Revision 2026-09-06: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
-extends the accepted batch-layout decision to in-place square movement and a
-checked core dense copy. Acceptance of the original batch regime does not
-accept the square-movement campaign. Earlier consumer candidates fail size or
-regression gates. Apollo's current cold-failure consolidation passes focused
-correctness and executable size with Leto `633acb7` unchanged; timing and
-verification of the combined consumer source remain pending. No release or manifest version change
-is authorized.
+Revision 2026-09-08: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
+retains the private generic kernels and public `ComplexLayout` role. Consumer
+acceptance below binds to Apollo `3f1c0db7` with Leto `633acb7`; provider
+checks at Leto `68745ef` do not transfer that acceptance to its newer graph.
+[PR 175](https://github.com/ryancinsight/leto/pull/175) may advance through
+provider-first delivery; consumer acceptance remains open. No release or
+manifest version change is authorized.
 
-## Ownership and current experiment
+## Ownership and current acceptance
 
-Apollo's 3-D FFT executes hundreds of adjacent small complex matrices. Its
-phase probe supports register tiles for that regime, but routing large
-rectangular 2-D matrices through them regresses by 5–52%. Apollo ADR 0040 assigns
-layout movement to Leto: core owns layout, storage and generic view copies;
-`leto-ops` owns SIMD movement through its existing Hermes dependency.
+Leto core owns layout, storage and checked borrowed dense copies; `leto-ops`
+owns SIMD movement through Hermes. Apollo owns FFT scheduling and scratch.
+Four `ComplexLayout` implementations bind f32, f64, F16 and Bf16 to one
+private generic checked body per operation. Square entries remain uninlined
+to preserve provider instantiation; batch entries inline so known counts can
+specialize at callers. This preserves the measured library-specialized and
+census-general split without duplicate square kernels or dynamic dispatch.
+The historical experiments below record the alternatives and rejection gates.
 
-The provider-entry experiment introduces the scalar role `ComplexLayout` for
-the two complex movement operations. The domain owns its contract and square
-error. Four concrete implementations bind f32, f64, F16 and Bf16 to one private
-generic checked body per operation. A generic default or blanket implementation
-would preserve consumer instantiation roots; arithmetic scalar traits impose
-unrelated operations, and moving the role to Hermes reverses layout ownership.
-No new dependency, dynamic dispatch, scalar arithmetic or algorithm copy enters.
+The [independent census audit](../../../../output/apollo-square-transpose/integration/provider-graph/census/independent-audit.json)
+accepts Apollo `3f1c0db7` with Leto `633acb7`: all 16 runs, 624 rows and
+62,400 samples are valid. Complete-family rank-33/68 envelopes support one
+gain and no regression. Efficiency-core full real length 262,144 has baseline
+median envelopes 2.2790–2.9478 ms versus candidate 2.0837–2.2058 ms. Four paired
+median reductions span 7.32–26.16%; this range is not a confidence interval.
+The [retained executable](../../../../output/apollo-square-transpose/integration/provider-graph/census/collection.json)
+is 6,861,312 bytes, 512 below the unchanged baseline.
 
-The initial experiment keeps both non-generic methods uninlined under ThinLTO.
-Its linked map establishes one provider square entry and one square kernel per
-used ISA, but the executable remains 4,608 bytes above baseline. The next bounded
-correction retains `#[inline(never)]` on square methods and applies `#[inline]`
-to batch methods, preserving the same role and generic bodies. FourStep passes
-immediate count one; the all-operation anchor retains count-256 dispatch and
-chunk-count division that its former specialization eliminated. Batch-plus-core
-map intervals total 5,936 bytes before and after, so this is caller/callee
-evidence for a specialization experiment, not the cause of whole-file growth.
+All warmed allocation and retained-byte records match, and the separate
+20-window footprint oracle matches exactly. Efficiency-core cold length
+65,536 peaks span 2,830,094–2,830,238 candidate bytes versus
+2,830,094–2,830,214 baseline bytes: the observed maximum is 24 bytes higher.
+Identical cold behavior is not established. Endpoint load snapshots miss
+transient processes and inaccessible CPU totals; caller affinity does not
+pin Moirai workers. [Competitor envelopes](../../../../output/apollo-square-transpose/integration/provider-graph/census/competitor-envelope.csv)
+show four leads, fourteen losses and two overlaps, so no general RustFFT or
+PhastFT lead follows.
 
-Require preservation of the measured count-one specialization, provider square
-ownership and the original size/full-engine gates. The initial all-callers
-specialization criterion exceeded the baseline evidence: its census-owned
-FourStep already called a general batch. The correction restores the earlier
-library-specialized/census-general split; it introduces no such residual call.
-Eliminating the remaining general call is a separate optimization hypothesis,
-not grounds to describe the baseline behavior as a new regression.
+Exact Leto `68745ef` [provider gates](../../../../output/apollo-square-transpose/integration/provider-delivery/final-checks.json)
+pass formatting, minimal features, all-target Clippy, 940 debug and 940 release
+tests, 30 doctests with one existing ignored test, warning-denied Rustdoc and
+24 existing layout smoke cases. All 331 captured inputs and the lock remain
+unchanged. The movement source and tests match `633acb7`, but `68745ef`
+includes landed CTC and requires Moirai 0.6. Exact-head hosted CI confirms the
+intended free-function and public-module removals; these provider checks
+establish no consumer timing or size result.
 
-The batch-inline source passes format, Clippy, warning-denied rustdoc, 30
-focused debug tests, 30 release tests and 25 doctests, with all 316 captured
-build inputs fixed. Evidence is retained under Atlas
-`output/apollo-square-transpose/batch-specialization/leto-gates`.
-Consumer focused gates pass and the map confirms that specialization split and
-one provider square kernel per ISA. The executable grows to 6,867,456 bytes
-(+5,632 baseline), so size acceptance still fails; no timing run follows.
-
-Apollo subsequently owns invariant-failure formatting and error cleanup in
-concrete cold functions, preserving error values, context and caller locations.
-This consumer correction changes no Leto source. Its executable is 6,861,312
-bytes (-512 baseline; -6,144 versus batch specialization). Normalized movement
-instructions remain equal; that establishes codegen preservation, not latency
-equivalence. The frozen consumer source also passes 1,445 native tests, 555
-release FFT tests, seven doctests, workspace Clippy/rustdoc and seven benchmark
-smokes. Twenty baseline allocation windows match. The first census attempt
-aborts before native invocation because Cargo processes 11480 and 59608 are
-active, so no timing result follows.
-
-Revision 2026-09-07: [draft PR 175](https://github.com/ryancinsight/leto/pull/175)
-exposes the provider change for review. Hermes merges as `9d68a9e` without
-changing the locked forwarding implementation. Apollo is integrating main's
-prime-routing changes and a concurrent Rader experiment; its prior artifacts
-remain bound to the frozen source and do not verify the combined result.
-Provider source and consumer retention criteria remain unchanged.
+Apollo's old Hephaestus `242520e` requires Moirai ^0.5. Adoption must advance
+Leto together with already-landed Hephaestus `1481a37`, which requires Moirai
+0.6. Provider-first delivery proceeds on its completed gates and independent
+layout review. Consumer compilation, values, allocations, linked size and the
+unchanged census must then verify the resolved graph; neither the accepted
+`633acb7` census nor unchanged movement source substitutes for those checks.
 
 ### Migration and classification
 

@@ -19,23 +19,15 @@
 
 <a id="leto-square-transpose"></a>
 ## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]
-
-- Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-07; [draft PR 175](https://github.com/ryancinsight/leto/pull/175).
-- Outcome: checked borrowed dense transpose and allocation-free, bit-preserving complex square movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
-- Scope: core assignment/materialization and `transpose_copy`, complex layout kernels, generic Clone/scalar and allocation tests; preserve batch dispatch and FFT arithmetic.
-- Acceptance: exact extent validation before mutation, all four scalar payload/coordinate/offset/tail oracles, no supported consumer regression or executable growth, unchanged allocation bounds.
-- Design: [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md); Leto owns movement, Hermes registers, Apollo scheduling and scratch.
-- Dependencies: locked Hermes `07c5e5f` and Eunomia `02397fa`; no new dependency or version bump. Review pins merge upstream before final consumer delivery.
-- Source reconciliation: ADR 0029 supersedes the prior pin-only branch; unmerged Mnemosyne work remains on `perf/mnemosyne-scratch-release`.
-- Verification: committed CI commands and Nextest 30/60-second budgets; final dense-copy revision passes 930 native tests, 366 release tests, 28 doctests (one existing ignored), Clippy, minimal features, rustdoc and 24 smoke cases.
-- API/review: both public packages pass 196 SemVer checks against `a2006ad` (58 inapplicable checks each); independent source review finds no production defect.
-- Evidence: `output/apollo-square-transpose/dense-copy/leto-gates/final-checks.json` records the exact 14-file hash set and unchanged lock. No timing or size acceptance follows from provider gates.
-- Experiment state: earlier builds fail size or regression acceptance; tile-span iteration additionally introduces AVX-512 division and payload spills and is removed. ADR 0027 owns those findings.
-- Provider-entry experiment: full gates pass; SemVer confirms intended function/error/module removals. Consumer size rejects the all-operation boundary at +4,608 bytes despite removing duplicate square kernels. [Evidence](../../output/apollo-square-transpose/provider-entry/apollo-final-checks.json); ADR 0027 owns attribution and migration.
-- Batch specialization: Leto `633acb7` passes format, Clippy, 30 focused tests in debug/release, 25 doctests and rustdoc at 316 unchanged inputs. Consumer codegen preserves the baseline specialization split and shared square kernels, but size rejects +5,632 bytes. [Evidence](../../output/apollo-square-transpose/batch-specialization/leto-gates/final-checks.json); ADR 0027 owns attribution.
-- Current consumer: Apollo cold failures leave Leto `633acb7` unchanged. Frozen-source size is -512 bytes; 1,445 native/555 release tests, seven smokes and 20 matched allocation windows pass. [Evidence](../../output/apollo-square-transpose/cold-failures/apollo-gates/results.json); normalized movement and caller locations are preserved. Timing has not run. Apollo's combined main/Rader source requires fresh verification; ADR 0027 records the evidence boundary.
-- Tile-diagnostic outcome: rejected despite clean source gates; executable +8,192 bytes and supported efficiency-core complex/1,024 regression of 0.59–4.22%. [Codegen](../../output/apollo-square-transpose/tile-diagnostics/codegen.md) and [census](../../output/apollo-square-transpose/tile-diagnostics/audit-summary.json) trigger restoration; prior candidate still fails size acceptance.
-- Restoration verification: tile source exactly matches `9a47d6b`; format, Clippy and unchanged 30 focused debug/release tests pass. Evidence: `output/apollo-square-transpose/tile-diagnostics/restoration/final-checks.json`; no timing rerun or lock change.
+- Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-08; [PR 175](https://github.com/ryancinsight/leto/pull/175); provider-first delivery authorized, consumer acceptance remains open.
+- Outcome: checked dense transpose and allocation-free, bit-preserving complex movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
+- Scope: core assignment, complex layout kernels and generic scalar/allocation tests; preserve FFT arithmetic, workload, manifest versions and locks.
+- Acceptance: failure-atomic extents, all four scalar payload/coordinate/offset/tail oracles, no supported consumer regression or executable growth, unchanged allocation bounds.
+- Design/migration: [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md) owns contracts, rejected experiments and revision-specific acceptance.
+- Consumer evidence: Apollo `3f1c0db7` with Leto `633acb7` is accepted: one efficiency-core full-real/262,144 gain, no supported regression, -512 executable bytes, 20 exact footprint windows. Cold peak maximum is +24 bytes; no general RustFFT lead. [Independent audit](../../output/apollo-square-transpose/integration/provider-graph/census/independent-audit.json).
+- Provider evidence: exact `68745ef` passes format/minimal/Clippy, 940 debug and 940 release tests, 30 doctests (one existing ignored), strict Rustdoc and 24 smokes; 331 inputs and lock unchanged. [Results](../../output/apollo-square-transpose/integration/provider-delivery/final-checks.json).
+- API: exact-head CI confirms intended free-function/public-module removals; [major] migration is documented, with no release or version bump.
+- Dependency closure: `68745ef` includes landed CTC and requires Moirai 0.6. Apollo's old Hephaestus `242520e` requires Moirai ^0.5; adoption must advance Leto together with landed Hephaestus `1481a37`. Fresh consumer graph/size/allocation/census gates remain required; provider merge does not establish their result.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 
