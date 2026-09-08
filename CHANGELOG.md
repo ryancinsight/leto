@@ -6,7 +6,22 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [Unreleased]
 
+### Changed
+
+- [major] Complex matrix movement uses the static `ComplexLayout` scalar
+  role. Free operation functions are removed; callers import the trait and
+  call `T::transpose_complex_matrices` or `T::transpose_square_inplace`.
+  Validation, errors and supported scalars are unchanged; see the
+  [migration contract](docs/adr/0027-hermes-complex-batch-transpose.md).
+
 ### Added
+
+- [minor] `leto::transpose_copy` exposes the existing cache-blocked dense
+  transpose over borrowed source and destination slices. Checked extents
+  precede mutation; generic element cloning and existing assignment and view
+  materialization behavior remain intact. Complex batches use this operation
+  directly outside their existing register-tile regime
+  ([ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md)).
 
 - [minor] `map_into_with_cache_geometry` and
   `binary_map_with_cache_geometry` accept an explicit cache-line policy for
@@ -14,7 +29,7 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   use the process-cached topology, while external topology providers and
   reproducible policy measurements can supply a validated line width.
 
-- [minor] `leto_ops::transpose_complex_matrices` adds a checked,
+- [minor] `ComplexLayout::transpose_complex_matrices` adds a checked,
   allocation-free, caller-owned layout operation for homogeneous complex
   matrix batches. It validates both complete slice lengths before mutation,
   preserves asymmetric and ragged tails, and selects exact-width Hermes

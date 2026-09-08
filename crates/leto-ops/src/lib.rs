@@ -34,7 +34,6 @@ pub use application::convolution::{
     convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
     ConvolutionParameters, TransposedConvolutionGradients, TransposedConvolutionParameters,
 };
-pub use application::layout::transpose_complex_matrices;
 pub use application::linalg::{
     bidiagonalize,
     bunch_kaufman,
@@ -167,6 +166,7 @@ pub use application::zip::{
     indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip_mut_with,
     zip_fold, zip_mut_with, CoordinateMapPlan, IndexedZipMutOutputs, ZipMutOutputs, ZipSources,
 };
+pub use domain::layout::{ComplexLayout, SquareTransposeError};
 
 // ── Interpolation (SSOT) ──────────────────────────────────────────────────────
 /// 2-D and 3-D spatial interpolation (bilinear, trilinear) in index space.

@@ -2,18 +2,32 @@
 
 <a id="leto-ctc-loss"></a>
 ## LETO-CTC-LOSS — Evaluate temporal label alignment loss [minor] [arch]
+- Status: done; [PR 177](https://github.com/ryancinsight/leto/pull/177), merge ba8a879; native scalar loss/gradients and [ADR 0030](docs/adr/0030-temporal-label-alignment.md); full local gates pass, hosted checks pending.
+- Primary integration preserves Apollo source and uses main's lock: Hermes `9d68a9e`, Eunomia `8e18d6d`, Moirai `0.6.0` at `00fb0ae`. Lock guard, format, minimal features, strict Clippy, CTC debug/release (10 each; `3b80fee3`/`7de39bb0`), 30 doctests and strict Rustdoc pass; prior Apollo performance evidence does not cover this graph.
 
-- Status: review; integrator: Codex review_plan; last-update: 2026-09-07.
-- Outcome: native-scalar CTC forward state and additive log-input gradients.
-- Scope: loss/ctc, its exports, tests and ADR; preserve transpose work and pins.
-- Design: [ADR 0030](docs/adr/0030-temporal-label-alignment.md).
-- Acceptance: independent short-path oracles, empty/impossible paths, typed
-  length/index errors before writes, finite resource bounds and focused gates.
-- Driver: [Coeus sequence contract](../coeus/docs/backlog.md#coeus-ctc-sequence-contract).
-- Lane: `../../worktrees/leto-ctc-loss`, branch `feat/leto-ctc-loss` from main.
-- Non-goal: accelerator kernels or changes to existing movement operations.
-- Evidence: locked standalone workspace 950 tests, release 10 CTC tests, clippy/docs and SemVer 223 checks pass; independent review closes both numeric findings.
+<a id="leto-windows-source-identity"></a>
+## LETO-WINDOWS-SOURCE-IDENTITY — Preserve source identity across mapped checkouts [patch]
+- Status: todo; priority: correctness; updated: 2026-09-07.
+- Outcome: standalone Windows builds cannot reuse another checkout's crate metadata when drive aliases are recycled; keep the single shared target directory.
+- Scope: centralize the standalone Cargo mapping/freshness mechanism and adopt it in Leto's committed verification path; no mathematical or workload changes.
+- Evidence: merged primary exports `transpose_copy`, but release reused local `leto-2960c0092a779492` metadata without that export; its relative-path dep-info and 05:07 UTC artifact were newer than primary source. Debug compilation passed; release failed E0432 in `application/layout/complex/batch.rs:8`.
+- Current mechanism: verification borrows `../coeus/scripts/lockfile.py::unused_windows_drive`; alternating primary/lane sources can retain one relative-path Cargo identity. Changing Z: to Y: still produced artifact `2960c0092a779492`, so a different drive letter alone is insufficient. Leto's committed lock guard does not own build freshness.
+- Recovery: invalidate only that crate's release fingerprint and artifacts; unchanged source then rebuilds metadata containing `transpose_copy` and passes release CTC 10/10 (`7de39bb0`). No full-cache deletion or source workaround.
+- Acceptance: alternate the actual primary and lane source states under one shared cache; each build exposes exactly its own API and computes its expected values, including when the incoming source has older timestamps.
+- Verification: source-identity regression plus the existing locked debug/release CTC gate; no cache fork, Cargo flag suppression, test retries, or source workaround.
+- Dependencies/authority: Atlas-owned standalone runner integration; Change through merge. Prior Apollo performance evidence remains bound to its original dependency graph.
 
+<a id="leto-square-transpose"></a>
+## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]
+- Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-08; [PR 175](https://github.com/ryancinsight/leto/pull/175); provider-first delivery authorized, consumer acceptance remains open.
+- Outcome: checked dense transpose and allocation-free, bit-preserving complex movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
+- Scope: core assignment, complex layout kernels and generic scalar/allocation tests; preserve FFT arithmetic, workload, manifest versions and locks.
+- Acceptance: failure-atomic extents, all four scalar payload/coordinate/offset/tail oracles, no supported consumer regression or executable growth, unchanged allocation bounds.
+- Design/migration: [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md) owns contracts, rejected experiments and revision-specific acceptance.
+- Consumer evidence: Apollo `3f1c0db7` with Leto `633acb7` is accepted: one efficiency-core full-real/262,144 gain, no supported regression, -512 executable bytes, 20 exact footprint windows. Cold peak maximum is +24 bytes; no general RustFFT lead. [Independent audit](../../output/apollo-square-transpose/integration/provider-graph/census/independent-audit.json).
+- Provider evidence: exact `68745ef` passes format/minimal/Clippy, 940 debug and 940 release tests, 30 doctests (one existing ignored), strict Rustdoc and 24 smokes; 331 inputs and lock unchanged. [Results](../../output/apollo-square-transpose/integration/provider-delivery/final-checks.json).
+- API: exact-head CI confirms intended free-function/public-module removals; [major] migration is documented, with no release or version bump.
+- Dependency closure: `68745ef` includes landed CTC and requires Moirai 0.6. Apollo's old Hephaestus `242520e` requires Moirai ^0.5; adoption must advance Leto together with landed Hephaestus `1481a37`. Fresh consumer graph/size/allocation/census gates remain required; provider merge does not establish their result.
 
 ## LETO-FD-MUTABLE-VIEW-DST-2026-09-04 — Take a mutable view as the FD destination [major] — review <a id="leto-fd-mutable-view-dst-2026-09-04"></a>
 
@@ -313,7 +327,7 @@
 - **Closed 2026-09-02.** The integrator's claim went stale in `review`;
   re-verified against the current tree rather than re-run: the operation is
   published (`leto_ops::transpose_complex_matrices`), routed through hermes
-  register tiles in `application/layout/complex_batch.rs`, covered by
+  register tiles in `application/layout/complex/tile.rs`, covered by
   `tests/complex_transpose_allocations.rs`, recorded in ADR 0027 and the
   CHANGELOG, and consumed by apollo at
   `apollo-fft/.../plan/fft/layout.rs:57`. `cargo nextest run -p leto-ops`:

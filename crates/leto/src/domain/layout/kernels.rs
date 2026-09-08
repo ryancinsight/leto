@@ -20,7 +20,11 @@ pub(crate) fn shape_size(shape: &[usize]) -> Result<usize> {
         return Ok(0);
     }
     shape.iter().try_fold(1usize, |size, &dim| {
-        size.checked_mul(dim).ok_or(LetoError::Overflow {
+        #[expect(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+        )]
+        size.checked_mul(dim).ok_or_else(|| LetoError::Overflow {
             reason: "layout shape product",
         })
     })
@@ -46,9 +50,15 @@ pub(crate) fn c_contiguous_strides(shape: &[usize], out: &mut [isize]) -> Result
             let dim = isize::try_from(dim).map_err(|_| LetoError::Overflow {
                 reason: "C-contiguous dimension conversion",
             })?;
-            stride = stride.checked_mul(dim).ok_or(LetoError::Overflow {
-                reason: "C-contiguous stride multiplication",
-            })?;
+            #[expect(
+                clippy::unnecessary_lazy_evaluations,
+                reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+            )]
+            {
+                stride = stride.checked_mul(dim).ok_or_else(|| LetoError::Overflow {
+                    reason: "C-contiguous stride multiplication",
+                })?;
+            }
         }
     }
     Ok(())
@@ -86,12 +96,26 @@ pub(crate) fn physical_offset(
         let idx = isize::try_from(index[i]).map_err(|_| LetoError::Overflow {
             reason: "layout index conversion",
         })?;
-        let delta = idx.checked_mul(strides[i]).ok_or(LetoError::Overflow {
-            reason: "layout offset multiplication",
-        })?;
-        offset = offset.checked_add(delta).ok_or(LetoError::Overflow {
-            reason: "layout offset accumulation",
-        })?;
+        #[expect(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+        )]
+        let delta = idx
+            .checked_mul(strides[i])
+            .ok_or_else(|| LetoError::Overflow {
+                reason: "layout offset multiplication",
+            })?;
+        #[expect(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+        )]
+        {
+            offset = offset
+                .checked_add(delta)
+                .ok_or_else(|| LetoError::Overflow {
+                    reason: "layout offset accumulation",
+                })?;
+        }
     }
     if offset < 0 {
         return Err(LetoError::StorageError {
@@ -126,19 +150,39 @@ pub(crate) fn min_max_offsets(
         let len_minus_one = isize::try_from(shape[i] - 1).map_err(|_| LetoError::Overflow {
             reason: "layout dimension bound conversion",
         })?;
-        let bound = len_minus_one.checked_mul(s).ok_or(LetoError::Overflow {
-            reason: "layout dimension bound multiplication",
-        })?;
-        min_offset = min_offset
-            .checked_add(0isize.min(bound))
-            .ok_or(LetoError::Overflow {
-                reason: "layout minimum offset accumulation",
+        #[expect(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+        )]
+        let bound = len_minus_one
+            .checked_mul(s)
+            .ok_or_else(|| LetoError::Overflow {
+                reason: "layout dimension bound multiplication",
             })?;
-        max_offset = max_offset
-            .checked_add(0isize.max(bound))
-            .ok_or(LetoError::Overflow {
-                reason: "layout maximum offset accumulation",
-            })?;
+        #[expect(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+        )]
+        {
+            min_offset =
+                min_offset
+                    .checked_add(0isize.min(bound))
+                    .ok_or_else(|| LetoError::Overflow {
+                        reason: "layout minimum offset accumulation",
+                    })?;
+        }
+        #[expect(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+        )]
+        {
+            max_offset =
+                max_offset
+                    .checked_add(0isize.max(bound))
+                    .ok_or_else(|| LetoError::Overflow {
+                        reason: "layout maximum offset accumulation",
+                    })?;
+        }
     }
     if min_offset < 0 {
         return Err(LetoError::StorageError {
