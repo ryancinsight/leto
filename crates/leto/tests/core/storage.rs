@@ -254,5 +254,9 @@ fn test_slice_step_isize_min() {
     let layout = Layout::c_contiguous([5]).unwrap();
     let ranges = [(0, 5, isize::MIN)];
     let res = layout.slice(&ranges);
-    assert!(res.is_err());
+    let error = res.expect_err("a step of isize::MIN must be rejected");
+    assert_eq!(
+        error.to_string(),
+        "Incompatible slice: range (0, 5), shape [5]"
+    );
 }
