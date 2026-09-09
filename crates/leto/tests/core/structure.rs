@@ -195,7 +195,8 @@ fn test_stack_panic_cleanup() {
     let res = std::panic::catch_unwind(|| {
         let _ = stack::<PanicClone, 1, 2>(inputs, 1);
     });
-    assert!(res.is_err());
+    let payload = res.expect_err("a panicking clone must unwind to the caller");
+    assert_eq!(payload.downcast_ref::<&str>(), Some(&"clone panic!"));
 
     std::mem::drop(a);
 
@@ -259,7 +260,8 @@ fn test_concat_panic_cleanup() {
     let res = std::panic::catch_unwind(|| {
         let _ = concat(inputs, 1);
     });
-    assert!(res.is_err());
+    let payload = res.expect_err("a panicking clone must unwind to the caller");
+    assert_eq!(payload.downcast_ref::<&str>(), Some(&"clone panic!"));
 
     std::mem::drop(a);
 

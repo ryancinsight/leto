@@ -65,9 +65,12 @@ fn matmul_rejects_shape_mismatch() {
         let lhs = array2(py, &[vec![1.0, 2.0, 3.0]]);
         let rhs = array2(py, &[vec![4.0, 5.0, 6.0]]);
 
-        let result = matmul_py(py, lhs.readonly(), rhs.readonly());
-
-        assert!(result.is_err());
+        let error = matmul_py(py, lhs.readonly(), rhs.readonly())
+            .expect_err("a shape mismatch must be rejected");
+        assert_eq!(
+            error.to_string(),
+            "ValueError: Dimension mismatch for matrix multiplication"
+        );
     });
 }
 
@@ -131,8 +134,7 @@ fn operations_reject_non_contiguous_numpy_inputs() {
             .extract::<PyReadonlyArray2<'_, f32>>()
             .unwrap();
 
-        let result = sum_py(py, view);
-
-        assert!(result.is_err());
+        let error = sum_py(py, view).expect_err("a non-contiguous input must be rejected");
+        assert_eq!(error.to_string(), "ValueError: a must be C-contiguous");
     });
 }

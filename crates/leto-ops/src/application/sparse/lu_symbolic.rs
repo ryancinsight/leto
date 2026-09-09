@@ -293,7 +293,6 @@ pub fn factor_symbolic<T: Scalar>(csc: &CscMatrix<T>) -> SymbolicLu {
 ///
 /// let symbolic_amd = factor_symbolic_with_ordering(&csc, OrderingStrategy::AmdApproxMinDegree);
 /// assert_eq!(symbolic_amd.n(), 3);
-/// assert!(symbolic_amd.amd_col_perm.is_some(), "AMD yields a col perm");
 /// let perm = symbolic_amd.amd_col_perm.as_ref().expect("AMD yields a perm");
 /// assert_eq!(perm.len(), 3);
 /// ```
