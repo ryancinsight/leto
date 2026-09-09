@@ -39,3 +39,4 @@
 | [0028](0028-sparse-array-support.md) | Sparse Array Support in Leto and Hephaestus | Accepted |
 | [0029](0029-provider-source-identity-during-coevolution.md) | Provider Source Identity During Co-evolution | Accepted |
 | [0030](0030-temporal-label-alignment.md) | Own temporal label alignment in Leto | Accepted |
+| [0031](0031-runtime-rank-layout-contract.md) | Runtime-rank broadcast and injectivity contract | Accepted |
