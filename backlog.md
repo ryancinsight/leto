@@ -1,8 +1,12 @@
 # Leto Work Backlog
 
 <a id="leto-strided-pitch-aliasing"></a>
-## LETO-STRIDED-PITCH-ALIASING-2026-09-10 — Window transposes at a 64 KiB pitch cost 1.7x their batch twin [patch] [perf] — todo
+## LETO-STRIDED-PITCH-ALIASING-2026-09-10 — Window transposes at a 64 KiB pitch cost 1.7x their batch twin [patch] [perf] — in-progress
 
+- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-strided-pitch-aliasing`;
+  lane `D:/atlas/worktrees/leto-strided-pitch-aliasing`; regions
+  `crates/leto-ops/benches/layout_copy.rs`, `crates/leto/src/application/assign.rs`.
+- **Last-update:** 2026-09-10.
 - **Question (spike).** After
   [`#leto-single-matrix-transpose-tasks`](#leto-single-matrix-transpose-tasks),
   apollo's 64³ probe reads the axis-0 pair — one `[64 x 4096]` `Complex64`
