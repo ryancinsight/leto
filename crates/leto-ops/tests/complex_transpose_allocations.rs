@@ -75,6 +75,33 @@ fn assert_batch_allocations<T: PayloadScalar + ComplexLayout>() {
     assert_bits(&destination, &oracle);
 }
 
+/// The batch that leaves the calling thread under `parallel`: sixty-four
+/// 64 KiB matrices, one per task. The contract is the same as the register
+/// regime's — a warm transpose touches no allocator — so the task path is held
+/// to it rather than exempted from it.
+fn assert_task_batch_allocations<T: PayloadScalar + ComplexLayout>() {
+    const MATRICES: usize = 64;
+    const SIDE: usize = 64;
+    const LEN: usize = MATRICES * SIDE * SIDE;
+
+    let source = values::<T>(LEN);
+    let oracle = expected(&source, MATRICES, SIDE, SIDE);
+    let mut destination = source.clone();
+    T::transpose_complex_matrices(&source, &mut destination, MATRICES, SIDE, SIDE)
+        .expect("warm task batch transpose succeeds");
+    let (result, allocations, reallocations) =
+        measured(|| T::transpose_complex_matrices(&source, &mut destination, MATRICES, SIDE, SIDE));
+    result.expect("measured task batch transpose succeeds");
+    assert_eq!((allocations, reallocations), (0, 0));
+    assert_bits(&destination, &oracle);
+}
+
+#[test]
+fn warmed_task_batches_allocate_nothing() {
+    assert_task_batch_allocations::<f32>();
+    assert_task_batch_allocations::<f64>();
+}
+
 #[test]
 fn warmed_selected_batches_allocate_nothing() {
     assert_batch_allocations::<f32>();

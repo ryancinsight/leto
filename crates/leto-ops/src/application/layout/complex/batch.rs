@@ -14,6 +14,28 @@ const REGISTER_TRANSPOSE_MIN_MATRICES: usize = 256;
 /// dominated; larger matrices retain Leto's cache-budgeted generic kernel.
 const REGISTER_TRANSPOSE_MAX_MATRIX_SIDE: usize = 16;
 
+/// Bytes of matrices one scheduled task transposes when a batch runs in
+/// parallel.
+///
+/// Apollo's 3-D pass probe (`dimension_3d::pass_attribution`, 2026-09-09)
+/// timed the axis-1 transpose pair of a 64³ `Complex64` volume — 64 matrices
+/// of 64 KiB — at 356 µs serial against 147 µs with one matrix per task, and
+/// 345 against 89 at the fastest samples. 64 KiB is one matrix there, sits
+/// inside one core's L2, and is the task width its lane passes settled on;
+/// smaller matrices group up to it, so a task never carries less.
+#[cfg(feature = "parallel")]
+const PARALLEL_TRANSPOSE_TASK_BYTES: usize = 64 * 1024;
+
+/// Bytes of batch below which the transpose stays on the calling thread.
+///
+/// The same probe's 32³ volume — 32 matrices of 16 KiB, 512 KiB in all — ran
+/// *slower* spread over tasks (28.5 µs against 21.9 serial): at eleven
+/// microseconds of work the runtime's spawn-and-join is the larger part. The
+/// 64³ batch, 4 MiB, won by 2.4x to 3.9x. One mebibyte sits between the two;
+/// the probe is the instrument that moves it.
+#[cfg(feature = "parallel")]
+const PARALLEL_TRANSPOSE_MIN_BYTES: usize = 1024 * 1024;
+
 pub(super) fn transpose_complex_matrices<T>(
     source: &[Complex<T>],
     destination: &mut [Complex<T>],
@@ -55,6 +77,11 @@ where
         return Ok(());
     }
 
+    #[cfg(feature = "parallel")]
+    if matrix_count >= 2 && parallel_transpose_applies::<Complex<T>>(total_len) {
+        transpose_in_tasks(source, destination, matrix_len, rows, columns);
+        return Ok(());
+    }
     for (source_matrix, destination_matrix) in source
         .chunks_exact(matrix_len)
         .zip(destination.chunks_exact_mut(matrix_len))
@@ -62,6 +89,53 @@ where
         transpose_copy(source_matrix, destination_matrix, rows, columns)?;
     }
     Ok(())
+}
+
+/// Whether a validated batch of `total_len` elements is worth spreading over
+/// the runtime's workers.
+#[cfg(feature = "parallel")]
+fn parallel_transpose_applies<E>(total_len: usize) -> bool {
+    total_len.saturating_mul(core::mem::size_of::<E>()) >= PARALLEL_TRANSPOSE_MIN_BYTES
+}
+
+/// Transposes a validated batch with whole matrices grouped into tasks of at
+/// least [`PARALLEL_TRANSPOSE_TASK_BYTES`].
+///
+/// Every task is a whole number of matrices and the batch is a whole number of
+/// matrices, so each destination chunk moirai hands out pairs with the source
+/// chunk at the same offset and no two tasks touch one matrix. The lengths were
+/// validated by the caller, which is what lets the per-matrix result be an
+/// invariant here rather than an error to thread out of the closure.
+#[cfg(feature = "parallel")]
+fn transpose_in_tasks<T>(
+    source: &[Complex<T>],
+    destination: &mut [Complex<T>],
+    matrix_len: usize,
+    rows: usize,
+    columns: usize,
+) where
+    T: LaneScalar + Pod,
+{
+    let matrix_bytes = matrix_len
+        .saturating_mul(core::mem::size_of::<Complex<T>>())
+        .max(1);
+    let matrices_per_task = (PARALLEL_TRANSPOSE_TASK_BYTES / matrix_bytes).max(1);
+    let task_len = matrix_len * matrices_per_task;
+    moirai::for_each_chunk_mut_enumerated_with::<moirai::Parallel, _, _>(
+        destination,
+        task_len,
+        |index, destination_task| {
+            let start = index * task_len;
+            let source_task = &source[start..start + destination_task.len()];
+            for (source_matrix, destination_matrix) in source_task
+                .chunks_exact(matrix_len)
+                .zip(destination_task.chunks_exact_mut(matrix_len))
+            {
+                transpose_copy(source_matrix, destination_matrix, rows, columns)
+                    .expect("invariant: each chunk is one rows x columns matrix, validated above");
+            }
+        },
+    );
 }
 
 #[inline]

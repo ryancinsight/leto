@@ -1,5 +1,44 @@
 # Leto Work Backlog
 
+<a id="leto-batch-transpose-tasks"></a>
+## LETO-BATCH-TRANSPOSE-TASKS-2026-09-09 — Large complex matrix batches transpose on one thread [patch] [perf] — done 2026-09-09
+
+- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-batch-transpose-tasks`.
+- **Last-update:** 2026-09-09.
+- **Finding.** `transpose_complex_matrices` ran every matrix of a batch on the
+  calling thread outside the register-tile regime. Apollo's 3-D pass probe
+  (`plan/fft/dimension_3d/pass_attribution`, apollo
+  [`#apollo-lane-task-width`](../apollo/backlog.md#apollo-lane-task-width))
+  measured the axis-1 pair of a 64³ `Complex64` volume — 64 matrices of 64 KiB,
+  4 MiB in all — at **356 µs serial against 147 µs with one matrix per moirai
+  task** (345 against 89 at the fastest samples), and after apollo's own
+  scheduling fix that pair is the largest measured piece of a 3-D forward
+  (60% at the fastest sample). The 32³ batch — 32 matrices of 16 KiB, 512 KiB —
+  ran slower spread out (28.5 µs against 21.9): eleven microseconds of work is
+  under the runtime's spawn-and-join.
+- **Change.** Under `parallel`, a validated batch of at least two matrices and
+  one mebibyte spreads over moirai tasks of whole matrices grouped to at least
+  64 KiB (`PARALLEL_TRANSPOSE_MIN_BYTES`, `PARALLEL_TRANSPOSE_TASK_BYTES`, each
+  carrying its measurement); every task is whole matrices and so is the batch,
+  so destination chunks pair with source chunks at the same offset and no two
+  tasks touch one matrix. The per-matrix kernel is unchanged; smaller batches
+  and the register-tile regime are untouched, as is the serial path without
+  the feature.
+- **Evidence.** Oracle cases added at 64 x 64 x 64 (one matrix per task) and
+  2048 x 20 x 8 (25 matrices per task with a partial tail) across every payload
+  scalar; the warm-transpose allocation contract extended to the task path and
+  held — moirai's scoped loop allocates nothing after warm-up. Clippy clean
+  with `parallel` on; with it off the only diagnostic is a pre-existing
+  `question_mark` in `linalg/lu_batch.rs:112`, a feature state CI does not
+  build, filed below. Timing lives in apollo's probe, which is the instrument
+  for both constants; the consumer measurement is the apollo pin advance's job.
+- **Incidental, filed:** `linalg/lu_batch.rs:112` fails `clippy::question_mark`
+  under `--no-default-features --features std,mnemosyne-memory` — the
+  `parallel`-off state has no gate, so a lint the feature-on build cannot see
+  landed. Its fix is one `?`; feature hygiene says the state needs a gate.
+- **Risk / change class:** [patch] [perf]; **dependencies:** none. Consumers:
+  apollo advances its `leto-ops` pin and re-reads `pass_attribution`.
+
 <a id="leto-ctc-loss"></a>
 ## LETO-CTC-LOSS — Evaluate temporal label alignment loss [minor] [arch]
 - Status: done; [PR 177](https://github.com/ryancinsight/leto/pull/177), merge ba8a879; native scalar loss/gradients and [ADR 0030](docs/adr/0030-temporal-label-alignment.md); full local gates pass, hosted checks pending.
