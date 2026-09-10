@@ -14,6 +14,14 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   Validation, errors and supported scalars are unchanged; see the
   [migration contract](docs/adr/0027-hermes-complex-batch-transpose.md).
 
+- [patch] `transpose_copy` and `transpose_copy_strided` walk each tile along
+  the side with the smaller stride — the destination rows when the source
+  pitch is the wider — instead of by matrix shape alone. A column window of a
+  wide matrix at a 64 KiB pitch, where every line a tile reuses maps to one
+  cache set, moves 31% faster on one core (302 → 209 µs for apollo's 64³
+  axis-0 window set); dense matrices are unchanged, the pitch being their
+  column count.
+
 ### Added
 
 - [minor] `leto::transpose_copy_strided` copies a column window of a

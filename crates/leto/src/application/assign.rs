@@ -401,10 +401,22 @@ fn transpose_blocked<T: Clone>(
     rows: usize,
     columns: usize,
 ) {
-    // The traversal addresses destination rows and source columns.
+    // The traversal addresses destination rows and source columns. One side of
+    // each tile is walked at a stride — the source by `pitch` in the first
+    // form, the destination by `width` in the second — and the stride is the
+    // cost: at a stride that is a multiple of the L1 way size, the lines a
+    // tile reuses along it all map to one cache set and evict one another, so
+    // the side with the smaller stride takes the walk. For a dense matrix the
+    // pitch is the column count and this is the shape rule; for a column
+    // window of a wide matrix — apollo's 64³ axis 0, 64 rows at a 64 KiB pitch
+    // into 1 KiB destination rows — the pitch is what aliases. Pinned to one
+    // performance core, the window set ran 302 µs walking the pitch and 209 µs
+    // walking the destination; padding the pitch off the alias reads 177 µs,
+    // and an 8-line strided tile in the first form 218 µs, so this rule is the
+    // one kept (leto-ops `layout_copy/window_pitch`, 2026-09-10).
     let (height, width) = (columns, rows);
     let tile = transpose_tile::<T>();
-    if width >= height {
+    if width >= pitch {
         for row_start in (0..height).step_by(tile) {
             let row_end = (row_start + tile).min(height);
             for column_start in (0..width).step_by(tile) {
