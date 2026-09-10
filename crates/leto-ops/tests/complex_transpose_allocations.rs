@@ -79,18 +79,19 @@ fn assert_batch_allocations<T: PayloadScalar + ComplexLayout>() {
 /// 64 KiB matrices, one per task. The contract is the same as the register
 /// regime's — a warm transpose touches no allocator — so the task path is held
 /// to it rather than exempted from it.
-fn assert_task_batch_allocations<T: PayloadScalar + ComplexLayout>() {
-    const MATRICES: usize = 64;
-    const SIDE: usize = 64;
-    const LEN: usize = MATRICES * SIDE * SIDE;
-
-    let source = values::<T>(LEN);
-    let oracle = expected(&source, MATRICES, SIDE, SIDE);
+fn assert_task_batch_allocations<T: PayloadScalar + ComplexLayout>(
+    matrix_count: usize,
+    rows: usize,
+    columns: usize,
+) {
+    let source = values::<T>(matrix_count * rows * columns);
+    let oracle = expected(&source, matrix_count, rows, columns);
     let mut destination = source.clone();
-    T::transpose_complex_matrices(&source, &mut destination, MATRICES, SIDE, SIDE)
+    T::transpose_complex_matrices(&source, &mut destination, matrix_count, rows, columns)
         .expect("warm task batch transpose succeeds");
-    let (result, allocations, reallocations) =
-        measured(|| T::transpose_complex_matrices(&source, &mut destination, MATRICES, SIDE, SIDE));
+    let (result, allocations, reallocations) = measured(|| {
+        T::transpose_complex_matrices(&source, &mut destination, matrix_count, rows, columns)
+    });
     result.expect("measured task batch transpose succeeds");
     assert_eq!((allocations, reallocations), (0, 0));
     assert_bits(&destination, &oracle);
@@ -98,8 +99,13 @@ fn assert_task_batch_allocations<T: PayloadScalar + ComplexLayout>() {
 
 #[test]
 fn warmed_task_batches_allocate_nothing() {
-    assert_task_batch_allocations::<f32>();
-    assert_task_batch_allocations::<f64>();
+    // 64 matrices of 64 x 64 are one matrix per task at `Complex64`; the
+    // single 64 x 4096 matrix — apollo's 64³ axis-0 transpose — is split into
+    // tasks of destination rows.
+    for (matrix_count, rows, columns) in [(64, 64, 64), (1, 64, 4096)] {
+        assert_task_batch_allocations::<f32>(matrix_count, rows, columns);
+        assert_task_batch_allocations::<f64>(matrix_count, rows, columns);
+    }
 }
 
 #[test]

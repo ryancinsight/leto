@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use leto::{transpose_copy, LetoError};
+use leto::{transpose_copy, transpose_copy_strided, LetoError};
 
 fn assert_coordinate_mapping<T: Clone + Debug + PartialEq>(make: impl Fn(usize) -> T) {
     for (rows, columns) in [
@@ -226,4 +226,155 @@ fn dense_transpose_preserves_observable_zero_sized_clones() {
             .expect("zero-sized Clone elements have observable clone semantics");
         CLONES.with(|count| assert_eq!(count.get(), rows * columns));
     }
+}
+
+/// Splits `columns` into windows whose widths cycle through a few tile
+/// relations: below, at and across the traversal's tile edges.
+fn column_windows(columns: usize) -> Vec<(usize, usize)> {
+    let mut windows = Vec::new();
+    let mut start = 0;
+    for width in [1, 7, 16, 33, 5].into_iter().cycle() {
+        if start >= columns {
+            break;
+        }
+        let end = (start + width).min(columns);
+        windows.push((start, end));
+        start = end;
+    }
+    windows
+}
+
+#[test]
+fn strided_windows_assemble_the_dense_transpose() {
+    for (rows, columns) in [
+        (1, 1),
+        (1, 129),
+        (129, 1),
+        (31, 33),
+        (33, 31),
+        (63, 65),
+        (65, 63),
+        (127, 129),
+        (129, 127),
+    ] {
+        // The matrix sits inside a wider row-major buffer so that the pitch
+        // exceeds the column count and the trailing row ends before its pitch.
+        for pitch in [columns, columns + 5] {
+            let buffer: Vec<usize> = (0..(rows - 1) * pitch + columns).collect();
+            let source: Vec<usize> = (0..rows)
+                .flat_map(|row| buffer[row * pitch..row * pitch + columns].iter().copied())
+                .collect();
+            let mut oracle = vec![usize::MAX; rows * columns];
+            transpose_copy(&source, &mut oracle, rows, columns).expect("dense oracle");
+
+            let mut assembled = vec![usize::MAX; rows * columns];
+            for (start, end) in column_windows(columns) {
+                let width = end - start;
+                let span = (rows - 1) * pitch + width;
+                transpose_copy_strided(
+                    &buffer[start..start + span],
+                    pitch,
+                    &mut assembled[start * rows..end * rows],
+                    rows,
+                    width,
+                )
+                .expect("a column window over its exact span is valid");
+                for guard in &assembled[end * rows..] {
+                    assert_eq!(
+                        *guard,
+                        usize::MAX,
+                        "shape {rows}x{columns}, window {start}..{end}"
+                    );
+                }
+            }
+            assert_eq!(assembled, oracle, "shape {rows}x{columns}, pitch {pitch}");
+        }
+    }
+}
+
+#[test]
+fn strided_transpose_validates_product_destination_pitch_span_then_extent() {
+    let source = [1, 2, 3, 4, 5, 6];
+    let mut destination = [0; 4];
+
+    assert_eq!(
+        transpose_copy_strided(&source, 3, &mut destination, usize::MAX, 2),
+        Err(LetoError::Overflow {
+            reason: "strided transpose element count"
+        })
+    );
+    assert_eq!(
+        transpose_copy_strided(&source, 3, &mut destination[..3], 2, 2),
+        Err(LetoError::StorageError {
+            reason: "strided transpose destination length 3 does not match expected 4".to_owned()
+        })
+    );
+    assert_eq!(
+        transpose_copy_strided(&source, 1, &mut destination, 2, 2),
+        Err(LetoError::StorageError {
+            reason: "strided transpose source pitch 1 is narrower than 2 columns".to_owned()
+        })
+    );
+    // Rows 0..2 of a pitch-3 matrix with a 2-wide window span 5 elements.
+    assert_eq!(
+        transpose_copy_strided(&source[..4], 3, &mut destination, 2, 2),
+        Err(LetoError::StorageError {
+            reason:
+                "strided transpose source length 4 is shorter than the 5 elements the window spans"
+                    .to_owned()
+        })
+    );
+    assert_eq!(
+        destination, [0; 4],
+        "rejection leaves the destination unchanged"
+    );
+
+    transpose_copy_strided(&source[1..], 3, &mut destination, 2, 2)
+        .expect("the exact span is valid");
+    assert_eq!(destination, [2, 5, 3, 6]);
+
+    // An empty window needs no source at all and no pitch relation beyond the
+    // column count.
+    let mut empty: [usize; 0] = [];
+    for (rows, columns, pitch) in [(0, 5, 5), (3, 0, 0), (0, usize::MAX, usize::MAX)] {
+        transpose_copy_strided::<usize>(&[], pitch, &mut empty, rows, columns)
+            .expect("an empty window reads nothing");
+    }
+    assert_eq!(
+        transpose_copy_strided::<usize>(&[], 4, &mut empty, 0, 5),
+        Err(LetoError::StorageError {
+            reason: "strided transpose source pitch 4 is narrower than 5 columns".to_owned()
+        })
+    );
+}
+
+#[test]
+fn strided_transpose_rejects_unrepresentable_zero_sized_extents() {
+    // Vec<()> represents these lengths without allocation or element work.
+    let count = usize::try_from(isize::MAX).expect("isize::MAX fits usize") + 1;
+    let source = vec![(); count];
+    let mut destination = vec![(); count];
+    assert_eq!(
+        transpose_copy_strided(&source, 1, &mut destination, count, 1),
+        Err(LetoError::Overflow {
+            reason: "strided transpose signed layout extent"
+        })
+    );
+    // At a pitch of three the leading rows alone overflow `usize`, before the
+    // extent is reached; at two they fit, and the span is merely unmet.
+    assert_eq!(
+        transpose_copy_strided(&source, 2, &mut destination, count, 1),
+        Err(LetoError::StorageError {
+            reason: format!(
+                "strided transpose source length {count} is shorter than the {} elements the window spans",
+                (count - 1) * 2 + 1
+            )
+        })
+    );
+    assert_eq!(
+        transpose_copy_strided(&source, 3, &mut destination, count, 1),
+        Err(LetoError::Overflow {
+            reason: "strided transpose source span"
+        })
+    );
 }

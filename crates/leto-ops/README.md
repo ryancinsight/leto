@@ -30,7 +30,9 @@ let qr = a.qr()?;
 - `ComplexLayout::transpose_complex_matrices` moves homogeneous row-major matrix batches into
   transposed caller-owned storage. Measured high-count small matrices use
   exact-width Hermes register tiles; other shapes call Leto's checked,
-  cache-blocked `transpose_copy` directly.
+  cache-blocked `transpose_copy` directly, and under `parallel` a batch of at
+  least a mebibyte — one large matrix included — is written in tasks of whole
+  destination rows.
 - `ComplexLayout::transpose_square_inplace` exchanges a complex square's rows and columns in
   borrowed storage, with checked extents and no allocation on success or
   rejection. `SquareTransposeError` retains overflowing sides or mismatched
