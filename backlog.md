@@ -1,37 +1,13 @@
 # Leto Work Backlog
 
 <a id="leto-single-matrix-transpose-tasks"></a>
-## LETO-SINGLE-MATRIX-TRANSPOSE-TASKS-2026-09-09 — A batch of one matrix still transposes on one thread [minor] [perf] — in-progress
+## LETO-SINGLE-MATRIX-TRANSPOSE-TASKS-2026-09-09 — A batch of one matrix still transposes on one thread [minor] [perf] — done 2026-09-10
 
-- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-single-matrix-transpose-tasks`;
-  lane `D:/atlas/worktrees/leto-single-matrix-transpose-tasks`; regions
-  `crates/leto/src/application/assign.rs`, `crates/leto-ops/src/application/layout/complex/`,
-  their tests.
-- **Last-update:** 2026-09-10.
-- **Finding.** [`#leto-batch-transpose-tasks`](#leto-batch-transpose-tasks)
-  spreads a batch over whole-matrix tasks, which cannot split a batch of one.
-  Apollo's 3-D axis 0 is exactly that: `transpose_complex_matrices(1, nx,
-  ny*nz)`, a single `[64 x 4096]` `Complex64` matrix at 64³. With the lane
-  task width (apollo #374) and the batch tasks (#182) both in the tree,
-  apollo's `dimension_3d::pass_attribution` reads a 64³ forward at
-  **629.5 µs** at the fastest sample and that one transpose pair at **370 µs
-  of it — 59%** — against 91 µs for axis 1's pair, which the batch path now
-  spreads.
-- **Shape.** Destination rows are contiguous and disjoint, so a task is a
-  block of destination rows `[c0, c1)` — source columns `[c0, c1)` of every
-  source row, the strided read the tile kernel already performs per tile —
-  sized to the same 64 KiB floor (64 destination rows of 1 KiB at this
-  geometry, 64 tasks). The per-tile kernel is unchanged; what it needs is a
-  source-stride parameter, or a view, so a column window of a row-major matrix
-  can be handed to it. The batch path's constants and threshold apply as they
-  stand.
-- **Acceptance oracle.** The pass probe's `transpose-x` row at 64³ falls to
-  the order of its `transpose-y` row (91 µs) at the fastest sample, unpinned;
-  `tests/ops/layout.rs` gains a single-matrix case past the threshold with a
-  partial final task; `complex_transpose_allocations` holds the task path to
-  zero allocations as it does for batches.
-- **Risk / change class:** [minor] [perf]; **dependencies:** none; apollo
-  consumes through its pin, and its probe is the instrument.
+- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-single-matrix-transpose-tasks`.
+- **Outcome.** Parallel transpose tasks are cut in destination rows through
+  the new `leto::transpose_copy_strided`, so one large matrix splits like a
+  batch; apollo's 64³ axis-0 pair 415 → 151 µs at the fastest sample, the
+  forward 1932 → 359 µs, both under peer load. See the PR for the table.
 
 <a id="leto-batch-transpose-tasks"></a>
 ## LETO-BATCH-TRANSPOSE-TASKS-2026-09-09 — Large complex matrix batches transpose on one thread [patch] [perf] — done 2026-09-09
