@@ -1,8 +1,13 @@
 # Leto Work Backlog
 
 <a id="leto-single-matrix-transpose-tasks"></a>
-## LETO-SINGLE-MATRIX-TRANSPOSE-TASKS-2026-09-09 — A batch of one matrix still transposes on one thread [minor] [perf] — todo
+## LETO-SINGLE-MATRIX-TRANSPOSE-TASKS-2026-09-09 — A batch of one matrix still transposes on one thread [minor] [perf] — in-progress
 
+- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-single-matrix-transpose-tasks`;
+  lane `D:/atlas/worktrees/leto-single-matrix-transpose-tasks`; regions
+  `crates/leto/src/application/assign.rs`, `crates/leto-ops/src/application/layout/complex/`,
+  their tests.
+- **Last-update:** 2026-09-10.
 - **Finding.** [`#leto-batch-transpose-tasks`](#leto-batch-transpose-tasks)
   spreads a batch over whole-matrix tasks, which cannot split a batch of one.
   Apollo's 3-D axis 0 is exactly that: `transpose_complex_matrices(1, nx,
