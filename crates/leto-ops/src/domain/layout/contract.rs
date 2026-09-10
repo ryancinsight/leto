@@ -24,8 +24,12 @@ pub trait ComplexLayout: LaneScalar + Pod {
     ///
     /// High-count batches of small matrices use the widest exact Hermes hardware
     /// width that fits a complete square tile. Other shapes and targets reuse
-    /// Leto's cache-budgeted [`leto::transpose_copy`]. Neither route allocates after the
-    /// caller provides `source` and `destination`.
+    /// Leto's cache-budgeted [`leto::transpose_copy`]; under the `parallel`
+    /// feature a batch of at least one mebibyte is written in tasks of whole
+    /// destination rows — [`leto::transpose_copy_strided`] windows of the
+    /// source — so a single large matrix spreads over the runtime's workers as
+    /// a batch of small ones does. No route allocates after the caller provides
+    /// `source` and `destination`.
     ///
     /// # Errors
     ///

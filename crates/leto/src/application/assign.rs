@@ -236,6 +236,8 @@ fn transpose_tile<T>() -> usize {
 /// elements. Each destination at `column * rows + row` receives a clone of
 /// `source[row * columns + column]`. Offsets are supplied by borrowing the
 /// desired subslices; elements outside those slices remain untouched.
+/// [`transpose_copy_strided`] produces one block of the transpose's rows from
+/// the matching column window of the source.
 ///
 /// The cache-blocked traversal creates no intermediate storage. It clones
 /// each source element once, including zero-sized types; a user-defined
@@ -275,9 +277,131 @@ pub fn transpose_copy<T: Clone>(
     if transpose_extent(source.len(), destination.len(), rows, columns)? == 0 {
         return Ok(());
     }
-    // The traversal addresses destination rows and source columns. Nonzero
-    // dimensions and their product fit isize, bounding every slice product
-    // and tile endpoint; all exact chunks below have nonzero widths.
+    transpose_blocked(source, columns, destination, rows, columns);
+    Ok(())
+}
+
+/// Copies a column window of a row-major matrix into the matching rows of its
+/// transpose.
+///
+/// `source` begins at the window's first element of row 0 and holds `rows`
+/// rows of `columns` window elements with consecutive rows `source_pitch`
+/// elements apart, so it spans at least `(rows - 1) * source_pitch + columns`
+/// elements; what lies between one row's window and the next is never read.
+/// `destination` is the dense `[columns, rows]` block those rows of the
+/// transpose occupy: `destination[column * rows + row]` receives a clone of
+/// `source[row * source_pitch + column]`. [`transpose_copy`] is the case of a
+/// pitch equal to the column count over exact storage. Disjoint windows of
+/// one matrix produce disjoint row blocks of its transpose, so one transpose
+/// can be written in parts — by several threads, or in several passes —
+/// without copying the source.
+///
+/// The traversal, clone accounting and payload guarantees are those of
+/// [`transpose_copy`].
+///
+/// # Errors
+///
+/// Returns [`LetoError::Overflow`] if the window element count or the source
+/// span overflows `usize`, or a nonempty window exceeds the signed extent
+/// supported by dense layouts. Returns [`LetoError::StorageError`] if
+/// `destination` is not exactly `rows * columns` long, `source_pitch` is
+/// narrower than `columns`, or `source` is shorter than the span. Validation
+/// proceeds in this order: product, destination length, pitch, then for a
+/// nonempty window the source span and the signed extent. An empty window
+/// accepts any source. Errors leave both slices unchanged.
+///
+/// # Panics
+///
+/// Element cloning or destruction may panic after earlier destination values
+/// have been replaced. Validation errors do not execute either operation.
+///
+/// # Examples
+///
+/// ```
+/// use leto::transpose_copy_strided;
+/// // Columns 1..3 of the [2, 3] matrix [[1, 2, 3], [4, 5, 6]] are rows 1..3
+/// // of its transpose.
+/// let source = [1, 2, 3, 4, 5, 6];
+/// let mut destination = [0; 4];
+/// transpose_copy_strided(&source[1..], 3, &mut destination, 2, 2)?;
+/// assert_eq!(destination, [2, 5, 3, 6]);
+/// # Ok::<(), leto::LetoError>(())
+/// ```
+pub fn transpose_copy_strided<T: Clone>(
+    source: &[T],
+    source_pitch: usize,
+    destination: &mut [T],
+    rows: usize,
+    columns: usize,
+) -> Result<()> {
+    #[expect(
+        clippy::unnecessary_lazy_evaluations,
+        reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+    )]
+    let elements = rows
+        .checked_mul(columns)
+        .ok_or_else(|| LetoError::Overflow {
+            reason: "strided transpose element count",
+        })?;
+    if destination.len() != elements {
+        return Err(LetoError::StorageError {
+            reason: format!(
+                "strided transpose destination length {} does not match expected {elements}",
+                destination.len()
+            ),
+        });
+    }
+    if source_pitch < columns {
+        return Err(LetoError::StorageError {
+            reason: format!(
+                "strided transpose source pitch {source_pitch} is narrower than {columns} columns"
+            ),
+        });
+    }
+    if elements == 0 {
+        return Ok(());
+    }
+    #[expect(
+        clippy::unnecessary_lazy_evaluations,
+        reason = "Avoid eager LetoError drop on successful arithmetic; ADR 0027"
+    )]
+    let span = (rows - 1)
+        .checked_mul(source_pitch)
+        .and_then(|leading_rows| leading_rows.checked_add(columns))
+        .ok_or_else(|| LetoError::Overflow {
+            reason: "strided transpose source span",
+        })?;
+    if source.len() < span {
+        return Err(LetoError::StorageError {
+            reason: format!(
+                "strided transpose source length {} is shorter than the {span} elements the window spans",
+                source.len()
+            ),
+        });
+    }
+    isize::try_from(elements).map_err(|_| LetoError::Overflow {
+        reason: "strided transpose signed layout extent",
+    })?;
+    transpose_blocked(source, source_pitch, destination, rows, columns);
+    Ok(())
+}
+
+/// Cache-blocked traversal shared by [`transpose_copy`] and
+/// [`transpose_copy_strided`].
+///
+/// Invariant, established by the callers' validation: all four dimensions are
+/// nonzero, `destination.len() == rows * columns` fits `isize`,
+/// `pitch >= columns`, and `source.len() >= (rows - 1) * pitch + columns`.
+/// That bounds every slice product and tile endpoint below, and every exact
+/// chunk has a nonzero width.
+fn transpose_blocked<T: Clone>(
+    source: &[T],
+    pitch: usize,
+    destination: &mut [T],
+    rows: usize,
+    columns: usize,
+) {
+    // The traversal addresses destination rows and source columns.
     let (height, width) = (columns, rows);
     let tile = transpose_tile::<T>();
     if width >= height {
@@ -285,7 +409,9 @@ pub fn transpose_copy<T: Clone>(
             let row_end = (row_start + tile).min(height);
             for column_start in (0..width).step_by(tile) {
                 let column_end = (column_start + tile).min(width);
-                let source_columns = &source[column_start * height..column_end * height];
+                // Source rows past the window's last are never reached: the
+                // zip below stops at the destination row's column window.
+                let source_columns = source[column_start * pitch..].chunks(pitch);
                 let destination_rows = &mut destination[row_start * width..row_end * width];
                 for (row_offset, destination_row) in
                     destination_rows.chunks_exact_mut(width).enumerate()
@@ -293,14 +419,14 @@ pub fn transpose_copy<T: Clone>(
                     let row = row_start + row_offset;
                     for (target, source_column) in destination_row[column_start..column_end]
                         .iter_mut()
-                        .zip(source_columns.chunks_exact(height))
+                        .zip(source_columns.clone())
                     {
                         *target = source_column[row].clone();
                     }
                 }
             }
         }
-        return Ok(());
+        return;
     }
 
     for column_start in (0..width).step_by(tile) {
@@ -309,7 +435,7 @@ pub fn transpose_copy<T: Clone>(
             let row_end = (row_start + tile).min(height);
             let destination_rows = &mut destination[row_start * width..row_end * width];
             for column in column_start..column_end {
-                let source_column = &source[column * height + row_start..column * height + row_end];
+                let source_column = &source[column * pitch + row_start..column * pitch + row_end];
                 for (destination_row, value) in
                     destination_rows.chunks_exact_mut(width).zip(source_column)
                 {
@@ -318,7 +444,6 @@ pub fn transpose_copy<T: Clone>(
             }
         }
     }
-    Ok(())
 }
 
 #[inline]

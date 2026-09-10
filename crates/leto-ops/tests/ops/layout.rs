@@ -9,10 +9,13 @@ use leto_ops::ComplexLayout;
 use payloads::{assert_bits, expected, values, PayloadScalar};
 
 fn assert_batches<T: PayloadScalar + ComplexLayout>() {
-    // The last two batches are large enough to leave the calling thread under
-    // the `parallel` feature: 64 x 64 x 64 is one 64 KiB matrix per task at
-    // `Complex64`, and 2048 x 20 x 8 groups 2.5 KiB matrices twenty-five to a
-    // task with a partial final task, so grouping and its tail are exercised.
+    // The last four batches are large enough to leave the calling thread under
+    // the `parallel` feature, where a task is 64 KiB of destination rows:
+    // 64 x 64 x 64 is one matrix per task at `Complex64`; 2048 x 20 x 8 is
+    // twenty-five 2.5 KiB matrices per task with a partial final task; one
+    // 96 x 1400 matrix is 42 destination rows per task (85 at `Complex32`) with
+    // a partial final task, the split whole-matrix tasks cannot make; and
+    // 3 x 96 x 500 puts a matrix boundary inside a task at both widths.
     for (matrix_count, rows, columns) in [
         (256, 15, 13),
         (256, 16, 16),
@@ -20,6 +23,8 @@ fn assert_batches<T: PayloadScalar + ComplexLayout>() {
         (1, 35, 67),
         (64, 64, 64),
         (2048, 20, 8),
+        (1, 96, 1400),
+        (3, 96, 500),
     ] {
         let source = values::<T>(matrix_count * rows * columns);
         let expected = expected(&source, matrix_count, rows, columns);

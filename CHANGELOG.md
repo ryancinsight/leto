@@ -16,6 +16,15 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] `leto::transpose_copy_strided` copies a column window of a
+  row-major matrix — the source at a pitch wider than the window — into the
+  matching rows of its transpose, with the checked extents, clone accounting
+  and traversal of `transpose_copy`. Under `parallel`,
+  `ComplexLayout::transpose_complex_matrices` cuts its tasks in destination
+  rows through it, so a batch of one large matrix spreads over the runtime's
+  workers as a batch of small ones already did; tasks and threshold keep
+  their measured widths.
+
 - [minor] `leto::transpose_copy` exposes the existing cache-blocked dense
   transpose over borrowed source and destination slices. Checked extents
   precede mutation; generic element cloning and existing assignment and view
