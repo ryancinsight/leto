@@ -1,27 +1,14 @@
 # Leto Work Backlog
 
 <a id="leto-strided-pitch-aliasing"></a>
-## LETO-STRIDED-PITCH-ALIASING-2026-09-10 — Window transposes at a 64 KiB pitch cost 1.7x their batch twin [patch] [perf] — todo
+## LETO-STRIDED-PITCH-ALIASING-2026-09-10 — Window transposes at a 64 KiB pitch cost 1.7x their batch twin [patch] [perf] — done 2026-09-10
 
-- **Question (spike).** After
-  [`#leto-single-matrix-transpose-tasks`](#leto-single-matrix-transpose-tasks),
-  apollo's 64³ probe reads the axis-0 pair — one `[64 x 4096]` `Complex64`
-  matrix in 64 window tasks — at **151.3 µs** against **90.3 µs** for the
-  axis-1 pair, 64 `[64 x 64]` matrices of the same 4 MiB, at the fastest
-  sample under peer load. Same bytes, same task width, same tile kernel; the
-  window's source rows are 64 KiB apart, so every row of a 32-row tile maps to
-  the same L1 sets, which a 12-way L1 cannot hold. Hypothesis, not finding.
-- **Method.** A leto-ops probe timing `transpose_copy_strided` over one
-  `[64 x 4096]` window set at pitches 4096 and 4096 + 8 elements (the same
-  bytes moved, only the set mapping changed), on one thread and in tasks; if
-  the padded pitch closes the gap, the fix is a tile whose source-row extent
-  shrinks when the pitch is a large power of two, chosen in
-  `transpose_tile` from the pitch rather than the payload alone.
-- **Evidence budget / deliverable.** One probe run per pitch; a board update
-  with the numbers, and the tile rule as the follow-on item if the hypothesis
-  holds. Oracle for the follow-on: the probe's `transpose-x` row at 64³ meets
-  its `transpose-y` row.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none.
+- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-strided-pitch-aliasing`.
+- **Outcome.** Hypothesis held: pinned to one performance core the window set
+  ran 302 µs at the 64 KiB pitch and 177 µs with the pitch padded off the
+  alias. The tile now walks the side with the smaller stride (209 µs); an
+  8-line strided tile measured 218 and was not kept. Residual 209 vs 177 is
+  the scatter form's cost; the instrument is `layout_copy/window_pitch`.
 
 <a id="leto-single-matrix-transpose-tasks"></a>
 ## LETO-SINGLE-MATRIX-TRANSPOSE-TASKS-2026-09-09 — A batch of one matrix still transposes on one thread [minor] [perf] — done 2026-09-10

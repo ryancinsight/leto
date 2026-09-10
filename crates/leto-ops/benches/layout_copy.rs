@@ -11,7 +11,7 @@
 )]
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use leto::{Array2, ArrayView2, ArrayViewMut2, Complex, Layout};
+use leto::{transpose_copy_strided, Array2, ArrayView2, ArrayViewMut2, Complex, Layout};
 use leto_ops::ComplexLayout;
 use std::hint::black_box;
 use std::time::Duration;
@@ -260,6 +260,122 @@ fn bench_complex_batches(c: &mut Criterion) {
     group.finish();
 }
 
+/// Apollo's 64³ axis-0 transpose: one `[64 x 4096]` `Complex64` matrix, moved
+/// as 64 windows of 64 destination rows.
+const WINDOW_ROWS: usize = 64;
+const WINDOW_COLUMNS: usize = 4_096;
+const WINDOW_WIDTH: usize = 64;
+/// Eight complex elements move the source rows off the 64 KiB pitch by two
+/// cache lines, so the rows of one tile no longer share L1 and L2 sets while
+/// the bytes moved stay the same.
+const PITCH_PAD: usize = 8;
+
+/// Transposes the matrix window by window on the calling thread, each window
+/// through the strided kernel at the given source pitch.
+fn transpose_windows(source: &[Complex<f64>], pitch: usize, destination: &mut [Complex<f64>]) {
+    for (window, block) in destination
+        .chunks_exact_mut(WINDOW_WIDTH * WINDOW_ROWS)
+        .enumerate()
+    {
+        let start = window * WINDOW_WIDTH;
+        let span = (WINDOW_ROWS - 1) * pitch + WINDOW_WIDTH;
+        transpose_copy_strided(
+            &source[start..start + span],
+            pitch,
+            block,
+            WINDOW_ROWS,
+            WINDOW_WIDTH,
+        )
+        .unwrap();
+    }
+}
+
+/// The same bytes at the same shape as `WINDOW_*`, at a pitch of the column
+/// count and at that pitch padded, on one thread and in the provider's tasks;
+/// beside them the batch of 64 `[64 x 64]` matrices apollo's axis 1 moves,
+/// which the provider spreads the same way and whose rows sit 1 KiB apart.
+fn bench_window_pitch(c: &mut Criterion) {
+    let mut group = c.benchmark_group("layout_copy/window_pitch");
+    let len = WINDOW_ROWS * WINDOW_COLUMNS;
+    let value = |index: usize| Complex::new(index as f64 + 0.25, -(index as f64) - 0.5);
+    let dense = (0..len).map(value).collect::<Vec<_>>();
+    let expected = expected_batch(&dense, 1, WINDOW_ROWS, WINDOW_COLUMNS);
+    let padded_pitch = WINDOW_COLUMNS + PITCH_PAD;
+    let padded = (0..WINDOW_ROWS * padded_pitch)
+        .map(|index| {
+            let (row, column) = (index / padded_pitch, index % padded_pitch);
+            if column < WINDOW_COLUMNS {
+                value(row * WINDOW_COLUMNS + column)
+            } else {
+                Complex::default()
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut output = vec![Complex::default(); len];
+
+    for (label, source, pitch) in [
+        ("serial/pitch=4096", &dense, WINDOW_COLUMNS),
+        ("serial/pitch=4104", &padded, padded_pitch),
+    ] {
+        transpose_windows(source, pitch, &mut output);
+        assert_eq!(output, expected);
+        group.bench_function(label, |b| {
+            b.iter(|| {
+                transpose_windows(black_box(source), pitch, black_box(&mut output));
+                black_box(output[len - 1])
+            });
+        });
+    }
+
+    <f64 as ComplexLayout>::transpose_complex_matrices(
+        &dense,
+        &mut output,
+        1,
+        WINDOW_ROWS,
+        WINDOW_COLUMNS,
+    )
+    .unwrap();
+    assert_eq!(output, expected);
+    group.bench_function("tasks/pitch=4096", |b| {
+        b.iter(|| {
+            <f64 as ComplexLayout>::transpose_complex_matrices(
+                black_box(&dense),
+                black_box(&mut output),
+                1,
+                WINDOW_ROWS,
+                WINDOW_COLUMNS,
+            )
+            .unwrap();
+            black_box(output[len - 1])
+        });
+    });
+
+    let batch_expected = expected_batch(&dense, WINDOW_ROWS, WINDOW_ROWS, WINDOW_ROWS);
+    <f64 as ComplexLayout>::transpose_complex_matrices(
+        &dense,
+        &mut output,
+        WINDOW_ROWS,
+        WINDOW_ROWS,
+        WINDOW_ROWS,
+    )
+    .unwrap();
+    assert_eq!(output, batch_expected);
+    group.bench_function("tasks/batch=64x64x64", |b| {
+        b.iter(|| {
+            <f64 as ComplexLayout>::transpose_complex_matrices(
+                black_box(&dense),
+                black_box(&mut output),
+                WINDOW_ROWS,
+                WINDOW_ROWS,
+                WINDOW_ROWS,
+            )
+            .unwrap();
+            black_box(output[len - 1])
+        });
+    });
+    group.finish();
+}
+
 criterion_group! {
     name = layout_copy;
     config = Criterion::default()
@@ -267,6 +383,6 @@ criterion_group! {
         .warm_up_time(Duration::from_millis(300))
         .measurement_time(Duration::from_millis(500))
         .without_plots();
-    targets = bench_layout_copy, bench_complex_batches
+    targets = bench_layout_copy, bench_complex_batches, bench_window_pitch
 }
 criterion_main!(layout_copy);
