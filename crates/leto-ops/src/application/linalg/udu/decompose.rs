@@ -1,5 +1,6 @@
 //! Unpivoted `A = U D Uᵀ` factorization kernel.
 
+use crate::application::linalg::thresholds::rank_pivot_ratio;
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
 
@@ -62,7 +63,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         }
     }
 
-    let pivot_tol = scale.mul(T::ONE.div(T::from_usize(1_000_000_000_000)));
+    let pivot_tol = scale.mul(rank_pivot_ratio::<T>());
     let mut u = vec![T::ZERO; n * n];
     let mut d = vec![T::ZERO; n];
     // Reusable hoist buffer for the loop-invariant weights `w[k] = u[j][k]·d[k]`.

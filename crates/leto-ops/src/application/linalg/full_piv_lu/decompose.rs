@@ -1,5 +1,6 @@
 //! Complete-pivoting Gaussian elimination `P A Q = L U`.
 
+use crate::application::linalg::thresholds::rank_pivot_ratio;
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
 
@@ -53,7 +54,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
     let mut sign = 1i8;
     let mut rank = n;
     // Relative pivot floor: a trailing block below this is treated as zero.
-    let tol = global_max.mul(T::ONE.div(T::from_usize(1_000_000_000_000)));
+    let tol = global_max.mul(rank_pivot_ratio::<T>());
 
     for k in 0..n {
         // Locate the largest-magnitude entry in the trailing submatrix.

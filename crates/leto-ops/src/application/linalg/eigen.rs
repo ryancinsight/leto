@@ -1,3 +1,4 @@
+use crate::application::linalg::thresholds::rank_pivot_ratio;
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use leto::{Array2, ArrayView2, LetoError, Result};
@@ -23,13 +24,12 @@ pub struct SymmetricEigenDecomposition<T> {
 
 /// Default convergence tolerance: `1 / 10^12` expressed in `T`.
 ///
-/// For `f64`/`f32` this is exactly `1e-12`. For reduced-precision types the
-/// `10^12` literal saturates to infinity, yielding a tolerance of zero so the
-/// solver runs to its bounded sweep cap rather than stopping early at a value
-/// the type cannot represent.
+/// The denominator is converted through the scalar's floating-point boundary,
+/// so the same source compiles on 32-bit targets while every solver retains its
+/// native-precision threshold.
 #[inline]
 fn default_tolerance<T: RealScalar>() -> T {
-    T::ONE.div(T::from_usize(1_000_000_000_000))
+    rank_pivot_ratio::<T>()
 }
 
 /// Compute the eigendecomposition of a real symmetric matrix with Jacobi rotations.

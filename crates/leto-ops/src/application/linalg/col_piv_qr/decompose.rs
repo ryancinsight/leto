@@ -1,6 +1,7 @@
 //! Householder QR with column pivoting: `A P = Q R`.
 
 use crate::application::linalg::householder::{apply_left, apply_right, reflector};
+use crate::application::linalg::thresholds::rank_pivot_ratio;
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
 
@@ -64,7 +65,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
             ref_norm = nrm;
         }
     }
-    let tol = ref_norm.mul(T::ONE.div(T::from_usize(1_000_000_000_000)));
+    let tol = ref_norm.mul(rank_pivot_ratio::<T>());
     let mut rank = p;
 
     let mut alw: Vec<T> = Vec::with_capacity(n);
