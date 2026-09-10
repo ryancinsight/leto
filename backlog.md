@@ -1,5 +1,14 @@
 # Leto Work Backlog
 
+<a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
+## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
+
+- Status: in-progress; priority: correctness; integrator: root; branch: `codex/leto-wasm-tolerance`; updated: 2026-09-10.
+- Outcome: the shared relative rank/pivot threshold compiles on 32-bit targets and preserves the documented native-precision `1e-12` policy.
+- Scope: the five linalg consumers of the `10^12` denominator, one shared tolerance constructor, tests/docs needed for the contract, and no algorithm or threshold change.
+- Acceptance: wasm32 `cargo check` and strict Clippy pass; native linalg tests pass; no duplicate threshold literals remain; commit and PR are linked here.
+- Lease: root `crates/leto-ops/src/application/linalg/`, `backlog.md`; 2026-09-10T16:00:00Z.
+
 <a id="leto-strided-pitch-aliasing"></a>
 ## LETO-STRIDED-PITCH-ALIASING-2026-09-10 — Window transposes at a 64 KiB pitch cost 1.7x their batch twin [patch] [perf] — done 2026-09-10
 
