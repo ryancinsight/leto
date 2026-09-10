@@ -1,2 +1,17 @@
+# Test-time budget: a test crossing 30s is flagged slow (a performance defect in
+# the code under test — profile and optimize the implementation, never raise
+# this limit); a second 30s period terminates it as a hang/deadlock to
+# root-cause. `cargo nextest run` is the only sanctioned test runner precisely
+# because it applies this instrument.
 [profile.default]
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+# Miri interprets rather than executes, costing two to three orders of magnitude
+# more per test, so the default bound would fire on interpreter overhead rather
+# than on a defect in the code under test. This profile is used only by the Miri
+# job and never relaxes the native budget above, which remains the authority on
+# real execution time. A test that exceeds even this bound is a genuine hang to
+# root-cause — under Miri that most likely means a deadlock the scheduler
+# exposes — not a reason to raise the number again.
+[profile.miri]
+slow-timeout = { period = "300s", terminate-after = 2 }
