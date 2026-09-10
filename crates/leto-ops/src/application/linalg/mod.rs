@@ -52,6 +52,8 @@ pub(crate) mod reflector_block;
 pub mod schur;
 /// Thin SVD and singular values for finite matrices.
 pub mod svd;
+/// Shared relative thresholds for dense factorizations.
+pub(crate) mod thresholds;
 /// Symmetric indefinite unpivoted `U D Uᵀ` factorization.
 pub mod udu;
 

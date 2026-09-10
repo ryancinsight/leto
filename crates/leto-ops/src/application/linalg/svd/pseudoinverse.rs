@@ -1,6 +1,7 @@
 //! Moore-Penrose pseudoinverse via the SVD.
 
 use super::svd_decompose;
+use crate::application::linalg::thresholds::rank_pivot_ratio;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
 
@@ -10,7 +11,7 @@ use leto::{Array2, ArrayView2, Result, Storage};
 /// of the decomposition (`O(ε·σ_max)`, `ε ≈ 2.2e-16`) and below any singular
 /// value a caller would consider structurally present.
 fn rank_cutoff_ratio<T: RealScalar>() -> T {
-    T::ONE.div(T::from_usize(1_000_000_000_000))
+    rank_pivot_ratio::<T>()
 }
 
 /// Moore-Penrose pseudoinverse `A⁺` (shape `n × m`), rank-revealing.

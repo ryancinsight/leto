@@ -1,5 +1,12 @@
 # Leto Work Backlog
 
+<a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
+## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
+
+- Status: review; priority: correctness; integrator: root; branch: `codex/leto-wasm-tolerance`; updated: 2026-09-10.
+- Outcome: `rank_pivot_ratio` converts the shared `1e-12` denominator through `FloatElement::from_f64`, so ColPivQR, Jacobi eigen, FullPivLU, SVD pseudoinverse, and UDU compile on 32-bit targets without changing the native threshold. The duplicate literal is deleted.
+- Acceptance evidence: Atlas-overlay `cargo check --offline -p leto-ops --target wasm32-unknown-unknown`, standalone strict Clippy, 585/585 `leto-ops` nextest, and the new f32/f64 threshold contract test pass. PR pending.
+
 <a id="leto-strided-pitch-aliasing"></a>
 ## LETO-STRIDED-PITCH-ALIASING-2026-09-10 — Window transposes at a 64 KiB pitch cost 1.7x their batch twin [patch] [perf] — done 2026-09-10
 
