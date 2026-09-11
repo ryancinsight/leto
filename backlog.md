@@ -61,44 +61,24 @@
 - Driver and evidence: [Apollo attribution](../apollo/backlog.md#apollo-rotated-move-geometry), [retained reports and limits](../apollo/docs/experiments/rotated-moves/README.md).
 
 <a id="leto-tall-transpose-geometry"></a>
-## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — A tall matrix transposes at a third the speed of its transpose [patch] [perf] — todo
+## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — Tall and wide transposes of one volume cost the same; the asymmetry was host load [patch] [perf] — done 2026-09-11
 
-- **Finding.** `layout_copy/transpose_geometry` (added with this item) times the
-  two moves a 3-D transform makes on a 64³ `Complex64` volume. Pinned to one
-  performance core, two rounds: the **wide** move (`[64, 4096]` into
-  `[4096, 64]`) reads **245 / 286 µs**, the **tall** move (`[4096, 64]` into
-  `[64, 4096]`) reads **853 / 842 µs** — a factor of 3.4 for the same 4 MiB and
-  the same element count. Through the provider's tasks the gap narrows to about
-  1.8x (127 against 226 µs, host loaded). This is what limits apollo's rotated
-  transform pair ([`apollo #apollo-rotated-order-handoff`](../apollo/backlog.md#apollo-rotated-order-handoff)),
-  whose inverse makes two tall moves where the C-order chain makes three wide
-  ones: four moves for six bought only 4%.
-- **What it is not.** Both forms of the blocked traversal already walk the side
-  with the smaller stride, and each geometry gets a 1 KiB stride on its strided
-  side, so neither is the set-aliasing case the pitch rule fixed. Two tile
-  shapes were tried and both regressed: a rectangular tile with a quarter of
-  the destination rows and four times the run length (tall 348 µs against 233
-  on the same host state) and a square tile of twice the side (no change tall,
-  wide worse). The difference between the geometries is which side is gathered
-  and which is scattered — tall gathers its reads and writes sequentially, wide
-  reads sequentially and scatters — not how the tile is cut.
-- **A second shape to compare (arm added, not yet measured).** The probe puts
-  the batched axis-1 pair at about 20 µs per move and the chain's single-matrix
-  moves at 48, so the chain's permutation is worth expressing as a batch: for
-  each `y`, `(x, y, z)` to `(y, z, x)` is the `[nx, nz]` window at stride
-  `ny * nz` laid down contiguously, which is exactly what
-  `transpose_copy_strided` takes. The bench's `serial/windowed/64x(64x64)` arm
-  does that and asserts it produces the same permutation as the single move.
-  Its timing is not recorded here: every run today was taken while this host
-  was saturated, and the numbers moved by an order of magnitude on code paths
-  that did not change. It needs a quiet host or the counters below.
-- **Method for the next attempt.** Read the two forms' counters rather than
-  their wall clock (`iai-callgrind` or `perf stat` equivalents on this host):
-  L1 and L2 miss counts, and store-buffer or RFO traffic, will say whether the
-  gather or the scatter is paying. A blocked two-pass move through a staging
-  tile that keeps both sides sequential is the candidate fix, and it costs an
-  extra pass over the volume, so it only wins if the gap is this large.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none.
+- **Integrator:** claude-opus-5; closed on its own measurement, no code change.
+- **Outcome, correcting the filing.** This item was opened on a 3.4x gap between
+  the tall (`[4096, 64]`) and wide (`[64, 4096]`) moves, pinned to one core.
+  Re-measured pinned on a quiet host (21–38%, no load of mine), three rounds:
+  wide 207 / 188 / 189 µs, tall 198 / 191 / 221 µs, and the windowed batch of
+  64 `[64, 64]` transposes 205 / 202 µs. The shapes cost the same. The filing's
+  runs were taken while load generators of mine and peer builds saturated the
+  host; pinning isolated the core but not the shared cache and memory
+  bandwidth, so they measured the host.
+- **Consequences.** No shape-dependent decomposition is warranted serially —
+  the scheduling decision that does matter, how a matrix is cut into tasks, is
+  already leto's (`transpose_in_tasks`, and source-line grouping in #192). The
+  parallel comparison stays open: at 96–97% host load its rounds disagree on
+  which shape is faster. apollo's rotated pair keeps its measured 4% without
+  the explanation this item gave it. `transpose_geometry` stays as the
+  instrument.
 
 <a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
 ## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
