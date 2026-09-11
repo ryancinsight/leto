@@ -123,10 +123,20 @@ fn transpose_in_tasks<T>(
 ) where
     T: LaneScalar + Pod,
 {
-    let row_bytes = rows
-        .saturating_mul(core::mem::size_of::<Complex<T>>())
-        .max(1);
-    let rows_per_task = (PARALLEL_TRANSPOSE_TASK_BYTES / row_bytes).max(1);
+    let element_bytes = core::mem::size_of::<Complex<T>>().max(1);
+    let row_bytes = rows.saturating_mul(element_bytes).max(1);
+    // Each destination row reads one source column. A byte budget alone cuts
+    // tall matrices into one-column tasks, making separate workers fetch the
+    // same source lines. Keep one line's worth of columns together: the 64³
+    // Apollo attribution measures four rows/task at 31–33 us versus 42–44 us
+    // for one, while raising the byte budget globally regresses wide moves.
+    // Unaligned origins and ragged pitches can still share boundary lines.
+    // Clipping to columns also bounds rows * source_columns by matrix_len.
+    let source_columns = crate::infrastructure::cache::cached_cache_geometry()
+        .cache_line_bytes()
+        .div_ceil(element_bytes)
+        .min(columns);
+    let rows_per_task = (PARALLEL_TRANSPOSE_TASK_BYTES / row_bytes).max(source_columns);
     let task_len = rows_per_task * rows;
     moirai::for_each_chunk_mut_enumerated_with::<moirai::Parallel, _, _>(
         destination,

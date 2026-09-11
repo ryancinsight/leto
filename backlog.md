@@ -1,13 +1,15 @@
 # Leto Work Backlog
 
 <a id="leto-transpose-row-tasks"></a>
-## LETO-TRANSPOSE-ROW-TASKS-2026-09-11 — Preserve source-line reuse in tall transpose tasks [patch] [perf] — in-progress
+## LETO-TRANSPOSE-ROW-TASKS-2026-09-11 — Preserve source-line reuse in tall transpose tasks [patch] [perf] — review
 
 - Integrator: root; branch: `perf/leto-transpose-row-tasks`; last-update: 2026-09-11.
 - Driver: [Apollo rotated move attribution](../apollo/backlog.md#apollo-rotated-move-geometry).
 - Scope: destination-row partition in `leto-ops` complex batch movement; no FFT, tile-loop, or global task-budget change.
 - Acceptance: four-scalar payload permutation and allocation gates pass; controlled 64³ consumer timing confirms improvement without a wide-move regression.
-- Basis: `c3c5a08`; Apollo's same-process controls measure tall tasks at 42–44 µs versus 31–33 µs for four destination rows; a global 256 KiB task regresses the wide control.
+- Evidence: [consumer reports and reproduction](../apollo/docs/experiments/rotated-moves/README.md); tall moves 41–45 → 30–32 µs, rotated pairs 7.6–14.4% lower in the stable comparison; shared-host limits apply.
+- Gates: 945 native tests; strict all-target Clippy; no-default-features check; 31 doctests pass, one ignored; operations rustdoc warning-clean. Four-scalar and ragged/batch payload cases pass; allocation counters cover the calling thread.
+- Independent review: production diff and retained timing reports pass for these bounded claims; no tile-loop or FFT-scheduling change.
 
 <a id="leto-tall-transpose-geometry"></a>
 ## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — A tall matrix transposes at a third the speed of its transpose [patch] [perf] — todo
