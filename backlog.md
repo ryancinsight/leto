@@ -1,5 +1,60 @@
 # Leto Work Backlog
 
+<a id="LETO-MIRI-GATE-2026-09-10"></a>
+## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
+
+- Status: in-progress; priority: safety; integrator: root; updated: 2026-09-10.
+- **Why it matters.** `reduce_axis` writes its output through
+  `VecStorage::uninit` and raw pointers (PR #157, `d16e3b2`). That is sound only
+  because every output element is written before it is read — an obligation
+  stated in prose on `VecStorage::uninit`, not enforced by any type. Nothing
+  gated it, which is the defect generator the mnemosyne board already recorded
+  for a crate sitting outside its Miri gate (MN-459).
+- **Landed in this item:** `[profile.miri]` in `.config/nextest.toml`, and a
+  `miri` job in `ci.yml` running both borrow models. Both are needed: an MN-437
+  fix in this stack passed Stacked Borrows while Tree Borrows still rejected
+  it, so a single-model gate can certify a still-broken fix.
+- **Measured 2026-09-10 (local Windows host, Miri `0.1.0` / nightly
+  `2026-08-26`).** Miri interprets every instruction, so cost tracks suite size,
+  not the code under test:
+
+  | Target | Tests | Stacked | Tree | Gated |
+  |---|---:|---:|---:|---|
+  | `leto --lib` | 130 | 206s | 363s | yes |
+  | `leto-ops --test ops_tests -E test(/reduction/)` | 17 | 6s | 8s | yes |
+  | `leto-ops --lib` | 216 | >10m | — | no |
+  | `leto-ops --test ops_tests` (full binary) | 352 | >10m | — | no |
+  | `leto layout_property_tests` | proptest | >10m | — | no |
+
+- **Scope, stated so it is not mistaken for a clean bill.** The gated pair is
+  the storage substrate and the uninitialized-output caller, which are the
+  contracts the job exists for. The excluded surfaces are excluded because they
+  are not yet affordable or Miri-clean — **not because they are believed
+  sound** — and this item owns widening the scope:
+  1. `layout_property_tests` samples thousands of layouts per run; under Miri
+     each sample is interpreted. Its property is still checked natively.
+  2. `leto-ops` unit and `ops_tests` suites exceed ten minutes. Narrowing them
+     by an arbitrary name filter would tailor the gate to what passes, so they
+     stay out until their workload is bounded.
+- **Two failures observed locally and deliberately not filed as defects.** Both
+  are environment or test-fragility, and neither is yet confirmed on the Linux
+  runner:
+  - `complex_transpose_allocations` aborts under Miri with a Stacked Borrows
+    tag error whose entire backtrace is the **test's own** `CountingAllocator`
+    forwarding to the Windows `HeapFree` path
+    (`tests/complex_transpose_allocations.rs:31`), plus
+    `unsupported operation: can't call foreign function
+    GetNumaHighestNodeNumber`. Both are Windows-Miri limitations, not product
+    UB; confirm on `ubuntu-latest` before treating either as a finding.
+  - `leto-ops --lib` fails two `leapfrog` tests on an exact `assert_eq!`
+    (`leapfrog/tests.rs:152`) under Miri. The test asserts bit-exact equality
+    of a computed kernel against a plain difference; the divergence between
+    native and interpreted float evaluation is not yet explained, so the test
+    is neither loosened nor called a defect here.
+- **Acceptance:** the `miri` job is green on `main` under both borrow models,
+  and each excluded surface above is either brought into scope with a measured
+  bound or recorded as closed with the reason it stays out.
+
 <a id="leto-transpose-row-tasks"></a>
 ## LETO-TRANSPOSE-ROW-TASKS-2026-09-11 — Preserve source-line reuse in tall transpose tasks [patch] [perf] — done
 - Delivered: [PR 192](https://github.com/ryancinsight/leto/pull/192), `c13b7fa` (merge `a70029e`); source-column grouping retains the byte budget and tile loop. 945 native tests and hosted Rust verification pass.
