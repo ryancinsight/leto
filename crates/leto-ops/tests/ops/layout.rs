@@ -25,6 +25,12 @@ fn assert_batches<T: PayloadScalar + ComplexLayout>() {
         (2048, 20, 8),
         (1, 96, 1400),
         (3, 96, 500),
+        // Tall rows exercise the source-line minimum, including a ragged
+        // last group and groups crossing matrix boundaries for every scalar.
+        (1, 4096, 64),
+        (1, 4097, 257),
+        (33, 4097, 5),
+        (2, 65537, 1),
     ] {
         let source = values::<T>(matrix_count * rows * columns);
         let expected = expected(&source, matrix_count, rows, columns);

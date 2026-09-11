@@ -102,7 +102,8 @@ fn warmed_task_batches_allocate_nothing() {
     // 64 matrices of 64 x 64 are one matrix per task at `Complex64`; the
     // single 64 x 4096 matrix — apollo's 64³ axis-0 transpose — is split into
     // tasks of destination rows.
-    for (matrix_count, rows, columns) in [(64, 64, 64), (1, 64, 4096)] {
+    for (matrix_count, rows, columns) in [(64, 64, 64), (1, 64, 4096), (1, 4096, 64), (3, 4097, 17)]
+    {
         assert_task_batch_allocations::<f32>(matrix_count, rows, columns);
         assert_task_batch_allocations::<f64>(matrix_count, rows, columns);
     }
