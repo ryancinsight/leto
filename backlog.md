@@ -6,8 +6,14 @@
 - Driver and evidence: [Apollo attribution](../apollo/backlog.md#apollo-rotated-move-geometry), [retained reports and limits](../apollo/docs/experiments/rotated-moves/README.md).
 
 <a id="leto-tall-transpose-geometry"></a>
-## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — A tall matrix transposes at a third the speed of its transpose [patch] [perf] — todo
+## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — A tall matrix transposes at a third the speed of its transpose [patch] [perf] — in-progress
 
+- **Integrator:** claude-opus-5; **branch:** `perf/leto-transpose-decomposition`;
+  lane `D:/atlas/worktrees/leto-transpose-geometry`; regions
+  `crates/leto/src/application/assign.rs`, `crates/leto-ops/benches/layout_copy.rs`.
+  Scope widened at the user's direction: the decomposition choice (one
+  matrix or a batch of windows) moves into leto rather than its callers.
+- **Last-update:** 2026-09-11.
 - **Finding.** `layout_copy/transpose_geometry` (added with this item) times the
   two moves a 3-D transform makes on a 64³ `Complex64` volume. Pinned to one
   performance core, two rounds: the **wide** move (`[64, 4096]` into
