@@ -11,7 +11,9 @@
 )]
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use leto::{transpose_copy_strided, Array2, ArrayView2, ArrayViewMut2, Complex, Layout};
+use leto::{
+    transpose_copy, transpose_copy_strided, Array2, ArrayView2, ArrayViewMut2, Complex, Layout,
+};
 use leto_ops::ComplexLayout;
 use std::hint::black_box;
 use std::time::Duration;
@@ -376,6 +378,96 @@ fn bench_window_pitch(c: &mut Criterion) {
     group.finish();
 }
 
+/// The two move geometries a 3-D transform makes on a 64³ `Complex64` volume:
+/// the C-order chain transposes `[64, 4096]` three times, and the pair that
+/// keeps the rotated order transposes `[64, 4096]` twice going out and
+/// `[4096, 64]` twice coming back. Four moves replaced six and bought four
+/// percent, so the two geometries are timed here against each other, through
+/// the provider (tasks) and through Leto's serial kernel.
+fn bench_transpose_geometry(c: &mut Criterion) {
+    const SIDE: usize = 64;
+    let plane = SIDE * SIDE;
+    let len = SIDE * plane;
+    let source = (0..len)
+        .map(|index| Complex::new(index as f64 + 0.25, -(index as f64) - 0.5))
+        .collect::<Vec<_>>();
+    let mut destination = vec![Complex::<f64>::default(); len];
+    let mut group = c.benchmark_group("layout_copy/transpose_geometry");
+
+    // The same permutation as the wide move, expressed as `SIDE` independent
+    // `[SIDE, SIDE]` transposes of a strided window rather than one
+    // `[SIDE, SIDE * SIDE]` matrix: `(x, y, z)` to `(y, z, x)` is, for each
+    // `y`, the `[nx, nz]` window at stride `ny * nz` laid down contiguously.
+    let expected_rotation = {
+        let mut rotated = vec![Complex::<f64>::default(); len];
+        for y in 0..SIDE {
+            for z in 0..SIDE {
+                for x in 0..SIDE {
+                    rotated[(y * SIDE + z) * SIDE + x] = source[(x * SIDE + y) * SIDE + z];
+                }
+            }
+        }
+        rotated
+    };
+    let rotate_by_window = |destination: &mut [Complex<f64>]| {
+        for y in 0..SIDE {
+            let window = &source[y * SIDE..];
+            let block = &mut destination[y * plane..(y + 1) * plane];
+            transpose_copy_strided(window, plane, block, SIDE, SIDE).unwrap();
+        }
+    };
+    rotate_by_window(&mut destination);
+    assert_eq!(destination, expected_rotation, "windowed rotation");
+    group.bench_function("serial/windowed/64x(64x64)", |b| {
+        b.iter(|| {
+            rotate_by_window(black_box(&mut destination));
+            black_box(destination[len - 1])
+        });
+    });
+
+    for (label, rows, columns) in [("wide/64x4096", SIDE, plane), ("tall/4096x64", plane, SIDE)] {
+        let expected = expected_batch(&source, 1, rows, columns);
+        <f64 as ComplexLayout>::transpose_complex_matrices(
+            &source,
+            &mut destination,
+            1,
+            rows,
+            columns,
+        )
+        .unwrap();
+        assert_eq!(destination, expected, "{label} provider");
+        group.bench_function(format!("provider/{label}"), |b| {
+            b.iter(|| {
+                <f64 as ComplexLayout>::transpose_complex_matrices(
+                    black_box(&source),
+                    black_box(&mut destination),
+                    1,
+                    rows,
+                    columns,
+                )
+                .unwrap();
+                black_box(destination[len - 1])
+            });
+        });
+
+        transpose_copy(&source, &mut destination, rows, columns).unwrap();
+        assert_eq!(destination, expected, "{label} serial");
+        group.bench_function(format!("serial/{label}"), |b| {
+            b.iter(|| {
+                transpose_copy(
+                    black_box(&source),
+                    black_box(&mut destination),
+                    rows,
+                    columns,
+                )
+                .unwrap();
+                black_box(destination[len - 1])
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group! {
     name = layout_copy;
     config = Criterion::default()
@@ -383,6 +475,6 @@ criterion_group! {
         .warm_up_time(Duration::from_millis(300))
         .measurement_time(Duration::from_millis(500))
         .without_plots();
-    targets = bench_layout_copy, bench_complex_batches, bench_window_pitch
+    targets = bench_layout_copy, bench_complex_batches, bench_window_pitch, bench_transpose_geometry
 }
 criterion_main!(layout_copy);
