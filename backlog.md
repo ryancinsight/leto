@@ -61,7 +61,7 @@
 - Driver and evidence: [Apollo attribution](../apollo/backlog.md#apollo-rotated-move-geometry), [retained reports and limits](../apollo/docs/experiments/rotated-moves/README.md).
 
 <a id="leto-tall-transpose-geometry"></a>
-## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — Tall and wide transposes of one volume cost the same; the asymmetry was host load [patch] [perf] — done 2026-09-11
+## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — The tall-move gap was task partition, not the serial kernel [patch] [perf] — done 2026-09-11
 
 - **Integrator:** claude-opus-5; closed on its own measurement, no code change.
 - **Outcome, correcting the filing.** This item was opened on a 3.4x gap between
@@ -72,13 +72,21 @@
   runs were taken while load generators of mine and peer builds saturated the
   host; pinning isolated the core but not the shared cache and memory
   bandwidth, so they measured the host.
-- **Consequences.** No shape-dependent decomposition is warranted serially —
-  the scheduling decision that does matter, how a matrix is cut into tasks, is
-  already leto's (`transpose_in_tasks`, and source-line grouping in #192). The
-  parallel comparison stays open: at 96–97% host load its rounds disagree on
-  which shape is faster. apollo's rotated pair keeps its measured 4% without
-  the explanation this item gave it. `transpose_geometry` stays as the
-  instrument.
+- **Where the real gap was: task partition, found and fixed by a peer.** The
+  provider path runs the moves in parallel, and there the tall move was slower
+  for a reason the serial arms cannot show: with a 64 KiB byte budget, a tall
+  move gave each task one destination row, hence one source column, so separate
+  workers fetched the same source lines. [#192](https://github.com/ryancinsight/leto/pull/192)
+  keeps the byte budget and imposes a minimum of one detected cache line's
+  worth of source columns per task — four for `Complex64` here — and apollo's
+  rotated-pair medians fall 7.6–14.4% with it
+  ([`apollo #apollo-rotated-move-geometry`](../apollo/backlog.md#apollo-rotated-move-geometry),
+  13-case alternating instrument in `docs/experiments/rotated-moves`).
+- **Consequences.** No shape-dependent decomposition is warranted in the serial
+  kernel. The decision that does depend on shape — how a matrix is cut into
+  tasks — is already leto's, and since #192 it reads the detected cache line
+  rather than a fixed byte budget alone. `transpose_geometry` stays as the
+  serial instrument.
 
 <a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
 ## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
