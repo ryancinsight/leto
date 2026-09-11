@@ -394,6 +394,37 @@ fn bench_transpose_geometry(c: &mut Criterion) {
     let mut destination = vec![Complex::<f64>::default(); len];
     let mut group = c.benchmark_group("layout_copy/transpose_geometry");
 
+    // The same permutation as the wide move, expressed as `SIDE` independent
+    // `[SIDE, SIDE]` transposes of a strided window rather than one
+    // `[SIDE, SIDE * SIDE]` matrix: `(x, y, z)` to `(y, z, x)` is, for each
+    // `y`, the `[nx, nz]` window at stride `ny * nz` laid down contiguously.
+    let expected_rotation = {
+        let mut rotated = vec![Complex::<f64>::default(); len];
+        for y in 0..SIDE {
+            for z in 0..SIDE {
+                for x in 0..SIDE {
+                    rotated[(y * SIDE + z) * SIDE + x] = source[(x * SIDE + y) * SIDE + z];
+                }
+            }
+        }
+        rotated
+    };
+    let rotate_by_window = |destination: &mut [Complex<f64>]| {
+        for y in 0..SIDE {
+            let window = &source[y * SIDE..];
+            let block = &mut destination[y * plane..(y + 1) * plane];
+            transpose_copy_strided(window, plane, block, SIDE, SIDE).unwrap();
+        }
+    };
+    rotate_by_window(&mut destination);
+    assert_eq!(destination, expected_rotation, "windowed rotation");
+    group.bench_function("serial/windowed/64x(64x64)", |b| {
+        b.iter(|| {
+            rotate_by_window(black_box(&mut destination));
+            black_box(destination[len - 1])
+        });
+    });
+
     for (label, rows, columns) in [("wide/64x4096", SIDE, plane), ("tall/4096x64", plane, SIDE)] {
         let expected = expected_batch(&source, 1, rows, columns);
         <f64 as ComplexLayout>::transpose_complex_matrices(

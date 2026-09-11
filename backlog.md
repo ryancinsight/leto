@@ -22,6 +22,16 @@
   wide worse). The difference between the geometries is which side is gathered
   and which is scattered — tall gathers its reads and writes sequentially, wide
   reads sequentially and scatters — not how the tile is cut.
+- **A second shape to compare (arm added, not yet measured).** The probe puts
+  the batched axis-1 pair at about 20 µs per move and the chain's single-matrix
+  moves at 48, so the chain's permutation is worth expressing as a batch: for
+  each `y`, `(x, y, z)` to `(y, z, x)` is the `[nx, nz]` window at stride
+  `ny * nz` laid down contiguously, which is exactly what
+  `transpose_copy_strided` takes. The bench's `serial/windowed/64x(64x64)` arm
+  does that and asserts it produces the same permutation as the single move.
+  Its timing is not recorded here: every run today was taken while this host
+  was saturated, and the numbers moved by an order of magnitude on code paths
+  that did not change. It needs a quiet host or the counters below.
 - **Method for the next attempt.** Read the two forms' counters rather than
   their wall clock (`iai-callgrind` or `perf stat` equivalents on this host):
   L1 and L2 miss counts, and store-buffer or RFO traffic, will say whether the
