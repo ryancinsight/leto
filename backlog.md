@@ -1,5 +1,14 @@
 # Leto Work Backlog
 
+<a id="LETO-LEAPFROG-UNIT-TASKS-2026-09-15"></a>
+## LETO-LEAPFROG-UNIT-TASKS-2026-09-15 — The staggered leapfrog stencils run on one thread [minor] [perf] — todo
+
+- **Finding.** `StaggeredLeapfrog3D::{gradient_into, divergence_into}` sweep on the calling thread: `leapfrog/kernels.rs` has no moirai path, and the `diff/three_dimensional` module holds none of the crate's 51 `parallel` cfg sites. kwavers FDTD runs six of these sweeps per staggered step (three gradients, three divergences), while every pointwise update around them already fans out, so on a multi-core host the stencils bound the step. The resolved kwavers graph enables `leto-ops/parallel` through default-feature unification, so the moirai edge is already present.
+- **Change.** Gradient and interior divergence on moirai unit tasks sized by bytes (moirai ADR 0059): whole output blocks for the outer axes and lines for the contiguous axis, with window sums unchanged. The divergence wall scatter writes reflected target cells, so it either stays serial behind the interior pass or is split so each task owns its target planes.
+- **Acceptance:** both operators match the indexed reference to the bit on all three axes at orders 2 to 8, serially and across tasks; existing leapfrog tests unchanged; kwavers `fdtd_step_64_cubed` before and after, unpinned and alternating.
+- **Consumer driver:** kwavers FDTD `leapfrog_operator`. `KW-FDTD-POINTWISE-LANES-2026-09-15` moves the pointwise updates; this item is the stencil half.
+- **Status:** todo, not claimed; filed 2026-09-15 by claude-opus-5.
+
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
 
