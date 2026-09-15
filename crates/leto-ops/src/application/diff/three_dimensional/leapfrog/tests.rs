@@ -371,6 +371,52 @@ fn the_block_kernels_agree_with_the_contiguous_one() {
 /// to write would show. Gradient
 /// along x reads neighbouring planes; its oracle is the transposed comparison
 /// above.
+/// Divergence along x gathers each target plane in the order the scatter
+/// writes it, so it matches, to the bit, the indexed scatter a non-contiguous
+/// input takes. The volume moves more than the parallel floor, so the gather
+/// also spreads over tasks, and both outputs start as NaN.
+#[test]
+fn divergence_along_x_gathers_what_the_scatter_writes() {
+    use leto::{ArrayView3, Layout};
+
+    let shape = [41usize, 38, 44];
+    let [nx, ny, nz] = shape;
+    let field = seeded(shape, 0.6);
+    // Every other buffer element, on every axis: a view that is not contiguous.
+    let mut buffer = vec![f64::NAN; 2 * nx * ny * nz];
+    for i in 0..nx {
+        for j in 0..ny {
+            for k in 0..nz {
+                buffer[2 * ((i * ny + j) * nz + k)] = field[[i, j, k]];
+            }
+        }
+    }
+    let strides = [(2 * ny * nz) as isize, (2 * nz) as isize, 2_isize];
+    let layout = Layout::<3>::try_new(shape, strides, 0).unwrap();
+    let strided = ArrayView3::try_new(layout, buffer.as_slice()).unwrap();
+    assert!(
+        strided.as_slice().is_none(),
+        "the strided input takes the indexed path"
+    );
+
+    for order in [2, 4, 8] {
+        let op = StaggeredLeapfrog3D::<f64>::new(order, 1.0e-3, 2.0e-3, 1.5e-3).unwrap();
+        let mut gathered = Array3::from_elem(shape, f64::NAN);
+        op.divergence_into(Axis::X, field.view(), &mut gathered.view_mut())
+            .unwrap();
+        let mut scattered = Array3::from_elem(shape, f64::NAN);
+        op.divergence_into(Axis::X, strided.reborrow(), &mut scattered.view_mut())
+            .unwrap();
+        let same = gathered
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(scattered.as_slice().unwrap())
+            .all(|(a, b)| a.to_bits() == b.to_bits());
+        assert!(same, "order {order}");
+    }
+}
+
 #[cfg(feature = "parallel")]
 #[test]
 fn a_parallel_sweep_matches_its_planes_swept_alone() {

@@ -74,9 +74,9 @@ pub(super) fn divergence<T: RealField + FloatElement + Copy>(
     shape: [usize; 3],
 ) {
     let (index, extent, scale) = op.axis_geometry(axis, shape);
-    // The transposes scatter into a zeroed target. The indexed fallback and the
-    // x axis zero the whole target on the calling thread; along y and z each
-    // plane is zeroed inside its own task, so the zeroing spreads with the
+    // The transposes accumulate into a zeroed target. The indexed fallback
+    // zeroes the whole target on the calling thread; every contiguous arm
+    // zeroes each plane inside its own task, so the zeroing spreads with the
     // sweep instead of staying a serial pass over the volume.
     let (Some(source), Some(target)) = (field.as_slice(), dst.as_mut_slice()) else {
         dst.fill(<T as NumericElement>::ZERO);
@@ -90,12 +90,14 @@ pub(super) fn divergence<T: RealField + FloatElement + Copy>(
     let plane = shape[1] * shape[2];
     let element_bytes = size_of::<T>();
     match index {
-        // The outer-axis transpose scatters each source plane into reflected
-        // target planes, so no plane owns its writes; it stays on the calling
-        // thread.
+        // A source plane scatters into reflected target planes, so each target
+        // plane gathers its terms instead, in the scatter's order.
         0 => {
-            target.fill(<T as NumericElement>::ZERO);
-            divergence_blocks(op, source, target, extent, plane, scale);
+            // A target plane reads up to 2·halo source planes.
+            let reads = 1 + 2 * op.halo_width();
+            for_each_plane_mut(target, plane, reads * element_bytes, |here, out| {
+                divergence_block_gather(op, source, out, here, extent, scale);
+            });
         }
         1 => for_each_plane_mut(target, plane, 2 * element_bytes, |x, out| {
             out.fill(<T as NumericElement>::ZERO);
@@ -271,6 +273,42 @@ fn divergence_blocks<T: RealField + FloatElement + Copy>(
             let lo = reflect(here as isize - n + 1, reach) * block;
             for (out, &value) in target[lo..lo + block].iter_mut().zip(value) {
                 *out += c * (value * scale);
+            }
+        }
+    }
+}
+
+/// One target block of [`divergence_blocks`] over a whole axis, gathered: block
+/// `here` of an axis of `extent` blocks of `out.len()` cells.
+///
+/// The scatter visits sources in ascending order, taps in ascending order, and
+/// for each writes its high reflection before its low one. This gather walks the
+/// same sequence and applies only the writes that land on `here`, so every cell
+/// accumulates the same terms in the same order and matches the scatter to the
+/// bit; target blocks no longer share writes and can run on separate tasks.
+fn divergence_block_gather<T: RealField + FloatElement + Copy>(
+    op: &StaggeredLeapfrog3D<T>,
+    source: &[T],
+    out: &mut [T],
+    here: usize,
+    extent: usize,
+    scale: T,
+) {
+    let block = out.len();
+    let reach = extent as isize;
+    out.fill(<T as NumericElement>::ZERO);
+    for (from, value) in source.chunks_exact(block).enumerate() {
+        for (offset, &c) in op.coefficients().taps().iter().enumerate() {
+            let n = offset as isize + 1;
+            if reflect(from as isize + n, reach) == here {
+                for (out, &value) in out.iter_mut().zip(value) {
+                    *out -= c * (value * scale);
+                }
+            }
+            if reflect(from as isize - n + 1, reach) == here {
+                for (out, &value) in out.iter_mut().zip(value) {
+                    *out += c * (value * scale);
+                }
             }
         }
     }
