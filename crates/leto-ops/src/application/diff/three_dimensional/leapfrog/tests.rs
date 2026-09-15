@@ -325,33 +325,99 @@ fn the_adjointness_fields_are_non_degenerate() {
 fn the_block_kernels_agree_with_the_contiguous_one() {
     // The three axes take three different traversals through the same
     // coefficients; a cubic grid makes their results directly comparable after
-    // transposing the field.
-    let n = 6;
-    let shape = [n, n, n];
-    let field = seeded(shape, 0.9);
-    let op = StaggeredLeapfrog3D::<f64>::new(6, 1.0, 1.0, 1.0).unwrap();
+    // transposing the field. The 41³ cube moves more than the parallel floor,
+    // so both traversals also spread over tasks.
+    for n in [6, 41] {
+        let shape = [n, n, n];
+        let field = seeded(shape, 0.9);
+        let op = StaggeredLeapfrog3D::<f64>::new(6, 1.0, 1.0, 1.0).unwrap();
 
-    let mut along_z = Array3::zeros(shape);
-    op.gradient_into(Axis::Z, field.view(), &mut along_z.view_mut())
-        .unwrap();
+        let mut along_z = Array3::zeros(shape);
+        op.gradient_into(Axis::Z, field.view(), &mut along_z.view_mut())
+            .unwrap();
 
-    // Transpose x <-> z, differentiate along x, transpose back.
-    let mut transposed = Array3::zeros(shape);
-    for i in 0..n {
-        for j in 0..n {
-            for k in 0..n {
-                transposed[[k, j, i]] = field[[i, j, k]];
+        // Transpose x <-> z, differentiate along x, transpose back.
+        let mut transposed = Array3::zeros(shape);
+        for i in 0..n {
+            for j in 0..n {
+                for k in 0..n {
+                    transposed[[k, j, i]] = field[[i, j, k]];
+                }
+            }
+        }
+        let mut along_x = Array3::zeros(shape);
+        op.gradient_into(Axis::X, transposed.view(), &mut along_x.view_mut())
+            .unwrap();
+
+        for i in 0..n {
+            for j in 0..n {
+                for k in 0..n {
+                    assert_eq!(
+                        along_z[[i, j, k]],
+                        along_x[[k, j, i]],
+                        "n {n} ({i}, {j}, {k})"
+                    );
+                }
             }
         }
     }
-    let mut along_x = Array3::zeros(shape);
-    op.gradient_into(Axis::X, transposed.view(), &mut along_x.view_mut())
-        .unwrap();
+}
 
-    for i in 0..n {
-        for j in 0..n {
-            for k in 0..n {
-                assert_eq!(along_z[[i, j, k]], along_x[[k, j, i]], "({i}, {j}, {k})");
+/// The in-plane sweeps (gradient and divergence along y and z) write each
+/// x-plane from that plane alone, so a volume large enough to spread over
+/// tasks matches, to the bit, the same operator applied to each of its
+/// x-planes as a one-plane array, which stays on the calling thread. The
+/// whole volume's output starts as NaN, so a plane its task failed to zero or
+/// to write would show. Gradient
+/// along x reads neighbouring planes; its oracle is the transposed comparison
+/// above.
+#[cfg(feature = "parallel")]
+#[test]
+fn a_parallel_sweep_matches_its_planes_swept_alone() {
+    let shape = [41, 38, 44];
+    let [nx, ny, nz] = shape;
+    assert!(
+        nx * ny * nz * 2 * size_of::<f64>() >= crate::infrastructure::parallel::PARALLEL_MIN_BYTES,
+        "the volume must spread over tasks"
+    );
+    let plane = ny * nz;
+    let field = seeded(shape, 0.4);
+    let values = field.as_slice().unwrap();
+    for order in [2, 6] {
+        let op = StaggeredLeapfrog3D::<f64>::new(order, 1.0e-3, 2.0e-3, 1.5e-3).unwrap();
+        for axis in [Axis::Y, Axis::Z] {
+            for divergence in [false, true] {
+                let sweep = |input: &Array3<f64>, initial: f64| {
+                    let mut out = Array3::from_elem(input.shape(), initial);
+                    if divergence {
+                        op.divergence_into(axis, input.view(), &mut out.view_mut())
+                            .unwrap();
+                    } else {
+                        op.gradient_into(axis, input.view(), &mut out.view_mut())
+                            .unwrap();
+                    }
+                    out
+                };
+                let whole = sweep(&field, f64::NAN);
+                let whole_values = whole.as_slice().unwrap();
+                for x in 0..nx {
+                    let slab = Array3::from_shape_vec(
+                        [1, ny, nz],
+                        values[x * plane..(x + 1) * plane].to_vec(),
+                    )
+                    .unwrap();
+                    let alone = sweep(&slab, 0.0);
+                    let same = alone
+                        .as_slice()
+                        .unwrap()
+                        .iter()
+                        .zip(&whole_values[x * plane..(x + 1) * plane])
+                        .all(|(a, b)| a.to_bits() == b.to_bits());
+                    assert!(
+                        same,
+                        "order {order} axis {axis:?} divergence {divergence} plane {x}"
+                    );
+                }
             }
         }
     }

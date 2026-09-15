@@ -1,6 +1,67 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
+#[cfg(feature = "parallel")]
 use leto::{TaskPartitionMut, TaskPartitionsMut};
+
+/// Bytes a pass moves before it spreads over the runtime's workers.
+///
+/// Apollo's 3-D pass probe (`dimension_3d::pass_attribution`, 2026-09-09)
+/// measured the crossover on this runtime: a 32³ volume — 32 matrices of
+/// 16 KiB, 512 KiB in all — ran *slower* spread over tasks (28.5 µs against
+/// 21.9 serial), because at eleven microseconds of work the runtime's
+/// spawn-and-join is the larger part, while the 64³ batch, 4 MiB, won by 2.4x
+/// to 3.9x. One mebibyte sits between the two. The batched complex transpose
+/// and the leapfrog sweeps share it; the probe and `benches/leapfrog.rs` are
+/// the instruments that move it.
+#[cfg(feature = "parallel")]
+pub(crate) const PARALLEL_MIN_BYTES: usize = 1024 * 1024;
+
+/// Runs `plane(index, values)` over the whole x-planes of a C-order 3-D output
+/// whose planes hold `plane_len` elements: `index` is the plane's x index and
+/// `values` its elements in storage order.
+///
+/// With the `parallel` feature, consecutive planes spread over moirai unit
+/// tasks (moirai ADR 0059) once the sweep moves [`PARALLEL_MIN_BYTES`];
+/// `element_bytes` counts one output element and every input element `plane`
+/// reads beside it. Without the feature the planes run in order on the calling
+/// thread. Either way each plane is written by exactly one call, so a `plane`
+/// body that reads only shared inputs computes the same values in both.
+pub(crate) fn for_each_plane_mut<T, F>(
+    output: &mut [T],
+    plane_len: usize,
+    #[cfg_attr(
+        not(feature = "parallel"),
+        expect(
+            unused_variables,
+            reason = "only the parallel arm sizes tasks by bytes"
+        )
+    )]
+    element_bytes: usize,
+    plane: F,
+) where
+    T: Send,
+    F: Fn(usize, &mut [T]) + Send + Sync,
+{
+    if plane_len == 0 {
+        return;
+    }
+    #[cfg(feature = "parallel")]
+    moirai::for_each_unit_task_mut_with::<moirai::WorkBytes<PARALLEL_MIN_BYTES>, _, _, _, _>(
+        output,
+        plane_len,
+        plane_len.saturating_mul(element_bytes),
+        || (),
+        |(), first_plane, planes| {
+            for (offset, values) in planes.chunks_exact_mut(plane_len).enumerate() {
+                plane(first_plane + offset, values);
+            }
+        },
+    );
+    #[cfg(not(feature = "parallel"))]
+    for (index, values) in output.chunks_exact_mut(plane_len).enumerate() {
+        plane(index, values);
+    }
+}
 
 /// Partition and run a 1D loop in parallel using Moirai's work-stealing runtime.
 ///
@@ -103,7 +164,7 @@ where
     for_each_task_partition_mut_with::<moirai::Adaptive, _, _, _>(moirai::global(), partitions, f)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "parallel"))]
 mod tests {
     use super::*;
     use leto::{Array, ArrayViewMut, Layout, VecStorage};
