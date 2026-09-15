@@ -43,6 +43,12 @@ criterion = { workspace = true }
 name = "kernels"
 harness = false
 
+# LETO-LEAPFROG-UNIT-TASKS: per-axis staggered sweeps at 64 cubed against a
+# pointwise control, the before-and-after instrument for the sweep scheduling.
+[[bench]]
+name = "leapfrog"
+harness = false
+
 [[bench]]
 name = "layout_copy"
 harness = false
