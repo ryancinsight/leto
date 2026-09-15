@@ -10,6 +10,7 @@ use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3};
 
 use super::{Axis, StaggeredLeapfrog3D};
+use crate::infrastructure::parallel::for_each_plane_mut;
 
 pub(super) fn gradient<T: RealField + FloatElement + Copy>(
     op: &StaggeredLeapfrog3D<T>,
@@ -31,24 +32,37 @@ pub(super) fn gradient<T: RealField + FloatElement + Copy>(
     // the length exactly, so no remainder exists to handle.
     let extent = extent as usize;
     let plane = shape[1] * shape[2];
+    // Every output plane is written from shared source reads alone, so the
+    // planes spread over tasks and each still runs the serial body.
+    let element_bytes = size_of::<T>();
     match index {
-        0 => gradient_blocks(op, source, target, extent, plane, scale),
-        1 => {
-            for (source, target) in source
-                .chunks_exact(plane)
-                .zip(target.chunks_exact_mut(plane))
-            {
-                gradient_blocks(op, source, target, extent, shape[2], scale);
-            }
+        0 => {
+            // Face `here` of the outer axis reads 2·halo whole source planes.
+            let reads = 1 + 2 * op.halo_width();
+            for_each_plane_mut(target, plane, reads * element_bytes, |here, out| {
+                gradient_block(op, source, out, here, extent, scale);
+            });
         }
-        _ => {
-            for (source, target) in source
+        1 => for_each_plane_mut(target, plane, 2 * element_bytes, |x, out| {
+            let start = x * plane;
+            gradient_blocks(
+                op,
+                &source[start..start + plane],
+                out,
+                extent,
+                shape[2],
+                scale,
+            );
+        }),
+        _ => for_each_plane_mut(target, plane, 2 * element_bytes, |x, out| {
+            let start = x * plane;
+            for (source, target) in source[start..start + plane]
                 .chunks_exact(extent)
-                .zip(target.chunks_exact_mut(extent))
+                .zip(out.chunks_exact_mut(extent))
             {
                 gradient_line(op, source, target, scale);
             }
-        }
+        }),
     }
 }
 
@@ -60,9 +74,12 @@ pub(super) fn divergence<T: RealField + FloatElement + Copy>(
     shape: [usize; 3],
 ) {
     let (index, extent, scale) = op.axis_geometry(axis, shape);
-    dst.fill(<T as NumericElement>::ZERO);
-
+    // The transposes scatter into a zeroed target. The indexed fallback and the
+    // x axis zero the whole target on the calling thread; along y and z each
+    // plane is zeroed inside its own task, so the zeroing spreads with the
+    // sweep instead of staying a serial pass over the volume.
     let (Some(source), Some(target)) = (field.as_slice(), dst.as_mut_slice()) else {
+        dst.fill(<T as NumericElement>::ZERO);
         divergence_indexed(op, index, extent, scale, field, dst, shape);
         return;
     };
@@ -71,24 +88,37 @@ pub(super) fn divergence<T: RealField + FloatElement + Copy>(
     }
     let extent = extent as usize;
     let plane = shape[1] * shape[2];
+    let element_bytes = size_of::<T>();
     match index {
-        0 => divergence_blocks(op, source, target, extent, plane, scale),
-        1 => {
-            for (source, target) in source
-                .chunks_exact(plane)
-                .zip(target.chunks_exact_mut(plane))
-            {
-                divergence_blocks(op, source, target, extent, shape[2], scale);
-            }
+        // The outer-axis transpose scatters each source plane into reflected
+        // target planes, so no plane owns its writes; it stays on the calling
+        // thread.
+        0 => {
+            target.fill(<T as NumericElement>::ZERO);
+            divergence_blocks(op, source, target, extent, plane, scale);
         }
-        _ => {
-            for (source, target) in source
+        1 => for_each_plane_mut(target, plane, 2 * element_bytes, |x, out| {
+            out.fill(<T as NumericElement>::ZERO);
+            let start = x * plane;
+            divergence_blocks(
+                op,
+                &source[start..start + plane],
+                out,
+                extent,
+                shape[2],
+                scale,
+            );
+        }),
+        _ => for_each_plane_mut(target, plane, 2 * element_bytes, |x, out| {
+            out.fill(<T as NumericElement>::ZERO);
+            let start = x * plane;
+            for (source, target) in source[start..start + plane]
                 .chunks_exact(extent)
-                .zip(target.chunks_exact_mut(extent))
+                .zip(out.chunks_exact_mut(extent))
             {
                 divergence_line(op, source, target, scale);
             }
-        }
+        }),
     }
 }
 
@@ -120,24 +150,38 @@ fn gradient_blocks<T: RealField + FloatElement + Copy>(
     block: usize,
     scale: T,
 ) {
-    let reach = extent as isize;
     for (here, out) in target.chunks_exact_mut(block).enumerate() {
-        out.fill(<T as NumericElement>::ZERO);
-        for (offset, &c) in op.coefficients().taps().iter().enumerate() {
-            let n = offset as isize + 1;
-            let hi = reflect(here as isize + n, reach) * block;
-            let lo = reflect(here as isize - n + 1, reach) * block;
-            for ((out, &hi), &lo) in out
-                .iter_mut()
-                .zip(&source[hi..hi + block])
-                .zip(&source[lo..lo + block])
-            {
-                *out += c * (hi - lo);
-            }
+        gradient_block(op, source, out, here, extent, scale);
+    }
+}
+
+/// One output block of [`gradient_blocks`]: face `here` of an axis of `extent`
+/// blocks of `out.len()` cells, read from whole source blocks.
+fn gradient_block<T: RealField + FloatElement + Copy>(
+    op: &StaggeredLeapfrog3D<T>,
+    source: &[T],
+    out: &mut [T],
+    here: usize,
+    extent: usize,
+    scale: T,
+) {
+    let block = out.len();
+    let reach = extent as isize;
+    out.fill(<T as NumericElement>::ZERO);
+    for (offset, &c) in op.coefficients().taps().iter().enumerate() {
+        let n = offset as isize + 1;
+        let hi = reflect(here as isize + n, reach) * block;
+        let lo = reflect(here as isize - n + 1, reach) * block;
+        for ((out, &hi), &lo) in out
+            .iter_mut()
+            .zip(&source[hi..hi + block])
+            .zip(&source[lo..lo + block])
+        {
+            *out += c * (hi - lo);
         }
-        for out in out.iter_mut() {
-            *out *= scale;
-        }
+    }
+    for out in out.iter_mut() {
+        *out *= scale;
     }
 }
 

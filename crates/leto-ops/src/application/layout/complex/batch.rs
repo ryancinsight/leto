@@ -30,16 +30,6 @@ const REGISTER_TRANSPOSE_MAX_MATRIX_SIDE: usize = 16;
 #[cfg(feature = "parallel")]
 const PARALLEL_TRANSPOSE_TASK_BYTES: usize = 64 * 1024;
 
-/// Bytes of batch below which the transpose stays on the calling thread.
-///
-/// The same probe's 32³ volume — 32 matrices of 16 KiB, 512 KiB in all — ran
-/// *slower* spread over tasks (28.5 µs against 21.9 serial): at eleven
-/// microseconds of work the runtime's spawn-and-join is the larger part. The
-/// 64³ batch, 4 MiB, won by 2.4x to 3.9x. One mebibyte sits between the two;
-/// the probe is the instrument that moves it.
-#[cfg(feature = "parallel")]
-const PARALLEL_TRANSPOSE_MIN_BYTES: usize = 1024 * 1024;
-
 pub(super) fn transpose_complex_matrices<T>(
     source: &[Complex<T>],
     destination: &mut [Complex<T>],
@@ -99,7 +89,8 @@ where
 /// the runtime's workers.
 #[cfg(feature = "parallel")]
 fn parallel_transpose_applies<E>(total_len: usize) -> bool {
-    total_len.saturating_mul(core::mem::size_of::<E>()) >= PARALLEL_TRANSPOSE_MIN_BYTES
+    total_len.saturating_mul(core::mem::size_of::<E>())
+        >= crate::infrastructure::parallel::PARALLEL_MIN_BYTES
 }
 
 /// Transposes a validated batch over tasks of at least

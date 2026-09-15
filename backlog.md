@@ -8,6 +8,7 @@
 - **Acceptance:** both operators match the indexed reference to the bit on all three axes at orders 2 to 8, serially and across tasks; existing leapfrog tests unchanged; kwavers `fdtd_step_64_cubed` before and after, unpinned and alternating.
 - **Consumer driver:** kwavers FDTD `leapfrog_operator`. `KW-FDTD-POINTWISE-LANES-2026-09-15` moves the pointwise updates; this item is the stencil half.
 - **Integrator:** claude-opus-5; **branch:** `perf/leto-leapfrog-unit-tasks`; **last-update:** 2026-09-15. First increment: a leapfrog sweep group in `benches/kernels.rs` (64 cubed, orders 2 and 4, all three axes) to state the stencil share of a kwavers FDTD step and serve as the before and after instrument.
+- **Progress:** bench `f64e86c`, moirai lock `a0f5e77`, then gradients on every axis and divergence along y and z on plane tasks, bitwise equal per plane. At 64 cubed the six sweeps drop from 620 to 231 µs at order 2 and from 1007 to 344 µs at order 4. Divergence along x stays serial (its scatter crosses planes) and is now the largest remaining sweep, 115 and 197 µs.
 
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
