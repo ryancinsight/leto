@@ -1,14 +1,10 @@
 # Leto Work Backlog
 
 <a id="LETO-LEAPFROG-UNIT-TASKS-2026-09-15"></a>
-## LETO-LEAPFROG-UNIT-TASKS-2026-09-15 — The staggered leapfrog stencils run on one thread [minor] [perf] — in-progress
+## LETO-LEAPFROG-UNIT-TASKS-2026-09-15 — The staggered leapfrog stencils run on one thread [minor] [perf] — done
 
-- **Finding.** `StaggeredLeapfrog3D::{gradient_into, divergence_into}` sweep on the calling thread: `leapfrog/kernels.rs` has no moirai path, and the `diff/three_dimensional` module holds none of the crate's 51 `parallel` cfg sites. kwavers FDTD runs six of these sweeps per staggered step (three gradients, three divergences), while every pointwise update around them already fans out, Measured at 64 cubed (`benches/leapfrog.rs`, quiet host), the six sweeps take 720 µs of a 2.69 ms step at order 2 and 1.03 ms of 3.12 ms at order 4: a quarter to a third of the step, and its largest single serial block. The remaining two-thirds is not attributed by this item. The resolved kwavers graph enables `leto-ops/parallel` through default-feature unification, so the moirai edge is already present.
-- **Change.** Gradient and interior divergence on moirai unit tasks sized by bytes (moirai ADR 0059): whole output blocks for the outer axes and lines for the contiguous axis, with window sums unchanged. The divergence wall scatter writes reflected target cells, so it either stays serial behind the interior pass or is split so each task owns its target planes.
-- **Acceptance:** both operators match the indexed reference to the bit on all three axes at orders 2 to 8, serially and across tasks; existing leapfrog tests unchanged; kwavers `fdtd_step_64_cubed` before and after, unpinned and alternating.
-- **Consumer driver:** kwavers FDTD `leapfrog_operator`. `KW-FDTD-POINTWISE-LANES-2026-09-15` moves the pointwise updates; this item is the stencil half.
-- **Integrator:** claude-opus-5; **branch:** `perf/leto-leapfrog-unit-tasks`; **last-update:** 2026-09-15. First increment: a leapfrog sweep group in `benches/kernels.rs` (64 cubed, orders 2 and 4, all three axes) to state the stencil share of a kwavers FDTD step and serve as the before and after instrument.
-- **Progress:** bench `f64e86c`, moirai lock `a0f5e77`, then gradients on every axis and divergence along y and z on plane tasks, bitwise equal per plane. At 64 cubed the six sweeps drop from 620 to 231 µs at order 2 and from 1007 to 344 µs at order 4. Divergence along x then gathers each target plane in the scatter order and spreads too: at 64 cubed the six sweeps cost 134 µs at order 2 and 168 µs at order 4. Remaining acceptance: kwavers advances its leto lock and re-reads `fdtd_step_64_cubed`.
+- #197 (`152d4c0`, with bench `f64e86c` and moirai lock `a0f5e77`) and #198 (`2e659b4`): all six sweeps run on plane tasks, bitwise equal per plane. At 64 cubed the six drop from 620 to 134 µs at order 2 and from 1007 to 168 µs at order 4.
+- Consumer: kwavers `fdtd_step_64_cubed` drops from 25.2 to 27.1 ms to 4.54 ms per ten steps at order 2 on clean alternating rounds (kwavers `KW-FDTD-LETO-SWEEPS-2026-09-15`).
 
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
