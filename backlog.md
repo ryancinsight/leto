@@ -1,12 +1,12 @@
 # Leto Work Backlog
 
 <a id="LETO-PARALLEL-FOR-UNUSED-2026-09-16"></a>
-## LETO-PARALLEL-FOR-UNUSED-2026-09-16 — A public parallel helper has no caller [major] — todo
+## LETO-PARALLEL-FOR-UNUSED-2026-09-16 — A public parallel helper has no caller [major] — review
 
-- **Finding.** `leto_ops::infrastructure::parallel::parallel_for(start, end, f)` dispatches one closure call per index under `Adaptive`. Nothing in leto, leto-ops or any stack consumer calls it; it survives only because `infrastructure` and `parallel` are public modules. Found while removing its sibling `parallel_for_chunks`.
-- **Options.** Remove it as a [major] with a CHANGELOG migration line, as `parallel_for_chunks` was removed; or keep it and state the external consumer it serves beside its declaration.
-- **Acceptance:** either the item is gone from the public surface with `cargo semver-checks` recording the removal, or its declaration names the consumer that justifies it.
-- **Status:** todo, not claimed; filed 2026-09-16 by claude-opus-5.
+- **Finding.** `leto_ops::infrastructure::parallel::parallel_for(start, end, f)` dispatched one closure call per index under `Adaptive`. Nothing in leto, leto-ops or any stack consumer called it; it survived only because `infrastructure` and `parallel` are public modules. Found while removing its sibling `parallel_for_chunks`.
+- **Adjudicated: removal.** The alternative was to keep it and name the external consumer that justifies it. There is none to name — the stack has no call site, and the body is a two-line wrapper over `moirai::for_each_index_with`, which a caller outside the tree can invoke directly.
+- **Acceptance met:** the item is gone from the public surface, `cargo semver-checks` records that one removal and nothing else, and the CHANGELOG carries the migration line.
+- **Integrator:** claude-opus-5; **branch:** `refactor/leto-drop-parallel-for`; **last-update:** 2026-09-16.
 
 <a id="LETO-STRIDED-UNIT-TASKS-2026-09-15"></a>
 ## LETO-STRIDED-UNIT-TASKS-2026-09-15 — Index-walking elementwise paths size their own chunks [major] [conformance] — done

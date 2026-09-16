@@ -8,6 +8,14 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [major] `leto_ops::infrastructure::parallel::parallel_for` is removed. It
+  dispatched one closure call per index under `Adaptive`, and no code in leto,
+  leto-ops or any consumer in the stack called it — it survived only because
+  its module is public. A caller outside the tree takes
+  `moirai::for_each_index_with::<Adaptive, _>(len, f)` directly, which is what
+  it wrapped, or one of the unit-task operators when the pass can state the
+  bytes a unit moves.
+
 - [major] `leto_ops::infrastructure::parallel::parallel_for_chunks` is removed.
   It scheduled a caller-sized chunk count behind its own fixed
   16384-element threshold, which is the decision moirai ADR 0059 moved into one
