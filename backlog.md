@@ -1,12 +1,10 @@
 # Leto Work Backlog
 
 <a id="LETO-PARALLEL-FOR-UNUSED-2026-09-16"></a>
-## LETO-PARALLEL-FOR-UNUSED-2026-09-16 — A public parallel helper has no caller [major] — review
+## LETO-PARALLEL-FOR-UNUSED-2026-09-16 — A public parallel helper has no caller [major] — done
 
-- **Finding.** `leto_ops::infrastructure::parallel::parallel_for(start, end, f)` dispatched one closure call per index under `Adaptive`. Nothing in leto, leto-ops or any stack consumer called it; it survived only because `infrastructure` and `parallel` are public modules. Found while removing its sibling `parallel_for_chunks`.
-- **Adjudicated: removal.** The alternative was to keep it and name the external consumer that justifies it. There is none to name — the stack has no call site, and the body is a two-line wrapper over `moirai::for_each_index_with`, which a caller outside the tree can invoke directly.
-- **Acceptance met:** the item is gone from the public surface, `cargo semver-checks` records that one removal and nothing else, and the CHANGELOG carries the migration line.
-- **Integrator:** claude-opus-5; **branch:** `refactor/leto-drop-parallel-for`; **last-update:** 2026-09-16.
+- Delivered: PR [#202](https://github.com/ryancinsight/leto/pull/202), commit `d159921`. `infrastructure::parallel::parallel_for` is gone from the public surface; `cargo semver-checks` reports that one removal and nothing else, and the CHANGELOG carries the migration to `moirai::for_each_index_with`.
+- Adjudicated removal over retention: no call site in leto, leto-ops or any stack consumer, and the body was a two-line wrapper.
 
 <a id="LETO-STRIDED-UNIT-TASKS-2026-09-15"></a>
 ## LETO-STRIDED-UNIT-TASKS-2026-09-15 — Index-walking elementwise paths size their own chunks [major] [conformance] — done
