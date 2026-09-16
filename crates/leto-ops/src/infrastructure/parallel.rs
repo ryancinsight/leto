@@ -16,6 +16,41 @@ use leto::{TaskPartitionMut, TaskPartitionsMut};
 #[cfg(feature = "parallel")]
 pub(crate) const PARALLEL_MIN_BYTES: usize = 1024 * 1024;
 
+/// Runs `run(first_index, values)` over consecutive runs of a dense output,
+/// each about one moirai unit task of work at `element_bytes` per element.
+///
+/// The caller decides whether to parallelize at all: an elementwise op gates on
+/// its own arithmetic and working set. This decides only the task width, from
+/// the bytes a unit moves, as moirai ADR 0059 requires, and hands each task a
+/// real slice rather than an index range to rebuild. Without the `parallel`
+/// feature the whole output runs on the calling thread.
+pub(crate) fn for_each_unit_run_mut<T, F>(
+    output: &mut [T],
+    #[cfg_attr(
+        not(feature = "parallel"),
+        expect(
+            unused_variables,
+            reason = "only the parallel arm sizes tasks by bytes"
+        )
+    )]
+    element_bytes: usize,
+    run: F,
+) where
+    T: Send,
+    F: Fn(usize, &mut [T]) + Send + Sync,
+{
+    #[cfg(feature = "parallel")]
+    moirai::for_each_unit_task_mut_with::<moirai::Parallel, _, _, _, _>(
+        output,
+        1,
+        element_bytes,
+        || (),
+        |(), first_index, values| run(first_index, values),
+    );
+    #[cfg(not(feature = "parallel"))]
+    run(0, output);
+}
+
 /// Runs `plane(index, values)` over the whole x-planes of a C-order 3-D output
 /// whose planes hold `plane_len` elements: `index` is the plane's x index and
 /// `values` its elements in storage order.

@@ -375,25 +375,15 @@ where
     Op: BinaryOp<T>,
     T: Scalar,
 {
-    let numel = lhs.len();
-    let lhs_ptr = lhs.as_ptr() as usize;
-    let rhs_ptr = rhs.as_ptr() as usize;
-    let out_ptr = out.as_mut_ptr() as usize;
-    let chunk_size = 4096;
-
-    crate::infrastructure::parallel::parallel_for_chunks(numel, chunk_size, move |start, end| {
-        // SAFETY: each worker writes to a distinct range of `out` corresponding to `start..end`.
-        // The slices are valid for the lifetime of parallel execution.
-        unsafe {
-            let lhs_chunk =
-                std::slice::from_raw_parts((lhs_ptr as *const T).add(start), end - start);
-            let rhs_chunk =
-                std::slice::from_raw_parts((rhs_ptr as *const T).add(start), end - start);
-            let out_chunk =
-                std::slice::from_raw_parts_mut((out_ptr as *mut T).add(start), end - start);
-            Op::apply_slice(lhs_chunk, rhs_chunk, out_chunk);
-        }
-    });
+    // One unit moves two inputs and one output, which is what sizes the task.
+    crate::infrastructure::parallel::for_each_unit_run_mut(
+        out,
+        3 * core::mem::size_of::<T>(),
+        |first, run| {
+            let end = first + run.len();
+            Op::apply_slice(&lhs[first..end], &rhs[first..end], run);
+        },
+    );
 }
 
 #[cfg(feature = "parallel")]

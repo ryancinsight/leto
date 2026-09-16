@@ -364,20 +364,16 @@ where
     T: Copy + Send + Sync + 'static,
     F: Fn(T) -> T + Copy + Send + Sync + 'static,
 {
-    let len = slice.len();
-    let ptr = slice.as_mut_ptr() as usize;
-    let chunk_size = 4096;
-
-    crate::infrastructure::parallel::parallel_for_chunks(len, chunk_size, move |start, end| {
-        for index in start..end {
-            // SAFETY: each worker mutates a unique element in `start..end` of a
-            // validated dense block.
-            unsafe {
-                let cell = (ptr as *mut T).add(index);
+    // One unit is read and written in place, so it moves twice its own size.
+    crate::infrastructure::parallel::for_each_unit_run_mut(
+        slice,
+        2 * core::mem::size_of::<T>(),
+        |_, run| {
+            for cell in run {
                 *cell = f(*cell);
             }
-        }
-    });
+        },
+    );
 }
 
 /// Zero-sized (or value-carrying) named real unary operation contract.
@@ -489,21 +485,17 @@ where
     U: Copy + Send + Sync + 'static,
     F: Fn(T) -> U + Copy + Send + Sync + 'static,
 {
-    let len = input.len();
-    let input_ptr = input.as_ptr() as usize;
-    let output_ptr = output.as_mut_ptr() as usize;
-    let chunk_size = 4096;
-
-    crate::infrastructure::parallel::parallel_for_chunks(len, chunk_size, move |start, end| {
-        for index in start..end {
-            // SAFETY: each worker writes a unique element in `start..end`; input and
-            // output slices have equal length by `map_into` shape validation.
-            unsafe {
-                let value = *(input_ptr as *const T).add(index);
-                *(output_ptr as *mut U).add(index) = f(value);
+    // One unit reads an input element and writes an output element.
+    crate::infrastructure::parallel::for_each_unit_run_mut(
+        output,
+        core::mem::size_of::<T>() + core::mem::size_of::<U>(),
+        |first, run| {
+            let end = first + run.len();
+            for (cell, &value) in run.iter_mut().zip(&input[first..end]) {
+                *cell = f(value);
             }
-        }
-    });
+        },
+    );
 }
 
 #[cfg(feature = "parallel")]

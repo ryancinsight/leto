@@ -5,9 +5,9 @@
 
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
-    add, binary_map, binary_map_with_cache_geometry, div, indexed_zip_mut_with, map, map_into,
-    map_into_with_cache_geometry, mapv, mul, scalar_map, sub, unary_map, zip_mut_with, AddOp,
-    CacheGeometry, EqOp, ErfOp, ErfcOp, GeOp, GtOp, LeOp, LgammaOp, LtOp, MulOp, NeOp,
+    add, binary_map, binary_map_with_cache_geometry, div, indexed_zip_mut_with, map, map_inplace,
+    map_into, map_into_with_cache_geometry, mapv, mul, scalar_map, sub, unary_map, zip_mut_with,
+    AddOp, CacheGeometry, EqOp, ErfOp, ErfcOp, GeOp, GtOp, LeOp, LgammaOp, LtOp, MulOp, NeOp,
 };
 
 fn assert_scalar_supertrait<T>()
@@ -684,4 +684,88 @@ fn f16_slice_operations_route_through_hermes_and_match_scalar_semantics() {
 #[test]
 fn bf16_slice_operations_route_through_hermes_and_match_scalar_semantics() {
     assert_reduced_precision_slice_operations::<eunomia::Bf16>();
+}
+
+/// Values `0.5, 1.0, 1.5, …`, built without a cast so the test carries no
+/// precision-losing conversion.
+fn ramp(len: usize, step: f64) -> Vec<f64> {
+    let mut value = 0.0;
+    (0..len)
+        .map(|_| {
+            value += step;
+            value
+        })
+        .collect()
+}
+
+/// Above the element-count gate of the unary paths (`PARALLEL_THRESHOLD`), so
+/// `map_into` and `map_inplace` take their parallel dense route.
+const PARALLEL_LEN: usize = 1 << 17;
+
+#[test]
+fn parallel_unary_dense_routes_match_the_serial_result() {
+    let source_values = ramp(PARALLEL_LEN, 0.5);
+    let source = Array::from_shape_vec([PARALLEL_LEN], source_values.clone()).unwrap();
+
+    let mut mapped = Array::from_shape_vec([PARALLEL_LEN], vec![0.0_f64; PARALLEL_LEN]).unwrap();
+    map_into(&source.view(), &mut mapped.view_mut(), |x| {
+        x.mul_add(3.0, -1.0)
+    })
+    .unwrap();
+    for (index, (&got, &x)) in mapped
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(&source_values)
+        .enumerate()
+    {
+        assert_eq!(
+            got.to_bits(),
+            x.mul_add(3.0, -1.0).to_bits(),
+            "map_into[{index}]"
+        );
+    }
+
+    let mut in_place = Array::from_shape_vec([PARALLEL_LEN], source_values.clone()).unwrap();
+    map_inplace(&mut in_place.view_mut(), |x| x.mul_add(-2.0, 0.25)).unwrap();
+    for (index, (&got, &x)) in in_place
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(&source_values)
+        .enumerate()
+    {
+        assert_eq!(
+            got.to_bits(),
+            x.mul_add(-2.0, 0.25).to_bits(),
+            "map_inplace[{index}]"
+        );
+    }
+}
+
+#[test]
+fn parallel_binary_dense_route_matches_the_serial_result() {
+    // The binary gate is a working set past the last-level cache, so the
+    // length comes from the probed geometry rather than a fixed count: three
+    // operands of `len` doubles, one page group past the capacity.
+    let capacity = leto_ops::cached_cache_geometry().l3_bytes();
+    let len = capacity / (3 * core::mem::size_of::<f64>()) + (1 << 16);
+
+    let lhs = Array::from_shape_vec([len], ramp(len, 0.5)).unwrap();
+    let rhs = Array::from_shape_vec([len], ramp(len, -0.25)).unwrap();
+    let mut out = Array::from_shape_vec([len], vec![0.0_f64; len]).unwrap();
+    add(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+
+    // Every element of the output is the sum of the two operands at the same
+    // position: a dropped, doubled or shifted task run shows up here.
+    for (index, ((&got, &x), &y)) in out
+        .storage()
+        .as_slice()
+        .iter()
+        .zip(lhs.storage().as_slice())
+        .zip(rhs.storage().as_slice())
+        .enumerate()
+    {
+        assert_eq!(got.to_bits(), (x + y).to_bits(), "add[{index}]");
+    }
 }
