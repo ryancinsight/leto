@@ -1,14 +1,11 @@
 # Leto Work Backlog
 
 <a id="LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15"></a>
-## LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15 — Dense elementwise paths size their own chunks [patch] [conformance] — review
+## LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15 — Dense elementwise paths size their own chunks [patch] [conformance] — done
 
-- **Finding.** `parallel_binary_map_slice`, `parallel_map_inplace_slice` and `parallel_map_slice` each pick a 4096-element chunk by hand and hand `parallel_for_chunks` only an index range, so every closure casts its slices to `usize` pointers and rebuilds them with `unsafe`. moirai ADR 0059 puts task width in one place, derived from the bytes a unit moves, and its unit-task operators hand out real `&mut [T]` runs.
-- **Change.** `infrastructure::parallel::for_each_unit_run_mut` wraps `for_each_unit_task_mut_with` for a dense output: the caller keeps the decision whether to parallelize at all (an elementwise op gates on its own arithmetic and working set), moirai decides the width from `element_bytes`. The three dense sites move onto it and their unsafe pointer round-trips go.
-- **Scope.** Dense paths only. The strided row-walk, block-tile and axis-reduction sites iterate logical indices rather than a dense output, so they keep `parallel_for_chunks` until an index-based byte-aware operator exists upstream; that is a second increment.
-- **Coverage.** No test reached any of the three parallel dense routes before this change: the gates are 65536 elements for the unary paths and a working set past L3 for the binary one, and the suite stayed under both. Two tests now drive all three above their gates and assert the result bit for bit against the elementwise reference, so a dropped, doubled or shifted task run fails. Each route was confirmed to run under a temporary probe rather than assumed.
-- **Acceptance:** leto and leto-ops suites (949 tests), 27 doctests, docs, clippy --all-targets -D warnings and the workspace --no-default-features check clean; three `unsafe` blocks fewer; no dispatch change, since both callers gate well above the 16384-element threshold `parallel_for_chunks` applied inside.
-- **Integrator:** claude-opus-5; **branch:** `perf/leto-elementwise-unit-tasks`; **last-update:** 2026-09-15.
+- Delivered: PR [#200](https://github.com/ryancinsight/leto/pull/200), commit `ae458db`. The binary map, in-place unary map and unary map-into take task width from the bytes a unit moves through `for_each_unit_run_mut`; the 4096-element chunks and three `unsafe` pointer round-trips are gone, and the callers keep the parallelize decision. No dispatch change: both gates sit far above the 16384-element threshold the old helper applied.
+- Coverage: no test reached these three routes before; two now drive all three past their gates and assert the result bit for bit, each route confirmed to run under a temporary probe. 949 tests, 27 doctests, clippy, docs and --no-default-features clean.
+- Remaining: the strided row-walk, block-tile and axis-reduction sites still size their own chunks; they iterate logical indices, so they need a byte-aware index operator upstream first.
 
 <a id="LETO-LEAPFROG-UNIT-TASKS-2026-09-15"></a>
 ## LETO-LEAPFROG-UNIT-TASKS-2026-09-15 — The staggered leapfrog stencils run on one thread [minor] [perf] — done
