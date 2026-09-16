@@ -485,14 +485,19 @@ where
 {
     let input_ptr = ctx.input_data.as_ptr() as usize;
     let output_ptr = ctx.output_data.as_mut_ptr() as usize;
-    let chunk_size = 512;
+    // One unit is one output element: it reads the whole reduced axis and
+    // writes once.
+    let unit_bytes = ctx
+        .axis_len
+        .saturating_add(1)
+        .saturating_mul(core::mem::size_of::<T>());
 
-    crate::infrastructure::parallel::parallel_for_chunks(
+    crate::infrastructure::parallel::for_each_unit_range(
         ctx.out_size,
-        chunk_size,
-        move |start, end| {
+        unit_bytes,
+        move |first, count| {
             let is_axis_contiguous = ctx.input_layout.strides()[ctx.axis] == 1;
-            for flat_idx in start..end {
+            for flat_idx in first..first + count {
                 let out_idx = index_from_flat(flat_idx, &ctx.out_shape);
                 let out_off = ctx
                     .output_layout

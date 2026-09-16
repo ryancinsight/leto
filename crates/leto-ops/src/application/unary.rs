@@ -524,13 +524,18 @@ where
             let input_row_step = ctx.input_layout.strides()[N - 2];
             let output_row_step = ctx.output_layout.strides()[N - 2];
             let blocks = geometry.slabs() * geometry.row_blocks();
-            let block_chunk = (4096 / (geometry.tile() * geometry.width()).max(1)).max(1);
+            // One unit is a tile of rows across the block's width, reading one
+            // input element and writing one output element per position.
+            let block_bytes = geometry
+                .tile()
+                .saturating_mul(geometry.width())
+                .saturating_mul(core::mem::size_of::<T>() + core::mem::size_of::<U>());
 
-            crate::infrastructure::parallel::parallel_for_chunks(
+            crate::infrastructure::parallel::for_each_unit_range(
                 blocks,
-                block_chunk,
-                move |start, end| {
-                    for block in start..end {
+                block_bytes,
+                move |first, count| {
+                    for block in first..first + count {
                         let slab = block / geometry.row_blocks();
                         let row_block = block % geometry.row_blocks();
                         let slab_idx = geometry.slab_base_index(slab);
@@ -576,13 +581,17 @@ where
             return;
         }
     }
-    let row_chunk = traversal.chunk_rows_for(4096);
+    // One unit is an innermost row, reading one input element and writing one
+    // output element per position.
+    let row_bytes = traversal
+        .inner()
+        .saturating_mul(core::mem::size_of::<T>() + core::mem::size_of::<U>());
 
-    crate::infrastructure::parallel::parallel_for_chunks(
+    crate::infrastructure::parallel::for_each_unit_range(
         traversal.rows(),
-        row_chunk,
-        move |start, end| {
-            for row in start..end {
+        row_bytes,
+        move |first, count| {
+            for row in first..first + count {
                 let base_idx = traversal.base_index(row);
                 let mut input_offset = ctx
                     .input_layout

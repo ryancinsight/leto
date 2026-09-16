@@ -51,6 +51,43 @@ pub(crate) fn for_each_unit_run_mut<T, F>(
     run(0, output);
 }
 
+/// Runs `run(first_unit, count)` over consecutive runs of `units` units the
+/// closure addresses itself, each run about one moirai unit task of work at
+/// `unit_bytes` per unit.
+///
+/// The dense counterpart is [`for_each_unit_run_mut`]. This one serves a pass
+/// whose units are rows, tiles or output indices rather than a slice the
+/// runtime can split, so the caller keeps the disjointness proof for what its
+/// indices address and the decision whether to parallelize at all; moirai
+/// decides the width from the bytes a unit moves (moirai ADR 0059). Without
+/// the `parallel` feature every unit runs on the calling thread.
+pub(crate) fn for_each_unit_range<F>(
+    units: usize,
+    #[cfg_attr(
+        not(feature = "parallel"),
+        expect(
+            unused_variables,
+            reason = "only the parallel arm sizes tasks by bytes"
+        )
+    )]
+    unit_bytes: usize,
+    run: F,
+) where
+    F: Fn(usize, usize) + Send + Sync,
+{
+    #[cfg(feature = "parallel")]
+    moirai::for_each_unit_task_range_with::<moirai::Parallel, _, _, _>(
+        units,
+        unit_bytes,
+        || (),
+        |(), first_unit, count| run(first_unit, count),
+    );
+    #[cfg(not(feature = "parallel"))]
+    if units > 0 {
+        run(0, units);
+    }
+}
+
 /// Runs `plane(index, values)` over the whole x-planes of a C-order 3-D output
 /// whose planes hold `plane_len` elements: `index` is the plane's x index and
 /// `values` its elements in storage order.
@@ -114,30 +151,6 @@ where
     moirai::for_each_index_with::<moirai::Adaptive, _>(len, move |i| {
         f(start + i);
     });
-}
-
-/// Run a loop in parallel chunks using Moirai's work-stealing runtime.
-///
-/// # Safety
-/// The caller must ensure that parallel execution does not violate aliasing invariants.
-#[cfg(feature = "parallel")]
-pub fn parallel_for_chunks<F>(len: usize, chunk_size: usize, f: F)
-where
-    F: Fn(usize, usize) + Send + Sync + 'static,
-{
-    if len == 0 {
-        return;
-    }
-    if len >= 16384 {
-        let num_chunks = len.div_ceil(chunk_size);
-        moirai::for_each_index_with::<moirai::Parallel, _>(num_chunks, move |chunk_idx| {
-            let start = chunk_idx * chunk_size;
-            let end = (start + chunk_size).min(len);
-            f(start, end);
-        });
-    } else {
-        f(0, len);
-    }
 }
 
 /// Consume disjoint Leto task partitions through a caller-owned Moirai runtime.

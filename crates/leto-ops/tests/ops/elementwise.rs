@@ -769,3 +769,113 @@ fn parallel_binary_dense_route_matches_the_serial_result() {
         assert_eq!(got.to_bits(), (x + y).to_bits(), "add[{index}]");
     }
 }
+
+/// Rows and columns whose product puts three `f64` operands past the probed
+/// last-level cache, which is the gate the strided elementwise paths take.
+fn strided_parallel_shape(operands: usize) -> (usize, usize) {
+    let capacity = leto_ops::cached_cache_geometry().l3_bytes();
+    let elements = capacity / (operands * core::mem::size_of::<f64>()) + (1 << 16);
+    let columns = 64;
+    (elements.div_ceil(columns), columns)
+}
+
+#[test]
+fn parallel_strided_binary_map_matches_the_serial_result() {
+    // A transposed view walks its last axis by a row stride, which takes the
+    // tiled block arm; the output is contiguous in the walked order.
+    let (rows, columns) = strided_parallel_shape(3);
+    let len = rows * columns;
+    let lhs = Array::from_shape_vec([rows, columns], ramp(len, 0.5)).unwrap();
+    let rhs = Array::from_shape_vec([rows, columns], ramp(len, -0.25)).unwrap();
+    let mut out = Array::from_shape_vec([columns, rows], vec![0.0_f64; len]).unwrap();
+
+    add(
+        &lhs.transpose([1, 0]).unwrap(),
+        &rhs.transpose([1, 0]).unwrap(),
+        &mut out.view_mut(),
+    )
+    .unwrap();
+
+    // Output element (column, row) is the sum at (row, column) of both inputs:
+    // a dropped, doubled or shifted task run shows up as a mismatch here.
+    let (lhs_values, rhs_values) = (lhs.storage().as_slice(), rhs.storage().as_slice());
+    for (index, &got) in out.storage().as_slice().iter().enumerate() {
+        let (column, row) = (index / rows, index % rows);
+        let source = row * columns + column;
+        assert_eq!(
+            got.to_bits(),
+            (lhs_values[source] + rhs_values[source]).to_bits(),
+            "add[{column}, {row}]"
+        );
+    }
+}
+
+#[test]
+fn parallel_strided_unary_map_matches_the_serial_result() {
+    let (rows, columns) = strided_parallel_shape(2);
+    let len = rows * columns;
+    let source = Array::from_shape_vec([rows, columns], ramp(len, 0.5)).unwrap();
+    let mut out = Array::from_shape_vec([columns, rows], vec![0.0_f64; len]).unwrap();
+
+    map_into(
+        &source.transpose([1, 0]).unwrap(),
+        &mut out.view_mut(),
+        |x| x.mul_add(3.0, -1.0),
+    )
+    .unwrap();
+
+    let values = source.storage().as_slice();
+    for (index, &got) in out.storage().as_slice().iter().enumerate() {
+        let (column, row) = (index / rows, index % rows);
+        let x = values[row * columns + column];
+        assert_eq!(
+            got.to_bits(),
+            x.mul_add(3.0, -1.0).to_bits(),
+            "map_into[{column}, {row}]"
+        );
+    }
+}
+
+#[test]
+fn parallel_row_walk_arms_match_the_serial_result() {
+    // A padded source sliced back to the output width keeps its last-axis
+    // stride at one element while its row stride differs from the output's,
+    // which is the row-walk arm rather than the tiled block arm.
+    const PAD: usize = 3;
+    let (rows, columns) = strided_parallel_shape(3);
+    let padded_columns = columns + PAD;
+    let padded_len = rows * padded_columns;
+    let len = rows * columns;
+
+    let lhs = Array::from_shape_vec([rows, padded_columns], ramp(padded_len, 0.5)).unwrap();
+    let rhs = Array::from_shape_vec([rows, padded_columns], ramp(padded_len, -0.25)).unwrap();
+    let lhs_view = lhs.slice(&[(0, rows, 1), (0, columns, 1)]).unwrap();
+    let rhs_view = rhs.slice(&[(0, rows, 1), (0, columns, 1)]).unwrap();
+
+    let mut out = Array::from_shape_vec([rows, columns], vec![0.0_f64; len]).unwrap();
+    add(&lhs_view, &rhs_view, &mut out.view_mut()).unwrap();
+
+    let (lhs_values, rhs_values) = (lhs.storage().as_slice(), rhs.storage().as_slice());
+    for (index, &got) in out.storage().as_slice().iter().enumerate() {
+        let (row, column) = (index / columns, index % columns);
+        let source = row * padded_columns + column;
+        assert_eq!(
+            got.to_bits(),
+            (lhs_values[source] + rhs_values[source]).to_bits(),
+            "add[{row}, {column}]"
+        );
+    }
+
+    // The unary row walk, on the same shape.
+    let mut mapped = Array::from_shape_vec([rows, columns], vec![0.0_f64; len]).unwrap();
+    map_into(&lhs_view, &mut mapped.view_mut(), |x| x.mul_add(3.0, -1.0)).unwrap();
+    for (index, &got) in mapped.storage().as_slice().iter().enumerate() {
+        let (row, column) = (index / columns, index % columns);
+        let x = lhs_values[row * padded_columns + column];
+        assert_eq!(
+            got.to_bits(),
+            x.mul_add(3.0, -1.0).to_bits(),
+            "map_into[{row}, {column}]"
+        );
+    }
+}
