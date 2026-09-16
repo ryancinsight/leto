@@ -421,12 +421,17 @@ where
                 ctx.out_layout.strides()[N - 2],
             );
             let blocks = geometry.slabs() * geometry.row_blocks();
-            let block_chunk = (4096 / (geometry.tile() * geometry.width()).max(1)).max(1);
-            crate::infrastructure::parallel::parallel_for_chunks(
+            // One unit is a tile of rows across the block's width, moving two
+            // inputs and one output per element.
+            let block_bytes = geometry
+                .tile()
+                .saturating_mul(geometry.width())
+                .saturating_mul(3 * core::mem::size_of::<T>());
+            crate::infrastructure::parallel::for_each_unit_range(
                 blocks,
-                block_chunk,
-                move |start, end| {
-                    for block in start..end {
+                block_bytes,
+                move |first, count| {
+                    for block in first..first + count {
                         let slab = block / geometry.row_blocks();
                         let rb = (block % geometry.row_blocks()) * geometry.tile();
                         let rend = (rb + geometry.tile()).min(geometry.height());
@@ -479,14 +484,17 @@ where
             return;
         }
     }
-    // Keep roughly the previous elements-per-chunk granularity.
-    let row_chunk = traversal.chunk_rows_for(4096);
+    // One unit is an innermost row, moving two inputs and one output per
+    // element.
+    let row_bytes = traversal
+        .inner()
+        .saturating_mul(3 * core::mem::size_of::<T>());
 
-    crate::infrastructure::parallel::parallel_for_chunks(
+    crate::infrastructure::parallel::for_each_unit_range(
         traversal.rows(),
-        row_chunk,
-        move |start, end| {
-            for row in start..end {
+        row_bytes,
+        move |first, count| {
+            for row in first..first + count {
                 let base_idx = traversal.base_index(row);
                 let mut lhs_off = ctx
                     .lhs_layout

@@ -8,6 +8,15 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [major] `leto_ops::infrastructure::parallel::parallel_for_chunks` is removed.
+  It scheduled a caller-sized chunk count behind its own fixed
+  16384-element threshold, which is the decision moirai ADR 0059 moved into one
+  place; every in-tree caller now declares the bytes one unit moves and lets
+  moirai choose the task width. A caller outside the tree takes
+  `moirai::for_each_unit_task_range_with::<Parallel, _, _, _>(units,
+  unit_bytes, init, f)` for an index walk, or
+  `for_each_unit_task_mut_with` when the pass owns a dense output slice.
+
 - [major] Complex matrix movement uses the static `ComplexLayout` scalar
   role. Free operation functions are removed; callers import the trait and
   call `T::transpose_complex_matrices` or `T::transpose_square_inplace`.

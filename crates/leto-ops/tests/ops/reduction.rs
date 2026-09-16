@@ -273,3 +273,35 @@ fn min_max_axis_ignore_nan_lanes_on_both_routes() {
     nan_lanes_are_ignored_on_both_routes::<f32>();
     nan_lanes_are_ignored_on_both_routes::<f64>();
 }
+
+#[test]
+fn parallel_axis_reduction_matches_the_serial_result() {
+    // Above the 32768-output gate the reduction spreads over unit tasks, each
+    // task owning a run of output indices and reading the whole reduced axis
+    // for each. Every element is an integer below 2^53 and so is every row
+    // sum, so the assertion holds for any summation order the kernel uses and
+    // tests the task split rather than the arithmetic.
+    const ROWS: usize = 40_000;
+    const COLUMNS: usize = 8;
+
+    let row_value = |row: usize| f64::from(u32::try_from(row % 1024).unwrap() * 256);
+    let column_value = |column: usize| f64::from(1_u32 << column);
+
+    let mut data = Vec::with_capacity(ROWS * COLUMNS);
+    for row in 0..ROWS {
+        for column in 0..COLUMNS {
+            data.push(row_value(row) + column_value(column));
+        }
+    }
+    let input = Array::from_shape_vec([ROWS, COLUMNS], data).unwrap();
+
+    let sums = sum_axis(&input.view(), 1).unwrap();
+
+    assert_eq!(sums.shape(), [ROWS, 1]);
+    // Each row sums its eight distinct powers of two (255) plus eight copies
+    // of its own value, so a run read from the wrong first index fails here.
+    for (row, &got) in sums.storage().as_slice().iter().enumerate() {
+        let expected = row_value(row).mul_add(8.0, 255.0);
+        assert_eq!(got.to_bits(), expected.to_bits(), "sum_axis[{row}]");
+    }
+}

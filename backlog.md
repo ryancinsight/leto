@@ -1,5 +1,24 @@
 # Leto Work Backlog
 
+<a id="LETO-PARALLEL-FOR-UNUSED-2026-09-16"></a>
+## LETO-PARALLEL-FOR-UNUSED-2026-09-16 — A public parallel helper has no caller [major] — todo
+
+- **Finding.** `leto_ops::infrastructure::parallel::parallel_for(start, end, f)` dispatches one closure call per index under `Adaptive`. Nothing in leto, leto-ops or any stack consumer calls it; it survives only because `infrastructure` and `parallel` are public modules. Found while removing its sibling `parallel_for_chunks`.
+- **Options.** Remove it as a [major] with a CHANGELOG migration line, as `parallel_for_chunks` was removed; or keep it and state the external consumer it serves beside its declaration.
+- **Acceptance:** either the item is gone from the public surface with `cargo semver-checks` recording the removal, or its declaration names the consumer that justifies it.
+- **Status:** todo, not claimed; filed 2026-09-16 by claude-opus-5.
+
+<a id="LETO-STRIDED-UNIT-TASKS-2026-09-15"></a>
+## LETO-STRIDED-UNIT-TASKS-2026-09-15 — Index-walking elementwise paths size their own chunks [major] [conformance] — review
+
+- **Finding.** The second increment of [`LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15`](#LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15). Five parallel paths walk logical indices rather than a dense output — the strided binary map (tiled block and row-walk arms), the strided unary map (both arms) and the axis reduction — and each sized its own chunks: `4096 / (tile * width)` blocks, `chunk_rows_for(4096)` rows, 512 reduction outputs, all behind `parallel_for_chunks`' fixed 16384-element threshold.
+- **Change.** moirai [#357](https://github.com/ryancinsight/Moirai/pull/357) added `for_each_unit_task_range_with`, the index-range operator these needed. `infrastructure::parallel::for_each_unit_range` wraps it: each site declares the bytes one unit moves — a tile of rows across its width, an innermost row, or one output element reading the whole reduced axis — and moirai decides the width. `parallel_for_chunks` and `RowMajorTraversal::chunk_rows_for` have no callers left and are deleted.
+- **No dispatch change.** All three callers gate above the deleted 16384-element threshold: the maps on a working set past L3, the reduction at 32768 outputs.
+- **Coverage.** No test reached any of the five routes. Four new tests do, each asserting the result bit for bit against the elementwise reference (the reduction on integral values, exact in any summation order, so it tests the task split rather than the arithmetic): transposed views take the block arms, a padded slice takes the row-walk arms, and 40,000 output rows take the reduction. Every route was confirmed to run under a temporary probe rather than assumed.
+- **[major], not [patch].** `infrastructure::parallel` is a public module, so `parallel_for_chunks` was reachable as `leto_ops::infrastructure::parallel::parallel_for_chunks`; removing it is a breaking change with a CHANGELOG entry and a migration line, verified by `cargo semver-checks`. No consumer in the stack calls it.
+- **Found alongside:** `parallel_for` in the same module is public and has no caller in the tree either — dead public surface predating this change, filed as `LETO-PARALLEL-FOR-UNUSED-2026-09-16` rather than folded in.
+- **Integrator:** claude-opus-5; **branch:** `perf/leto-strided-unit-tasks`; **last-update:** 2026-09-16.
+
 <a id="LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15"></a>
 ## LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15 — Dense elementwise paths size their own chunks [patch] [conformance] — done
 
