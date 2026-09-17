@@ -11,7 +11,7 @@
 //! | Scheme | Order | Stencil | dst shape on diff axis |
 //! |--------|-------|---------|------------------------|
 //! | [`FiniteDifference3DScheme::CentralSecondOrder`] | O(Δx²) 3-point | symmetric interior | matches `field` |
-//! | [`FiniteDifference3DScheme::CentralFourthOrder`] | O(Δx⁴) 5-point + 2nd/1st fall-back | matches `field` |
+//! | [`FiniteDifference3DScheme::CentralFourthOrder`] | O(Δx⁴) 5-point + 2nd/1st fall-back, any axis length | matches `field` |
 //! | [`FiniteDifference3DScheme::CentralSixthOrder`] | O(Δx⁶) 7-point + 4th/2nd/1st fall-back | matches `field` |
 //! | [`FiniteDifference3DScheme::StaggeredForward`] | O(Δx) Yee face | one cell smaller |
 //! | [`FiniteDifference3DScheme::StaggeredBackward`] | O(Δx) cell-on-integer-grid | matches `field` |
@@ -35,6 +35,7 @@ use eunomia::FloatElement;
 
 mod central;
 mod coefficients;
+mod fourth_order;
 mod leapfrog;
 mod operator;
 mod staggered;

@@ -8,6 +8,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [minor] `FiniteDifference3D` with `CentralFourthOrder` accepts an axis of
+  any length. A singleton axis differentiates to zero and an axis under five
+  points takes the first- and second-order closure rows; before, these
+  returned `LetoError::InvalidInput`. C-dense fields are swept lane by lane
+  across moirai unit tasks; values on longer axes are unchanged to the bit.
+
 - [major] `leto_ops::infrastructure::parallel::parallel_for` is removed. It
   dispatched one closure call per index under `Adaptive`, and no code in leto,
   leto-ops or any consumer in the stack called it — it survived only because
