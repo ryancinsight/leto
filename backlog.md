@@ -1,5 +1,13 @@
 # Leto Work Backlog
 
+<a id="LETO-CENTRAL-FOURTH-SWEEPS-2026-09-17"></a>
+## LETO-CENTRAL-FOURTH-SWEEPS-2026-09-17 — The fourth-order central sweeps run one bounds-checked index at a time and reject short axes [minor] [perf] — review
+
+- **Driver:** kwavers' elastic step spends ~85% of its time in a stress divergence built on a private copy of this stencil (kwavers `kw-swe-unit-tasks`), which ADR 128 there assigns to leto. The copy could not be dropped: leto's sweep walked `[i, j, k]` indices on one thread and returned an error for any axis under five points, while the plane-strain elastic path differentiates a singleton axis.
+- **Change:** `CentralFourthOrder` sweeps whole lanes of C-dense fields, x-planes spread over unit tasks sized by the bytes a plane moves, like the leapfrog sweeps; other layouts take a logical walk through the same arithmetic. Axes of every length take the documented closure: a singleton axis differentiates to zero, and a short axis uses only its first- and second-order rows. Values on axes of five points or more are bit-identical to the previous kernels.
+- **Acceptance:** every axis length 1-8 on every axis, dense and transposed, bitwise against the stencil table; a volume that spreads over tasks against the same table; exactness on the polynomial each order promises. Injected defects (a shifted interior lane, a narrowed closure, a mirrored y lane) each fail.
+- **Integrator:** claude-opus-5; **branch:** `perf/leto-central-sweeps`; **last-update:** 2026-09-17.
+
 <a id="LETO-PARALLEL-FOR-UNUSED-2026-09-16"></a>
 ## LETO-PARALLEL-FOR-UNUSED-2026-09-16 — A public parallel helper has no caller [major] — done
 

@@ -1,16 +1,19 @@
 //! The 3-D finite-difference operator: its spacings, and the dispatch from a
 //! stencil scheme to the stencil that implements it.
 //!
-//! The stencils live in [`super::central`] and [`super::staggered`]; this
+//! The stencils live in [`super::central`], [`super::fourth_order`] and
+//! [`super::staggered`]; this
 //! drives them and checks the destination shape.
 
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use super::central::{
-    central2_x_into, central2_y_into, central2_z_into, central4_x_into, central4_y_into,
-    central4_z_into, central6_x_into, central6_y_into, central6_z_into,
+    central2_x_into, central2_y_into, central2_z_into, central6_x_into, central6_y_into,
+    central6_z_into,
 };
+use super::fourth_order::central4_into;
+use super::leapfrog::Axis;
 use super::staggered::{
     staggered_backward_x_into, staggered_backward_y_into, staggered_backward_z_into,
     staggered_forward_x_into, staggered_forward_y_into, staggered_forward_z_into,
@@ -106,7 +109,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
             }
             FiniteDifference3DScheme::CentralFourthOrder => {
                 assert_dst_shape(&dst.shape(), &[nx, ny, nz])?;
-                central4_x_into(field, dst, nx, ny, nz, self.dx)
+                central4_into(field, dst, Axis::X, self.dx)
             }
             FiniteDifference3DScheme::CentralSixthOrder => {
                 assert_dst_shape(&dst.shape(), &[nx, ny, nz])?;
@@ -135,7 +138,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
             }
             FiniteDifference3DScheme::CentralFourthOrder => {
                 assert_dst_shape(&dst.shape(), &[nx, ny, nz])?;
-                central4_y_into(field, dst, nx, ny, nz, self.dy)
+                central4_into(field, dst, Axis::Y, self.dy)
             }
             FiniteDifference3DScheme::CentralSixthOrder => {
                 assert_dst_shape(&dst.shape(), &[nx, ny, nz])?;
@@ -164,7 +167,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
             }
             FiniteDifference3DScheme::CentralFourthOrder => {
                 assert_dst_shape(&dst.shape(), &[nx, ny, nz])?;
-                central4_z_into(field, dst, nx, ny, nz, self.dz)
+                central4_into(field, dst, Axis::Z, self.dz)
             }
             FiniteDifference3DScheme::CentralSixthOrder => {
                 assert_dst_shape(&dst.shape(), &[nx, ny, nz])?;
