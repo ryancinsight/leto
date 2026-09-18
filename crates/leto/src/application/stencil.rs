@@ -37,6 +37,7 @@ pub enum LaplacianPolarity {
 
 /// Typed Laplacian contract failure.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum LaplacianError {
     /// An axis is too short for the boundary stencil.
     #[error("Laplacian grid axes must contain at least two points: nx={nx}, ny={ny}")]
@@ -61,6 +62,17 @@ pub enum LaplacianError {
         dx: String,
         /// Debug representation of y spacing in meters.
         dy: String,
+    },
+    /// Signed inverse squared spacings are non-finite, zero, or of mixed sign,
+    /// so they describe neither polarity of a valid grid.
+    #[error(
+        "Laplacian signed inverse squared spacings must be finite, non-zero, and share one sign: x={x}, y={y}"
+    )]
+    InvalidInverseSpacing {
+        /// Debug representation of the signed x value in m⁻².
+        x: String,
+        /// Debug representation of the signed y value in m⁻².
+        y: String,
     },
     /// The input array length does not match the flattened grid.
     #[error("Laplacian input length mismatch: expected {expected}, actual {actual}")]
@@ -112,12 +124,7 @@ where
         dy: Length<T>,
         boundary: BoundaryCondition,
     ) -> Result<Self, LaplacianError> {
-        if nx < 2 || ny < 2 {
-            return Err(LaplacianError::GridTooSmall { nx, ny });
-        }
-        let len = nx
-            .checked_mul(ny)
-            .ok_or(LaplacianError::GridSizeOverflow { nx, ny })?;
+        let len = Self::validated_len(nx, ny)?;
         let dx_m = dx.in_unit::<Meter>();
         let dy_m = dy.in_unit::<Meter>();
         if !dx_m.is_finite()
@@ -139,6 +146,62 @@ where
             boundary,
             polarity: LaplacianPolarity::Laplacian,
         })
+    }
+
+    /// Rebuild the contract from the value [`Self::signed_inverse_spacing_squared`]
+    /// returns, as carried by an accelerator parameter block.
+    ///
+    /// The polarity is the shared sign of the two values, so for every contract
+    /// `c`, rebuilding from `c.signed_inverse_spacing_squared()` with
+    /// `c.boundary()` yields `c` exactly: no spacing is recomputed through a
+    /// square root.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LaplacianError::GridTooSmall`] or
+    /// [`LaplacianError::GridSizeOverflow`] as [`Self::new`] does, and
+    /// [`LaplacianError::InvalidInverseSpacing`] when a value is non-finite or
+    /// zero, or the two differ in sign.
+    pub fn from_signed_inverse_spacing_squared(
+        nx: usize,
+        ny: usize,
+        signed_inverse_spacing_squared: [T; 2],
+        boundary: BoundaryCondition,
+    ) -> Result<Self, LaplacianError> {
+        let len = Self::validated_len(nx, ny)?;
+        let [x, y] = signed_inverse_spacing_squared;
+        let zero = <T as NumericElement>::ZERO;
+        let valid = |value: T| value.is_finite() && value != zero;
+        let polarity = if valid(x) && valid(y) && (x > zero) == (y > zero) {
+            if x > zero {
+                LaplacianPolarity::Laplacian
+            } else {
+                LaplacianPolarity::NegativeLaplacian
+            }
+        } else {
+            return Err(LaplacianError::InvalidInverseSpacing {
+                x: format!("{x:?}"),
+                y: format!("{y:?}"),
+            });
+        };
+        let magnitude = |value: T| if value > zero { value } else { zero - value };
+        Ok(Self {
+            nx,
+            ny,
+            len,
+            inverse_spacing_squared: [magnitude(x), magnitude(y)],
+            boundary,
+            polarity,
+        })
+    }
+
+    /// Validate the grid axes and return the flattened length.
+    fn validated_len(nx: usize, ny: usize) -> Result<usize, LaplacianError> {
+        if nx < 2 || ny < 2 {
+            return Err(LaplacianError::GridTooSmall { nx, ny });
+        }
+        nx.checked_mul(ny)
+            .ok_or(LaplacianError::GridSizeOverflow { nx, ny })
     }
 
     /// Select the operator sign convention.
@@ -213,5 +276,69 @@ mod tests {
         .expect_err("zero spacing must be rejected");
 
         assert!(matches!(error, LaplacianError::InvalidSpacing { .. }));
+    }
+
+    /// Rebuilding from the signed inverse squared spacings reproduces the
+    /// contract exactly, for both polarities and a spacing (0.3 m) whose
+    /// inverse square is inexact in binary.
+    #[test]
+    fn signed_inverse_spacing_round_trips_exactly() {
+        for polarity in [
+            LaplacianPolarity::Laplacian,
+            LaplacianPolarity::NegativeLaplacian,
+        ] {
+            let contract = Laplacian2D::new(
+                5,
+                3,
+                Length::from_unit::<Meter>(0.3f32),
+                Length::from_unit::<Meter>(0.7f32),
+                BoundaryCondition::Neumann,
+            )
+            .expect("valid grid")
+            .with_polarity(polarity);
+            let rebuilt = Laplacian2D::from_signed_inverse_spacing_squared(
+                5,
+                3,
+                contract.signed_inverse_spacing_squared(),
+                BoundaryCondition::Neumann,
+            )
+            .expect("round trip");
+            assert_eq!(rebuilt, contract);
+        }
+    }
+
+    #[test]
+    fn rejects_zero_non_finite_or_mixed_sign_inverse_spacing() {
+        for signed in [
+            [0.0f32, 1.0],
+            [1.0, f32::INFINITY],
+            [f32::NAN, 1.0],
+            [1.0, -1.0],
+            [-4.0, 4.0],
+        ] {
+            let error = Laplacian2D::from_signed_inverse_spacing_squared(
+                4,
+                4,
+                signed,
+                BoundaryCondition::Periodic,
+            )
+            .expect_err("must be rejected");
+            assert!(
+                matches!(error, LaplacianError::InvalidInverseSpacing { .. }),
+                "{signed:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn inverse_spacing_constructor_validates_the_grid() {
+        let error = Laplacian2D::from_signed_inverse_spacing_squared(
+            1,
+            4,
+            [1.0f32, 1.0],
+            BoundaryCondition::Dirichlet,
+        )
+        .expect_err("a one-point axis must be rejected");
+        assert_eq!(error, LaplacianError::GridTooSmall { nx: 1, ny: 4 });
     }
 }
