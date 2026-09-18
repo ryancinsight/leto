@@ -1,24 +1,70 @@
 use crate::application::index::{validate_mutable_output, RowMajorTraversal};
 use crate::domain::real::RealScalar;
 use crate::domain::rng::Xorshift64;
-use leto::{Array, ArrayViewMut, Result, VecStorage};
+use leto::{Array, ArrayViewMut, LetoError, Result, VecStorage};
 use std::sync::LazyLock;
+
+/// One uniform draw in `[low, high)`.
+///
+/// `low + unit * span` is rounded to `T`, and a unit near 1 or a span of a few
+/// ULPs rounds it up to `high` (for `[1, next_up(1))` about half of all draws
+/// do), so a rounded result equal to `high` is redrawn rather than clamped;
+/// clamping would pile that mass onto the largest representable sample.
+/// Termination: `unit < 1/2` keeps the exact value below the interval's
+/// midpoint, which rounds below `high`, so each draw is accepted with
+/// probability at least one half.
+fn uniform_draw<T: RealScalar>(rng: &mut Xorshift64, low: T, span: T, high: T) -> T {
+    loop {
+        let sample = low.add(T::from_f64(rng.next_unit_f64()).mul(span));
+        if sample < high {
+            return sample;
+        }
+    }
+}
+
+/// Reject a uniform interval that is empty, unordered, or not finite.
+fn validate_uniform_interval<T: RealScalar>(low: T, high: T) -> Result<T> {
+    let span = high.sub(low);
+    if low < high && span.is_finite() {
+        Ok(span)
+    } else {
+        Err(LetoError::InvalidInput(format!(
+            "uniform interval [{low:?}, {high:?}) must satisfy low < high with a finite span"
+        )))
+    }
+}
+
+/// Reject a normal distribution whose mean is not finite or whose standard
+/// deviation is not finite and positive.
+fn validate_normal_parameters<T: RealScalar>(mean: T, std_dev: T) -> Result<()> {
+    if mean.is_finite() && std_dev.is_finite() && std_dev > T::ZERO {
+        Ok(())
+    } else {
+        Err(LetoError::InvalidInput(format!(
+            "normal distribution needs a finite mean and a finite positive std_dev, got mean {mean:?}, std_dev {std_dev:?}"
+        )))
+    }
+}
 
 /// Fill a caller-owned view with i.i.d. uniform samples in `[low, high)`,
 /// derived deterministically from `seed`.
+///
+/// # Errors
+///
+/// [`LetoError::InvalidInput`] unless `low < high` and `high - low` is
+/// finite; the output is not written.
 pub fn uniform_with_seed_into<T: RealScalar, const N: usize>(
     out: &mut ArrayViewMut<'_, T, N>,
     low: T,
     high: T,
     seed: u64,
 ) -> Result<()> {
-    let span = high.sub(low);
+    let span = validate_uniform_interval(low, high)?;
     let mut rng = Xorshift64::new(seed);
 
     if let Some(out_slice) = out.as_mut_slice() {
         for val in out_slice.iter_mut() {
-            let unit = T::from_f64(rng.next_unit_f64());
-            *val = low.add(unit.mul(span));
+            *val = uniform_draw(&mut rng, low, span, high);
         }
         return Ok(());
     }
@@ -37,8 +83,7 @@ pub fn uniform_with_seed_into<T: RealScalar, const N: usize>(
         let base_idx = traversal.base_index(row);
         let mut out_offset = out_layout.offset_of(base_idx)? as isize;
         for _ in 0..traversal.inner() {
-            let unit = T::from_f64(rng.next_unit_f64());
-            out_data[out_offset as usize] = low.add(unit.mul(span));
+            out_data[out_offset as usize] = uniform_draw(&mut rng, low, span, high);
             out_offset += out_step;
         }
     }
@@ -165,12 +210,18 @@ impl ZigguratNormal {
 
 /// Fill a caller-owned view with i.i.d. normal samples of the given `mean`
 /// and `std_dev`, derived deterministically from `seed`.
+///
+/// # Errors
+///
+/// [`LetoError::InvalidInput`] unless `mean` is finite and `std_dev` is
+/// finite and positive; the output is not written.
 pub fn normal_with_seed_into<T: RealScalar, const N: usize>(
     out: &mut ArrayViewMut<'_, T, N>,
     mean: T,
     std_dev: T,
     seed: u64,
 ) -> Result<()> {
+    validate_normal_parameters(mean, std_dev)?;
     let mut rng = Xorshift64::new(seed);
 
     if let Some(out_slice) = out.as_mut_slice() {

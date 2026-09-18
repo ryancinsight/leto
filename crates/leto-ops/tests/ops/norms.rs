@@ -127,6 +127,54 @@ fn test_l2_normalize_generic() {
     assert_close(*out_eps.get([2]).unwrap(), 0.4);
 }
 
+/// Over `[1, next_up(1))` the rounded affine map lands on `high` for about
+/// half of all units, so every sample must be exactly `1.0` once a rounded
+/// `high` is redrawn.
+#[test]
+fn uniform_samples_stay_below_high_when_rounding_reaches_it() {
+    let high = f32::from_bits(1.0f32.to_bits() + 1);
+    let samples = leto_ops::uniform_with_seed([256], 1.0f32, high, 42).unwrap();
+    assert!(samples
+        .storage()
+        .as_slice()
+        .iter()
+        .all(|&value| value == 1.0));
+}
+
+#[test]
+fn uniform_rejects_an_empty_unordered_or_unbounded_interval() {
+    for (low, high) in [
+        (1.0f64, 1.0),
+        (2.0, 1.0),
+        (f64::NAN, 1.0),
+        (-f64::MAX, f64::MAX),
+        (0.0, f64::INFINITY),
+    ] {
+        let result = leto_ops::uniform_with_seed([4], low, high, 7);
+        assert!(
+            matches!(result, Err(leto::LetoError::InvalidInput(_))),
+            "[{low}, {high}) must be rejected"
+        );
+    }
+}
+
+#[test]
+fn normal_rejects_a_non_positive_or_non_finite_parameter() {
+    for (mean, std_dev) in [
+        (0.0f64, 0.0),
+        (0.0, -1.0),
+        (0.0, f64::NAN),
+        (0.0, f64::INFINITY),
+        (f64::NAN, 1.0),
+    ] {
+        let result = leto_ops::normal_with_seed([4], mean, std_dev, 7);
+        assert!(
+            matches!(result, Err(leto::LetoError::InvalidInput(_))),
+            "mean {mean}, std_dev {std_dev} must be rejected"
+        );
+    }
+}
+
 #[test]
 fn test_random_into() {
     let mut out1 = Array::from_elem([10], 0.0f64);
