@@ -8,7 +8,8 @@
 use leto::Array3;
 
 use super::super::coefficients::{
-    central_first_derivative_coefficients, staggered_first_derivative_coefficients, MAX_HALF_ORDER,
+    central_first_derivative_coefficients, staggered_first_derivative_coefficients,
+    TapCoefficients, MAX_HALF_ORDER,
 };
 use super::super::{FiniteDifference3D, FiniteDifference3DScheme};
 use super::{Axis, StaggeredLeapfrog3D};
@@ -114,10 +115,56 @@ fn rejects_invalid_orders_and_spacings() {
     assert!(StaggeredLeapfrog3D::<f64>::new(2, 0.0, 1.0, 1.0).is_err());
     assert!(StaggeredLeapfrog3D::<f64>::new(2, 1.0, -1.0, 1.0).is_err());
     assert!(StaggeredLeapfrog3D::<f64>::new(2, 1.0, 1.0, 0.0).is_err());
+    assert!(StaggeredLeapfrog3D::<f64>::new(2, f64::NAN, 1.0, 1.0).is_err());
+    assert!(StaggeredLeapfrog3D::<f64>::new(2, 1.0, f64::INFINITY, 1.0).is_err());
     let op = StaggeredLeapfrog3D::<f64>::new(8, 1e-3, 2e-3, 3e-3).unwrap();
     assert_eq!(op.order(), 8);
     assert_eq!(op.halo_width(), 4);
     assert_eq!(op.spacing(), (1e-3, 2e-3, 3e-3));
+}
+
+/// Rebuilding from the operator's own taps and reciprocal spacings sweeps
+/// bitwise identically, at a spacing (0.3) whose reciprocal is inexact.
+#[test]
+fn from_parts_reproduces_the_derived_operator_bitwise() {
+    let op = StaggeredLeapfrog3D::<f32>::new(6, 0.3, 0.7, 1.1).unwrap();
+    let (dx, dy, dz) = op.spacing();
+    let rebuilt = StaggeredLeapfrog3D::from_parts(
+        TapCoefficients::from_taps(op.coefficients().taps()).unwrap(),
+        [dx.recip(), dy.recip(), dz.recip()],
+    )
+    .unwrap();
+    let shape = [7, 6, 8];
+    let field = seeded(shape, 0.37).mapv(|value| value as f32);
+    for axis in AXES {
+        let mut expected = Array3::<f32>::zeros(shape);
+        let mut got = Array3::<f32>::zeros(shape);
+        op.gradient_into(axis, field.view(), &mut expected.view_mut())
+            .unwrap();
+        rebuilt
+            .gradient_into(axis, field.view(), &mut got.view_mut())
+            .unwrap();
+        assert_eq!(got, expected, "gradient along {axis:?}");
+        op.divergence_into(axis, field.view(), &mut expected.view_mut())
+            .unwrap();
+        rebuilt
+            .divergence_into(axis, field.view(), &mut got.view_mut())
+            .unwrap();
+        assert_eq!(got, expected, "divergence along {axis:?}");
+    }
+}
+
+#[test]
+fn from_parts_and_from_taps_reject_invalid_input() {
+    let taps = staggered_first_derivative_coefficients::<f64>(2).unwrap();
+    assert!(StaggeredLeapfrog3D::from_parts(taps, [1.0, 0.0, 1.0]).is_err());
+    assert!(StaggeredLeapfrog3D::from_parts(taps, [1.0, 1.0, f64::NAN]).is_err());
+    assert!(TapCoefficients::<f64>::from_taps(&[]).is_err());
+    assert!(TapCoefficients::<f64>::from_taps(&[1.0; MAX_HALF_ORDER + 1]).is_err());
+    assert!(TapCoefficients::from_taps(&[1.0, f64::INFINITY]).is_err());
+    let adopted = TapCoefficients::from_taps(&[1.125, -1.0 / 24.0]).unwrap();
+    assert_eq!(adopted.taps(), &[1.125, -1.0 / 24.0]);
+    assert_eq!(adopted.order(), 4);
 }
 
 #[test]

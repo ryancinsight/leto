@@ -101,6 +101,8 @@ impl Axis {
 pub struct StaggeredLeapfrog3D<T> {
     coefficients: TapCoefficients<T>,
     spacing: [T; 3],
+    /// `1/Δ` per axis, the factor the kernels apply, reduced once here.
+    inverse_spacing: [T; 3],
 }
 
 impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
@@ -112,22 +114,42 @@ impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
     /// Returns [`LetoError::InvalidInput`] for an odd or zero order, an order
     /// beyond the coefficient derivation's verified range
     /// ([`MAX_HALF_ORDER`](super::coefficients::MAX_HALF_ORDER) tap pairs), and
-    /// non-positive spacings.
+    /// spacings that are not finite and positive.
     pub fn new(order: usize, dx: T, dy: T, dz: T) -> Result<Self> {
         if order == 0 || !order.is_multiple_of(2) {
             return Err(LetoError::InvalidInput(format!(
                 "StaggeredLeapfrog3D needs an even, non-zero order, got {order}"
             )));
         }
-        let zero = <T as NumericElement>::ZERO;
-        if dx <= zero || dy <= zero || dz <= zero {
-            return Err(LetoError::InvalidInput(
-                "StaggeredLeapfrog3D: dx, dy, dz must all be strictly positive".into(),
-            ));
-        }
+        let spacing = [dx, dy, dz];
+        require_finite_positive(spacing, "dx, dy, dz")?;
         Ok(Self {
             coefficients: staggered_first_derivative_coefficients(order / 2)?,
-            spacing: [dx, dy, dz],
+            spacing,
+            inverse_spacing: spacing.map(T::recip),
+        })
+    }
+
+    /// Build the pair from given taps and reciprocal spacings, as an
+    /// accelerator parameter block carries them.
+    ///
+    /// The kernels apply `inverse_spacing` exactly as given, so a reference
+    /// evaluating a device's parameters reproduces the device's arithmetic
+    /// rather than a round trip through `1/(1/Δ)`; for every operator `op`
+    /// from [`Self::new`], `from_parts(*op.coefficients(),` its reciprocal
+    /// spacings`)` sweeps bitwise identically. [`Self::spacing`] then reports
+    /// the reciprocals of `inverse_spacing`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::InvalidInput`] unless every reciprocal spacing is
+    /// finite and positive.
+    pub fn from_parts(coefficients: TapCoefficients<T>, inverse_spacing: [T; 3]) -> Result<Self> {
+        require_finite_positive(inverse_spacing, "1/dx, 1/dy, 1/dz")?;
+        Ok(Self {
+            coefficients,
+            spacing: inverse_spacing.map(T::recip),
+            inverse_spacing,
         })
     }
 
@@ -230,7 +252,26 @@ impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
     fn axis_geometry(&self, axis: Axis, shape: [usize; 3]) -> (usize, isize, T) {
         let index = axis.index();
         let extent = isize::try_from(shape[index]).unwrap_or(isize::MAX);
-        (index, extent, self.spacing[index].recip())
+        (index, extent, self.inverse_spacing[index])
+    }
+}
+
+/// Reject a spacing triple unless every value is finite and positive; a
+/// `NaN` passes a bare `<= 0` test and would poison every swept value.
+fn require_finite_positive<T: RealField + FloatElement + Copy>(
+    values: [T; 3],
+    names: &str,
+) -> Result<()> {
+    let zero = <T as NumericElement>::ZERO;
+    if values
+        .iter()
+        .all(|&value| value.is_finite() && value > zero)
+    {
+        Ok(())
+    } else {
+        Err(LetoError::InvalidInput(format!(
+            "StaggeredLeapfrog3D: {names} must all be finite and positive"
+        )))
     }
 }
 
