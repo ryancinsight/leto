@@ -153,12 +153,17 @@ jobs:
           MIRIFLAGS: -Zmiri-disable-isolation
         run: cargo +nightly miri nextest run -p leto --locked --profile miri --lib
 
+      # The parallel axis reduction engages only above 32768 outputs, so its
+      # test reduces a 40000x8 array; under Miri that exceeds the profile's
+      # 600 s bound. Miri therefore covers the serial output path only, and
+      # the parallel task split is covered by the native suite.
       - name: Miri — uninitialized reduction output (Stacked Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation
         run: >-
           cargo +nightly miri nextest run -p leto-ops --locked --profile miri
-          --test ops_tests -E 'test(/reduction/)'
+          --test ops_tests
+          -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
 
       - name: Miri — storage substrate (Tree Borrows)
         env:
@@ -170,4 +175,5 @@ jobs:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
         run: >-
           cargo +nightly miri nextest run -p leto-ops --locked --profile miri
-          --test ops_tests -E 'test(/reduction/)'
+          --test ops_tests
+          -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
