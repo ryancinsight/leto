@@ -91,6 +91,38 @@ pub struct TapCoefficients<T> {
 }
 
 impl<T: Copy + NumericElement> TapCoefficients<T> {
+    /// Adopt taps derived elsewhere, `c_1` first, such as the ones an
+    /// accelerator parameter block carries.
+    ///
+    /// The taps are taken as given: a reference evaluating a device's
+    /// parameters must apply the taps the device applies, so this does not
+    /// re-derive or compare them against
+    /// [`staggered_first_derivative_coefficients`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LetoError::InvalidInput`] unless there are between one and
+    /// [`MAX_HALF_ORDER`] taps, all finite.
+    pub fn from_taps(taps: &[T]) -> Result<Self> {
+        if taps.is_empty() || taps.len() > MAX_HALF_ORDER {
+            return Err(LetoError::InvalidInput(format!(
+                "tap coefficients must number 1..={MAX_HALF_ORDER}, got {}",
+                taps.len()
+            )));
+        }
+        if !taps.iter().all(|tap| tap.is_finite()) {
+            return Err(LetoError::InvalidInput(
+                "tap coefficients must all be finite".into(),
+            ));
+        }
+        let mut stored = [<T as NumericElement>::ZERO; MAX_HALF_ORDER];
+        stored[..taps.len()].copy_from_slice(taps);
+        Ok(Self {
+            taps: stored,
+            len: taps.len(),
+        })
+    }
+
     /// The `N` derived taps, `c_1` first.
     #[must_use]
     #[inline]
