@@ -25,7 +25,7 @@ use leto::{ArrayView3, ArrayViewMut3, Result};
 
 use super::f;
 use super::leapfrog::Axis;
-use crate::infrastructure::parallel::for_each_plane_mut;
+use crate::infrastructure::parallel::{for_each_plane_mut, for_each_plane_mut_with};
 
 /// Bytes one output element moves: itself and the four neighbours the
 /// interior stencil reads.
@@ -289,6 +289,146 @@ where
             add_row(scales[2], out_row, &fields[2][base..base + nz]);
         }
     });
+}
+
+/// One fused pass over `dst`: each output lane receives the `N` axis
+/// derivatives named by `terms` and the `M` pointwise values at that lane,
+/// and `combine` decides what to write.
+///
+/// A caller that scales a sum of two axis derivatives by a field -- an
+/// elastic shear stress is one -- reads its fields once per lane here,
+/// instead of sweeping each axis into a buffer and reading both back
+/// alongside the scale: 8 MB of traffic at 64 cubed where the composed form
+/// moves 16 MB. The per-coordinate stencils and the arithmetic are
+/// [`central4_into`]'s, so each derivative handed to `combine` is the value
+/// that sweep would have written.
+///
+/// Terms name distinct axes. A repeated axis is not rejected; it reads its
+/// field twice and hands `combine` both values, which is what it asked for.
+///
+/// The caller has checked that every field, every pointwise input and `dst`
+/// share one shape.
+pub(super) fn central4_map_into<T, const N: usize, const M: usize, F>(
+    terms: [(Axis, ArrayView3<'_, T>); N],
+    pointwise: [ArrayView3<'_, T>; M],
+    dst: &mut ArrayViewMut3<'_, T>,
+    spacing: [T; 3],
+    combine: F,
+) -> Result<()>
+where
+    T: RealField + FloatElement + Copy,
+    F: Fn([T; N], [T; M]) -> T + Send + Sync,
+{
+    let shape = dst.shape();
+    let scales: [Scales<T>; N] = core::array::from_fn(|j| Scales::new(spacing[terms[j].0.index()]));
+    let axes: [Axis; N] = core::array::from_fn(|j| terms[j].0);
+    let mut dense = true;
+    let fields: [&[T]; N] = core::array::from_fn(|j| {
+        terms[j].1.as_slice().unwrap_or_else(|| {
+            dense = false;
+            &[]
+        })
+    });
+    let scalars: [&[T]; M] = core::array::from_fn(|k| {
+        pointwise[k].as_slice().unwrap_or_else(|| {
+            dense = false;
+            &[]
+        })
+    });
+    if dense {
+        if let Some(out) = dst.as_mut_slice() {
+            map_dense(fields, scalars, axes, out, shape, scales, &combine);
+            return Ok(());
+        }
+    }
+    map_strided(terms, pointwise, dst, shape, scales, &combine);
+    Ok(())
+}
+
+fn map_dense<T, const N: usize, const M: usize, F>(
+    fields: [&[T]; N],
+    pointwise: [&[T]; M],
+    axes: [Axis; N],
+    out: &mut [T],
+    shape: [usize; 3],
+    scales: [Scales<T>; N],
+    combine: &F,
+) where
+    T: RealField + FloatElement + Copy,
+    F: Fn([T; N], [T; M]) -> T + Send + Sync,
+{
+    let [nx, ny, nz] = shape;
+    let plane_len = ny * nz;
+    // One output element, the four neighbours each term's stencil reaches,
+    // and one element of each pointwise input.
+    let element_bytes = (1 + N * (ELEMENTS_PER_UNIT - 1) + M) * size_of::<T>();
+    for_each_plane_mut_with(
+        out,
+        plane_len,
+        element_bytes,
+        || vec![<T as NumericElement>::ZERO; N * nz],
+        |scratch, x, out_plane| {
+            for (y, out_row) in out_plane.chunks_exact_mut(nz).enumerate() {
+                let base = x * plane_len + y * nz;
+                // Each term writes a whole lane through the same kernel a
+                // separate sweep would use, into a row of scratch that stays
+                // in L1: the fields are still read once per output lane, and
+                // the lane writers keep vectorizing. Dispatching a stencil
+                // per element instead costs more than the traffic it saves --
+                // kwavers' shear assembly measured 134 -> 170 us at 64 cubed
+                // on the per-element form.
+                for (j, values) in scratch.chunks_exact_mut(nz).enumerate() {
+                    match axes[j] {
+                        Axis::X => Stencil::at(x, nx).apply_lane(scales[j], values, |o| {
+                            let plane = x.wrapping_add_signed(o) * plane_len + y * nz;
+                            &fields[j][plane..plane + nz]
+                        }),
+                        Axis::Y => Stencil::at(y, ny).apply_lane(scales[j], values, |o| {
+                            let row = x * plane_len + y.wrapping_add_signed(o) * nz;
+                            &fields[j][row..row + nz]
+                        }),
+                        Axis::Z => sweep_row(scales[j], values, &fields[j][base..base + nz]),
+                    }
+                }
+                for (k, value) in out_row.iter_mut().enumerate() {
+                    *value = combine(
+                        core::array::from_fn(|j| scratch[j * nz + k]),
+                        core::array::from_fn(|p| pointwise[p][base + k]),
+                    );
+                }
+            }
+        },
+    );
+}
+
+fn map_strided<T, const N: usize, const M: usize, F>(
+    terms: [(Axis, ArrayView3<'_, T>); N],
+    pointwise: [ArrayView3<'_, T>; M],
+    dst: &mut ArrayViewMut3<'_, T>,
+    shape: [usize; 3],
+    scales: [Scales<T>; N],
+    combine: &F,
+) where
+    T: RealField + FloatElement + Copy,
+    F: Fn([T; N], [T; M]) -> T + Send + Sync,
+{
+    for i in 0..shape[0] {
+        for j in 0..shape[1] {
+            for k in 0..shape[2] {
+                let index = [i, j, k];
+                let derivatives: [T; N] = core::array::from_fn(|t| {
+                    let axis = terms[t].0.index();
+                    let c = index[axis];
+                    Stencil::at(c, shape[axis]).apply(scales[t], |o| {
+                        let mut neighbour = index;
+                        neighbour[axis] = c.wrapping_add_signed(o);
+                        terms[t].1[neighbour]
+                    })
+                });
+                dst[index] = combine(derivatives, core::array::from_fn(|p| pointwise[p][index]));
+            }
+        }
+    }
 }
 
 fn divergence_strided<T>(
