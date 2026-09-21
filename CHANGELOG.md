@@ -8,6 +8,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [minor] `FiniteDifference3D::divergence_into(fields, dst)` sums the three
+  axis derivatives of three fields into one destination in a single pass,
+  reading each field once per output lane instead of writing three per-axis
+  buffers the caller then adds. Values are bit-identical to the composed
+  form summed in x, y, z order. Implemented for `CentralFourthOrder`; the
+  other schemes return `LetoError::InvalidInput` naming the composed route.
+
 - [minor] `FiniteDifference3D` with `CentralFourthOrder` accepts an axis of
   any length. A singleton axis differentiates to zero and an axis under five
   points takes the first- and second-order closure rows; before, these

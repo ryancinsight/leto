@@ -189,3 +189,148 @@ fn each_order_is_exact_on_its_polynomial() {
         );
     }
 }
+
+/// `seeded` shifted, so the three divergence inputs differ everywhere.
+fn seeded_offset(shape: [usize; 3], offset: f64) -> Array3<f64> {
+    let mut field = seeded(shape);
+    for value in field.iter_mut() {
+        *value = *value * 1.37 + offset;
+    }
+    field
+}
+
+/// The composed form the fused kernel replaces: one buffer per axis, summed
+/// in x, y, z order.
+fn composed_divergence(fields: [&Array3<f64>; 3]) -> Array3<f64> {
+    let op = FiniteDifference3D::central_fourth_order(SPACING[0], SPACING[1], SPACING[2])
+        .expect("positive spacing");
+    let shape = fields[0].shape();
+    let mut parts = [
+        Array3::from_elem(shape, f64::NAN),
+        Array3::from_elem(shape, f64::NAN),
+        Array3::from_elem(shape, f64::NAN),
+    ];
+    for (axis, (field, part)) in fields.iter().zip(parts.iter_mut()).enumerate() {
+        let mut view = part.view_mut();
+        match axis {
+            0 => op.apply_x_into(field.view(), &mut view),
+            1 => op.apply_y_into(field.view(), &mut view),
+            _ => op.apply_z_into(field.view(), &mut view),
+        }
+        .expect("matching shapes");
+    }
+    let [nx, ny, nz] = shape;
+    let mut sum = Array3::zeros(shape);
+    for i in 0..nx {
+        for j in 0..ny {
+            for k in 0..nz {
+                let p = [i, j, k];
+                sum[p] = (parts[0][p] + parts[1][p]) + parts[2][p];
+            }
+        }
+    }
+    sum
+}
+
+fn fused_divergence(fields: [&Array3<f64>; 3]) -> Array3<f64> {
+    let op = FiniteDifference3D::central_fourth_order(SPACING[0], SPACING[1], SPACING[2])
+        .expect("positive spacing");
+    let mut out = Array3::from_elem(fields[0].shape(), f64::NAN);
+    let mut view = out.view_mut();
+    op.divergence_into(
+        [fields[0].view(), fields[1].view(), fields[2].view()],
+        &mut view,
+    )
+    .expect("matching shapes");
+    out
+}
+
+/// Shapes below and past the sweep's parallel floor, with short and singleton
+/// axes that take only the wall closures.
+#[test]
+fn the_fused_divergence_is_the_composed_one_bit_for_bit() {
+    for shape in [
+        [5usize, 4, 6],
+        [9, 7, 8],
+        [32, 30, 28],
+        [4, 3, 1],
+        [1, 6, 5],
+        [2, 2, 2],
+    ] {
+        let fields = [
+            seeded(shape),
+            seeded_offset(shape, 3.5),
+            seeded_offset(shape, -7.25),
+        ];
+        let borrowed = [&fields[0], &fields[1], &fields[2]];
+        let fused = fused_divergence(borrowed);
+        let composed = composed_divergence(borrowed);
+        let [nx, ny, nz] = shape;
+        for i in 0..nx {
+            for j in 0..ny {
+                for k in 0..nz {
+                    let p = [i, j, k];
+                    assert_eq!(
+                        fused[p].to_bits(),
+                        composed[p].to_bits(),
+                        "shape {shape:?} at {p:?}: {} vs {}",
+                        fused[p],
+                        composed[p]
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// A field the caller stores transposed takes the logical walk; the values
+/// are the same ones the dense path produces.
+#[test]
+fn a_transposed_field_gives_the_dense_values() {
+    let shape = [6usize, 6, 6];
+    let fields = [
+        seeded(shape),
+        seeded_offset(shape, 3.5),
+        seeded_offset(shape, -7.25),
+    ];
+    let dense = fused_divergence([&fields[0], &fields[1], &fields[2]]);
+
+    let stored = reversed_storage(&fields[1]);
+    let transposed = stored.transpose([2, 1, 0]).expect("a permutation");
+    assert!(
+        transposed.as_slice().is_none(),
+        "the case needs a non-C-dense field"
+    );
+    let op = FiniteDifference3D::central_fourth_order(SPACING[0], SPACING[1], SPACING[2])
+        .expect("positive spacing");
+    let mut out = Array3::from_elem(shape, f64::NAN);
+    let mut view = out.view_mut();
+    op.divergence_into([fields[0].view(), transposed, fields[2].view()], &mut view)
+        .expect("matching shapes");
+    assert_bitwise(&out, |index| dense[index], "transposed field");
+}
+
+#[test]
+fn a_mismatched_shape_and_an_unfused_scheme_are_refused() {
+    let shape = [6usize, 5, 7];
+    let fields = [seeded(shape), seeded(shape), seeded(shape)];
+    let op = FiniteDifference3D::central_fourth_order(SPACING[0], SPACING[1], SPACING[2])
+        .expect("positive spacing");
+
+    let mut wrong = Array3::<f64>::zeros([6, 5, 6]);
+    assert!(op
+        .divergence_into(
+            [fields[0].view(), fields[1].view(), fields[2].view()],
+            &mut wrong.view_mut()
+        )
+        .is_err());
+
+    let mut out = Array3::<f64>::zeros(shape);
+    let second_order = FiniteDifference3D::central_second_order(SPACING[0], SPACING[1], SPACING[2])
+        .expect("positive spacing");
+    let refusal = second_order.divergence_into(
+        [fields[0].view(), fields[1].view(), fields[2].view()],
+        &mut out.view_mut(),
+    );
+    assert!(refusal.is_err(), "an unfused scheme must say so");
+}

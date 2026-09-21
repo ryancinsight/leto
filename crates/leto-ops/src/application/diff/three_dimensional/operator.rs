@@ -12,7 +12,7 @@ use super::central::{
     central2_x_into, central2_y_into, central2_z_into, central6_x_into, central6_y_into,
     central6_z_into,
 };
-use super::fourth_order::central4_into;
+use super::fourth_order::{central4_divergence_into, central4_into};
 use super::leapfrog::Axis;
 use super::staggered::{
     staggered_backward_x_into, staggered_backward_y_into, staggered_backward_z_into,
@@ -123,6 +123,42 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
                 assert_dst_shape(&dst.shape(), &[nx, ny, nz])?;
                 staggered_backward_x_into(field, dst, nx, ny, nz, self.dx)
             }
+        }
+    }
+
+    /// Sum the three axis derivatives of three fields into one destination:
+    /// `dst = ∂fields[0]/∂x + ∂fields[1]/∂y + ∂fields[2]/∂z`.
+    ///
+    /// The fused form reads each field once per output lane instead of
+    /// writing three per-axis buffers a caller then adds, which is where a
+    /// divergence spends its time once the stencils are lane-swept: at 64
+    /// cubed it moves 8 MB against the composed form's 20 MB. Values are
+    /// bit-identical to applying each axis separately and summing in x, y, z
+    /// order.
+    ///
+    /// # Errors
+    /// - [`LetoError::InvalidInput`] when the fields and `dst` do not share
+    ///   one shape, or when the scheme is not `CentralFourthOrder`. The other
+    ///   schemes have no fused kernel yet; compose [`Self::apply_x_into`] and
+    ///   its siblings and sum, or extend `fourth_order` the same way.
+    pub fn divergence_into(
+        &self,
+        fields: [ArrayView3<'_, T>; 3],
+        dst: &mut ArrayViewMut3<'_, T>,
+    ) -> Result<()> {
+        let shape = fields[0].shape();
+        for field in &fields[1..] {
+            assert_dst_shape(&field.shape(), &shape)?;
+        }
+        assert_dst_shape(&dst.shape(), &shape)?;
+        match self.scheme {
+            FiniteDifference3DScheme::CentralFourthOrder => {
+                central4_divergence_into(fields, dst, [self.dx, self.dy, self.dz])
+            }
+            other => Err(LetoError::InvalidInput(format!(
+                "divergence_into has no fused kernel for {other:?}; apply each \
+                 axis separately and sum"
+            ))),
         }
     }
 
