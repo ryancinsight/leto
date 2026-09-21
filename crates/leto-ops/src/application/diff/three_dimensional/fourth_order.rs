@@ -336,18 +336,21 @@ fn add_row<T: RealField + FloatElement + Copy>(scales: Scales<T>, out: &mut [T],
             *value += scales.fourth(m2, m1, p1, p2);
         }
     }
-    // On a short axis the four edge positions collapse onto each other
-    // (n = 2 gives 0, 1, 0, 1). Assignment tolerates a repeat; accumulation
-    // would add that coordinate's derivative twice, so each is visited once.
-    let mut edges = [0, 1, n.saturating_sub(2), n.saturating_sub(1)];
-    edges.sort_unstable();
-    let mut previous = usize::MAX;
-    for c in edges.into_iter().filter(|&c| c < n) {
-        if c == previous {
-            continue;
+    // Accumulation must visit each coordinate once: on a short axis the four
+    // edge positions collapse onto each other (n = 2 gives 0, 1, 0, 1), and
+    // adding that coordinate's derivative twice is a wrong value, where the
+    // assigning twin merely writes it twice. From n = 4 up the four are
+    // already distinct and ordered, so the dedupe is confined to the short
+    // case rather than paid on every row of every sweep; below it every
+    // coordinate is an edge, and 0..n is exactly the collapsed set.
+    if n >= 4 {
+        for c in [0, 1, n - 2, n - 1] {
+            out[c] += Stencil::at(c, n).apply(scales, |o| row[c.wrapping_add_signed(o)]);
         }
-        previous = c;
-        out[c] += Stencil::at(c, n).apply(scales, |o| row[c.wrapping_add_signed(o)]);
+    } else {
+        for c in 0..n {
+            out[c] += Stencil::at(c, n).apply(scales, |o| row[c.wrapping_add_signed(o)]);
+        }
     }
 }
 
