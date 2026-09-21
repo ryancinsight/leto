@@ -12,7 +12,9 @@ use super::central::{
     central2_x_into, central2_y_into, central2_z_into, central6_x_into, central6_y_into,
     central6_z_into,
 };
-use super::fourth_order::{central4_divergence_into, central4_into, central4_map_into};
+use super::fourth_order::{
+    central4_divergence_into, central4_into, central4_map_into, central4_map_triple_into,
+};
 use super::leapfrog::Axis;
 use super::staggered::{
     staggered_backward_x_into, staggered_backward_y_into, staggered_backward_z_into,
@@ -210,6 +212,56 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
             ),
             other => Err(LetoError::InvalidInput(format!(
                 "map_axis_derivatives has no fused kernel for {other:?}; sweep                  each axis separately and combine"
+            ))),
+        }
+    }
+
+    /// [`Self::map_axis_derivatives`] writing three destinations from one
+    /// derivative pass.
+    ///
+    /// Where three results read the same axis derivatives -- the diagonal of
+    /// an elastic stress tensor reads the same three normal strains -- this
+    /// sweeps the stencils once and writes all three, instead of one call per
+    /// destination sweeping them again. At 64 cubed that is 16 MB of traffic
+    /// against 28 MB for sweeping the derivatives into buffers and combining
+    /// them afterwards, and against 36 MB for three separate fused calls.
+    ///
+    /// Three is the runtime's lockstep split, not a domain limit.
+    ///
+    /// # Errors
+    /// - [`LetoError::InvalidInput`] when the fields, the pointwise inputs
+    ///   and the destinations do not share one shape, or when the scheme is
+    ///   not `CentralFourthOrder`.
+    pub fn map_axis_derivatives_triple<const N: usize, const M: usize, F>(
+        &self,
+        terms: [(Axis, ArrayView3<'_, T>); N],
+        pointwise: [ArrayView3<'_, T>; M],
+        dst: [&mut ArrayViewMut3<'_, T>; 3],
+        combine: F,
+    ) -> Result<()>
+    where
+        F: Fn([T; N], [T; M]) -> [T; 3] + Send + Sync,
+    {
+        let shape = dst[0].shape();
+        for destination in &dst[1..] {
+            assert_dst_shape(&destination.shape(), &shape)?;
+        }
+        for (_, field) in &terms {
+            assert_dst_shape(&field.shape(), &shape)?;
+        }
+        for field in &pointwise {
+            assert_dst_shape(&field.shape(), &shape)?;
+        }
+        match self.scheme {
+            FiniteDifference3DScheme::CentralFourthOrder => central4_map_triple_into(
+                terms,
+                pointwise,
+                dst,
+                [self.dx, self.dy, self.dz],
+                combine,
+            ),
+            other => Err(LetoError::InvalidInput(format!(
+                "map_axis_derivatives_triple has no fused kernel for {other:?};                  sweep each axis separately and combine"
             ))),
         }
     }

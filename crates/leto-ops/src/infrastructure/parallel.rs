@@ -138,6 +138,76 @@ pub(crate) fn for_each_plane_mut_with<T, S, I, F>(
     }
 }
 
+/// [`for_each_plane_mut_with`] over three destinations at once: each task
+/// owns the same plane range of all three, so a kernel whose outputs share
+/// one derivative pass writes them in that pass instead of repeating it.
+///
+/// The arity is the runtime's: moirai splits one, two or three buffers in
+/// lockstep, and three is what the elastic diagonal stresses need. A fourth
+/// destination would need the runtime to grow first.
+pub(crate) fn for_each_plane_mut_triple_with<T, S, I, F>(
+    first: &mut [T],
+    second: &mut [T],
+    third: &mut [T],
+    plane_len: usize,
+    #[cfg_attr(
+        not(feature = "parallel"),
+        expect(
+            unused_variables,
+            reason = "only the parallel arm sizes tasks by bytes"
+        )
+    )]
+    element_bytes: usize,
+    state: I,
+    plane: F,
+) where
+    T: Send,
+    S: Send,
+    I: Fn() -> S + Send + Sync,
+    F: Fn(&mut S, usize, [&mut [T]; 3]) + Send + Sync,
+{
+    if plane_len == 0 {
+        return;
+    }
+    #[cfg(feature = "parallel")]
+    moirai::for_each_unit_task_triple_mut_with::<
+        moirai::WorkBytes<PARALLEL_MIN_BYTES>,
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+    >(
+        first,
+        second,
+        third,
+        plane_len,
+        plane_len.saturating_mul(element_bytes),
+        state,
+        |task_state, first_plane, a, b, c| {
+            let planes = a
+                .chunks_exact_mut(plane_len)
+                .zip(b.chunks_exact_mut(plane_len))
+                .zip(c.chunks_exact_mut(plane_len));
+            for (offset, ((x, y), z)) in planes.enumerate() {
+                plane(task_state, first_plane + offset, [x, y, z]);
+            }
+        },
+    );
+    #[cfg(not(feature = "parallel"))]
+    {
+        let mut task_state = state();
+        let planes = first
+            .chunks_exact_mut(plane_len)
+            .zip(second.chunks_exact_mut(plane_len))
+            .zip(third.chunks_exact_mut(plane_len));
+        for (index, ((x, y), z)) in planes.enumerate() {
+            plane(&mut task_state, index, [x, y, z]);
+        }
+    }
+}
+
 /// Runs `plane(index, values)` over the whole x-planes of a C-order 3-D output
 /// whose planes hold `plane_len` elements: `index` is the plane's x index and
 /// `values` its elements in storage order.
