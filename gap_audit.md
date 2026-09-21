@@ -83,28 +83,6 @@ the dominant prior cost, not an exact cross-binary improvement percentage. This
 establishes layout-copy throughput only. Apollo integration still must verify
 full FFT behavior and steady-state allocation.
 
-## 2026-08-20 Stack-storage constructor oracle — closed
-
-The capacity test in `crates/leto/tests/core/stack_storage.rs` used
-existence-only assertions for both the valid and invalid `from_stack` paths.
-It now checks the constructed shape, size, and nonuniform inline values, and
-matches the typed `LetoError::StorageError` reason for the rejected shape. The
-provider conformance scan drops the existence-only count from 9 to 7 with no
-other class change. Locked all-target compilation, warning-denied Clippy,
-focused and full Nextest (`1/1` and `984/984`), doctests, and Rustdoc complete;
-a temporary valid-shape rejection mutation fails the focused test.
-
-## ATLAS-LETO-CONTRACT-100 — Shutdown error contract (closed 2026-08-17)
-
-The Atlas conformance scan reports `existence_only_assertions=10` against a
-baseline of 9. The additional site is the shutdown regression test in
-`crates/leto-ops/src/infrastructure/parallel.rs`, introduced by provider
-commit `508962d`; it checks only `is_err()` after runtime shutdown. The
-provider exposes `moirai::ExecutorError`, so commit `6463f4a` asserts the exact
-`ShuttingDown` value without a compatibility path or baseline edit. The
-provider scan returns 9; formatting, strict Clippy, and focused locked Nextest
-pass 550/550. Hosted exact-head CI `32021076930` and Pages `32021074899` pass.
-
 ## 2026-08-13 Convolution provider closure
 
 The generic regular and transposed convolution family is complete at provider
@@ -241,31 +219,6 @@ owns accelerator execution and its separate device-gate evidence.
   remains inconclusive. Fixed 32 remains the production policy and the explicit
   adaptive selector remains available for future hardware-specific evidence.
 
-## 2026-07-23 Dense matmul parity audit
-
-- **Finding:** the historical 0.19.7 oracle rows marked dense matmul as slower
-  than ndarray at 64×64, 128×128, and 256×256. A quiet-host rerun against the
-  current default-feature release path changed that conclusion: Leto measured
-  `23.597 µs` [17.659, 29.520], `123.63 µs` [117.41, 130.97], and `233.60 µs`
-  [202.28, 253.87] at those sizes; ndarray measured `12.770 µs` [11.437,
-  14.460], `113.07 µs` [104.34, 120.96], and `952.54 µs` [935.68, 981.42].
-- **Resolution:** no production change is justified by the current evidence.
-  The existing `is_parallel_beneficial` threshold selects the parallel dense
-  path at 64×64; a focused 20-sample rerun measured `23.597 µs` with parallel
-  execution versus `27.483 µs` [26.478, 28.271] with parallelism disabled.
-  At 128×128 and 256×256, the serial path measured `223.69 µs` [222.72,
-  224.43] and `1.8522 ms` [1.8208, 1.9032], respectively. The measured
-  default path is therefore the better current policy across the tested sizes.
-- **Profile limit:** `cargo flamegraph` could not collect samples on this
-  Windows session because `dtrace` was unavailable and its `blondie` fallback
-  required administrator rights. The result is controlled benchmark and source
-  dispatch evidence, not a call-stack profile or a topology proof.
-- **Verification:** locked Criterion oracle runs used the same deterministic
-  f64 inputs and current release profile; a no-default-feature Leto run
-  isolated the serial comparison. No production source changed. The claim is
-  closed as an evidence-only audit; future tile or packing work requires a
-  working profiler and a changed kernel hypothesis.
-
 ## 2026-07-23 Contiguous and non-unit-stride benchmark coverage
 
 - **Finding:** the canonical `leto-ops` Criterion harness had selected
@@ -337,46 +290,6 @@ owns accelerator execution and its separate device-gate evidence.
   established by the ownership/data-flow audit; no runtime allocation profile
   is claimed by this change.
 
-## 2026-07-22 Runnable Migration Evidence
-
-- **Closed evidence gap:** `leto-ops` now owns runnable `ndarray_parity` and
-  `nalgebra_parity` examples in addition to its focused integration tests and
-  Criterion benchmarks. The examples are deterministic and input-sensitive;
-  they report measured error magnitudes rather than boolean-only success.
-- **Numerical contract:** elementwise equal-order operations require exact
-  equality; independent reductions use `2γₙ Σ|term|`; the manufactured Poisson
-  solve uses normalized backward error, the exact discrete sine eigenmode, and
-  the exact infinity-norm condition number
-  `κ∞(A) = 2 maxᵢ i(n + 1 - i)` for forward bounds.
-- **Architecture effect:** ndarray and nalgebra remain dev-only differential
-  oracles. Production dependency ownership and kernel implementations are
-  unchanged. The examples contain no one-shot timing claim; performance
-  evidence remains owned by the controlled Criterion suite.
-- **Evidence limit:** these examples cover a representative migration workflow,
-  not the full provider surfaces. `docs/completeness/parity_matrix.md` and its
-  focused contract suites remain the completeness SSOT.
-
-## 2026-07-21 Public ndarray Compatibility Boundary
-
-- **Finding:** `leto` contradicted its production dependency policy through an
-  optional `ndarray-compat` feature. That feature exposed a public third-party
-  re-export and six conversion implementations, including two unsafe raw-slice
-  reconstructions. No live Atlas manifest or Rust caller uses the feature or
-  conversion module; Apollo commit `324f380` consumes native Leto arrays and its
-  resolved graph has no Rust `ndarray` package.
-- **Resolution:** remove the feature, optional dependency, module, re-export,
-  conversion-only integration tests, and the conversion fixture from Leto Ops.
-  `ndarray` remains a dev-dependency oracle. Consumer language/FFI boundaries
-  construct native Leto arrays directly; no replacement adapter is introduced.
-- **Coverage preservation:** canonical Leto suites retain constructor/storage,
-  transpose, broadcast, axis mutation, signed-stride slicing, layout bounds,
-  reshape, and logical-order materialization coverage. Configured Nextest passes
-  266/266 after the conversion-only suite is removed. ADR 0017 records the
-  public migration and ownership decision.
-- **Evidence limit:** tests prove retained Leto value semantics; the production
-  dependency scan and Cargo graph prove boundary removal. Neither is a runtime
-  performance measurement.
-
 ## 2026-07-20 Decomposition SIMD-Dispatch Gap (Cholesky shipped)
 
 - **Finding:** LU, Hessenberg reduction, the SVD values-path, Francis QR, and the
@@ -428,20 +341,6 @@ owns accelerator execution and its separate device-gate evidence.
   sparse solver). The `SellP` fallback (`spmv.rs:341`) has the same shape.
   hermes/eunomia f32/f64 SIMD hot paths are otherwise verified hand-written quality
   (hardware FMA, 4-way accumulators, bounds-check-free inner loops, F16C for f16).
-
-## 2026-07-20 Typed Laplacian Ownership
-
-- **Finding:** Hephaestus owned a WGPU Laplacian, but Leto exposed no matching
-  CPU contract. CFDrs consequently kept a live CPU formula and another local
-  test oracle, and its CPU/GPU solver operators selected opposite signs.
-- **Resolution:** Leto owns the validated dimensional contract and Leto Ops
-  owns the CPU evaluation; Hephaestus consumes the same boundary and polarity
-  types. Consumer formulas are deleted in the paired migration.
-- **Evidence tier:** generic `f32`/`f64` closed-form value regression plus
-  compile-time type unification and focused package gates.
-- **Residual:** three-dimensional and variable-coefficient CFD operators are
-  distinct contracts and remain outside this two-dimensional uniform-grid
-  slice.
 
 ## 2026-07-20 SpMV Bounds-Check Elision (Krylov Kernel)
 
@@ -509,63 +408,6 @@ owns accelerator execution and its separate device-gate evidence.
   threshold already used by the parallel policy) so it never regresses
   cache-resident sizes, (b) eliminate the trailing-update copies via matmul into
   strided views, and (c) verify the win at `n` past the LLC on a quiet host.
-
-## 2026-07-20 Normal RNG at Parity (Ziggurat)
-
-- **Finding (closed):** `normal_with_seed` used Box-Muller — even after the
-  sine-half recovery (570 µs/64k `f64`) it trailed ndarray's Ziggurat ~3.9×. This
-  was the last profiled path on which leto-ops lost to ndarray.
-- **Resolution:** replaced Box-Muller with the Ziggurat method (Marsaglia & Tsang
-  2000, 128 layers). The `kn`/`wn`/`fx` tables are reconstructed from the published
-  `r`/`v` constants via the equal-area recurrence (Burkardt's reference form).
-  64k `f64` normals **1108 µs (0.39.0) → 210 µs**, at parity with ndarray (212 µs).
-  Correctness verified against the analytic normal — first four moments, tail
-  probabilities `P(|Z|>1..4)`, and a 200-bin chi-squared goodness-of-fit over 10M
-  samples (`ziggurat_normal_matches_analytical_distribution`) — with per-seed
-  determinism and layout independence preserved. leto-ops now matches or beats
-  ndarray on every profiled path.
-- **Note:** second per-seed *sequence* change for `normal_with_seed` this release
-  cycle (distribution preserved and verified; documented in CHANGELOG).
-
-## 2026-07-19 Parallel Threshold Ignores Arithmetic Intensity
-
-- **Finding:** `leto-ops` gates parallelism on a uniform element-count constant
-  (`PARALLEL_THRESHOLD` = 65536 in `map.rs`/`unary.rs`, 32768 in `reduction.rs`)
-  irrespective of an operation's arithmetic intensity. Bandwidth-bound binary
-  elementwise ops (`add`/`sub`/`mul`/`div`) parallelize the moment the array
-  reaches the threshold, where thread-dispatch overhead exceeds any benefit,
-  while compute-bound unary `exp` (which correctly wins 9.2× vs ndarray) needs
-  it — one gate cannot serve both intensities.
-- **Evidence (criterion, noisy host):** `parity_oracle/add_leto_64k` = 43 µs with
-  default features vs **14.6 µs** under `--no-default-features --features
-  std,mnemosyne-memory,topology` (parallel off) — ~3× slower parallel; serial
-  even beats ndarray's 17.6 µs. `PARALLEL_THRESHOLD` (65536) exactly equals the
-  benchmark `len` (`1<<16`), so the `>=` guard trips parallelism by one element.
-- **Impact:** every bandwidth-bound elementwise op on arrays from ~64k up to the
-  parallel-profitable size (several MB, past shared LLC) pays parallel overhead
-  for a net slowdown — `add`/`sub`/`mul`/`div` and the bandwidth-bound unary maps
-  (negate/abs/copy). Compute-bound transcendentals are unaffected.
-- **Fix direction ([minor]/[arch], ADR):** replace the uniform element-count gate
-  with an arithmetic-intensity- and cache-aware threshold — parallelize a
-  bandwidth-bound op only when its working set (`operands · N · size_of::<T>()`)
-  exceeds the shared last-level cache (available through `themis::CpuTopology`),
-  so extra cores contribute memory bandwidth; keep the low threshold for
-  compute-bound ops. Needs an empirical crossover sweep on a quiet host to
-  calibrate and verify.
-- **Status:** binary, unary, and scalar paths resolved; reductions measured-fine.
-  All bandwidth-bound elementwise ops (`add`/`sub`/`mul`/`div` in `binary_map`;
-  `neg`/`abs` via `unary_map_into`; scalar broadcast via `scalar_map_into`) now
-  gate on working-set-vs-LLC through `CacheGeometry::l3_bytes()` (cache-derived,
-  not a guessed constant); `UnaryOp::COMPUTE_BOUND` keeps transcendentals eager.
-  Measured: 64k `f64` `add` 43 → 16 µs, `scalar_map_into` add ~73 → 9.4 µs;
-  reductions do not over-parallelize (`sum` @64k serial 3.3 µs ≈ parallel 3.6 µs,
-  efficient tree-reduction) so they keep their threshold. Correctness-safe (both
-  paths compute identically); 305/305 tests green. **Resolved:** the
-  `parallel_crossover` sweep (`add` 512k → 8M, gate vs serial, 36 MiB-L3 host)
-  confirms the L3-working-set threshold is correctly calibrated — serial and
-  matching the baseline below L3, parallel and 1.26–1.78× faster above it (CIs
-  non-overlapping). The cache-residency default is optimal by measurement, not a
-  guess; `LETO-PARALLEL-INTENSITY-1` closed.
 
 ## 2026-07-18 Raw Reduced-Precision Ownership
 
@@ -636,26 +478,6 @@ owns accelerator execution and its separate device-gate evidence.
   graph. `LETO-EXTERNAL-ORACLE-1` requires equivalent independent evidence
   before their removal and deletes obsolete comparison benchmark rows.
 
-## 2026-07-18 Sparse COO/CSC Conversion Defects
-
-- **Resolved:** the stale duplicate-conversion work no longer builds a
-  coordinate HashMap plus multiple temporary vectors. One stable row/column
-  ordering and streaming compaction implements both sum and keep-last policies;
-  zero sums do not enter CSR storage.
-- **Resolved:** `CscArray::from_coo` now owns column-major normalization.
-  CSR-to-CSC transpose no longer supplies row-major coordinates to a
-  column-major-only constructor, and callers no longer pre-sort redundantly.
-- **Evidence tier:** exact unordered-duplicate, zero-sum, CSC column/lookup,
-  and transpose regressions; sparse Nextest 18/18; full Leto Nextest 267/267;
-  warning-denied all-target/all-feature Clippy; doctest 1/1; warning-denied
-  rustdoc; and 196/196 applicable SemVer checks.
-- **Provider refresh:** the committed lock now resolves Eunomia 0.2.0
-  `6f431f2d`; the former Eunomia-owned `num-traits` graph edge is absent.
-- **Open toolchain conformance:** the workspace still declares edition 2021
-  and resolver 2. Move to edition 2024/resolver 3 in a dedicated coordinated
-  change after every published crate and consumer passes the edition lint and
-  SemVer gates.
-
 ## 2026-07-17 CFDrs Sparse Direct Factorization Gap
 
 - **Open upstream item**: `LETO-SPARSE-DIRECT-1`.
@@ -675,25 +497,6 @@ owns accelerator execution and its separate device-gate evidence.
   tests, and the downstream direct-after-GMRES contract regression. This audit
   records the gap; it does not claim the algorithm is implemented.
 
-## 2026-07-16 Helios Oriented-Grid Provider Gap
-
-- **Resolved in Leto**: `UnitQuaternion::try_from_rotation_columns` owns the
-  finite, orthonormal, right-handed basis validation and branch-stable
-  matrix-to-quaternion conversion. The generic `f32`/`f64` suite proves the
-  rotation maps the local axes to the supplied columns; exact failures cover
-  non-orthogonal, reflected, non-finite, and invalid-tolerance inputs.
-- **Evidence tier**: value-semantic tests plus locked check, warnings-denied
-  Clippy, 249/249 configured Nextest, doctest, warning-clean Leto rustdoc, and
-  repository-baseline SemVer checks for `leto`/`leto-ops`.
-- **Residual external limitation**: `cargo semver-checks -p leto-python
-  --baseline-rev origin/main` cannot build rustdoc on Rust 1.95 because
-  NumPy 0.23 triggers `collect_intra_doc_links` ICE. `leto-python` is already
-  `doc = false`; no source workaround is introduced for a compiler defect.
-- **Downstream sequencing**: Helios consumes this contract after RITK exposes
-  the named `ImageOrientationPatient` DICOM tag from its currently occupied
-  provider lane; Helios owns the DICOM-specific tolerance and oblique-series
-  regression.
-
 ## 2026-07-15 provider default-branch convergence
 
 Leto retained revision-qualified and path-patched first-party dependencies,
@@ -704,147 +507,6 @@ nextest, and rustdoc gates pass; the locked provider-duplicate scan is empty.
 Evidence tier: locked dependency-resolution plus value-semantic package tests.
 Residual downstream work: Hephaestus and Apollo lock convergence.
 
-## 2026-07-04 CFDrs Sparse Extension CSR Utility Provider Gap
-
-- **Resolved**: `CsrMatrix` now owns diagonal extraction, scalar/value
-  scaling, row scaling, column scaling, Frobenius norm, strict diagonal
-  dominance, and the diagonal-dominance condition-estimate heuristic.
-- **Consumer driver**: CFDrs `cfd-math::sparse::SparseMatrixExt` still exposed
-  these operations over `nalgebra_sparse::CsrMatrix`, but the operation logic
-  now has a Leto-owned provider target instead of downstream CSR loops.
-- **Evidence tier**: provider compile/clippy and empirical nextest plus
-  downstream compile/clippy/nextest. In `D:/atlas/repos/leto`, `rustup run
-  nightly cargo fmt -p leto-ops --check`, `cargo check -p leto-ops`, `cargo
-  nextest run -p leto-ops --test ops_tests sparse --status-level fail` (18/18),
-  and `cargo clippy -p leto-ops --all-targets -- -D warnings` passed.
-  Downstream CFDrs `cfd-math` fmt/check, focused sparse nextest (18/18), and
-  all-target clippy passed.
-
----
-
-## 2026-07-04 CFDrs AMG CSR Transpose Provider Gap
-
-- **Resolved**: `CsrMatrix::transpose()` now returns a sorted CSR
-  representation of `A^T` without dense materialization. The operation counts
-  nonzeros per output row, prefix-scans the output row pointers, and scatters
-  source entries in source-row order so transposed row column indices remain
-  strictly increasing.
-- **Consumer driver**: CFDrs AMG restriction construction needs `R = P^T`.
-  This provider surface lets the downstream path move off
-  `nalgebra_sparse::transpose_as_csc` instead of adding a CFDrs-local CSR
-  transpose helper.
-- **Evidence tier**: provider compile/clippy/doc and empirical nextest plus
-  downstream compile/clippy/nextest. In `D:/atlas/repos/leto`, `rustup run
-  nightly cargo fmt -p leto-ops --check`, `cargo check -p leto-ops`, `cargo
-  nextest run -p leto-ops --test ops_tests sparse --status-level fail` (16/16),
-  `cargo clippy -p leto-ops --all-targets -- -D warnings`, and `cargo doc -p
-  leto-ops --no-deps` passed. Downstream CFDrs `cfd-math` fmt/check, focused
-  sparse nextest (17/17), focused AMG nextest (6/6), and all-target clippy
-  passed.
-
----
-
-## 2026-07-04 CFDrs AMG CSR Product Provider Gap
-
-- **Resolved**: `leto_ops::spgemm` now computes CSR×CSR matrix products with
-  sorted output rows and exact-zero cancellation removal. `CsrRow::nnz` exposes
-  row sparsity without requiring consumers to inspect row slices manually.
-- **Consumer driver**: CFDrs AMG setup currently relies on
-  `nalgebra_sparse` multiplication for Galerkin products (`R * A * P`). This
-  provider surface gives the downstream sparse/linear-solver migration a
-  Leto-owned target instead of a CFDrs-local CSR multiply.
-- **Evidence tier**: provider compile/clippy/doc and empirical nextest.
-  `rustup run nightly cargo fmt -p leto-ops --check`, `cargo check -p
-  leto-ops`, `cargo nextest run -p leto-ops --test ops_tests sparse
-  --status-level fail` (14/14), `cargo clippy -p leto-ops --all-targets -- -D
-  warnings`, and `cargo doc -p leto-ops --no-deps` passed.
-
----
-
-## 2026-07-04 CFDrs Mesh Rotation Provider Gap
-
-- **Resolved**: `FixedMatrix<T, 3, 3>` now multiplies
-  `leto::geometry::Vector3<T>` directly. The implementation computes the
-  row-major 3x3 geometry-vector product without an identity-element dependency.
-- **Consumer driver**: CFDrs `cfd-core::geometry::mesh::MeshOperations::rotate`
-  moved from nalgebra `Matrix3<T>` and `Vector3<T>` to Leto fixed geometry while
-  the mesh/staggered geometry cone moved scalar contracts to Eunomia.
-- **Evidence tier**: provider compile/clippy and empirical nextest, plus
-  downstream compile/clippy/nextest and static scans. `rustup run nightly cargo
-  fmt -p leto --check`, `cargo check -p leto`, `cargo nextest run -p leto
-  --status-level fail` (171/171), and `cargo clippy -p leto --all-targets --
-  -D warnings` passed. Downstream `cfd-core` no-default check, full no-default
-  nextest (201/201), no-default all-target clippy, and mesh/staggered provider
-  scans passed.
-
----
-
-## 2026-07-04 CFDrs Domain Point1 Provider Gap
-
-- **Resolved**: `leto::geometry` now includes `Point1<T>` for one-dimensional
-  domain bounds. Fixed geometry values derive `Eq` conditionally where the
-  scalar supports it, matching downstream generic enum derive requirements.
-  Leto's `std` and `alloc` features now propagate to serde so direct provider
-  checks compile Vec-backed serde surfaces.
-- **Consumer driver**: CFDrs `cfd-core::geometry::shapes::Domain` moved
-  one-, two-, and three-dimensional point/vector geometry from nalgebra to Leto,
-  and the dependent boundary/domain contract moved scalar bounds to Eunomia.
-- **Evidence tier**: provider compile/clippy and empirical nextest, plus
-  downstream compile/clippy/nextest and static scans. `rustup run nightly cargo
-  fmt -p leto --check`, `cargo check -p leto`, `cargo nextest run -p leto
-  --status-level fail` (170/170), and `cargo clippy -p leto --all-targets --
-  -D warnings` passed. Downstream `cfd-core` no-default check, full no-default
-  nextest (201/201), and no-default all-target clippy passed.
-
----
-
-## 2026-07-04 CFDrs Serialized Owned-Array Provider Gap
-
-- **Resolved**: Owned `Array<T, S, N>`, `VecStorage<T>`, and const-rank
-  `Layout<N>` now support serde. `Array` deserialization reconstructs through
-  `Array::new`, so malformed layout/storage bounds are rejected instead of
-  constructing invalid private fields.
-- **Consumer driver**: CFDrs `cfd-core::abstractions::state` moved scalar
-  field state from serialized nalgebra `DVector<T>` to serialized
-  `leto::Array1<T>` without a downstream compatibility wrapper.
-- **Evidence tier**: provider compile/clippy and focused empirical nextest,
-  plus downstream compile/clippy/nextest. `cargo fmt -p leto --check`, focused
-  `cargo nextest run -p leto
-  owned_array_round_trips_shape_and_values_through_serde --status-level fail`,
-  and `cargo clippy -p leto --all-targets -- -D warnings` passed. Downstream
-  `cfd-core` no-default check, no-default all-target clippy, and focused state
-  nextest passed.
-
----
-
-Audit date: 2026-06-12. Evidence tier: codebase scan of `leto` (0.19.6),
-`D:/atlas/repos/apollo`, `D:/atlas/repos/coeus`, current docs.rs pages for
-`ndarray 0.17` and `nalgebra`, and upstream Atlas crates. Counterparts:
-`ndarray 0.17`, `nalgebra` (already removed from Apollo).
-
-## Consumer Position
-
-- **Apollo** (spectral transforms): migrated to native Leto host arrays at
-  commit `324f380`; its manifests and resolved Rust graph contain no `ndarray` or
-  `ndarray-compat` dependency edge. Transform APIs expose Leto boundaries, and
-  nalgebra is removed (FrFT/GFT eigendecomposition uses
-  `leto_ops::symmetric_eigen_jacobi`; GFT adjacency uses `leto::Array2<f64>`).
-- **Coeus** (tensor/autodiff, burn replacement): CPU array layer **fully
-  consolidated onto leto** (re-verified 2026-06-15 against coeus HEAD
-  `037fdd5`; pins leto `d8d34c61`, older than current leto HEAD `723a63c`).
-  coeus's CPU `BackendOps` route every array primitive (elementwise, matmul +
-  batched, axis reductions, argmax/argmin, cumsum/suffix, concat/pad/split/
-  stack, seeded RNG, to_contiguous/reshape/permute, cross-backend transfer,
-  from_fn/eye/arange/linspace) through the `coeus-leto` const-rank dispatch shim
-  (ADR 0002) into leto/leto-ops, covered by `coeus-leto/tests/contract.rs` and
-  `coeus-ops`/`coeus-tensor` `*_leto_diff.rs` suites (coeus workspace 255 tests
-  green). Coeus retains its sealed `ComputeBackend`, autodiff, NN kernel
-  orchestration, and optimizers. Leto owns CPU attention; Hephaestus owns
-  accelerator attention. `coeus-core` keeps a dynamic-rank `Layout` and
-  `Storage`/`StorageMut` traits that
-  `coeus-leto` converts to leto's const-rank views at the boundary — this is the
-  intended ADR 0002 seam, not residual duplication.
-
 ## Layer Boundary Decision (proposed, [arch])
 
 Leto owns the non-differentiable array substrate: layout/strides, storage,
@@ -854,61 +516,6 @@ scaled dot-product attention on CPU, and narrow CPU CSR sparse-dense parity
 kernels. Coeus owns autodiff, NN orchestration, optimizer fusion, and backend
 selection; Hephaestus owns accelerator attention. Apollo owns transform
 kernels. FFT stays in Apollo; Coeus already routes `fft_1d` there.
-
-## A. Gaps vs ndarray 0.16 (Apollo-facing)
-
-Present and verified: const-rank `Array/ArrayView/ArrayViewMut` (+ rank
-aliases 1–3), C/F layouts, ndarray-style `SliceArg` slicing, transpose,
-broadcast, axis iteration, `zeros`/`ones`/`from_elem`/`from_vec`/
-`from_shape_vec`/`from_shape_fn`/`into_vec`, `map_into`/`mapv`/`map`,
-`zip_mut_with`, `zip2_mut_with`, `zip3_mut_with`, `zip5_mut_with`,
-`indexed_map_inplace`, `indexed_map4_inplace`, `indexed_zip4_mut_with`,
-`zip_fold`, checked all-elements `min`/`max`, `indexed_fold`,
-`indexed_fold_fortran`, `coordinate_map_inplace`, `CoordinateMapPlan`,
-sum/mean/min/max keep-dim axis reductions,
-argmin/argmax, 2D matmul, variance/std (all + axis, finite
-`ddof`), quantile/median (all + axis, five interpolation strategies),
-covariance/Pearson correlation
-(rowvar), CoW storage, Mnemosyne storage, and
-owned-array convenience methods for consumer migration (`as_slice_mut`,
-memory-order mutable slices, `mapv`, `zip_map`, `fill`, `assign`, and
-`[usize; N]` indexing), plus rank-1 `usize` indexing and owned-array
-`PartialEq`/`Eq` value semantics for Kwavers CPML profile/factor storage.
-Owned-array serde includes `Array<T, S, N>`, `VecStorage<T>`, and const-rank
-`Layout<N>` with manual rank validation for serde ranks above the fixed-array
-impl limit.
-Fixed-size provider geometry includes
-`FixedMatrix<T, 3, 3>::try_inverse(min_abs_det)` for Gaia/Kwavers FEM
-tetrahedral Jacobian inversion, `Vector2<T>` plus generic vector
-norm/normalization for CFDrs FVM face geometry, and Serde-backed fixed geometry
-values for CFDrs serialized velocity/parameter migration. Special-function unary markers
-`ErfOp`/`ErfcOp`/`LgammaOp` are present over the Eunomia real-math SSOT for the
-Coeus special-functions lane.
-
-| Gap | ndarray counterpart | Consumer driver | Class |
-| --- | --- | --- | --- |
-| Contiguous-slice access on views (`as_slice`, `as_slice_mut`, memory-order variant) | `as_slice_memory_order_mut`, `is_standard_layout` | Apollo FFT butterfly kernels require contiguous mutable slices (~20 call sites) | Closed |
-| Multi-array zip, fold, indexed mutable map, indexed fold, sparse coordinate map, and `Zip::indexed` | `Zip::from(..).and(..).for_each/fold`, `Zip::from(..).and(..).and(..)`, `Zip::from(..).and(..).and(..).and(..)`, higher-arity `Zip`, `Zip::indexed`, `indexed_iter().fold`, sparse coordinate loops | Apollo precision-downgrade, scaling, position-aware paths; Kwavers FWI pressure second derivative, relative model change, self-adjoint imaging conditions/source injection, sponge test helper, adjoint gradient peak logging, MOFI rigid-Jacobian multi-output fills, and FWI Fortran-order voxel lists | Closed (`zip_mut_with`, `zip_fold`, `indexed_fold`, `indexed_fold_fortran`, `coordinate_map_inplace`, `CoordinateMapPlan`, `zip2_mut_with`, `zip3_mut_with`, `zip5_mut_with`, `indexed_map_inplace`, `indexed_map4_inplace`, `indexed_zip_mut_with`, `indexed_zip2_mut_with`, `indexed_zip4_mut_with`) |
-| `mapv_inplace` / in-place unary mutation | `mapv_inplace` | Apollo normalization (1/N scaling) (~5 sites) | Closed |
-| Reshape / `into_shape` on contiguous arrays | `into_shape_with_order` | Apollo (low frequency), Coeus `reshape` (required) | Closed |
-| Scalar–array elementwise ops (array + scalar, array * scalar) | `&a + 1.0`, `mapv` shortcuts | Apollo scaling, Coeus bias/scale paths | Closed |
-| Broadcast-aware binary ops into caller-owned output | broadcasted elementwise ops | Coeus passes `a_layout`, `b_layout`, `c_layout`; Apollo validation and scale paths | Closed |
-| std::ops operator impls on arrays/views (`Add`, `Sub`, `Mul`, `Div`, `Neg`) | operator overloads | Ergonomics for both consumers; std-trait integration mandate | Deferred by ADR 0001; current scalar/binary map APIs cover driven cases |
-| `concat`/`stack` along axis | `ndarray::concatenate`, `stack` | Coeus `cat()`; Apollo validation builders | Closed (`concat`; `stack` via `InsertAxis` rank helper) |
-| Dynamic-rank escape type at I/O boundaries | `IxDyn` | Apollo generic-over-dimension helpers (~30 sites use `Array<T, D>`); Coeus layout is dynamic-rank | Closed (`ArrayD`, `LayoutDyn`, zero-copy rank bridge; ADR 0007 boundary carrier, compute still via const-rank recovery) |
-| 1D dot / vector ops | `Array1::dot` | Apollo, Coeus | Closed |
-| Elementwise unary math suite (`exp`, `ln`, `sin`, `cos`, `sqrt`, `abs`, `neg`, `powf`, `erf`, `erfc`, `lgamma`) as named ZST ops | `mapv` with std/special float fns | Coeus `UnaryOp` enum and exact-GELU / `torch.special` parity lane | Closed |
-| `cumsum` / prefix scans along axis | (ndarray lacks native; Coeus has) | Coeus `cumsum`, `suffix_sum` | Closed (`scan_axis`, `cumsum`, fwd/rev, CumSum/CumProd) |
-| Random constructors (uniform/normal, seeded) | `ndarray-rand` | Coeus init (`Xorshift64`, Box-Muller); keep deterministic, seed-based | Closed (`uniform_with_seed`, `normal_with_seed`) |
-| Pad / split along axis | (manual in ndarray) | Coeus shape ops | Closed (`pad`, `split`) |
-| Batched (rank-3) matmul | (via einsum/manual) | Coeus batched contraction — boundary decision places it in leto | Closed (`batched_matmul`, batch broadcast) |
-| Variance / standard deviation | ndarray-stats / ndarray `var` | Array statistics parity | Closed (`var_all`, `std_all`, `var_axis`, `std_axis`; two-pass, finite `ddof`) |
-| Quantile / median | ndarray-stats / numpy | Array statistics parity | Closed (`quantile_all`, `median_all`, `quantile_axis`, `median_axis`; five interpolation strategies, NaN/range rejection) |
-| Correlation / covariance | ndarray-stats | Array statistics parity | Closed (`covariance`, `pearson_correlation`; rowvar, two-pass centered covariance, exact empty/ddof rejection) |
-
-Non-goals confirmed: convolution, pooling, optimizer kernels, higher sparse
-formats/backends beyond CPU CSR SpMV/SpMM, and autodiff stay in Coeus. CPU
-attention is closed in Leto; accelerator attention belongs to Hephaestus.
 
 ## B. Gaps vs nalgebra (linear algebra)
 
@@ -945,30 +552,6 @@ does **not** depend on `leto`/`leto-ops` today — it uses `nalgebra` 0.33 and
 differential oracle (`oracle_parity.rs`) and stand on general-parity grounds;
 they are not currently exercised by a live Atlas consumer. A real CFDrs
 migration to leto dense linalg remains an unstarted, separately tracked item.
-
-## C. Coeus backend integration ([arch]) — COMPLETE (2026-06-15)
-
-The CPU array-kernel consolidation is done (verified against coeus HEAD
-`037fdd5`). The plan-of-record integration path resolved as:
-1. Leto provides the CPU array kernels (unary suite, broadcast-aware binary into
-   caller-owned output, reductions incl. argmax/cumsum, matmul + batched,
-   concat/pad/split/stack, seeded RNG). DONE.
-2. Coeus routes its CPU `BackendOps` through the `coeus-leto` const-rank dispatch
-   shim (ADR 0002) into those kernels — the duplicated array-primitive traversal
-   loops in coeus are retired. DONE, with `coeus-leto/tests/contract.rs` and
-   `*_leto_diff.rs` differential suites; coeus workspace 255 tests green.
-3. Coeus keeps `ComputeBackend` ownership, autodiff, NN orchestration, higher
-   sparse formats/backends, and optimizers. CPU attention dispatches to Leto;
-   accelerator attention dispatches to Hephaestus. Revised by ADR 0002.
-
-Framing correction: `coeus-tensor` is **not** a duplicate of leto to delete — it
-is the autodiff-integrated `Tensor`/COW wrapper over `coeus-core`'s dynamic-rank
-`Layout`, with CPU compute delegated to leto via `coeus-leto`. coeus-core's
-dynamic-rank layout + `Storage` traits, converted at the `coeus-leto` boundary,
-are the intended ADR 0002 seam. No leto-side capability gap remains for the CPU
-re-base. Remaining cross-repo work is the apollo internal FFT-kernel migration
-(apollo-owned) and the themis-0.9 re-pin cascade (§D), which gates clean consumer
-rev-bumps to leto 0.24.0.
 
 ## D. Residual Risk Register
 
@@ -1055,7 +638,6 @@ exception-safety, `matrix.rs` parallel matmul). Conclusions:
   5 days untouched, gitignored, not the configured target dir) — it had filled
   the disk and violates the single-`CARGO_TARGET_DIR` rule.
 
-
 Update 2026-06-15 (v0.24.0): §A indexed zip parity, the Stage A1
 consumer-driven nalgebra surface, Stage C2 dense norm SIMD coverage, and
 Stage C3 unary/binary/zip column-walk line micro-tiling are closed through
@@ -1080,254 +662,6 @@ in `docs/adr/`. Remaining work is cross-cutting: Apollo internal FFT-kernel
 migration, the themis-0.9 re-pin cascade, dense matmul oracle performance
 parity, Schur vectors, pivoted symmetric-indefinite factorization, matrix
 functions, and any consumer-driven fixed-size/geometry decisions.
-
-## Performance gap analysis (2026-06-15, AVX2 Win11 x86_64, criterion sample-10)
-
-Decomposition surface, leto/nalgebra median ratio (`decomposition_compare`
-benchmark group):
-
-| Kernel | 32×32 gap | 64×64 gap | Bound / cause |
-| --- | --- | --- | --- |
-| SVD (default `svd_decompose`) | ~10.6× → **~3.5×** | ~18× → **~4.1×** | was one-sided Jacobi; **now** bidiagonal QR (Golub–Reinsch) — see below |
-| eigenvalues | ~16× → **~5.8×** | ~16× → **~7.4×** | **was** complex single-shift QR; **now** real Schur (Francis), no-Q path — see below |
-| matexp | ~5.7× → **~1.15×** | — | **RESOLVED** (commit `01a197d`). Root cause was *not* matmul (matpow, also matmul-bound, was already ~1.2×) but the **Padé-denominator inverse**: `LuDecomposition::solve_in_place` read the packed `L`/`U` via the bounds-checked logical `Array2::get([r,c])` per element, and `inv()` calls it `n` times → `O(n³)` checked gets dominating. Fixed by the contiguous slice + SIMD `dot_slice` substitution. 64² 2.14 → 0.39 ms. Speeds every LU solve/inv/det. |
-| QR | ~3.6× | **~1.0×** | reach parity (row-oriented SIMD apply + blocked ≥256²) |
-| LU | ~3.5× | **~0.96×** | reach parity (bulk-copy input + SIMD axpy elimination); solve/inv O(n³) `get` removed |
-| Cholesky | ~3.4× | — | solve/inv O(n³) `get` removed (commit `6920655`); decompose scalar (constant-factor) |
-| singular_values (values-only SVD) | — | 64² ~2.25×, **256² 1.28×, 512² 1.03×** | **REFRAMED (ADR 0011): not a structural gap.** Levers exhausted at 64²: blocked `dlabrd` (implemented, oracle-verified, reverted — regressive); allocation-free reduce (shipped, ~5%); `apply_left` small-span scalar threshold (tried, **reverted** — a clean light-session toggle A/B showed always-SIMD 121 µs vs threshold 140 µs; the apparent "28%" was CPU-contention dispatch-overhead noise, not a real win — measurement-discipline lesson). The 64² residual is irreducible small-`n` constant overhead vs nalgebra's tuned inner loops; leto is at parity at scale.
-
-  **Root cause, grounded in nalgebra 0.35 source (`linalg/{bidiagonal,householder}.rs`), correcting the earlier guess:** nalgebra's bidiagonalization is **unblocked** (`for ite in 0..dim-1` → `clear_column_unchecked`/`clear_row_unchecked`), *not* blocked — so the earlier "GEMM-parity → blocking doesn't pay" framing was wrong (it assumed nalgebra blocks; it does not, which is *also* why leto's blocked `dlabrd` couldn't beat it). The actual edge is constant-factor tightness: nalgebra computes each reflector **in place** on the matrix column/row (`reflection_axis_mut`, no gather, no per-reflector `v` allocation) with **reused `axis_packed`/`work` scratch**, and its **column-major** layout makes the left (column) reflector contiguous. leto is **row-major**, so the column reflector needs a strided gather, and the reduce still allocates the reflector `v`. The gap is therefore a layout-and-tightness constant factor in the unblocked reduce (plus the sequential Givens sweep), fundamental to leto's row-major n-D design and immaterial at scale (512² 1.03×) where the `O(n³)` SIMD work dominates the constants. Closing it locally would mean an in-place strided-aware reflector + fused gemv/ger apply matching nalgebra's kernels — a significant rewrite of the shared `householder` primitive for microsecond small-`n` gains, against an actively peer-edited file. The blocked `dgebrd`/`dlabrd` was implemented + oracle-verified (192² matches nalgebra) then **reverted as measured-regressive** (256² 4.69→5.68 ms, 512² 32.7→38 ms — the `X`/`Y` look-ahead ~doubles flops, unrecovered by leto's GEMM ratio). Key finding: leto's **unblocked** bidiagonalization is **already at parity at scale** (512² 1.03×); the ~2.25× is a small-`n` (64²) constant-factor artifact. **Profile-confirmed (warm 64² reduce ≈ 50 µs): `apply_left` 21 µs + `apply_right` 17 µs (the SIMD applies) dominate; reflector gather + `v` alloc is only ~12 µs.** The applies run *exactly* nalgebra's flop count (gemv + rank-1 update per reflector), so the residual is **SIMD apply throughput at equal flops** (nalgebra's column-major tuned kernels vs leto's row-major `axpy`-per-row), an irreducible per-flop-throughput floor of the row-major design — *not* allocation (reuse ~5 %), *not* dispatch (scalar-threshold A/B: SIMD beats scalar), *not* blocking (`dlabrd` verified-but-regressive), *not* the sweep (same Golub–Kahan Givens as nalgebra). Every cheaper lever is eliminated by measurement (incl. `axpy_rows` for the rank-1 update: clean multi-run A/B null within noise — the apply is compute-bound, not dispatch-bound); immaterial at scale. UPDATE: per a user decision, a **column-major working-buffer** values reduce (`bidiagonal/colmajor.rs`; left reflector contiguous, no global layout change) shipped — clean A/B ~4–5% faster, narrowing 64² to **~1.64×**, returning `(d,e)` directly (row-major values path removed; factor path unchanged). The remaining ~1.64× is the diffuse small-`n` constant; the row-major→global column-major inversion that could close it fully stays prohibited. FINAL: 12 levers evaluated total — 5 shipped (allocation-free reductions, active-block deflation, values-path zeroing-skip, column-major buffer, reciprocal Givens); 7 measured null/regressive and reverted (blocking/`dlabrd`, dispatch threshold, `axpy_rows`, `validate_input` rewrite, 2×2 closed-form SVD, direct-index scalar apply, `larfg` SIMD norm) **plus a fat-LTO build (null)**. leto's `singular_values_64²` is ~112–120 µs vs nalgebra's session-variable ~53–94 µs — an invariant ~2× per-flop codegen-efficiency constant that holds across every lever incl. LTO, that I could not attribute without a sampling profiler (unavailable in this Windows env: flamegraph needs admin/ETW; no perf/dtrace/samply), and that no discipline-compliant change closes. Immaterial at scale (512² 1.03×). |
-| singular_values (superseded note) | — | — | **profiled** (warm 64²): REDUCE ~82 µs + SWEEP ~48 µs vs nalgebra ~78 µs total. The SIMD `apply_right` dot trimmed the reduce ~6%; full parity needs **major algorithm work**, not constant-factor: (a) the bidiagonalization REDUCE is ~2.25× nalgebra's, and a flop analysis proves
-this is **not** allocation or constant-factor: leto's 82 µs is already *below* a
-naive per-reflector SIMD estimate (~131 µs), so the axpy applies are well
-vectorized — removing the per-step `col`/`row`/`w` heap allocations would not
-move it. nalgebra's 40 µs is **higher sustained flop/ns from blocked GEMM**
-(`dlabrd`) vs leto's per-reflector axpy passes (bandwidth/latency-bound); the only
-lever is blocking, the intricate look-ahead-coupled kernel (ADR 0010 Phase 2 note,
-needs the `X`/`Y` accumulators). (b) the values SWEEP is **sequential Givens** with
-a per-rotation `sqrt`, parity-closeable only by **divide-and-conquer SVD**
-(`dbdsdc`). Both are major sequential/blocked-kernel rewrites of the same class as
-the deferred eig multishift — correctly phased, not rushed (a subtle bug ships
-wrong singular values, a HARD-tier defect). The verified compact-WY block reflector
-(`reflector_block`) is the ready substrate for `dlabrd`; the remaining intricacy is
-the two-sided look-ahead, not the block apply. |
-| dense matmul | ~2.0× | ~1.5× | AXPY (rank-1) scheme: O(n³) output traffic; needs register-blocked GEMM micro-kernel (tile-accumulating SIMD primitive → upstream hermes) |
-| matpow | ~1.5× | — | matmul-bound (tracks matmul) |
-
-Priority finding: the largest gaps are **SVD** and **eigenvalues**, *not* matmul.
-
-- **eigenvalues — RESOLVED (partial, [patch] ×2)**: (1) consolidated onto the
-  real Schur (Francis double-shift) iteration, deleting the complex single-shift
-  QR (`eigenvalues/{complex,qr}.rs`, `Cplx`) — one QR iteration in the crate
-  (SSOT), real arithmetic. (2) **no-Q Francis path**: `francis::run` is
-  const-generic over `ACCUMULATE_Q`; eigenvalues-only passes `false`, so the
-  Schur-vector update is DCE'd (zero cost) and standardization is skipped; block
-  extraction factored into one shared helper. (3) **active-block confinement**:
-  the eigenvalues-only apply is restricted to the active window `[lo, hi]` (left
-  columns `≤ hi`, right rows `≥ lo`); skipped entries are strictly
-  upper-triangular and never feed back, so the spectrum is bitwise identical
-  (proof: `hi` decreases, `lo` is monotone non-decreasing for fixed `hi` via
-  exact-zero deflation). 64×64 `eig` 1.69 → 1.50 ms. The safe confinement is the
-  perturbation-free subset of the LAPACK `dlahqr` WANTT=false window.
-
-  **eig DISPARITY RESOLVED (within-block window, now SHIPPED — commit `676ff72`).**
-  The `dlahqr` WANTT=false narrowing — left columns `[k, hi]`, right rows
-  `[lo, k+len]`, explicit bulge zeroing — is ~half the apply work of the `[lo,hi]²`
-  confinement and cuts the dominant scalar right-apply to the bulge neighbourhood.
-  Clean A/B 64×64: confinement 2.69 ms → restriction 0.69 ms (3.9×); vs nalgebra
-  0.60 ms ⇒ **1.16× (near parity, from ~4.6×)**. It was rejected three times
-  *only* because it diverges from nalgebra by `√(ε‖A‖) = 1.75e-7` on the defective
-  eigenvalue (below), exceeding the *old* fixed `1e-7` test bound; it is
-  backward-stable and became admissible once that bound was corrected (Phase 0) to
-  the analytically-derived `8·√(ε‖A‖)`. The earlier "#20 rejected" verdict was
-  conditional on the brittle test, which is now fixed — the window is the genuine
-  win, not a defect.
-
-  Historical note (#20, machine-checked): the window's divergence was *not* a bug
-  and *not* bad scaling — the 16×16 fixture has a **defective (high-multiplicity)
-  zero eigenvalue**: `det(A) = -8.7e-30 ≈ 0`, nullity 3 (smallest singular values
-    `[5.55, 1.3e-15, 0, 0]`). A defective eigenvalue perturbs as `O(√(ε‖A‖))`, and
-    `√(ε‖A‖) = 1.54e-7` matches the spurious `1.75e-7` imaginary part nalgebra
-    reports for the defective-0. Both algorithm variants are backward-stable; they
-    legitimately differ by `√(ε‖A‖) > 1e-7`. The narrowing is correctness-equivalent
-    (leto's `~1e-15` is in fact nearer the true real-0) but cannot match the oracle
-    at the over-tight 1e-7 absolute tolerance, for a sub-2× apply gain over the
-    confinement already landed — not pursued.
-  - **Matrix balancing (`dgebal` Parlett–Reinsch scaling)** — implemented, verified
-    spectrum-preserving (radix-2 exact), then **reverted**: on the well-scaled
-    integer benchmark matrices it produces `D ≈ I`, so it neither conditions the
-    defective eigenvalue (the narrowing still failed *with* balancing) nor speeds
-    convergence, while adding O(n²·sweeps) overhead that **regressed** `eig`
-    (64×64 1.50 → 1.64 ms). Net-negative for the target metric with no consumer
-    need; removed per subtractive/anti-over-engineering discipline.
-
-  (4) **SIMD apply** (now the eig test is backward-error-correct, see below):
-  the shared Householder apply and the Francis **left**-apply route their
-  contiguous inner sweeps through `Scalar::axpy_slice` (SSOT SIMD), row-oriented
-  with a reused scratch buffer and a `SPAN_SIMD_MIN = 32` threshold (narrow spans
-  stay scalar). Bitwise-identical to the column-oriented form. 64×64 `eig` 1.50 →
-  **1.11 ms** (5.9× → **4.4×**); 32×32 284 → **242 µs**. The brittle `1e-7`
-  oracle was first replaced by the analytically-correct backward-error bound
-  `8·√(ε‖A‖)` (defective-eigenvalue derivation above, machine-checked), which
-  unblocked all backward-stable reorderings.
-
-  Residual gap (~4.4×) is the Francis **right**-apply (3-wide per row, no
-  contiguous span to vectorize) plus the per-step reflector overhead. Closing it
-  needs the blocked/aggregated-reflector (compact-WY / small-bulge multishift)
-  rewrite so the apply becomes a GEMM — tracked as `[major/arch]` (#21), not a
-  patch. **#20 CLOSED**: the within-block `[k, k+len]` narrowing and balancing
-  were both investigated and rejected (above).
-- **SVD — RESOLVED ([patch]+[minor])**: both singular values and the full thin
-  SVD now use the implicit-shift **bidiagonal QR** (`svd/bidiagonal_qr.rs`,
-  reusing `bidiagonalize`). No `AᵀA`, so accuracy is `κ(A)` not `κ(A)²` (resolves
-  `diag(1,1e-6)` to 1e-15). `svd_via_bidiagonal` accumulates `U`/`V` via Givens
-  (const-generic `VEC`; DCE'd for values-only); `svd_decompose` routes to it
-  (Gram path deleted, SSOT). Current validation: full SVD 32×32 ~292→103.6 µs
-  (10.6×→3.5×), 64×64 ~3.1 ms→758.8 µs (18×→4.1×); values-only
-  `singular_values` 57.1 µs (32×32) and 275.0 µs (64×64), a 25.5%/39.5% local
-  median reduction after skipping factor accumulation. One-sided Jacobi
-  (`svd_rank_revealing`) retained for rank-deficient / maximal accuracy.
-  **SIMD bidiagonalization** (shared Householder apply now routes through
-  `Scalar::axpy_slice`, see the eigenvalues entry): 64×64 full SVD 758.8 →
-  **417 µs** (4.1× → **3.4×**), `singular_values` 275.0 → **133 µs** (3.8× →
-  **2.3×**). Residual gap is the scalar **Givens** bidiagonal-QR sweep (strided
-  2×2 rotations, sequential bulge chase).
-
-  **ADR 0010 Phase 2 (blocked U/V factor formation) — implemented, verified, then
-  REVERTED as valueless.** The factor formation was rewritten to store the panel
-  reflectors and form `U = L₀…L_{n-1}` / `V = R₀…R_{n-2}` by blocked compact-WY
-  `apply_block_right` (one-sided, no `dlabrd` look-ahead); verified correct by a
-  256² `A = U B Vᵀ` reconstruction + orthogonality + singular-value contract. But
-  the A/B measurement is decisive: **full SVD 256² is 164 ms blocked vs 163 ms
-  unblocked — no difference.** The entire 256² SVD cost (~163 ms vs nalgebra
-  46.6 ms, 3.5×) is the **sequential Givens bidiagonal-QR sweep**; the U/V
-  formation is < 1 ms. Blocking it is therefore cargo-cult (complexity with no
-  present performance need) and was removed. **The genuine SVD lever is Phase 3
-  — accelerating the Givens sweep itself** (`dbdsqr`), which is inherently
-  sequential (each rotation feeds the next in the bulge chase) and is exactly why
-  it is the residual. `apply_block_right` reverted with it (no value-adding
-  consumer; `apply_block_left`/blocked-QR Phase 1 retained, a measured 256² win).
-
-  **ADR 0010 Phase 3 (SVD) — DONE, disparity resolved.** Without restructuring the
-  serial bulge chase, the per-Givens `U`/`V` **column** rotation (striding the
-  row-major factors — a cache line per row, no SIMD) was made contiguous by
-  accumulating `U`/`V` **transposed**, so each rotation mixes two contiguous rows:
-  bitwise-identical factor, cache-friendly auto-vectorized loop. **256² full SVD
-  164 → 34.7 ms (4.7×, now *faster* than nalgebra 46.6 ms); 64² 1.31 → 0.60 ms**
-  (clean A/B), verified by the SVD reconstruction + nalgebra batteries (commit
-  `9bef76e`). The trick does *not* transfer to eig (`H` is the read/written working
-  matrix, not an isolated accumulator), so the eig residual still needs the
-  multishift block rewrite.
-- **matmul — OPEN**: register-blocked GEMM micro-kernel needs a tile-accumulating
-  SIMD primitive owned upstream in hermes (multi-repo, peer-agent lane); a prior
-  scalar 4×4 tile regressed (no SIMD in the tile). Coordinated effort.
-
-- `stack` (rank `N -> N+1`): CLOSED ([minor]) — implemented via the `InsertAxis`
-  rank helper (dual of `RemoveAxis`, ranks 0..=7). `concat`/`pad`/`split`/`stack`
-  all closed.
-- Dynamic-rank boundary: DECIDED ([major]) in
-  `docs/adr/0002-coeus-rank-boundary.md` — const-generic dispatch shim at the
-  Coeus boundary, shim owned by Coeus, Leto stays const-rank. Phase 6 leto-side
-  capabilities authored const-rank.
-- `symmetric_eigen_jacobi`: CLOSED ([minor]) — now generic over `T: RealScalar`,
-  native precision, no hidden widening. Residual: no wider-accumulator variant;
-  consumers needing higher working precision than storage convert first
-  (explicit). f16/bf16 transcendentals use the documented f32 fallback.
-- `symmetric_eigenvalues_jacobi`: CLOSED ([minor]) — sorted eigenvalues without
-  eigenvector allocation, implemented by a zero-sized no-vector rotation target
-  over the shared Jacobi diagonalization kernel. Evidence tier:
-  value-semantic full-vs-values parity and strided-view tests.
-- Contiguous-slice view access: CLOSED — `as_slice`/`as_mut_slice` are now
-  offset-independent C-dense; `as_slice_memory_order`/`as_mut_slice_memory_order`
-  expose F-order/offset blocks. Apollo's end-to-end native Leto migration is
-  complete at commit `324f380`; its resolved Rust graph contains no `ndarray`.
-- std::ops operator overloading: DEFERRED ([arch]) in
-  `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule). `scalar_map`
-  covers array–scalar arithmetic; no consumer blocked.
-- Indexed zip parity: CLOSED ([minor]) — `indexed_zip_mut_with` and
-  `indexed_zip2_mut_with` provide `Zip::indexed`-style logical coordinates for
-  one- and two-input mutable zip traversals.
-- Stage C3 column-walk elementwise traversal: CLOSED for binary and unary
-  `map_into` plus `zip_mut_with` ([patch]/[minor]) — all use shared cache-line
-  `TileGeometry`.
-  Evidence tier: value-semantic strided tests plus criterion differential
-  timing before/after the optimization. Remaining cache-aware CPU kernel work
-  is blocked matmul cache hierarchy selection and themis topology wiring.
-- Stage C2 dense norm SIMD coverage: CLOSED for `norm_l1`/`norm_l2`/`norm_max`
-  over dense memory-order slices. `norm_l1` and `norm_max` now route f32/f64
-  through Hermes absolute-value reductions; reduced precision keeps the native
-  scalar fallback. Evidence tier: value-semantic norm tests plus criterion
-  in-run scalar-reference comparison. Remaining reduction work is truly
-  non-dense strided reductions, which need per-lane partial accumulators.
-- Coverage of new ops: value-semantic tests plus ndarray differential oracles
-  now cover the unary math suite (`exp`/`sqrt`), `scalar_map`, `concat`,
-  `stack`, `batched_matmul` (per-batch ndarray `dot`), and `cumsum` (reference
-  accumulate), alongside the existing map/reduction/matmul differentials. RNG is
-  validated against closed-form mean/variance (correct per policy, not ndarray).
-  Remaining: differential coverage is leto-internal; consumer-side (Apollo/Coeus)
-  migration tests are the next cross-repo step.
-- `leto-python` rustdoc ICE via `numpy 0.23`: RESOLVED without changing the
-  FFI dependency constraint. `leto-python` is a PyO3 extension boundary with no
-  public Rust API, so its library target sets `doc = false`; full workspace
-  docs no longer walk NumPy 0.23's broken intra-doc link path.
-- Differential coverage: ndarray oracle covers map/reductions/matmul, unary
-  suite, concat/stack, batched matmul, and cumsum. RNG uses closed-form
-  references. Indexed zip currently rests on value-semantic traversal tests.
-- Oracle performance parity: reverse-last-axis `sum`/`norm_l2` is at parity or
-  faster than ndarray on the recorded 256x256 benchmark. Dense matmul is not
-  at parity with ndarray/nalgebra and blocks replacement-performance claims.
-  The 0.19.7 Hermes fused multi-row AXPY path improved Leto medians from
-  21.443 µs / 127.63 µs / 2.4357 ms to 17.430 µs / 108.98 µs / 1.0631 ms for
-  64x64/128x128/256x256, but ndarray/nalgebra remain faster. The 0.19.2
-  zero-skip branch-removal experiment was rejected after canonical dense
-  256x256 instability/regression. The 0.19.3 packed-RHS dot and
-  scalar-row-update experiments also regressed 128x128. The 0.19.4 Hermes
-  `tiled_gemm` f64 dense path regressed 128x128, and small-matrix serial
-  scheduling was slower than row-block parallelism. The 0.19.5
-  `MATMUL_ROW_BLOCK=16` and first-shared-row output initialization experiments
-  did not meet the release benchmark stability/performance gate. Post-0.19.7
-  Hermes column-chunk `axpy_rows` regressed 64x64/128x128/256x256 and ended
-  with `STATUS_ACCESS_VIOLATION`; `MATMUL_ROW_BLOCK=64` also regressed against
-  the 32-row baseline. Row-block fused-branch/alpha-buffer hoisting produced
-  no statistically significant 128x128 improvement and also ended with
-  `STATUS_ACCESS_VIOLATION`. Generic 4x4 registered dense tiles regressed the
-  oracle shapes and are not retained. Hermes `axpy_rows_batch` improves the
-  local themis-0.9 128x128 Leto oracle median from 212.64 µs to 98.853 µs when
-  gated to that row regime, but broad depth-batched routing regressed other
-  oracle shapes and is not retained. (The "next work needs packing scratch or
-  an external micro-kernel" conclusion here is superseded: the 2026-08-28
-  re-measurement below closed the parity gap without either lever.)
-- themis-0.9 migration + dependency resolution (re-diagnosed/MEASURED
-  2026-06-15). Three coupled facts:
-  1. **`Cargo.lock` is gitignored** in leto (`.gitignore`), so there is no
-     committed lock — contrary to the prior "commit Cargo.lock" claim. leto's
-     standalone build depends on a locally-generated lock.
-  2. **Fresh pure-git resolution is broken.** `hermes-simd` (`efac0454`, the
-     measured-good fused-AXPY matmul pin) and `mnemosyne-arena`/`moirai-iter`
-     transitively require `themis ^0.8.0` with no rev, so `cargo
-     generate-lockfile` floats themis to the default-branch HEAD (0.9.11) and
-     fails `^0.8.0`. cargo will not unify a rev-pin with the transitive
-     version-spec, and `[patch]` to the same git source is rejected — so no
-     leto-local pin change resolves it. Builds worked only via a frozen
-     pre-drift themis-0.8 lock (now superseded locally).
-  3. **The themis-0.9 path regresses matmul.** Built leto 0.24.0 against the
-     local themis-0.9 stack (path-patches): all 122 tests + 4 doctests pass, but
-     the required hermes bump `efac0454`→`e6761ac` (dispatch/AXPY refactor)
-     regresses dense matmul **64² 17.4→24.9 µs (+43%)**, **128² 109→176 µs
-     (+61%)**, 256² ~unchanged. So themis-0.9 adoption is blocked not just by pin
-     coordination but by a **measured hermes matmul regression**.
-  Resolution = stack-wide re-pin cascade (themis → mnemosyne → moirai → hermes →
-  leto → apollo/coeus, in order, since each pins old revs of the others) PLUS a
-  hermes-side fix restoring the AXPY/dispatch perf on its themis-0.9 line; then
-  leto migrates and re-measures matmul. Owned at the meta/stack level, not
-  leto-local. Process gap to fix alongside: either commit a frozen `Cargo.lock`
-  (un-gitignore) or pin the whole stack so fresh resolution is reproducible.
-  Interim: leto builds locally via the apollo/coeus-style path-patch set
-  (uncommitted, flagged in `Cargo.toml`); consumer rev-bumps to leto 0.24.0 wait
-  on the cascade (coeus already verified compatible — 22/22 contract tests green
-  against working-tree leto 0.24.0).
-- Evidence tier of this audit: codebase scan + existing test suites +
-  criterion benchmark measurements. No machine-checked proof was performed.
 
 ## Leto rank-deficient singular-values parity [patch]
 - Performed: split `leto-ops::singular_values` from the full-vector `svd_decompose` path. Singular-values-only now diagonalizes the smaller Gram matrix and maps near-zero eigenvalues to zero singular values for finite rank-deficient inputs.
