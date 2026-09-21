@@ -88,6 +88,56 @@ pub(crate) fn for_each_unit_range<F>(
     }
 }
 
+/// [`for_each_plane_mut`] with per-task state: `state()` runs once per unit
+/// task and `plane(&mut state, index, values)` sees the same value for every
+/// plane that task owns.
+///
+/// A kernel that needs row scratch builds it here rather than per plane, so
+/// the allocation count follows the task count instead of the grid. Without
+/// the `parallel` feature one state serves the whole output.
+pub(crate) fn for_each_plane_mut_with<T, S, I, F>(
+    output: &mut [T],
+    plane_len: usize,
+    #[cfg_attr(
+        not(feature = "parallel"),
+        expect(
+            unused_variables,
+            reason = "only the parallel arm sizes tasks by bytes"
+        )
+    )]
+    element_bytes: usize,
+    state: I,
+    plane: F,
+) where
+    T: Send,
+    S: Send,
+    I: Fn() -> S + Send + Sync,
+    F: Fn(&mut S, usize, &mut [T]) + Send + Sync,
+{
+    if plane_len == 0 {
+        return;
+    }
+    #[cfg(feature = "parallel")]
+    moirai::for_each_unit_task_mut_with::<moirai::WorkBytes<PARALLEL_MIN_BYTES>, _, _, _, _>(
+        output,
+        plane_len,
+        plane_len.saturating_mul(element_bytes),
+        state,
+        |task_state, first_plane, planes| {
+            for (offset, values) in planes.chunks_exact_mut(plane_len).enumerate() {
+                plane(task_state, first_plane + offset, values);
+            }
+        },
+    );
+    #[cfg(not(feature = "parallel"))]
+    {
+        let mut task_state = state();
+        for (index, values) in output.chunks_exact_mut(plane_len).enumerate() {
+            plane(&mut task_state, index, values);
+        }
+    }
+}
+
 /// Runs `plane(index, values)` over the whole x-planes of a C-order 3-D output
 /// whose planes hold `plane_len` elements: `index` is the plane's x index and
 /// `values` its elements in storage order.

@@ -12,7 +12,7 @@ use super::central::{
     central2_x_into, central2_y_into, central2_z_into, central6_x_into, central6_y_into,
     central6_z_into,
 };
-use super::fourth_order::{central4_divergence_into, central4_into};
+use super::fourth_order::{central4_divergence_into, central4_into, central4_map_into};
 use super::leapfrog::Axis;
 use super::staggered::{
     staggered_backward_x_into, staggered_backward_y_into, staggered_backward_z_into,
@@ -158,6 +158,58 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
             other => Err(LetoError::InvalidInput(format!(
                 "divergence_into has no fused kernel for {other:?}; apply each \
                  axis separately and sum"
+            ))),
+        }
+    }
+
+    /// Combine several axis derivatives and pointwise fields into one
+    /// destination in a single pass: `dst[i] = combine(derivatives, values)`,
+    /// where `derivatives[j]` is `∂terms[j].1/∂terms[j].0` at that lane and
+    /// `values[k]` is `pointwise[k]` there.
+    ///
+    /// [`Self::divergence_into`] is the sum of three axis derivatives; this
+    /// serves the combinations that are not a sum. An elastic shear stress
+    /// `μ (∂u/∂b + ∂v/∂a)` is `N = 2, M = 1`: it reads two fields and the
+    /// scale once per lane, where sweeping each axis into a buffer and
+    /// scaling the sum moves twice the traffic. Each derivative is the value
+    /// the corresponding [`Self::apply_x_into`] sweep would have written.
+    ///
+    /// Terms name distinct axes in the cases this serves; a repeated axis is
+    /// read twice and both values are handed to `combine`.
+    ///
+    /// # Errors
+    /// - [`LetoError::InvalidInput`] when the fields, the pointwise inputs
+    ///   and `dst` do not share one shape, or when the scheme is not
+    ///   `CentralFourthOrder`. The other schemes have no fused kernel yet;
+    ///   sweep each axis separately and combine, or extend `fourth_order` the
+    ///   same way.
+    pub fn map_axis_derivatives<const N: usize, const M: usize, F>(
+        &self,
+        terms: [(Axis, ArrayView3<'_, T>); N],
+        pointwise: [ArrayView3<'_, T>; M],
+        dst: &mut ArrayViewMut3<'_, T>,
+        combine: F,
+    ) -> Result<()>
+    where
+        F: Fn([T; N], [T; M]) -> T + Send + Sync,
+    {
+        let shape = dst.shape();
+        for (_, field) in &terms {
+            assert_dst_shape(&field.shape(), &shape)?;
+        }
+        for field in &pointwise {
+            assert_dst_shape(&field.shape(), &shape)?;
+        }
+        match self.scheme {
+            FiniteDifference3DScheme::CentralFourthOrder => central4_map_into(
+                terms,
+                pointwise,
+                dst,
+                [self.dx, self.dy, self.dz],
+                combine,
+            ),
+            other => Err(LetoError::InvalidInput(format!(
+                "map_axis_derivatives has no fused kernel for {other:?}; sweep                  each axis separately and combine"
             ))),
         }
     }
