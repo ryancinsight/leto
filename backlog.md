@@ -1,12 +1,12 @@
 # Leto Work Backlog
 
-<a id="LETO-CENTRAL-FOURTH-SWEEPS-2026-09-17"></a>
-## LETO-CENTRAL-FOURTH-SWEEPS-2026-09-17 — The fourth-order central sweeps run one bounds-checked index at a time and reject short axes [minor] [perf] — review
+<a id="LETO-CENTRAL-DIVERGENCE-2026-09-21"></a>
+## LETO-CENTRAL-DIVERGENCE-2026-09-21 — A divergence pays three buffers for a value that needs one pass [minor] [perf] — review
 
-- **Driver:** kwavers' elastic step spends ~85% of its time in a stress divergence built on a private copy of this stencil (kwavers `kw-swe-unit-tasks`), which ADR 128 there assigns to leto. The copy could not be dropped: leto's sweep walked `[i, j, k]` indices on one thread and returned an error for any axis under five points, while the plane-strain elastic path differentiates a singleton axis.
-- **Change:** `CentralFourthOrder` sweeps whole lanes of C-dense fields, x-planes spread over unit tasks sized by the bytes a plane moves, like the leapfrog sweeps; other layouts take a logical walk through the same arithmetic. Axes of every length take the documented closure: a singleton axis differentiates to zero, and a short axis uses only its first- and second-order rows. Values on axes of five points or more are bit-identical to the previous kernels.
-- **Acceptance:** every axis length 1-8 on every axis, dense and transposed, bitwise against the stencil table; a volume that spreads over tasks against the same table; exactness on the polynomial each order promises. Injected defects (a shifted interior lane, a narrowed closure, a mirrored y lane) each fail.
-- **Integrator:** claude-opus-5; **branch:** `perf/leto-central-sweeps`; **last-update:** 2026-09-17.
+- **Driver:** kwavers' elastic stress divergence (`kw-swe-unit-tasks`) is ~68% of a 64-cubed step, and its phase split reads 656 us as 343 us of eighteen sweeps and 313 us of nine assembly passes -- both halves moving their traffic at the same rate, so the path is memory-bound. Each divergence component swept three axes into three buffers and summed them back: 20 MB per component where the values need 8 MB.
+- **Change:** `FiniteDifference3D::divergence_into(fields, dst)` sums the three axis derivatives in one pass, reading each field once per output lane, on the same plane tasks and with the same per-coordinate stencils as `central4_into`. Bit-identical to sweeping each axis and summing in x, y, z order. `CentralFourthOrder` only; the other schemes return a typed refusal naming the composed route, since no consumer needs them fused yet.
+- **Acceptance:** bitwise against the composed form at six shapes, including past the parallel floor and with short and singleton axes; a transposed field takes the logical walk and agrees with the dense values; shape mismatch and an unfused scheme are refused. Short axes needed an edge-visit dedupe the assigning kernel did not: `[0, 1, n-2, n-1]` collapses at n < 4 and accumulation would add a coordinate twice.
+- **Integrator:** claude-opus-5; **branch:** `perf/leto-central-divergence`; **last-update:** 2026-09-21.
 
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
