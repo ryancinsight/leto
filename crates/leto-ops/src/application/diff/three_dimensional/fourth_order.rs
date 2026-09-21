@@ -25,7 +25,9 @@ use leto::{ArrayView3, ArrayViewMut3, Result};
 
 use super::f;
 use super::leapfrog::Axis;
-use crate::infrastructure::parallel::{for_each_plane_mut, for_each_plane_mut_with};
+use crate::infrastructure::parallel::{
+    for_each_plane_mut, for_each_plane_mut_triple_with, for_each_plane_mut_with,
+};
 
 /// Bytes one output element moves: itself and the four neighbours the
 /// interior stencil reads.
@@ -399,6 +401,164 @@ fn map_dense<T, const N: usize, const M: usize, F>(
             }
         },
     );
+}
+
+/// [`central4_map_into`] writing three destinations from one derivative pass.
+///
+/// The elastic diagonal stresses are the case: all three read the same three
+/// normal strains, so computing the strains once and writing all three
+/// stresses in that pass moves 16 MB at 64 cubed where sweeping the strains
+/// into buffers and combining them afterwards moves 28 MB. Splitting the
+/// combination into three single-destination calls would instead sweep the
+/// stencils three times over.
+///
+/// The caller has checked that every field, every pointwise input and every
+/// destination share one shape.
+pub(super) fn central4_map_triple_into<T, const N: usize, const M: usize, F>(
+    terms: [(Axis, ArrayView3<'_, T>); N],
+    pointwise: [ArrayView3<'_, T>; M],
+    dst: [&mut ArrayViewMut3<'_, T>; 3],
+    spacing: [T; 3],
+    combine: F,
+) -> Result<()>
+where
+    T: RealField + FloatElement + Copy,
+    F: Fn([T; N], [T; M]) -> [T; 3] + Send + Sync,
+{
+    let shape = dst[0].shape();
+    let scales: [Scales<T>; N] = core::array::from_fn(|j| Scales::new(spacing[terms[j].0.index()]));
+    let axes: [Axis; N] = core::array::from_fn(|j| terms[j].0);
+    let mut dense = true;
+    let fields: [&[T]; N] = core::array::from_fn(|j| {
+        terms[j].1.as_slice().unwrap_or_else(|| {
+            dense = false;
+            &[]
+        })
+    });
+    let scalars: [&[T]; M] = core::array::from_fn(|k| {
+        pointwise[k].as_slice().unwrap_or_else(|| {
+            dense = false;
+            &[]
+        })
+    });
+    let [first, second, third] = dst;
+    if dense {
+        if let (Some(a), Some(b), Some(c)) = (
+            first.as_mut_slice(),
+            second.as_mut_slice(),
+            third.as_mut_slice(),
+        ) {
+            map_triple_dense(fields, scalars, axes, [a, b, c], shape, scales, &combine);
+            return Ok(());
+        }
+    }
+    map_triple_strided(
+        terms,
+        pointwise,
+        [first, second, third],
+        shape,
+        scales,
+        &combine,
+    );
+    Ok(())
+}
+
+fn map_triple_dense<T, const N: usize, const M: usize, F>(
+    fields: [&[T]; N],
+    pointwise: [&[T]; M],
+    axes: [Axis; N],
+    out: [&mut [T]; 3],
+    shape: [usize; 3],
+    scales: [Scales<T>; N],
+    combine: &F,
+) where
+    T: RealField + FloatElement + Copy,
+    F: Fn([T; N], [T; M]) -> [T; 3] + Send + Sync,
+{
+    let [nx, ny, nz] = shape;
+    let plane_len = ny * nz;
+    // Three output elements, the four neighbours each term's stencil reaches,
+    // and one element of each pointwise input.
+    let element_bytes = (3 + N * (ELEMENTS_PER_UNIT - 1) + M) * size_of::<T>();
+    let [first, second, third] = out;
+    for_each_plane_mut_triple_with(
+        first,
+        second,
+        third,
+        plane_len,
+        element_bytes,
+        || vec![<T as NumericElement>::ZERO; N * nz],
+        |scratch, x, planes| {
+            let [a, b, c] = planes;
+            let rows = a
+                .chunks_exact_mut(nz)
+                .zip(b.chunks_exact_mut(nz))
+                .zip(c.chunks_exact_mut(nz));
+            for (y, ((first_row, second_row), third_row)) in rows.enumerate() {
+                let base = x * plane_len + y * nz;
+                for (j, values) in scratch.chunks_exact_mut(nz).enumerate() {
+                    match axes[j] {
+                        Axis::X => Stencil::at(x, nx).apply_lane(scales[j], values, |o| {
+                            let plane = x.wrapping_add_signed(o) * plane_len + y * nz;
+                            &fields[j][plane..plane + nz]
+                        }),
+                        Axis::Y => Stencil::at(y, ny).apply_lane(scales[j], values, |o| {
+                            let row = x * plane_len + y.wrapping_add_signed(o) * nz;
+                            &fields[j][row..row + nz]
+                        }),
+                        Axis::Z => sweep_row(scales[j], values, &fields[j][base..base + nz]),
+                    }
+                }
+                let lanes = first_row
+                    .iter_mut()
+                    .zip(second_row.iter_mut())
+                    .zip(third_row.iter_mut());
+                for (k, ((one, two), three)) in lanes.enumerate() {
+                    let [x_value, y_value, z_value] = combine(
+                        core::array::from_fn(|j| scratch[j * nz + k]),
+                        core::array::from_fn(|p| pointwise[p][base + k]),
+                    );
+                    *one = x_value;
+                    *two = y_value;
+                    *three = z_value;
+                }
+            }
+        },
+    );
+}
+
+fn map_triple_strided<T, const N: usize, const M: usize, F>(
+    terms: [(Axis, ArrayView3<'_, T>); N],
+    pointwise: [ArrayView3<'_, T>; M],
+    dst: [&mut ArrayViewMut3<'_, T>; 3],
+    shape: [usize; 3],
+    scales: [Scales<T>; N],
+    combine: &F,
+) where
+    T: RealField + FloatElement + Copy,
+    F: Fn([T; N], [T; M]) -> [T; 3] + Send + Sync,
+{
+    let [first, second, third] = dst;
+    for i in 0..shape[0] {
+        for j in 0..shape[1] {
+            for k in 0..shape[2] {
+                let index = [i, j, k];
+                let derivatives: [T; N] = core::array::from_fn(|t| {
+                    let axis = terms[t].0.index();
+                    let c = index[axis];
+                    Stencil::at(c, shape[axis]).apply(scales[t], |o| {
+                        let mut neighbour = index;
+                        neighbour[axis] = c.wrapping_add_signed(o);
+                        terms[t].1[neighbour]
+                    })
+                });
+                let values = combine(derivatives, core::array::from_fn(|p| pointwise[p][index]));
+                first[index] = values[0];
+                second[index] = values[1];
+                third[index] = values[2];
+            }
+        }
+    }
 }
 
 fn map_strided<T, const N: usize, const M: usize, F>(
