@@ -563,7 +563,11 @@ trap restore_gate_lock EXIT INT TERM
 
 # Formatting is workspace-wide and near-instant, and its failure is the
 # cheapest one to find here rather than on a runner.
-if ! (cd "$gate_cwd" && cargo fmt $gate_manifest -- --check >/dev/null); then
+# `--all` because the check is workspace-wide either way, and a member
+# whose root manifest is virtual (leto) has no default package to format:
+# from a lane this runs with `--manifest-path`, and without `--all` cargo
+# answers "Failed to find targets" and every push from that lane fails.
+if ! (cd "$gate_cwd" && cargo fmt --all $gate_manifest -- --check >/dev/null); then
   cat >&2 <<'MESSAGE'
 
 pre-push: `cargo fmt --check` fails, so the architecture validation would.
