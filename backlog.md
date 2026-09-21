@@ -1,13 +1,5 @@
 # Leto Work Backlog
 
-<a id="LETO-CENTRAL-DIVERGENCE-2026-09-21"></a>
-## LETO-CENTRAL-DIVERGENCE-2026-09-21 — A divergence pays three buffers for a value that needs one pass [minor] [perf] — review
-
-- **Driver:** kwavers' elastic stress divergence (`kw-swe-unit-tasks`) is ~68% of a 64-cubed step, and its phase split reads 656 us as 343 us of eighteen sweeps and 313 us of nine assembly passes -- both halves moving their traffic at the same rate, so the path is memory-bound. Each divergence component swept three axes into three buffers and summed them back: 20 MB per component where the values need 8 MB.
-- **Change:** `FiniteDifference3D::divergence_into(fields, dst)` sums the three axis derivatives in one pass, reading each field once per output lane, on the same plane tasks and with the same per-coordinate stencils as `central4_into`. Bit-identical to sweeping each axis and summing in x, y, z order. `CentralFourthOrder` only; the other schemes return a typed refusal naming the composed route, since no consumer needs them fused yet.
-- **Acceptance:** bitwise against the composed form at six shapes, including past the parallel floor and with short and singleton axes; a transposed field takes the logical walk and agrees with the dense values; shape mismatch and an unfused scheme are refused. Short axes needed an edge-visit dedupe the assigning kernel did not: `[0, 1, n-2, n-1]` collapses at n < 4 and accumulation would add a coordinate twice.
-- **Integrator:** claude-opus-5; **branch:** `perf/leto-central-divergence`; **last-update:** 2026-09-21.
-
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
 
