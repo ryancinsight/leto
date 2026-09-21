@@ -22,51 +22,6 @@
 - [x] Synchronize Rustdoc and changelog; pass strict focused/full gates,
       SemVer, consumer verification, and provider-first delivery.
 
-## ATLAS-LETO-STACK-STORAGE-ORACLE-2026-08-20 [patch] — complete
-
-- [x] Replace both capacity-path existence assertions with value-semantic
-      success and typed-error checks.
-- [x] Run exact-lane format, locked checks, nextest, Clippy, doctests, and
-      Rustdoc; verify the provider conformance count decreases.
-- [x] Record the exact provider commit and mutation control; preserve the
-      dirty primary checkout.
-- [x] Publish the exact provider branch and record the compare result.
-- [ ] Open the draft PR and collect hosted gates; blocked by connector HTTP
-      403 (`Resource not accessible by integration`).
-
-## ATLAS-LETO-CONTRACT-100 [patch] — complete
-
-- [x] Replace the shutdown `is_err()` assertion with an exact
-      `ExecutorError::ShuttingDown` value assertion.
-- [x] Preserve the callback-not-run behavior and pass formatting, strict
-      Clippy, focused Nextest, and the provider conformance scan.
-- [x] Record exact provider head `6463f4a`, scan count 9, strict Clippy, focused
-      Nextest 550/550, hosted CI `32021076930`, and Pages `32021074899`.
-
-
-## ATLAS-ORPHAN-MODULES-096-LETO [patch] — complete
-
-- [x] Decide the fate of `crates/leto/src/application/transform.rs` after
-      verifying the module graph and compiled API surface.
-- [x] Remove the uncompiled duplicate implementation or wire it into the
-      canonical application module; preserve value-semantic coverage without
-      retaining a second source of truth.
-- [x] Run the Leto package gates and the Atlas orphan-module detector, then
-      record the exact commit and residual count.
-
-Scope is limited to this orphan and its provider-local PM records. The Atlas
-root conformance script identifies the file as one of Leto's seven orphan
-modules; `crates/leto/src/application/mod.rs` has no `transform` declaration,
-and the compiled `Array` implementation already owns `mapv`, `zip_map`, and
-`fill`. The unreachable file is deleted. `git diff --check` passes and the
-direct orphan detector reports `leto_orphan_modules=0`. Running from outside
-the Atlas configuration ancestry with the pinned
-`1.97.0-x86_64-pc-windows-msvc` toolchain and the shared target directory
-passes format, locked package check, warning-denied Clippy, configured
-Nextest `314/314`, two doctests, and rustdoc. The inherited Atlas overlay
-still rejects the same `--locked` command before compilation because it would
-rewrite the lockfile; no lockfile churn is committed.
-
 ## LETO-CROSS-ENTROPY-PROVIDER-1 [minor, arch] — Owner: Codex
 
 - [x] Claim the provider boundary and record ADR 0023.
@@ -75,26 +30,6 @@ rewrite the lockfile; no lockfile churn is committed.
 - [x] Pass focused Nextest, warning-denied gates, doctests, SemVer checks, and
       independent review.
 - [x] Pass exact-head CI and merge before the accelerator and consumer slices.
-
-## LETO-CONVOLUTION-PROVIDER-1 [major, arch] — complete
-
-- [x] Deliver one scalar- and rank-generic regular and transposed convolution
-      family over borrowed views and caller-owned outputs, with checked
-      failure-atomic validation and no operation-path allocation.
-- [x] Cover f32, f64, F16, and Bf16; regular and transposed 1-D, 2-D, and 3-D
-      value semantics; strided layouts; output-padding gradients; and typed
-      invalid-contract failures.
-- [x] Merge implementation PRs #78, #79, and #80; current provider default is
-      `e525d8dd5ee52d12de0bf61987e8af6bf896700f`.
-- [x] Verify exact-head hosted run `31663241086`: formatting, minimal-feature
-      compilation, warning-denied Clippy, configured Nextest, doctests, and
-      documentation all pass.
-- [x] Confirm Coeus direct CPU dispatch and host-loop deletion at default
-      `aabdec67a0f5baa415c4abb6dded69db41b2f2d6`, hosted run `31672329963`.
-
-Residual: Leto retains 33 pre-existing Rustdoc broken/private-link warnings;
-none is introduced by the convolution family. Accelerator implementation is
-owned by Hephaestus.
 
 ## LETO-CRATES-METADATA-1 [patch] — Owner: Codex
 
@@ -128,35 +63,6 @@ without the umbrella overlay; then collect exact-head hosted verification.
 - [x] Bind `themis` to package `themis-topology` 0.10.1.
 - [x] Refresh dependency resolution and pass focused gates.
 - [x] Merge before rerunning dependent Hephaestus provider CI.
-
-## LETO-STATEFUL-ZERO-LR-1 [patch] — complete
-
-- Owner: Codex; PR #86 merged as `7d8c98f`; PM closeout ran on
-  `codex/leto-pm-closeout`.
-- [x] Admit finite zero learning rates without relaxing epsilon or domain
-      validation.
-- [x] Cover all five parameter contracts with focused Nextest.
-- [x] Pass warning-denied Clippy and exact-head hosted checks; Rust verification
-      run `30716401746` passed and current CI run `31645757949` is green.
-
-## LETO-STATEFUL-UPDATE-1 [minor, arch] — complete
-
-- Owner: Codex; PR #85 merged as `7c8b90b`; current CI run `31645757949` is
-  green.
-- [x] Record CPU ownership, scalar/rank variation, validation, and consumer
-      migration direction in ADR 0022.
-- [x] Implement one generic borrowed stateful-update family over mutable zip.
-- [x] Add f32/f64 dense, strided, scalar, empty rank-eight,
-      guard-preservation, IEEE-special-value, and rejection conformance.
-- [x] Pass warning-denied gates, independent review, and exact-head CI; merge is
-      the delivery transition for this completed provider slice.
-
-## LETO-STABLE-VECTOR-NORM-1 [patch] — complete
-
-- [x] Stabilize finite large and subnormal Euclidean norms without widening
-      precision, with value-semantic f32/f64 regression coverage.
-- [x] Merge PR #84 as `aa5c283` and verify current default head `8c4e609`
-      through CI run `31645757949`.
 
 ## LETO-ATTENTION-GROUPED-MASK-001 [minor, arch] — Owner: Codex
 
@@ -1088,85 +994,6 @@ Parallel cross-repo track: Coeus CPU consolidation onto coeus-leto; the shared
 GPU substrate `hephaestus` (atlas ADR 0001, wgpu + composed cuda-oxide/cutile)
 consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
 
-## Atlas ndarray replacement readiness [arch]
-- [x] [minor] Route default thin SVD through implicit-shift bidiagonal QR
-  (`svd_via_bidiagonal`) and remove the former Gram-backed SVD leaf; values-only
-  `singular_values` now reuses bidiagonal reduction without U/V factor
-  accumulation. Verification: `cargo fmt --check`; `cargo clippy --workspace
-  --all-targets --all-features -- -D warnings`; `cargo nextest run --workspace
-  --all-features` (384 tests); `cargo test --doc --workspace --all-features` (5
-  doctests); `cargo doc -p leto -p leto-ops --all-features --no-deps`;
-  criterion SVD and singular-values benchmark groups; `git diff --check`.
-  Follow-up 2026-07-05: full workspace docs no longer hit the tracked
-  `numpy 0.23.0` rustdoc ICE because `leto-python` is excluded as a Rust doc
-  target while remaining checked/tested as a PyO3 extension crate.
-- [x] [patch] Complete Stage C2 Hermes SIMD coverage audit for leto-ops hot kernels. Current coverage: dense elementwise slice ops and dense sum/dot/min/max route through Hermes via `Scalar`; matmul remains scalar because the current Hermes public surface lacks a zero-allocation scalar-AXPY/fused row-update provider. Rejected measured candidates: const-generic dense blocking regressed matmul (`64x64` ~48.5 µs, `256x256` ~3.37 ms); generic `mul_add` regressed matmul (`64x64` ~245.6 µs, `256x256` ~12.5 ms). Verification: focused matmul tests passed during both experiments; regressing source changes reverted; final gate run recorded in CHANGELOG/backlog.
-- [x] [minor] Extend cache-line micro-tiling to unary `map_into` strided fallbacks (serial + parallel) through the shared `TileGeometry`/`line_elements` policy. Value tests: cache-line-sized transposed f64 `map_into` exact logical output; strided zero-sized input maps without divide-by-zero. Criterion: transposed unary `map_into` 57.631 µs (56.477–58.379 µs CI) → 35.303 µs (34.221–36.468 µs CI), −38.7% median with non-overlapping confidence intervals. Contiguous `map_into` remains within observed run-to-run noise. Version: 0.15.0.
-- [x] [patch] Split `leto-ops::singular_values` from the full-vector `svd_decompose` contract so finite rank-deficient matrices return zero singular values through the smaller Gram-matrix eigenvalue path while `svd_decompose` still rejects rank-deficient inputs. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
-- [x] [patch] Generalized `leto-ops::svd_decompose`/`singular_values` from tall-or-square full-column-rank inputs to all full-rank thin SVD shapes, adding the wide full-row-rank `A A^T` path and deriving right singular vectors with `V = A^T U Σ^-1`. Verification: `cargo metadata --no-deps --locked --format-version 1`; `cargo fmt --check`; `cargo check --workspace --all-features --locked`; `cargo test --workspace --all-features --locked`; `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps --locked`; `git diff --check`.
-- [x] [patch] All Leto package manifests now default both `parallel` and `mnemosyne-memory`; `leto` maps Mnemosyne memory to its existing Mnemosyne-backed storage implementation, `leto-ops` forwards memory into `leto`, and `leto-python` forwards both provider features to its Rust dependencies. Verification: manifest audit confirmed every package default includes both feature contracts; `cargo metadata --no-deps --locked`; `cargo fmt --check`; `cargo check --workspace --all-features`; `cargo test --workspace --all-features`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`.
-- [x] [minor] Add `leto-ops` eigenvalues-only symmetric Jacobi entry points (`symmetric_eigenvalues_jacobi`, `symmetric_eigenvalues_jacobi_with_tolerance`) that share the full decomposition's diagonalization logic through a monomorphized `RotationTarget` strategy and a zero-sized no-vector target. Verification: `cargo fmt --check`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo nextest run --workspace --all-features`; `cargo doc -p leto -p leto-ops --all-features --no-deps`. Current note: the reopened `numpy 0.23` rustdoc ICE is resolved by the 2026-07-05 `leto-python` doc-target exclusion.
-- [x] [minor] Add `leto-ops` thin SVD (`svd_decompose`, `svd_decompose_with_tolerance`, `singular_values`, `SvdDecomposition`) for tall/square full-column-rank matrices via `A^T A` + symmetric Jacobi; unsupported wide or rank-deficient inputs reject explicitly. Verification: `cargo fmt --check`; `cargo test -p leto-ops --test ops_tests svd --all-features`; `cargo test -p leto-ops --all-features`; `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`; `cargo test --workspace --all-features`.
-- [x] [minor] Add unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`, `UduDecomposition`) with determinant, solve, and inverse helpers. Verification: `cargo test -p leto-ops --test ops_tests udu --all-features`.
-- [x] [minor] Add variance and standard-deviation reductions (`var_all`/`std_all`/`var_axis`/`std_axis`) with finite `ddof` validation. Verification: `cargo test -p leto --test core_tests variance --all-features`.
-- [x] Repository structure exists: `leto`, `leto-ops`, and `leto-python`.
-- [x] Core C/F-contiguous `Layout<const N: usize>` construction, offset lookup, slicing, transpose, and broadcast have value-semantic tests.
-- [x] Core storage exists for borrowed slices, mutable borrowed slices, `Vec`, and feature-gated Mnemosyne allocation.
-- [x] Core `Array`, `ArrayView`, and `ArrayViewMut` wrappers exist for const-rank layouts.
-- [x] Basic elementwise binary ops, `sum`, and 2D `matmul` exist with value-semantic tests.
-- [x] [patch] Added ndarray-style slicing with full-axis ranges, optional signed bounds, negative indices, negative strides, axis-dropping integer indices, inserted new axes, ellipsis expansion, and implicit trailing axes through `SliceArg` and `slice_with`.
-- [x] [patch] Run `cargo fmt` and keep `cargo fmt --check` clean across all workspace crates.
-- [x] [patch] Fixed `mnemosyne-alloc` feature compilation by importing the allocator trait surface used by `MnemosyneStorage`.
-- [x] [patch] Fixed `MnemosyneStorage` initialization semantics: `new(len)` now requires `T: Default` and initializes elements; `from_slice` copies initialized elements; `Drop` runs element destructors before deallocation.
-- [x] [patch] Make mutable broadcast writes structurally impossible when the resulting layout has zero-stride aliasing.
-- [x] [patch] Replace negative-offset casts with checked signed offset validation before any `usize` conversion in `Layout::offset_of`, `Layout::min_max_offsets`, and sliced layout construction.
-- [x] [patch] Add property tests for C/F offset formulas, transposes, reverse slices, composed slices, empty axes, singleton-axis broadcasts, and negative-stride storage spans.
-- [x] [patch] Add validated `ArrayView::try_new` / `ArrayViewMut::try_new` constructors so externally supplied layouts cannot index past the backing slice.
-- [x] [patch] Add overflow-checked shape product and storage-span validation through `Layout::checked_size`, `checked_min_max_offsets`, and `validate_storage_len`.
-- [x] [patch] Collapse duplicated `add`/`sub`/`mul`/`div` traversal into one generic zero-cost binary map skeleton with operation ZSTs.
-- [x] [patch] Add axis-aware reductions required by Apollo and Coeus: `sum_axis_into`, `mean_axis_into`, `min_axis_into`, `max_axis_into`, and caller-owned output variants.
-- [x] [patch] Add allocating keep-dim axis reduction wrappers: `sum_axis`, `mean_axis`, `min_axis`, and `max_axis`.
-- [x] [patch] Add ndarray-parity constructors used by Apollo: `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec`.
-- [x] [patch] Add row/column/axis iteration APIs with contiguous fast paths and strided fallbacks.
-- [x] [patch] Complete borrowed iterator ergonomics for owned arrays and mutable views:
-      `IntoIterator for &Array` and read-only `IntoIterator for &ArrayViewMut`
-      preserve logical stride order; mutable `&mut T` traversal remains the
-      fallible alias-rejecting `indexed_iter_mut` contract.
-- [x] [patch] Add named rank-2 `rows`, `columns`, `rows_mut`, and `columns_mut` wrappers over the axis iterator APIs.
-- [x] [patch] Add shape aliases or type aliases for `Array1`, `Array2`, `Array3`, `ArrayView1`, `ArrayView2`, `ArrayView3` if Apollo migration keeps rank-specific readability.
-- [x] [patch] Add `map`, `map_into`, `mapv`-equivalent, and precision-conversion APIs without hidden widen-and-narrow computation.
-- [x] [patch] Add ndarray differential tests for map-style contiguous/transposed traversal.
-- [x] [patch] Add zip-map APIs without duplicating the shared binary/unary traversal strategy.
-- [x] [patch] Add BLAS/matrixmultiply replacement gates: contiguous `matmul`, strided `matmul`, transposed inputs, caller-owned output, and differential tests against `ndarray`.
-- [x] [patch] Add ndarray differential tests for keep-dim axis reductions over contiguous and transposed inputs.
-- [x] [patch] Add Python output conversion that avoids `Vec` clone round-trips where NumPy ownership transfer or direct allocation is available.
-- [x] [patch] Add Python boundary tests for value parity, shape validation, C-contiguous input, and rejected non-contiguous inputs.
-- [x] [patch] Add representative Leto-side Apollo and Coeus migration fixtures for rank aliases, complex precision mapping, keep-dim reduction/broadcast, and dense matmul.
-- [x] [patch] Add `CowStorage` so Leto can borrow Apollo/Coeus read-only buffers without copying and detach into owned storage on mutation.
-- [x] [patch] Add `CowStorage::as_borrowed` and `as_owned` accessors so callers can inspect backing state without cloning or forcing detachment.
-- [x] [patch] Split storage infrastructure into SRP leaf modules for traits, borrowed slices, owned vectors, Cow, and Mnemosyne allocation while preserving the public storage API.
-- [x] [patch] Fix ndarray-to-Leto zero-copy view conversion for negative strides by preserving signed strides and anchoring the borrowed backing slice at the minimum physical address.
-- [x] [patch] Add Apollo ndarray-validation contract coverage for constructors, C-order storage, transpose, broadcast, axis iteration, mutable views, owned ndarray round trips, negative-stride views, slice-with metadata, and storage-bound rejection.
-- [x] [minor] Add Mnemosyne-backed owned constructors (`zeros_mnemosyne`, `from_mnemosyne_slice`) so Apollo can return Leto arrays with provider-owned allocation instead of ndarray-owned storage. Verified against ndarray C-order values and storage-bound rejection.
-- [x] [patch] Fix reduction module rustdoc links so `cargo doc -p leto --features mnemosyne-alloc --no-deps` is warning-clean.
-- [x] [patch] Match ndarray retained single-element range stride metadata by setting the sliced axis stride to `0` when `SliceArg::range` selects exactly one logical element; empty ranges keep their computed stride.
-- [x] [patch] Add Apollo migration test coverage for Mnemosyne-backed Leto owned constructors as the first FFT replacement prerequisite.
-- [x] [minor] Add indexed mutable zip traversal (`indexed_zip_mut_with`, `indexed_zip2_mut_with`) to cover ndarray `Zip::indexed`-style Apollo/Coeus position-aware call sites without allocation.
-- [x] [patch] Add Apollo migration tests proving Leto can replace current `Array1`/`Array2`/`Array3` usage in FFT, DHT, NTT, NUFFT, SHT, WGPU verification, and Python bindings. Added explicit Apollo FFT three-axis mutable rank-1 lane slicing over rank-3 Leto arrays so ndarray-free 3D axis-pass mutation is covered. Verification: `cargo fmt --check`; `cargo test -p leto-ops --test migration_fixtures --all-features`; `cargo clippy -p leto-ops --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; `cargo doc --workspace --exclude leto-python --all-features --no-deps`.
-- [x] [patch] Coeus migration tests covering tensor layout, broadcast, elementwise ops, reductions, matmul, and non-differentiable storage boundaries: DONE on the coeus side as `coeus-leto/tests/contract.rs` (cross-repo behavior contracts) plus `coeus-ops/tests/*_leto_diff.rs` and `coeus-tensor/tests/*_leto_diff.rs` differential suites (verified 2026-06-15).
-- [x] [major] Retire the transitional `ndarray` compatibility feature after
-  consumers migrate; retain `ndarray` only as Leto's differential oracle.
-- [x] [minor] Publish Leto 0.40.0 after format, warning-denied Clippy, configured
-  Nextest, doctest, Rustdoc, dependency, and SemVer gates pass.
-
-## Gap analysis: ndarray/nalgebra replacement [arch]
-- [x] [patch] Audit Leto against `ndarray` 0.16, `nalgebra`, Apollo usage, and
-  Coeus backend requirements; record the 2026-06-10 baseline in `gap_audit.md`.
-  That audit found partial Apollo migration and no Coeus Leto references; both
-  consumer migrations are now complete, while the recorded layer boundary
-  remains authoritative.
-- [x] [patch] Sync README role, layer boundary, linear-algebra features, and replacement status with the audited state.
-
 ## Next increments (ordered)
 
 - [ ] `LETO-FFT-LAYOUT-THROUGHPUT` (owner: Codex
@@ -1271,5 +1098,3 @@ consumed by coeus MS-60+ Stage D and apollo Stage D4; apollo ndarray retirement.
   is still blocked upstream by
   Mnemosyne's `themis ^0.8.0` requirement vs Themis main 0.9.5.
 
-## Naming decision [patch]
-- [x] Keep `leto` as the crate name. Functionally, Leto is a non-differentiable shared strided-array substrate between Coeus and Apollo; mythologically, Leto bridges Coeus and Apollo as parent/child context. The name is appropriate if the crate remains the shared array/memory vocabulary, not an autodiff engine or spectral-transform crate.

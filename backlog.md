@@ -8,32 +8,6 @@
 - **Acceptance:** every axis length 1-8 on every axis, dense and transposed, bitwise against the stencil table; a volume that spreads over tasks against the same table; exactness on the polynomial each order promises. Injected defects (a shifted interior lane, a narrowed closure, a mirrored y lane) each fail.
 - **Integrator:** claude-opus-5; **branch:** `perf/leto-central-sweeps`; **last-update:** 2026-09-17.
 
-<a id="LETO-PARALLEL-FOR-UNUSED-2026-09-16"></a>
-## LETO-PARALLEL-FOR-UNUSED-2026-09-16 — A public parallel helper has no caller [major] — done
-
-- Delivered: PR [#202](https://github.com/ryancinsight/leto/pull/202), commit `d159921`. `infrastructure::parallel::parallel_for` is gone from the public surface; `cargo semver-checks` reports that one removal and nothing else, and the CHANGELOG carries the migration to `moirai::for_each_index_with`.
-- Adjudicated removal over retention: no call site in leto, leto-ops or any stack consumer, and the body was a two-line wrapper.
-
-<a id="LETO-STRIDED-UNIT-TASKS-2026-09-15"></a>
-## LETO-STRIDED-UNIT-TASKS-2026-09-15 — Index-walking elementwise paths size their own chunks [major] [conformance] — done
-
-- Delivered: PR [#201](https://github.com/ryancinsight/leto/pull/201), commit `ec9b99a`. The strided binary map (both arms), the strided unary map (both arms) and the axis reduction declare the bytes one unit moves and take their task width from moirai through `for_each_unit_range`; `parallel_for_chunks` and `chunk_rows_for` are gone. No dispatch change: every caller gates above the deleted 16384-element threshold.
-- [major] because `parallel_for_chunks` was publicly reachable. `cargo semver-checks` reports that one removal and nothing else; the CHANGELOG carries the migration line. No consumer in the stack called it.
-- Evidence: 953 tests (4 new, one per arm plus the reduction, each bit-for-bit against the elementwise reference and each route probe-confirmed to run), 27 doctests, clippy, docs and --no-default-features clean.
-
-<a id="LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15"></a>
-## LETO-ELEMENTWISE-UNIT-TASKS-2026-09-15 — Dense elementwise paths size their own chunks [patch] [conformance] — done
-
-- Delivered: PR [#200](https://github.com/ryancinsight/leto/pull/200), commit `ae458db`. The binary map, in-place unary map and unary map-into take task width from the bytes a unit moves through `for_each_unit_run_mut`; the 4096-element chunks and three `unsafe` pointer round-trips are gone, and the callers keep the parallelize decision. No dispatch change: both gates sit far above the 16384-element threshold the old helper applied.
-- Coverage: no test reached these three routes before; two now drive all three past their gates and assert the result bit for bit, each route confirmed to run under a temporary probe. 949 tests, 27 doctests, clippy, docs and --no-default-features clean.
-- Remaining: the strided row-walk, block-tile and axis-reduction sites still size their own chunks; they iterate logical indices, so they need a byte-aware index operator upstream first.
-
-<a id="LETO-LEAPFROG-UNIT-TASKS-2026-09-15"></a>
-## LETO-LEAPFROG-UNIT-TASKS-2026-09-15 — The staggered leapfrog stencils run on one thread [minor] [perf] — done
-
-- #197 (`152d4c0`, with bench `f64e86c` and moirai lock `a0f5e77`) and #198 (`2e659b4`): all six sweeps run on plane tasks, bitwise equal per plane. At 64 cubed the six drop from 620 to 134 µs at order 2 and from 1007 to 168 µs at order 4.
-- Consumer: kwavers `fdtd_step_64_cubed` drops from 25.2 to 27.1 ms to 4.54 ms per ten steps at order 2 on clean alternating rounds (kwavers `KW-FDTD-LETO-SWEEPS-2026-09-15`).
-
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
 
@@ -89,103 +63,12 @@
   and each excluded surface above is either brought into scope with a measured
   bound or recorded as closed with the reason it stays out.
 
-<a id="leto-transpose-row-tasks"></a>
-## LETO-TRANSPOSE-ROW-TASKS-2026-09-11 — Preserve source-line reuse in tall transpose tasks [patch] [perf] — done
-- Delivered: [PR 192](https://github.com/ryancinsight/leto/pull/192), `c13b7fa` (merge `a70029e`); source-column grouping retains the byte budget and tile loop. 945 native tests and hosted Rust verification pass.
-- Driver and evidence: [Apollo attribution](../apollo/backlog.md#apollo-rotated-move-geometry), [retained reports and limits](../apollo/docs/experiments/rotated-moves/README.md).
-
-<a id="leto-tall-transpose-geometry"></a>
-## LETO-TALL-TRANSPOSE-GEOMETRY-2026-09-10 — The tall-move gap was task partition, not the serial kernel [patch] [perf] — done 2026-09-11
-
-- **Integrator:** claude-opus-5; closed on its own measurement, no code change.
-- **Outcome, correcting the filing.** This item was opened on a 3.4x gap between
-  the tall (`[4096, 64]`) and wide (`[64, 4096]`) moves, pinned to one core.
-  Re-measured pinned on a quiet host (21–38%, no load of mine), three rounds:
-  wide 207 / 188 / 189 µs, tall 198 / 191 / 221 µs, and the windowed batch of
-  64 `[64, 64]` transposes 205 / 202 µs. The shapes cost the same. The filing's
-  runs were taken while load generators of mine and peer builds saturated the
-  host; pinning isolated the core but not the shared cache and memory
-  bandwidth, so they measured the host.
-- **Where the real gap was: task partition, found and fixed by a peer.** The
-  provider path runs the moves in parallel, and there the tall move was slower
-  for a reason the serial arms cannot show: with a 64 KiB byte budget, a tall
-  move gave each task one destination row, hence one source column, so separate
-  workers fetched the same source lines. [#192](https://github.com/ryancinsight/leto/pull/192)
-  keeps the byte budget and imposes a minimum of one detected cache line's
-  worth of source columns per task — four for `Complex64` here — and apollo's
-  rotated-pair medians fall 7.6–14.4% with it
-  ([`apollo #apollo-rotated-move-geometry`](../apollo/backlog.md#apollo-rotated-move-geometry),
-  13-case alternating instrument in `docs/experiments/rotated-moves`).
-- **Consequences.** No shape-dependent decomposition is warranted in the serial
-  kernel. The decision that does depend on shape — how a matrix is cut into
-  tasks — is already leto's, and since #192 it reads the detected cache line
-  rather than a fixed byte budget alone. `transpose_geometry` stays as the
-  serial instrument.
-
 <a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
 ## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
 
 - Status: review; priority: correctness; integrator: root; branch: `codex/leto-wasm-tolerance`; updated: 2026-09-10.
 - Outcome: `rank_pivot_ratio` converts the shared `1e-12` denominator through `FloatElement::from_f64`, so ColPivQR, Jacobi eigen, FullPivLU, SVD pseudoinverse, and UDU compile on 32-bit targets without changing the native threshold. The duplicate literal is deleted.
 - Acceptance evidence: Atlas-overlay `cargo check --offline -p leto-ops --target wasm32-unknown-unknown`, standalone strict Clippy, 585/585 `leto-ops` nextest, and the new f32/f64 threshold contract test pass. PR pending.
-
-<a id="leto-strided-pitch-aliasing"></a>
-## LETO-STRIDED-PITCH-ALIASING-2026-09-10 — Window transposes at a 64 KiB pitch cost 1.7x their batch twin [patch] [perf] — done 2026-09-10
-
-- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-strided-pitch-aliasing`.
-- **Outcome.** Hypothesis held: pinned to one performance core the window set
-  ran 302 µs at the 64 KiB pitch and 177 µs with the pitch padded off the
-  alias. The tile now walks the side with the smaller stride (209 µs); an
-  8-line strided tile measured 218 and was not kept. Residual 209 vs 177 is
-  the scatter form's cost; the instrument is `layout_copy/window_pitch`.
-
-<a id="leto-single-matrix-transpose-tasks"></a>
-## LETO-SINGLE-MATRIX-TRANSPOSE-TASKS-2026-09-09 — A batch of one matrix still transposes on one thread [minor] [perf] — done 2026-09-10
-
-- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-single-matrix-transpose-tasks`.
-- **Outcome.** Parallel transpose tasks are cut in destination rows through
-  the new `leto::transpose_copy_strided`, so one large matrix splits like a
-  batch; apollo's 64³ axis-0 pair 415 → 151 µs at the fastest sample, the
-  forward 1932 → 359 µs, both under peer load. See the PR for the table.
-
-<a id="leto-batch-transpose-tasks"></a>
-## LETO-BATCH-TRANSPOSE-TASKS-2026-09-09 — Large complex matrix batches transpose on one thread [patch] [perf] — done 2026-09-09
-
-- **Integrator:** claude-fable-5.1; **branch:** `perf/leto-batch-transpose-tasks`.
-- **Last-update:** 2026-09-09.
-- **Finding.** `transpose_complex_matrices` ran every matrix of a batch on the
-  calling thread outside the register-tile regime. Apollo's 3-D pass probe
-  (`plan/fft/dimension_3d/pass_attribution`, apollo
-  [`#apollo-lane-task-width`](../apollo/backlog.md#apollo-lane-task-width))
-  measured the axis-1 pair of a 64³ `Complex64` volume — 64 matrices of 64 KiB,
-  4 MiB in all — at **356 µs serial against 147 µs with one matrix per moirai
-  task** (345 against 89 at the fastest samples), and after apollo's own
-  scheduling fix that pair is the largest measured piece of a 3-D forward
-  (60% at the fastest sample). The 32³ batch — 32 matrices of 16 KiB, 512 KiB —
-  ran slower spread out (28.5 µs against 21.9): eleven microseconds of work is
-  under the runtime's spawn-and-join.
-- **Change.** Under `parallel`, a validated batch of at least two matrices and
-  one mebibyte spreads over moirai tasks of whole matrices grouped to at least
-  64 KiB (`PARALLEL_TRANSPOSE_MIN_BYTES`, `PARALLEL_TRANSPOSE_TASK_BYTES`, each
-  carrying its measurement); every task is whole matrices and so is the batch,
-  so destination chunks pair with source chunks at the same offset and no two
-  tasks touch one matrix. The per-matrix kernel is unchanged; smaller batches
-  and the register-tile regime are untouched, as is the serial path without
-  the feature.
-- **Evidence.** Oracle cases added at 64 x 64 x 64 (one matrix per task) and
-  2048 x 20 x 8 (25 matrices per task with a partial tail) across every payload
-  scalar; the warm-transpose allocation contract extended to the task path and
-  held — moirai's scoped loop allocates nothing after warm-up. Clippy clean
-  with `parallel` on; with it off the only diagnostic is a pre-existing
-  `question_mark` in `linalg/lu_batch.rs:112`, a feature state CI does not
-  build, filed below. Timing lives in apollo's probe, which is the instrument
-  for both constants; the consumer measurement is the apollo pin advance's job.
-- **Incidental, filed:** `linalg/lu_batch.rs:112` fails `clippy::question_mark`
-  under `--no-default-features --features std,mnemosyne-memory` — the
-  `parallel`-off state has no gate, so a lint the feature-on build cannot see
-  landed. Its fix is one `?`; feature hygiene says the state needs a gate.
-- **Risk / change class:** [patch] [perf]; **dependencies:** none. Consumers:
-  apollo advances its `leto-ops` pin and re-reads `pass_attribution`.
 
 <a id="leto-ctc-loss"></a>
 ## LETO-CTC-LOSS — Evaluate temporal label alignment loss [minor] [arch]
@@ -339,12 +222,6 @@
   upstream review rejected PR #123 while confirming its source correction is
   already valid on `main`.
 
-## LETO-EUNOMIA-IDENTITY-2026-09-04 — Follow merged Eunomia source [patch] [arch] — done 2026-09-04 <a id="leto-eunomia-identity-2026-09-04"></a>
-
-- Merged-provider pins removed; the temporary Mnemosyne pin was closed by
-  `LETO-MNEMOSYNE-DEFAULT-2026-09-04`. One Eunomia source; check, Clippy,
-  923/923 nextest, 23 doctests, and rustdoc pass.
-
 ## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
 
 - **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**
@@ -377,214 +254,6 @@
   `docs/adr/0007-dynamic-rank-boundary.md`, `crates/leto/README.md`,
   `Cargo.toml`, `Cargo.lock`;
   **last-update:** 2026-09-03.
-
-## ✅ LETO-F16-HERMES-ROUTING-2026-09-02 — Route F16 slice operations through hermes [minor] [perf] — done 2026-09-02
-
-- **Finding:** `impl_simd_ops_unsupported!(F16)` was stale — hermes 0.7 serves every operation the `SimdStrategy` routes (elementwise add/sub/mul/div, sum, dot, axpy, axpy rows, gemv, tiled GEMM, abs-sum/abs-max, min/max, jaccard/hamming) at `F16` on the scalar, AVX2 (+F16C), AVX-512 and NEON backends. The follow-up Bf16 consumer route is tracked in `LETO-BF16-HERMES-ROUTING-2026-09-02` now that Hermes provides the same backend coverage.
-- **Delivered:** `F16` takes `impl_simd_ops_native!` and the SIMD-routing `Scalar` impl (`impl_scalar_simd!` now takes the index conversion, so the reduced-precision constructor fits it); `f16_slice_operations_route_through_hermes_and_match_scalar_semantics` pins bitwise equality for the elementwise ops (single rounding from the `f32` intermediate on every backend), an `n·u` bound for sum/dot, exact min/max, and the public `add` reaching the same route. leto-ops suite and clippy `-D warnings` green.
-
-## LETO-BF16-HERMES-ROUTING-2026-09-02 — Route Bf16 slice operations through Hermes [minor] [perf] — done 2026-09-02
-
-- **Integrator:** Codex atlas-session; **branch:** `perf/leto-bf16-hermes`;
-  **lease:** `crates/leto-ops/src/domain/strategy.rs`,
-  `crates/leto-ops/src/domain/scalar/impls.rs`,
-  `crates/leto-ops/tests/ops/elementwise.rs`; **last-update:** 2026-09-02.
-- **Finding:** Hermes 0.7 now exposes Bf16 `LaneScalar` and already supplies
-  the scalar, AVX2, AVX-512, and NEON `BackendKernel` implementations. Leto's
-  Bf16 `Scalar` implementation still bypasses `impl_scalar_simd!`, so every
-  Bf16 slice operation uses the scalar fallback while F16 takes Hermes.
-- **Acceptance:** Bf16 uses the existing generic `impl_simd_ops_native!` and
-  `impl_scalar_simd!` paths; elementwise results match the Bf16 scalar
-  contract bitwise, reductions satisfy the derived `n·u` bound with
-  `u = 2⁻⁸`, min/max remain exact, and the public operation path is covered.
-  No new arithmetic or allocation path is introduced.
-- **Non-goals:** Hermes provider implementation, GEMM algorithm changes,
-  runtime dispatch redesign, or allocator changes.
-- **Disposition:** completed by removing the Bf16 scalar-only implementation
-  and routing it through the existing generic Hermes path. The reduced-
-  precision conformance helper now instantiates both F16 and Bf16. Evidence:
-  `cargo nextest run --offline -p leto-ops --no-fail-fast` 549/549 passed;
-  doctests 21/21 passed; Rustdoc generated; Clippy and diff checks passed;
-  `cargo semver-checks` passed 196/196 applicable checks with 58 skipped.
-
-## ✅ LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01 [minor] [perf] — done 2026-09-02
-
-- **Outcome:** strided unary and binary map kernels now use the process-cached
-  `CacheGeometry::cache_line_bytes()` value to derive their micro-tile side;
-  explicit `map_into_with_cache_geometry` and
-  `binary_map_with_cache_geometry` entry points support authoritative external
-  topology and injected policy measurements. `CacheGeometry::with_cache_line_bytes`
-  validates positive widths and retains conservative capacity fallbacks.
-- **Evidence:** injected, pinned one-core Criterion runs over transposed
-  `256 × 256` `f64` input consistently favored line-128. The clean 10-sample
-  confirmation measured line-64 at `[21.901, 22.042] µs` (median 21.945)
-  and line-128 at `[19.339, 19.474] µs` (median 19.402); a 20-sample run
-  measured `[23.488, 24.633] µs` (median 23.937) versus `[18.198, 18.473]
-  µs` (median 18.315). The exact medians vary with host frequency, but the
-  direction and separated intervals persist. `cargo nextest run -p leto-ops`:
-  548/548; doctests 21/21; Clippy `--all-targets -D warnings`, rustdoc, and
-  196/196 applicable minor SemVer checks pass.
-- **Integrator:** Codex atlas-session; **branch:** `perf/leto-runtime-tile-geometry`; **lease:** none; **commit:** pending PR.
-
-- **Context:** `ATLAS-LETO-CACHE-LINE-TOPOLOGY` (PR #137) made
-  `cache_line_bytes()` report the width themis actually observes instead of an
-  unconditional 64. That accessor has **no in-tree consumer**, so the merged
-  fix changes no kernel decision. The decision that does depend on line width
-  is `line_elements<T>()` (`crates/leto-ops/src/application/index.rs:178`),
-  which hardcodes `64 / size_of::<T>()` as the micro-tile side and is
-  documented as such at lines 105-113. It is a `const fn`, so it cannot read
-  runtime geometry without restructuring `TileGeometry` construction.
-- **Impact is bounded, not a defect.** Under-estimating is the conservative
-  direction for tiling: a 64-derived tile on a 128-byte-line part touches each
-  line twice rather than consuming it once — lost reuse, never wrong results.
-  Over-estimating is the harmful direction (a 128-assumption on a 64-byte part
-  quadruples a 2-D tile's working set and can overflow the L1 budget), which is
-  why 64 stays the fallback. So this item buys measured throughput on
-  wide-line parts; it does not fix a bug.
-- **Acceptance oracle:** a benchmark on a part reporting 128-byte lines shows
-  the runtime-geometry tile beating the const-64 tile beyond noise, on pinned
-  cores, with the baseline stored. **If the delta is inside noise, the correct
-  outcome is to close this item unfixed and record 64 as measured-adequate** —
-  do not land the restructuring on the strength of the reasoning above.
-- **Constraint:** this host reports 64-byte lines at every level, so it
-  **cannot** produce the discriminating measurement. Either source a
-  128-byte-line part or drive `TileGeometry` from an injected geometry in a
-  bench harness so the tile side varies without the topology varying. State
-  which was used; a 64-byte-host measurement is not evidence either way.
-- **Non-goals:** false-sharing padding — a different width whose safe error
-  direction is the opposite one, and which must not reuse this constant.
-
-## ATLAS-LETO-CACHE-LINE-TOPOLOGY-2026-09-01 — Cache-line width read from topology [patch] — done 2026-09-01
-
-- **Outcome:** `CacheGeometry::cache_line_bytes` reports the platform width
-  `themis` already detects on both backends, instead of always returning the
-  64-byte fallback constant.
-- **Scope/non-goals:** `geometry_from_cache_levels` and its unit tests in
-  `crates/leto-ops/src/infrastructure/cache.rs`, plus CHANGELOG. No change to
-  `CacheGeometry`'s shape or accessors, to L1/L2/L3 capacity selection, or to
-  any tiling policy that consumes the geometry.
-- **Acceptance:** a reported `line_bytes` reaches `cache_line_bytes()`
-  (including widths narrower than the fallback); the widest width across levels
-  governs when several are reported; typed absence (`None` or zero) resolves to
-  `FALLBACK_CACHE_LINE_BYTES` at one documented site.
-- **Evidence:** the three line-width tests were run against the reverted
-  production path and all three fail there returning `64` (expected `128`,
-  `128`, `32`), so they discriminate the fix rather than pin the old behavior;
-  the two absence tests pass under both, which is their contract. Gates at
-  `HEAD`: fmt clean, Clippy `--all-targets -D warnings` clean, Nextest 542/542,
-  21/21 doctests.
-- **Residual:** `line_elements<T>()` in `crates/leto-ops/src/application/index.rs`
-  still hardcodes the 64-byte line as a `const fn`; it is the only consumer-side
-  cache-line constant found and is out of this item's scope. `cache_line_bytes()`
-  itself currently has no in-tree consumer, so this fix corrects the reported
-  value without changing any kernel decision yet.
-- **Integrator:** Claude session 5050c72a; **lease:** none.
-  **Last-update:** 2026-09-01.
-- **Independent review (2026-09-01, Claude):** the evidence claim reproduced.
-  With `cache_line_bytes` reverted to the constant, exactly the three
-  line-width tests fail — `cache_levels_override_capacities_and_line_width`,
-  `widest_reported_line_width_wins_across_levels`,
-  `reported_line_width_narrower_than_the_fallback_is_honoured` — and the eight
-  others pass, so they discriminate the fix rather than pin old behaviour.
-  Merged as PR #137. The `line_elements<T>()` residual is tracked as
-  `LETO-TILE-WIDTH-RUNTIME-GEOMETRY-2026-09-01`.
-
-## ✅ ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 — Register-tiled complex matrix batches [minor, perf] — done 2026-09-02
-
-- **Outcome:** add one Leto-owned, allocation-free C-destination/F-source
-  complex matrix-batch operation that uses Hermes register-resident square
-  tiles only for the measured high-count small-matrix regime and preserves the
-  existing generic transpose for every other shape, scalar, and capability.
-- **Scope/non-goals:** `crates/leto-ops` layout operation, exact value
-  and allocation tests, a bounded provider instrument, API/Rustdoc, ADR,
-  CHANGELOG, and Apollo consumer integration. No change to generic `assign`,
-  FFT arithmetic, scheduler policy, or public compatibility layer.
-- **Acceptance:** validate all lengths before mutation; preserve source-major
-  matrix order and ragged/asymmetric tails for `Complex<f32>` and
-  `Complex<f64>`; allocate zero times after caller storage exists; select
-  Hermes only at the operation boundary when native complex lanes are useful;
-  retain a value-identical generic fallback; and reproduce the measured Apollo
-  3-D improvement without regressing its warm allocation census.
-- **Integrator:** Codex `/root`; **lease:** none. **Evidence:** provider source
-  `63d5cab` passes 3/3 value and failure-atomicity cases for f32/f64/F16, 1/1
-  warmed zero-allocation census, release repeats, AArch64 warning-denied
-  compilation, all-target/all-feature Clippy, 540/540 package Nextest, 21/21
-  doctests, Rustdoc, and 196/196 minor SemVer checks; two local AVX2 Criterion
-  runs retain the selected regime (ADR 0027).
-- **Closed 2026-09-02.** The integrator's claim went stale in `review`;
-  re-verified against the current tree rather than re-run: the operation is
-  published (`leto_ops::transpose_complex_matrices`), routed through hermes
-  register tiles in `application/layout/complex/tile.rs`, covered by
-  `tests/complex_transpose_allocations.rs`, recorded in ADR 0027 and the
-  CHANGELOG, and consumed by apollo at
-  `apollo-fft/.../plan/fft/layout.rs:57`. `cargo nextest run -p leto-ops`:
-  546/546 pass. Every acceptance clause is satisfied by the merged tree, so
-  the item closes on evidence.
-
-## ATLAS-LETO-QR-REFLECTOR-ACCESSORS-2026-08-31 — Read side for the QR compact reflector storage [minor] — done 2026-08-31
-
-- **Delivered:** `QrDecomposition::{packed, heads, betas}` — the read
-  counterpart to the existing `from_raw_parts`, so the hephaestus WGPU backend
-  accumulates `Q` device-side rather than materializing it host-side via `q()`.
-  Indexing pinned by `reflector_accessors_reproduce_q` (bitwise match to `q()`).
-  Gates: fmt clean, clippy `-D warnings` clean, nextest 535/535, doctests 20/20.
-  PR open, unmerged.
-- **Integrator:** Claude session 5050c72a.
-
-## LETO-MATMUL-PARITY-VERDICT-2026-08-28 — Dense matmul oracle parity re-measured and closed [patch] — done 2026-08-28
-
-- **Delivered:** the open "dense matmul remains slower than ndarray/nalgebra"
-  thread closes on fresh evidence, not new kernel work. A pinned same-binary
-  external probe (leto path-dep beside ndarray 0.16 / nalgebra 0.34, outside
-  the repo per the dependency policy; best-of-24 blocks, per-core pinning,
-  three-engine value agreement < 1e-6) at HEAD `f527685` measures the SERIAL
-  kernel 15–23 % ahead of ndarray at every oracle shape on the P-core (64²
-  0.77x … 512² 0.85x) and 2–3x ahead of nalgebra; the default parallel entry
-  is 1.8–15x ahead of the references' single-threaded execution (neither
-  reference threads at default features, so that ratio measures Leto's
-  runtime advantage, not kernel parity — the serial row above is the
-  kernel-parity evidence). The recorded deficit predated the re-landed dense
-  `T::tiled_gemm` route and the Hermes lane overhaul. Full table, method, and
-  limits: `gap_audit.md` (dense matmul oracle parity — CLOSED). The
-  packing-scratch / register-micro-kernel lever is retired; re-open trigger
-  is an `oracle_compare/matmul_leto_*` median regression or a fresh external
-  re-comparison, with the rejected-candidate list still binding.
-- **Integrator:** Claude session 5050c72a.
-
-## ATLAS-LETO-QUALITY-2026-08-27 — Mutable-iteration soundness + kernel fast paths [patch] — done 2026-08-27
-
-- **Delivered:** PR #129 (`dfea36f`..merge) — injectivity gates on
-  `lanes_mut`/`axis_iter_mut`, window-exclusivity tracking with gated
-  whole-window accessors, one shared `validate_mutable_output` across 18
-  leto-ops entry points, `sum` storage validation, `kron` checked size math,
-  dense `fill` fast path; PR #130 — `scaled_add` slice path, F-dense
-  `to_contiguous` via the tiled transpose, shared-dense-order map fast paths,
-  single-zero matmul scratch, rustfmt cure for #129's fmt red. Gates:
-  nextest 888/888, clippy `-D warnings` clean, fmt clean, doctests green.
-- **Integrator:** claude-fable session 03d80d33 (atlas
-  ATLAS-PROVIDER-CHAIN-QUALITY-2026-08-27).
-
-## ATLAS-LETO-SUM-RESULT-UNIFICATION — `sum` panics where `reduce_all` returns Result [minor] — done 2026-09-01
-
-- Owner: unclaimed. Evidence: audit 2026-08-27 + PR #129 — `sum` keeps its
-  infallible `T` signature (now asserting storage validity) while
-  `reduce_all` returns `Result<T>` for the same input class; one reduction
-  surface should carry one failure contract. Breaking ([minor] 0.x); needs a
-  consumer sweep (coeus backend adapters) in the same co-evolution unit.
-
-- **Resolved (2026-09-01, Claude) — one implementation, two honest signatures.**
-  The two surfaces differ in failure class, not by accident: `reduce_all`
-  returns `Err` for an empty input under an op with no identity (`MinAxis`,
-  `MaxAxis`), a genuine input-dependent failure; `sum` has an identity, so
-  its only failure was the malformed-view invariant that validated
-  construction cannot reach — a programmer error, which the panic policy
-  keeps as a panic. So the contract stays split, but the *implementation*
-  no longer is: `sum` was a second copy of `reduce_all`'s traversal (same
-  fast rows, same element order, so bitwise-identical results) and now
-  delegates to `reduce_all::<SumAxis>` with the impossible failure
-  `expect`ed at the boundary. Net −34 lines. No consumer sweep needed:
-  `coeus_ops::sum` already wraps in `Result` on its side. Workspace gate
-  clean: 910/910, Clippy, Rustdoc, fmt.
 
 ## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
 
@@ -651,10 +320,6 @@
   and miri coverage become tractable. Weigh it against the corrected cost
   model above — the win may not justify the unsafe surface.
 
-## ✅ ATLAS-LETO-MINMAX-NAN-CONTRACT — axis min/max NaN semantics undocumented and route-dependent [patch] — done 2026-09-02
-
-- **Delivered:** `MinAxis`/`MaxAxis` seed their fold from `T::MAX_VALUE`/`T::MIN_VALUE`, so a leading NaN is rejected like any other; hermes #129 gave `min_slice`/`max_slice` the same contract (NaN ignored, all-NaN → identity) and the lock advances to it. Contract documented on both markers.
-- **Evidence:** `min_max_axis_ignore_nan_lanes_on_both_routes` (f32, f64) — NaN leading/interior/trailing and an all-NaN lane, on the contiguous (SIMD) and strided (fold) routes, bitwise-equal expectations.
 ## ATLAS-LETO-MNEMOSYNE-SINGLE-WRITE-2026-08-27 — Initialize final provider storage once [patch, complete]
 
 **Outcome:** let allocation-sensitive consumers initialize final
@@ -1465,16 +1130,6 @@ Acceptance:
   and SemVer gates pass; CFDrs removes `rsparse` and all old call sites in the
   same consumer increment, without an adapter or iterative fallback.
 
-## Provider default-source convergence (DELIVERED 2026-07-16)
-
-[minor] Leto 0.37.0 follows merged provider default branches for Mnemosyne,
-Moirai, Hermes, Eunomia, and Themis. The lockfile remains the reproducibility
-pin. Mnemosyne 0.5/Core 0.2 requires the declared Rust 1.95 MSRV across every
-published workspace package. Formatter, explicit-nightly warning-denied release
-Clippy, 568/568 release Nextest, 9/9 doctests, rustdoc, source-identity scan,
-and offline rustdoc SemVer checks for `leto` and `leto-ops` pass. Hephaestus and
-Apollo now refresh their locks against the merged Leto source contract.
-
 ## CR-4 SSOT rebind: `leto_ops::Scalar` over `eunomia::NumericElement` (DONE 2026-07-05)
 
 [minor] Leto `leto_ops::Scalar` is now bound as `pub trait Scalar: NumericElement { fn from_usize(...) -> Self; /* default-bodied slice kernels */ }` per `atlas/docs/adr/0005-eunomia-scalar-ssot.md`. The local maintainer branch was rebased onto `origin/main` (PR #30 feat/array-to-vec, 47 commits ahead), resolving file-level merge conflicts at `crates/leto-ops/src/domain/scalar.rs`, `crates/leto/src/lib.rs`, `crates/leto/src/application/array.rs`, and `crates/leto-ops/src/application/sparse/mod.rs`. The old standalone `Scalar` trait methods (`ZERO/ONE/add/sub/mul/div/bitand/bitor/bitxor/count_ones/to_f64`) are inherited from `NumericElement`; `RealScalar` inherits from `FloatElement`. Leto keeps only `from_usize` and default-bodied slice kernels. No compatibility shims.
@@ -1855,50 +1510,6 @@ no unmeasured "optimization" per performance_engineering.
   get the documented fallback L1/L2/line constants. The `themis` cache-level
   reader walks the borrowed slice directly and does not allocate copies.
 
-## Replacement Position
-- [x] [arch] Use `leto` as the Atlas shared N-dimensional strided-array and layout crate. It sits below Apollo and Coeus and above Mnemosyne/Moirai/Hermes. It should replace `ndarray` only after parity and verification gates are met.
-- [x] [patch] Naming assessment: `leto` is appropriate. The crate's intended responsibility is the shared array substrate between Coeus and Apollo, matching both functionality and the existing mythological naming scheme. Rename only if the crate changes scope into autodiff/tensors proper or Apollo-specific signal arrays.
-
-## Current Evidence
-- [x] [patch] ndarray/nalgebra oracle gates added for current Leto replacement
-  claims. `leto-ops` oracle tests compare LU solve/determinant/inverse,
-  symmetric eigenvalues, Cholesky lower factors, singular values, and
-  reverse-last-axis reductions against nalgebra/ndarray. Criterion oracle
-  comparison shows reverse reductions at parity or faster than ndarray, while
-  dense 128x128 matmul is slower than ndarray/nalgebra and remains open.
-  **Superseded 2026-08-28** — see `LETO-MATMUL-PARITY-VERDICT-2026-08-28`.
-- [x] [patch] `cargo test --all-features` passes: 34 `leto` core tests, 28 `leto-ops` tests, and 5 `leto-python` tests pass. Evidence tier: value-semantic, property, differential, PyO3 boundary, and downstream-shape migration fixture tests.
-- [x] [patch] The 2026-06-10 Apollo scan identified its public and internal
-  `ndarray` usage; the completed migration replaces those array, shape, mapping,
-  and Python ownership boundaries with native Leto arrays at commit `324f380`.
-- [x] [patch] `cargo fmt --check` is clean after formatting the workspace.
-- [x] [patch] `cargo clippy --all-targets --all-features -- -D warnings` is clean after fixing `mnemosyne-alloc` allocator use and public module docs.
-- [x] [patch] `cargo test --all-features` is clean.
-- [x] [patch] `CowStorage` is available for Leto arrays that borrow read-only Apollo/Coeus inputs and clone only when mutable access is requested. Evidence tier: value-semantic tests assert pointer identity on read-only borrowed storage, source preservation after mutation, and owned-detach output values.
-- [x] [patch] Full `cargo doc --workspace --all-features --no-deps` no longer
-  hits the `leto-python`/`numpy-0.23.0` rustdoc ICE. `leto-python` is a PyO3
-  extension boundary with no public Rust API, so its library target has
-  `doc = false`; Cargo still checks and tests the Rust crate, but rustdoc no
-  longer walks NumPy 0.23's broken intra-doc link path. Verification:
-  `cargo doc -p leto-python --all-features --no-deps`;
-  `cargo doc --workspace --all-features --no-deps`;
-  `cargo doc --no-deps`;
-  `cargo clippy -p leto-python --all-targets --all-features -- -D warnings`;
-  `cargo nextest run -p leto-python --all-features` (21 tests).
-
-## Phase 1: Sound Core Layout and Storage [patch]
-- [x] Add ndarray-style slicing for full-axis selection, optional signed range bounds, negative indices, negative steps, integer axis removal, new-axis insertion, ellipsis expansion, and implicit trailing axes. Verification: three value-semantic tests over rank-preserving, rank-dropping, rank-adding, reverse, ellipsis, and implicit-tail cases.
-- [x] Replace unchecked negative-offset casts with checked signed arithmetic across `Layout` and `Array` validation. Verification: value-semantic tests cover valid negative strides, rejected negative physical offsets, and one-past-storage rejection.
-- [x] Make externally constructed `ArrayView` and `ArrayViewMut` layouts bounds-checked against their backing slices through `try_new` constructors. Verification: invalid external layouts return `StorageError`.
-- [x] Add copy-on-write storage for zero-copy read-only interop and mutation-time detachment. Verification: core tests cover borrowed pointer identity, owned-detach transition, unchanged source backing, and mutated owned values.
-- [x] Remove or constrain mutable broadcast views that introduce zero-stride write aliasing. Verification: mutable broadcast rejects aliasing expansion and permits same-shape non-aliasing writes.
-- [x] Add overflow-checked shape product and stride multiplication for core constructors and derived layout validation. Verification: property tests cover bounded generated offset, empty-axis, negative-stride, and composed-slice cases.
-- [x] Add property tests for C/F layouts, negative strides, singleton axes, transposes, slices, broadcasts, and offset ranges. Verification: generated tests cover C/F offset formulas, transpose value preservation, reverse slicing, composed slicing, empty-axis storage validation, singleton-axis broadcast stride/value contracts, and negative-stride storage span validation. Remaining risk: broad adversarial composition over larger dimensions still needs expansion.
-- [x] Fix `MnemosyneStorage` initialization semantics. `new(len)` requires `T: Default` and initializes elements; `from_slice` copies initialized values; `Drop` drops elements before deallocation.
-- [x] Add Mnemosyne-backed owned array constructors for Apollo replacement boundaries. `zeros_mnemosyne` and `from_mnemosyne_slice` construct C-contiguous Leto arrays over `MnemosyneStorage`, with ndarray differential validation for shape, strides, values, and length rejection.
-- [x] Add Apollo ndarray-validation contract tests. Coverage validates Leto constructor, storage, transpose, broadcast, axis iteration, mutable view, slice metadata, ndarray conversion, negative-stride import, and bounds-rejection behavior against `ndarray`.
-- [x] Align retained single-element range stride metadata with `ndarray`: `SliceArg::range` outputs stride `0` when the normalized range length is exactly one, while empty ranges preserve their computed stride.
-
 ## Phase 2: ndarray API Parity Required by Apollo [minor]
 - [x] Add rank-specific aliases for `Array1`, `Array2`, `Array3` and corresponding view types. Verification: value test constructs `Array1` and `Array2` aliases and reads through views.
 - [x] Add a stable `RankMarker` / `RemoveAxis` helper for rank-dropping shape and stride calculations over ranks 1 through 4. Verification: value tests cover rank-3 axis removal and out-of-bounds rejection.
@@ -2002,26 +1613,6 @@ Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto`
 - [ ] [arch] std::ops operator overloading on arrays/views: DEFERRED, see `docs/adr/0001-elementwise-operator-overloading.md` (orphan rule; revisit when a consumer driver exists; `scalar_map` covers the scalar case meanwhile).
 - [x] [minor] Add 3+-operand zip traversal: `zip2_mut_with` (one mutable output + two read inputs), the `Zip::from(out).and(a).and(b)` analogue. Verification: fused multiply-add and strided-input value tests.
 - [x] [minor] Add indexed mutable zip traversal: `indexed_zip_mut_with` and `indexed_zip2_mut_with`, the `Zip::indexed` analogue for one- and two-input mutable zip paths. Verification: dense logical-index and strided-transposed value tests.
-
-## Phase 8: nalgebra Successor Policy [minor]
-Source: `gap_audit.md` §B. Apollo's nalgebra removal is complete; this phase is demand-driven.
-- [x] [minor] Generalize `symmetric_eigen_jacobi`/`SymmetricEigenDecomposition` over `T: RealScalar`; runs in native precision with no hidden widening (the wider-accumulator path is intentionally not introduced — a consumer needing higher working precision converts first). f32 genericity test added; f64 path unchanged. `RealScalar` is a segregated transcendental extension of `Scalar` (ISP).
-- [x] [minor] Add eigenvalues-only symmetric Jacobi entry points so callers do not allocate eigenvectors when only sorted eigenvalues are needed. The implementation uses a `RotationTarget` strategy with a zero-sized no-vector target; no `dyn` dispatch and no fake generic widening.
-- [x] [minor] LU/solve/det/inv, QR + least squares, Cholesky, and norms entered `leto-ops` with named CFDrs consumer drivers and nalgebra differential oracles.
-- [x] [major] Full rank-revealing SVD/pseudoinverse delivered by ADR 0005 through one-sided Jacobi SVD and Moore-Penrose construction; the legacy Gram SVD remains full-rank-only by contract.
-- [x] [minor] Non-symmetric eigenvalues delivered by ADR 0006 Phase 2a through shifted complex QR. Remaining [major] surface: Schur vectors (`Q`, quasi-triangular `T`) when a consumer needs them.
-- [x] [minor] Add unpivoted symmetric indefinite `U D Uᵀ` decomposition with determinant/solve/inverse helpers. Remaining [major] surface: pivoted symmetric-indefinite factorization for zero-pivot cases.
-
-## Apollo Migration Gate [arch]
-- [x] Add Leto as a Git workspace dependency in Apollo only after a pushed Leto revision passes all default and all-feature gates. The initial Apollo boundary requested `["std", "ndarray-compat"]`; current Apollo consumes native Leto arrays without that retired feature and exposes Leto boundaries across its transform families.
-- [x] [minor] Replace Apollo's nalgebra dependency: FrFT/GFT eigendecomposition migrated to `leto_ops::symmetric_eigen_jacobi`; GFT adjacency storage migrated to `leto::Array2<f64>`.
-- [x] Add representative Leto-side Apollo and Coeus migration fixtures before direct consumer updates. Verification: fixtures cover Apollo FFT-like rank/complex/precision shapes and Coeus reduction/broadcast/matmul shapes.
-- [x] Migrate Apollo transform crates to native Leto arrays with consumer-side
-  value-semantic and differential coverage.
-- [x] Record Apollo's public array-boundary migration in its changelog and
-  update all in-repository callers in the same development line.
-- [x] Remove Apollo's workspace `ndarray` dependency after its manifests,
-  kernels, validation, and Python bindings consume native Leto arrays.
 
 ## Phase 9: Blocked-reflector vectorization (eig/SVD disparity) [major]
 Source: `docs/adr/0010-blocked-reflector-vectorization.md`; `gap_audit.md` eig/SVD residuals.
