@@ -52,6 +52,34 @@ numpy = "0.23"
 proptest = "1.11"
 criterion = "0.8"
 
+# Debuginfo budget, matching the stack's shared `.cargo/config.toml`.
+#
+# Config profiles apply only to builds rooted beneath the Atlas root, and the
+# working practice here runs cargo from outside it (`--manifest-path` from a
+# neutral directory, so the development overlay does not rewrite this
+# workspace's lock). Cargo reads config from the working directory, not the
+# manifest, so those builds silently fell back to `debug = 2` for this
+# workspace and every dependency: the shared `target/debug` measured 383 GB
+# against release's 41. Declaring the budget here makes it hold wherever the
+# build is rooted.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.dev.build-override]
+debug = false
+
+[profile.test]
+debug = "line-tables-only"
+
+[profile.test.package."*"]
+debug = false
+
+[profile.test.build-override]
+debug = false
+
 [profile.release]
 codegen-units = 1
 lto = "thin"
