@@ -27,7 +27,6 @@ pub mod hermitian;
 pub mod hessenberg;
 /// Shared Householder reflector primitive (SSOT for orthogonal transforms).
 pub(crate) mod householder;
-/// Iterative solvers (CG, BiCGSTAB, GMRES, LSQR) and preconditioners.
 /// LU decomposition with partial pivoting, solve, determinant, inverse.
 pub mod lu;
 /// Batched LU decomposition over a stack of square matrices.
