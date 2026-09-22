@@ -65,7 +65,8 @@ where
 
 /// One fused pass over the grid planes `planes`, writing `K` destinations:
 /// each output lane receives the `N` axis derivatives named by `terms` and
-/// the `M` pointwise values at that lane, and `combine` returns the `K`
+/// the `M` pointwise values at that lane, and the `K` values the
+/// destinations hold there, and `combine` returns the `K`
 /// values written there. Planes outside the range are not touched.
 ///
 /// Each field and each destination hold a window of a grid of `grid_planes`
@@ -83,7 +84,7 @@ pub(in super::super) fn central4_map_into<T, const N: usize, const M: usize, con
 ) -> Result<()>
 where
     T: RealField + FloatElement + Copy,
-    F: Fn([T; N], [T; M]) -> [T; K] + Send + Sync,
+    F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
 {
     let Some(first) = dst.first() else {
         return Ok(());

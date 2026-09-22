@@ -2,7 +2,11 @@
 
 - Status: Accepted
 - Date: 2026-09-22
-- Class: [minor] public surface; `map_axis_derivatives_triple` is removed
+- Revised: 2026-09-22 -- decision 4: `combine` receives the destinations'
+  held values, so a pass can update a field in place (driver: the kwavers
+  elastic step applying its velocity kick inside the acceleration pass).
+- Class: [major] public surface; `map_axis_derivatives_triple` is removed and
+  `combine` takes the destinations' held values
 - Driver: kwavers ADR 133 (elastic stress evaluates in slabs)
 
 ## Context
@@ -51,6 +55,14 @@ followed from the kernel shapes, not from the physics.
    destinations, pointwise inputs and y/z fields hold every plane written;
    x-fields hold every plane the fourth-order stencil reaches (two either
    side, clipped at the grid).
+4. **`combine` receives what each destination holds.** Its signature is
+   `Fn([T; N], [T; M], [T; K]) -> [T; K]`, the last argument the value each
+   destination held before the pass. A result that updates its destination
+   -- kwavers' velocity advanced by the acceleration a pass assembles,
+   `v + h a` -- reads it there; as a pointwise input it would alias the
+   destination it is written to. A combine that replaces its destination
+   ignores the argument, and the load is dead once `combine` inlines into
+   the kernel.
 
 ## Alternatives
 
@@ -63,6 +75,9 @@ followed from the kernel shapes, not from the physics.
   tasks 591-616 on the whole-grid path; four-row bands did not recover it, so
   per-task overhead is not the mechanism. On windowed slabs the best time did
   not move.
+- **An update method beside the replacing one** (decision 4). Rejected:
+  replace-or-update is one variation of what `combine` returns, and a
+  sibling entry point would carry a second copy of every kernel path.
 
 ## Consequences
 
@@ -72,6 +87,12 @@ followed from the kernel shapes, not from the physics.
 - kwavers evaluates the acceleration through a reused stress window past the
   cache: 1.5x at 96 cubed and 1.8x at 128 cubed over whole-grid (kwavers ADR
   133 records the measurements and the selection rule).
+- kwavers applies its velocity-Verlet kick inside the acceleration pass
+  (decision 4), writing each velocity once instead of storing three
+  accelerations and reading them back: the whole elastic step runs
+  925-968 us against 1028-1056 at 64 cubed, 4452-5436 against 6179-8272 at
+  96 cubed and 16041-16782 against 20348-20954 at 128 cubed (release,
+  paired), values unchanged to the bit.
 - Breaking for `map_axis_derivatives_triple`, whose only caller is kwavers;
   the rename lands in its dependency update.
 
@@ -85,6 +106,9 @@ followed from the kernel shapes, not from the physics.
   the planes it writes, give the whole-grid planes bit for bit on both walks.
 - Six destinations from one pass over nine gradients equal the diagonal pass
   plus three shear passes bit for bit, on both walks.
+- A destination updated in place -- `v + m (a + b)` -- equals the composed
+  sweeps added to its held value bit for bit on both walks, and a windowed
+  update leaves the planes outside its range as they were.
 - Each malformed window, destinations holding different planes, and a pass
   with no destination are refused before anything is written, naming the
   fault.

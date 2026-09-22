@@ -1,3 +1,4 @@
+use super::super::super::window::{PlaneWindow, PlaneWindowMut};
 use super::*;
 
 /// The shear shape: a scale times the sum of two axis derivatives of two
@@ -49,7 +50,7 @@ fn mapped_scaled_pair(
         [(first.0, first.1.view()), (second.0, second.1.view())],
         [scale.view()],
         &mut view,
-        |[a, b], [m]| m * (a + b),
+        |[a, b], [m], _| m * (a + b),
     )
     .expect("matching shapes");
     out
@@ -107,7 +108,7 @@ fn a_mapped_sum_is_the_fused_divergence_bit_for_bit() {
             ],
             [],
             &mut view,
-            |[a, b, c], []| (a + b) + c,
+            |[a, b, c], [], _| (a + b) + c,
         )
         .expect("matching shapes");
         assert_bitwise(&out, |index| fused[index], "mapped sum");
@@ -136,7 +137,7 @@ fn a_transposed_field_takes_the_logical_walk_in_a_mapped_pair() {
         [(Axis::Z, first.view()), (Axis::X, transposed)],
         [scale.view()],
         &mut view,
-        |[a, b], [m]| m * (a + b),
+        |[a, b], [m], _| m * (a + b),
     )
     .expect("matching shapes");
     assert_bitwise(&out, |index| dense[index], "transposed mapped pair");
@@ -157,7 +158,7 @@ fn a_mapped_mismatch_and_an_unfused_scheme_are_refused() {
             [(Axis::Y, first.view()), (Axis::X, second.view())],
             [scale.view()],
             &mut wrong.view_mut(),
-            |[a, b], [m]| m * (a + b),
+            |[a, b], [m], _| m * (a + b),
         )
         .is_err());
 
@@ -168,7 +169,7 @@ fn a_mapped_mismatch_and_an_unfused_scheme_are_refused() {
             [(Axis::Y, first.view()), (Axis::X, second.view())],
             [short.view()],
             &mut out.view_mut(),
-            |[a, b], [m]| m * (a + b),
+            |[a, b], [m], _| m * (a + b),
         )
         .is_err(),
         "a pointwise input off the grid must be refused"
@@ -182,9 +183,93 @@ fn a_mapped_mismatch_and_an_unfused_scheme_are_refused() {
                 [(Axis::Y, first.view()), (Axis::X, second.view())],
                 [scale.view()],
                 &mut out.view_mut(),
-                |[a, b], [m]| m * (a + b),
+                |[a, b], [m], _| m * (a + b),
             )
             .is_err(),
         "an unfused scheme must say so"
+    );
+}
+
+/// `held + scale · (∂first/∂a + ∂second/∂b)` through the scaled pair's
+/// composed sweeps, with `held` the value each lane started at.
+fn composed_update(
+    held: &Array3<f64>,
+    first: (Axis, &Array3<f64>),
+    second: (Axis, &Array3<f64>),
+    scale: &Array3<f64>,
+) -> Array3<f64> {
+    let increment = composed_scaled_pair(first, second, scale);
+    let mut out = held.clone();
+    let [nx, ny, nz] = held.shape();
+    for i in 0..nx {
+        for j in 0..ny {
+            for k in 0..nz {
+                let p = [i, j, k];
+                out[p] += increment[p];
+            }
+        }
+    }
+    out
+}
+
+/// A pass that updates its destination -- a velocity advanced by the
+/// acceleration its derivatives assemble -- sees each lane's value from
+/// before the pass, on the dense walk and on the logical walk a transposed
+/// field forces, and planes outside a windowed pass keep theirs.
+#[test]
+fn a_destination_updated_in_place_matches_its_composed_update_bit_for_bit() {
+    let shape = [7usize, 6, 9];
+    let first = seeded(shape);
+    let second = seeded_offset(shape, 3.5);
+    let scale = seeded_offset(shape, -7.25);
+    let held = seeded_offset(shape, 11.0);
+    let expected = composed_update(&held, (Axis::Z, &first), (Axis::X, &second), &scale);
+    let op = FiniteDifference3D::central_fourth_order(SPACING[0], SPACING[1], SPACING[2])
+        .expect("positive spacing");
+
+    let stored = reversed_storage(&second);
+    let transposed = stored.transpose([2, 1, 0]).expect("a permutation");
+    assert!(
+        transposed.as_slice().is_none(),
+        "the logical walk needs a non-C-dense field"
+    );
+    for (walk, second_view) in [("dense", second.view()), ("logical", transposed)] {
+        let mut out = held.clone();
+        let mut view = out.view_mut();
+        op.map_axis_derivatives(
+            [(Axis::Z, first.view()), (Axis::X, second_view)],
+            [scale.view()],
+            &mut view,
+            |[a, b], [m], v| v + m * (a + b),
+        )
+        .expect("matching shapes");
+        assert_bitwise(&out, |index| expected[index], walk);
+    }
+
+    let planes = 2..5;
+    let mut out = held.clone();
+    let mut view = out.view_mut();
+    op.map_axis_derivatives_in_windows(
+        shape[0],
+        planes.clone(),
+        [
+            (Axis::Z, PlaneWindow::whole(first.view())),
+            (Axis::X, PlaneWindow::whole(second.view())),
+        ],
+        [PlaneWindow::whole(scale.view())],
+        [PlaneWindowMut::whole(&mut view)],
+        |[a, b], [m], [v]| [v + m * (a + b)],
+    )
+    .expect("matching shapes");
+    assert_bitwise(
+        &out,
+        |index| {
+            if planes.contains(&index[0]) {
+                expected[index]
+            } else {
+                held[index]
+            }
+        },
+        "windowed",
     );
 }

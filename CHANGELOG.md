@@ -8,6 +8,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [major] `FiniteDifference3D::map_axis_derivatives`, `map_axis_derivatives_many`
+  and `map_axis_derivatives_in_windows` fuse `N` axis derivatives and `M`
+  pointwise inputs into `K` destinations in one pass, over whole grids or
+  over `PlaneWindow`/`PlaneWindowMut` windows of x-planes (ADR 0032).
+  `combine` receives the value each destination holds as its last argument
+  -- `Fn([T; N], [T; M], [T; K]) -> [T; K]`, `Fn([T; N], [T; M], T) -> T`
+  for `K = 1` -- so a pass can update a field in place; a combine that
+  replaces its destination ignores it. `map_axis_derivatives_triple` is
+  removed; `map_axis_derivatives_many` with `K = 3` replaces it.
+
 - [minor] `FiniteDifference3D::divergence_into(fields, dst)` sums the three
   axis derivatives of three fields into one destination in a single pass,
   reading each field once per output lane instead of writing three per-axis

@@ -96,7 +96,7 @@ fn a_mapped_triple_matches_its_composed_sweeps_bit_for_bit() {
             ],
             [lambda.view(), mu.view()],
             [&mut first, &mut second, &mut third],
-            |[exx, eyy, ezz], [la, mv]| diagonal_from(exx, eyy, ezz, la, mv),
+            |[exx, eyy, ezz], [la, mv], _| diagonal_from(exx, eyy, ezz, la, mv),
         )
         .expect("matching shapes");
 
@@ -141,7 +141,7 @@ fn a_transposed_field_takes_the_logical_walk_in_a_mapped_triple() {
         ],
         [lambda.view(), mu.view()],
         [&mut first, &mut second, &mut third],
-        |[exx, eyy, ezz], [la, mv]| diagonal_from(exx, eyy, ezz, la, mv),
+        |[exx, eyy, ezz], [la, mv], _| diagonal_from(exx, eyy, ezz, la, mv),
     )
     .expect("matching shapes");
 
@@ -168,7 +168,7 @@ fn a_mapped_triple_mismatch_and_an_unfused_scheme_are_refused() {
             (Axis::Z, field.view()),
         ]
     };
-    let combine = |[a, b, c]: [f64; 3], [m]: [f64; 1]| [m * a, m * b, m * c];
+    let combine = |[a, b, c]: [f64; 3], [m]: [f64; 1], _: [f64; 3]| [m * a, m * b, m * c];
 
     let mut good = Array3::<f64>::zeros(shape);
     let mut other = Array3::<f64>::zeros(shape);
@@ -251,7 +251,7 @@ fn six_destinations_from_one_pass_match_four_passes_bit_for_bit() {
             ],
             [lambda.view(), mu.view()],
             [&mut a, &mut b, &mut c],
-            |[exx, eyy, ezz], [la, mv]| diagonal_from(exx, eyy, ezz, la, mv),
+            |[exx, eyy, ezz], [la, mv], _| diagonal_from(exx, eyy, ezz, la, mv),
         )
         .expect("matching shapes");
         for ((first, second), out) in [
@@ -263,7 +263,7 @@ fn six_destinations_from_one_pass_match_four_passes_bit_for_bit() {
                 [(first.0, first.1.view()), (second.0, second.1.view())],
                 [mu.view()],
                 &mut out.view_mut(),
-                |[p, q], [m]| m * (p + q),
+                |[p, q], [m], _| m * (p + q),
             )
             .expect("matching shapes");
         }
@@ -289,7 +289,7 @@ fn six_destinations_from_one_pass_match_four_passes_bit_for_bit() {
             ],
             [lambda.view(), mu.view()],
             [a, b, c, d, e, f],
-            |[a0, a1, a2, b0, b1, b2, c0, c1, c2], [la, mv]| {
+            |[a0, a1, a2, b0, b1, b2, c0, c1, c2], [la, mv], _| {
                 six_stresses([[a0, a1, a2], [b0, b1, b2], [c0, c1, c2]], la, mv)
             },
         )
@@ -310,7 +310,7 @@ fn a_pass_with_no_destination_is_refused() {
     let field = seeded(shape);
     let op = FiniteDifference3D::central_fourth_order(SPACING[0], SPACING[1], SPACING[2])
         .expect("positive spacing");
-    match op.map_axis_derivatives_many([(Axis::X, field.view())], [], [], |[_], []| []) {
+    match op.map_axis_derivatives_many([(Axis::X, field.view())], [], [], |[_], [], _| []) {
         Err(LetoError::InvalidInput(message)) => assert!(
             message.contains("at least one destination"),
             "unexpected message {message}"
