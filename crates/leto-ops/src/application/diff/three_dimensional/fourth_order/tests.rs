@@ -1,4 +1,4 @@
-use leto::Array3;
+use leto::{Array3, LetoError};
 
 use super::super::leapfrog::Axis;
 use super::super::FiniteDifference3D;
@@ -332,7 +332,18 @@ fn a_mismatched_shape_and_an_unfused_scheme_are_refused() {
         [fields[0].view(), fields[1].view(), fields[2].view()],
         &mut out.view_mut(),
     );
-    assert!(refusal.is_err(), "an unfused scheme must say so");
+    // Exact text of the `other` branch in `FiniteDifference3D::divergence_into`
+    // (operator.rs): the refusal must name the scheme it has no fused kernel
+    // for, not merely fail.
+    assert_eq!(
+        refusal,
+        Err(LetoError::InvalidInput(
+            "divergence_into has no fused kernel for CentralSecondOrder; apply each \
+             axis separately and sum"
+                .to_string()
+        )),
+        "an unfused scheme must name itself in the refusal"
+    );
 }
 
 /// The shear shape: a scale times the sum of two axis derivatives of two
