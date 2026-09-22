@@ -1,0 +1,34 @@
+# Artifact budget: PM boards under their line budget and tracked images under
+# their byte budget, ratchet-to-budget against the PR base (an over-budget
+# board may not grow, an oversized image may not be added or touched).
+#
+# A separate workflow rather than a job in ci.yml, for the same reason the
+# other callers keep it separate: a job's check name is `CI / <job name>`, and
+# a required status check has to be requireable on its own. It also keeps the
+# gate off ci.yml's 20-minute critical path, so a board-only change gets its
+# verdict in seconds instead of after the whole verification pipeline.
+#
+# One definition in Atlas; this file only calls it.
+name: Artifact budget
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: artifact-budget-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-budget:
+    name: Artifact budget
+    uses: ryancinsight/atlas/.github/workflows/artifact-budget.yml@9233e1b3d9daa398b33f9b2a66a4380465a5859e
+    with:
+      atlas-ref: 9233e1b3d9daa398b33f9b2a66a4380465a5859e
+    permissions:
+      contents: read
