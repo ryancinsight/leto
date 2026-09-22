@@ -29,11 +29,8 @@ mod strided;
 #[cfg(test)]
 mod tests;
 
-pub(super) use dispatch::{
-    central4_divergence_into, central4_into, central4_map_into, central4_map_triple_into,
-};
-// Not re-exported past this module: only the `parallel`-gated test in
-// `tests` reads it, via `super::ELEMENTS_PER_UNIT`, to size its
-// parallel-floor fixture.
+pub(super) use dispatch::{central4_divergence_into, central4_into, central4_map_into};
+// Not re-exported past this module: only the `parallel`-gated tests read it,
+// to size fixtures that must cross the parallel floor.
 #[cfg(all(test, feature = "parallel"))]
 use stencil::ELEMENTS_PER_UNIT;

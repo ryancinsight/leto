@@ -2,25 +2,29 @@
 //! stencils, taken when a field is not C-contiguous along the differentiated
 //! axis.
 
+use core::ops::Range;
+
 use eunomia::{FloatElement, NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3};
+
+use super::super::window::{PlaneWindow, PlaneWindowMut};
 
 use super::super::leapfrog::Axis;
 use super::stencil::{Scales, Stencil};
 
-pub(super) fn map_triple_strided<T, const N: usize, const M: usize, F>(
-    terms: [(Axis, ArrayView3<'_, T>); N],
-    pointwise: [ArrayView3<'_, T>; M],
-    dst: [&mut ArrayViewMut3<'_, T>; 3],
+pub(super) fn map_strided<T, const N: usize, const M: usize, const K: usize, F>(
+    terms: [(Axis, PlaneWindow<'_, T>); N],
+    pointwise: [PlaneWindow<'_, T>; M],
+    mut dst: [PlaneWindowMut<'_, '_, T>; K],
     shape: [usize; 3],
+    planes: Range<usize>,
     scales: [Scales<T>; N],
     combine: &F,
 ) where
     T: RealField + FloatElement + Copy,
-    F: Fn([T; N], [T; M]) -> [T; 3] + Send + Sync,
+    F: Fn([T; N], [T; M]) -> [T; K] + Send + Sync,
 {
-    let [first, second, third] = dst;
-    for i in 0..shape[0] {
+    for i in planes {
         for j in 0..shape[1] {
             for k in 0..shape[2] {
                 let index = [i, j, k];
@@ -30,43 +34,16 @@ pub(super) fn map_triple_strided<T, const N: usize, const M: usize, F>(
                     Stencil::at(c, shape[axis]).apply(scales[t], |o| {
                         let mut neighbour = index;
                         neighbour[axis] = c.wrapping_add_signed(o);
-                        terms[t].1[neighbour]
+                        neighbour[0] -= terms[t].1.first();
+                        terms[t].1.view()[neighbour]
                     })
                 });
-                let values = combine(derivatives, core::array::from_fn(|p| pointwise[p][index]));
-                first[index] = values[0];
-                second[index] = values[1];
-                third[index] = values[2];
-            }
-        }
-    }
-}
-
-pub(super) fn map_strided<T, const N: usize, const M: usize, F>(
-    terms: [(Axis, ArrayView3<'_, T>); N],
-    pointwise: [ArrayView3<'_, T>; M],
-    dst: &mut ArrayViewMut3<'_, T>,
-    shape: [usize; 3],
-    scales: [Scales<T>; N],
-    combine: &F,
-) where
-    T: RealField + FloatElement + Copy,
-    F: Fn([T; N], [T; M]) -> T + Send + Sync,
-{
-    for i in 0..shape[0] {
-        for j in 0..shape[1] {
-            for k in 0..shape[2] {
-                let index = [i, j, k];
-                let derivatives: [T; N] = core::array::from_fn(|t| {
-                    let axis = terms[t].0.index();
-                    let c = index[axis];
-                    Stencil::at(c, shape[axis]).apply(scales[t], |o| {
-                        let mut neighbour = index;
-                        neighbour[axis] = c.wrapping_add_signed(o);
-                        terms[t].1[neighbour]
-                    })
-                });
-                dst[index] = combine(derivatives, core::array::from_fn(|p| pointwise[p][index]));
+                let at = |window: &PlaneWindow<'_, T>| window.view()[[i - window.first(), j, k]];
+                let values = combine(derivatives, core::array::from_fn(|p| at(&pointwise[p])));
+                for (destination, value) in dst.iter_mut().zip(values) {
+                    let local = [i - destination.first(), j, k];
+                    destination.view_mut()[local] = value;
+                }
             }
         }
     }

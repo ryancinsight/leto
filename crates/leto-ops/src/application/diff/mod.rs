@@ -27,6 +27,6 @@ pub use finite_difference::FiniteDifference;
 pub use schemes::FiniteDifferenceScheme;
 pub use three_dimensional::{
     central_first_derivative_coefficients, staggered_first_derivative_coefficients, Axis,
-    FiniteDifference3D, FiniteDifference3DScheme, StaggeredLeapfrog3D, TapCoefficients,
-    MAX_HALF_ORDER,
+    FiniteDifference3D, FiniteDifference3DScheme, PlaneWindow, PlaneWindowMut, StaggeredLeapfrog3D,
+    TapCoefficients, MAX_HALF_ORDER,
 };

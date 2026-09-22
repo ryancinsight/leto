@@ -191,6 +191,9 @@ pub use application::diff::{FiniteDifference, FiniteDifferenceScheme};
 /// Generic 3-D finite-difference operator (provider-SSOT for kwavers/CFDrs/helios
 /// first-derivative kernels: central 2nd/4th/6th + Yee staggered forward/backward).
 pub use application::diff::{FiniteDifference3D, FiniteDifference3DScheme};
+/// Fields holding only a window of a grid's x-planes, for fused passes run a
+/// slab at a time.
+pub use application::diff::{PlaneWindow, PlaneWindowMut};
 
 // ── Quadrature (SSOT) ─────────────────────────────────────────────────────────
 /// Numerical quadrature (integration) rules.

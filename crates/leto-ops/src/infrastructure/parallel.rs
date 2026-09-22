@@ -88,15 +88,21 @@ pub(crate) fn for_each_unit_range<F>(
     }
 }
 
-/// [`for_each_plane_mut`] with per-task state: `state()` runs once per unit
-/// task and `plane(&mut state, index, values)` sees the same value for every
-/// plane that task owns.
+/// Runs `plane(&mut state, index, planes)` over the x-planes of `K` dense
+/// outputs of one length in lockstep: `planes[d]` is plane `index` of output
+/// `d`, and `state()` runs once per unit task, so every plane a task owns
+/// sees the same state.
+///
+/// Any `K` is one parallel region. A kernel whose outputs share one
+/// derivative pass writes all of them in that pass rather than repeating it
+/// per output -- and rather than paying a region per output, which on a
+/// fused elastic step measured slower than the unfused passes it replaced.
 ///
 /// A kernel that needs row scratch builds it here rather than per plane, so
 /// the allocation count follows the task count instead of the grid. Without
 /// the `parallel` feature one state serves the whole output.
-pub(crate) fn for_each_plane_mut_with<T, S, I, F>(
-    output: &mut [T],
+pub(crate) fn for_each_plane_mut_many_with<T, S, I, F, const K: usize>(
+    outputs: [&mut [T]; K],
     plane_len: usize,
     #[cfg_attr(
         not(feature = "parallel"),
@@ -112,98 +118,42 @@ pub(crate) fn for_each_plane_mut_with<T, S, I, F>(
     T: Send,
     S: Send,
     I: Fn() -> S + Send + Sync,
-    F: Fn(&mut S, usize, &mut [T]) + Send + Sync,
+    F: Fn(&mut S, usize, [&mut [T]; K]) + Send + Sync,
 {
     if plane_len == 0 {
         return;
     }
     #[cfg(feature = "parallel")]
-    moirai::for_each_unit_task_mut_with::<moirai::WorkBytes<PARALLEL_MIN_BYTES>, _, _, _, _>(
-        output,
+    moirai::for_each_unit_task_many_mut_with::<moirai::WorkBytes<PARALLEL_MIN_BYTES>, _, _, _, _, K>(
+        outputs,
         plane_len,
         plane_len.saturating_mul(element_bytes),
         state,
-        |task_state, first_plane, planes| {
-            for (offset, values) in planes.chunks_exact_mut(plane_len).enumerate() {
-                plane(task_state, first_plane + offset, values);
+        |task_state, first_plane, runs| {
+            let planes = runs.first().map_or(0, |run| run.len() / plane_len);
+            let mut cursors = runs.map(|run| run.chunks_exact_mut(plane_len));
+            for offset in 0..planes {
+                let lockstep = core::array::from_fn(|d| {
+                    cursors[d]
+                        .next()
+                        .expect("invariant: every run holds the same plane count")
+                });
+                plane(task_state, first_plane + offset, lockstep);
             }
         },
     );
     #[cfg(not(feature = "parallel"))]
     {
         let mut task_state = state();
-        for (index, values) in output.chunks_exact_mut(plane_len).enumerate() {
-            plane(&mut task_state, index, values);
-        }
-    }
-}
-
-/// [`for_each_plane_mut_with`] over three destinations at once: each task
-/// owns the same plane range of all three, so a kernel whose outputs share
-/// one derivative pass writes them in that pass instead of repeating it.
-///
-/// The arity is the runtime's: moirai splits one, two or three buffers in
-/// lockstep, and three is what the elastic diagonal stresses need. A fourth
-/// destination would need the runtime to grow first.
-pub(crate) fn for_each_plane_mut_triple_with<T, S, I, F>(
-    first: &mut [T],
-    second: &mut [T],
-    third: &mut [T],
-    plane_len: usize,
-    #[cfg_attr(
-        not(feature = "parallel"),
-        expect(
-            unused_variables,
-            reason = "only the parallel arm sizes tasks by bytes"
-        )
-    )]
-    element_bytes: usize,
-    state: I,
-    plane: F,
-) where
-    T: Send,
-    S: Send,
-    I: Fn() -> S + Send + Sync,
-    F: Fn(&mut S, usize, [&mut [T]; 3]) + Send + Sync,
-{
-    if plane_len == 0 {
-        return;
-    }
-    #[cfg(feature = "parallel")]
-    moirai::for_each_unit_task_triple_mut_with::<
-        moirai::WorkBytes<PARALLEL_MIN_BYTES>,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-    >(
-        first,
-        second,
-        third,
-        plane_len,
-        plane_len.saturating_mul(element_bytes),
-        state,
-        |task_state, first_plane, a, b, c| {
-            let planes = a
-                .chunks_exact_mut(plane_len)
-                .zip(b.chunks_exact_mut(plane_len))
-                .zip(c.chunks_exact_mut(plane_len));
-            for (offset, ((x, y), z)) in planes.enumerate() {
-                plane(task_state, first_plane + offset, [x, y, z]);
-            }
-        },
-    );
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut task_state = state();
-        let planes = first
-            .chunks_exact_mut(plane_len)
-            .zip(second.chunks_exact_mut(plane_len))
-            .zip(third.chunks_exact_mut(plane_len));
-        for (index, ((x, y), z)) in planes.enumerate() {
-            plane(&mut task_state, index, [x, y, z]);
+        let planes = outputs.first().map_or(0, |output| output.len() / plane_len);
+        let mut cursors = outputs.map(|output| output.chunks_exact_mut(plane_len));
+        for index in 0..planes {
+            let lockstep = core::array::from_fn(|d| {
+                cursors[d]
+                    .next()
+                    .expect("invariant: every output holds the same plane count")
+            });
+            plane(&mut task_state, index, lockstep);
         }
     }
 }
