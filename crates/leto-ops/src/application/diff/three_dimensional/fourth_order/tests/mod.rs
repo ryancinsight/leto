@@ -347,4 +347,5 @@ fn a_mismatched_shape_and_an_unfused_scheme_are_refused() {
 }
 
 mod map;
-mod map_triple;
+mod map_many;
+mod planes;

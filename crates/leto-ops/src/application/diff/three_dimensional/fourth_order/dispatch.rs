@@ -2,13 +2,17 @@
 //! [`dense`](super::dense) or [`strided`](super::strided) implementation by
 //! field contiguity.
 
+use core::ops::Range;
+
 use eunomia::{FloatElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3, Result};
 
+use super::super::window::{PlaneWindow, PlaneWindowMut};
+
 use super::super::leapfrog::Axis;
-use super::dense::{divergence_dense, map_dense, map_triple_dense, sweep_dense};
+use super::dense::{divergence_dense, map_dense, sweep_dense, DenseTerm};
 use super::stencil::Scales;
-use super::strided::{divergence_strided, map_strided, map_triple_strided, sweep_strided};
+use super::strided::{divergence_strided, map_strided, sweep_strided};
 
 /// `dst = ∂field/∂axis` with the closure in the [module documentation](super).
 ///
@@ -59,98 +63,80 @@ where
     Ok(())
 }
 
-/// One fused pass over `dst`: each output lane receives the `N` axis
-/// derivatives named by `terms` and the `M` pointwise values at that lane,
-/// and `combine` decides what to write.
+/// One fused pass over the grid planes `planes`, writing `K` destinations:
+/// each output lane receives the `N` axis derivatives named by `terms` and
+/// the `M` pointwise values at that lane, and `combine` returns the `K`
+/// values written there. Planes outside the range are not touched.
 ///
-/// The caller has checked that every field, every pointwise input and `dst`
-/// share one shape.
-pub(in super::super) fn central4_map_into<T, const N: usize, const M: usize, F>(
-    terms: [(Axis, ArrayView3<'_, T>); N],
-    pointwise: [ArrayView3<'_, T>; M],
-    dst: &mut ArrayViewMut3<'_, T>,
+/// Each field and each destination hold a window of a grid of `grid_planes`
+/// x-planes; the caller has checked that every window covers what the pass
+/// reads or writes in it, that all share the destinations' lanes, and that
+/// the destinations hold the same planes.
+pub(in super::super) fn central4_map_into<T, const N: usize, const M: usize, const K: usize, F>(
+    terms: [(Axis, PlaneWindow<'_, T>); N],
+    pointwise: [PlaneWindow<'_, T>; M],
+    mut dst: [PlaneWindowMut<'_, '_, T>; K],
+    grid_planes: usize,
+    planes: Range<usize>,
     spacing: [T; 3],
     combine: F,
 ) -> Result<()>
 where
     T: RealField + FloatElement + Copy,
-    F: Fn([T; N], [T; M]) -> T + Send + Sync,
+    F: Fn([T; N], [T; M]) -> [T; K] + Send + Sync,
 {
-    let shape = dst.shape();
+    let Some(first) = dst.first() else {
+        return Ok(());
+    };
+    let [_, ny, nz] = first.shape();
+    let origin = first.first();
+    let shape = [grid_planes, ny, nz];
     let scales: [Scales<T>; N] = core::array::from_fn(|j| Scales::new(spacing[terms[j].0.index()]));
-    let axes: [Axis; N] = core::array::from_fn(|j| terms[j].0);
-    let mut dense = true;
-    let fields: [&[T]; N] = core::array::from_fn(|j| {
-        terms[j].1.as_slice().unwrap_or_else(|| {
-            dense = false;
-            &[]
-        })
-    });
-    let scalars: [&[T]; M] = core::array::from_fn(|k| {
-        pointwise[k].as_slice().unwrap_or_else(|| {
-            dense = false;
-            &[]
-        })
-    });
-    if dense {
-        if let Some(out) = dst.as_mut_slice() {
-            map_dense(fields, scalars, axes, out, shape, scales, &combine);
+    if let (Some(fields), Some(scalars)) =
+        (dense_terms(&terms, scales), dense_pointwise(&pointwise))
+    {
+        let out = dst
+            .each_mut()
+            .map(|window| window.view_mut().as_mut_slice());
+        if out.iter().all(Option::is_some) {
+            let out = out.map(|slice| slice.expect("invariant: every slice was checked present"));
+            map_dense(fields, scalars, (out, origin), shape, planes, &combine);
             return Ok(());
         }
     }
-    map_strided(terms, pointwise, dst, shape, scales, &combine);
+    map_strided(terms, pointwise, dst, shape, planes, scales, &combine);
     Ok(())
 }
 
-/// [`central4_map_into`] writing three destinations from one derivative pass.
-///
-/// The caller has checked that every field, every pointwise input and every
-/// destination share one shape.
-pub(in super::super) fn central4_map_triple_into<T, const N: usize, const M: usize, F>(
-    terms: [(Axis, ArrayView3<'_, T>); N],
-    pointwise: [ArrayView3<'_, T>; M],
-    dst: [&mut ArrayViewMut3<'_, T>; 3],
-    spacing: [T; 3],
-    combine: F,
-) -> Result<()>
-where
-    T: RealField + FloatElement + Copy,
-    F: Fn([T; N], [T; M]) -> [T; 3] + Send + Sync,
-{
-    let shape = dst[0].shape();
-    let scales: [Scales<T>; N] = core::array::from_fn(|j| Scales::new(spacing[terms[j].0.index()]));
-    let axes: [Axis; N] = core::array::from_fn(|j| terms[j].0);
-    let mut dense = true;
-    let fields: [&[T]; N] = core::array::from_fn(|j| {
-        terms[j].1.as_slice().unwrap_or_else(|| {
-            dense = false;
-            &[]
+/// The dense form of a windowed pass's derivative terms, or `None` unless
+/// every field is C-contiguous.
+fn dense_terms<'a, T: Copy, const N: usize>(
+    terms: &[(Axis, PlaneWindow<'a, T>); N],
+    scales: [Scales<T>; N],
+) -> Option<[DenseTerm<'a, T>; N]> {
+    let fields = terms.each_ref().map(|(_, window)| window.view().as_slice());
+    fields.iter().all(Option::is_some).then(|| {
+        core::array::from_fn(|j| DenseTerm {
+            axis: terms[j].0,
+            field: fields[j].expect("invariant: every field was checked present"),
+            origin: terms[j].1.first(),
+            scales: scales[j],
         })
-    });
-    let scalars: [&[T]; M] = core::array::from_fn(|k| {
-        pointwise[k].as_slice().unwrap_or_else(|| {
-            dense = false;
-            &[]
+    })
+}
+
+/// The dense form of a windowed pass's pointwise inputs, each with the grid
+/// plane its storage starts at, or `None` unless every one is C-contiguous.
+fn dense_pointwise<'a, T: Copy, const M: usize>(
+    pointwise: &[PlaneWindow<'a, T>; M],
+) -> Option<[(&'a [T], usize); M]> {
+    let values = pointwise.each_ref().map(|window| window.view().as_slice());
+    values.iter().all(Option::is_some).then(|| {
+        core::array::from_fn(|k| {
+            (
+                values[k].expect("invariant: every input was checked present"),
+                pointwise[k].first(),
+            )
         })
-    });
-    let [first, second, third] = dst;
-    if dense {
-        if let (Some(a), Some(b), Some(c)) = (
-            first.as_mut_slice(),
-            second.as_mut_slice(),
-            third.as_mut_slice(),
-        ) {
-            map_triple_dense(fields, scalars, axes, [a, b, c], shape, scales, &combine);
-            return Ok(());
-        }
-    }
-    map_triple_strided(
-        terms,
-        pointwise,
-        [first, second, third],
-        shape,
-        scales,
-        &combine,
-    );
-    Ok(())
+    })
 }

@@ -41,6 +41,7 @@ mod operator;
 mod staggered;
 #[cfg(test)]
 mod tests;
+mod window;
 
 #[inline]
 pub(super) fn f<T: FloatElement>(v: f64) -> T {
@@ -81,3 +82,4 @@ pub use coefficients::{
 };
 pub use leapfrog::{Axis, StaggeredLeapfrog3D};
 pub use operator::FiniteDifference3D;
+pub use window::{PlaneWindow, PlaneWindowMut};
