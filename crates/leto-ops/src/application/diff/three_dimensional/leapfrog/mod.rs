@@ -44,6 +44,7 @@
 //! [`staggered_first_derivative_coefficients`]: super::staggered_first_derivative_coefficients
 
 mod kernels;
+mod map;
 #[cfg(test)]
 mod tests;
 

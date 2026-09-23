@@ -19,50 +19,68 @@ pub(super) fn gradient<T: RealField + FloatElement + Copy>(
     dst: &mut ArrayViewMut3<'_, T>,
     shape: [usize; 3],
 ) {
-    let (index, extent, scale) = op.axis_geometry(axis, shape);
     let (Some(source), Some(target)) = (field.as_slice(), dst.as_mut_slice()) else {
+        let (index, extent, scale) = op.axis_geometry(axis, shape);
         gradient_indexed(op, index, extent, scale, field, dst, shape);
         return;
     };
     if source.is_empty() {
         return;
     }
-    // Row-major: the array is `shape[0]` planes of `shape[1] * shape[2]`
-    // cells, each plane `shape[1]` rows of `shape[2]`; the chunk sizes divide
-    // the length exactly, so no remainder exists to handle.
-    let extent = extent as usize;
+    let index = axis.index();
     let plane = shape[1] * shape[2];
     // Every output plane is written from shared source reads alone, so the
     // planes spread over tasks and each still runs the serial body.
-    let element_bytes = size_of::<T>();
+    for_each_plane_mut(
+        target,
+        plane,
+        plane_reads(op, index) * size_of::<T>(),
+        |x, out| {
+            gradient_plane(op, axis, source, out, x, shape);
+        },
+    );
+}
+
+/// Source elements a gradient plane along axis `index` reads per output
+/// element: along the outer axis each face reads 2·halo whole source planes
+/// and itself; along the inner two, its own plane twice.
+pub(super) fn plane_reads<T: RealField + FloatElement + Copy>(
+    op: &StaggeredLeapfrog3D<T>,
+    index: usize,
+) -> usize {
+    if index == 0 {
+        1 + 2 * op.halo_width()
+    } else {
+        2
+    }
+}
+
+/// The gradient along `axis` at x-plane `x` of a C-contiguous `source` of
+/// `shape`, written into the plane `out`.
+///
+/// Row-major: the array is `shape[0]` planes of `shape[1] * shape[2]` cells,
+/// each plane `shape[1]` rows of `shape[2]`; the chunk sizes divide the length
+/// exactly, so no remainder exists to handle.
+pub(super) fn gradient_plane<T: RealField + FloatElement + Copy>(
+    op: &StaggeredLeapfrog3D<T>,
+    axis: Axis,
+    source: &[T],
+    out: &mut [T],
+    x: usize,
+    shape: [usize; 3],
+) {
+    let (index, extent, scale) = op.axis_geometry(axis, shape);
+    let extent = extent as usize;
+    let plane = shape[1] * shape[2];
+    let own = &source[x * plane..(x + 1) * plane];
     match index {
-        0 => {
-            // Face `here` of the outer axis reads 2·halo whole source planes.
-            let reads = 1 + 2 * op.halo_width();
-            for_each_plane_mut(target, plane, reads * element_bytes, |here, out| {
-                gradient_block(op, source, out, here, extent, scale);
-            });
-        }
-        1 => for_each_plane_mut(target, plane, 2 * element_bytes, |x, out| {
-            let start = x * plane;
-            gradient_blocks(
-                op,
-                &source[start..start + plane],
-                out,
-                extent,
-                shape[2],
-                scale,
-            );
-        }),
-        _ => for_each_plane_mut(target, plane, 2 * element_bytes, |x, out| {
-            let start = x * plane;
-            for (source, target) in source[start..start + plane]
-                .chunks_exact(extent)
-                .zip(out.chunks_exact_mut(extent))
-            {
+        0 => gradient_block(op, source, out, x, extent, scale),
+        1 => gradient_blocks(op, own, out, extent, shape[2], scale),
+        _ => {
+            for (source, target) in own.chunks_exact(extent).zip(out.chunks_exact_mut(extent)) {
                 gradient_line(op, source, target, scale);
             }
-        }),
+        }
     }
 }
 
@@ -168,22 +186,59 @@ fn gradient_block<T: RealField + FloatElement + Copy>(
     scale: T,
 ) {
     let block = out.len();
+    gradient_taps(op, out, here, extent, scale, |at| {
+        &source[at * block..(at + 1) * block]
+    });
+}
+
+/// Face `here` of an axis of `extent` lanes, each as long as `out`, where
+/// `lane(i)` is lane `i` of the source: the taps summed across whole lanes
+/// in coefficient order, then scaled.
+fn gradient_taps<'a, T: RealField + FloatElement + Copy + 'a>(
+    op: &StaggeredLeapfrog3D<T>,
+    out: &mut [T],
+    here: usize,
+    extent: usize,
+    scale: T,
+    lane: impl Fn(usize) -> &'a [T],
+) {
     let reach = extent as isize;
     out.fill(<T as NumericElement>::ZERO);
     for (offset, &c) in op.coefficients().taps().iter().enumerate() {
         let n = offset as isize + 1;
-        let hi = reflect(here as isize + n, reach) * block;
-        let lo = reflect(here as isize - n + 1, reach) * block;
-        for ((out, &hi), &lo) in out
-            .iter_mut()
-            .zip(&source[hi..hi + block])
-            .zip(&source[lo..lo + block])
-        {
+        let hi = lane(reflect(here as isize + n, reach));
+        let lo = lane(reflect(here as isize - n + 1, reach));
+        for ((out, &hi), &lo) in out.iter_mut().zip(hi).zip(lo) {
             *out += c * (hi - lo);
         }
     }
     for out in out.iter_mut() {
         *out *= scale;
+    }
+}
+
+/// The gradient along `axis` at row `y` of x-plane `x` of a C-contiguous
+/// `source` of `shape`, written into the row `out`: the value
+/// [`gradient_plane`] writes there, by the same sums in the same order.
+pub(super) fn gradient_row<T: RealField + FloatElement + Copy>(
+    op: &StaggeredLeapfrog3D<T>,
+    axis: Axis,
+    source: &[T],
+    out: &mut [T],
+    [x, y]: [usize; 2],
+    shape: [usize; 3],
+) {
+    let (index, extent, scale) = op.axis_geometry(axis, shape);
+    let extent = extent as usize;
+    let [_, ny, nz] = shape;
+    let row_at = |plane: usize, row: usize| {
+        let start = (plane * ny + row) * nz;
+        &source[start..start + nz]
+    };
+    match index {
+        0 => gradient_taps(op, out, x, extent, scale, |plane| row_at(plane, y)),
+        1 => gradient_taps(op, out, y, extent, scale, |row| row_at(x, row)),
+        _ => gradient_line(op, row_at(x, y), out, scale),
     }
 }
 
