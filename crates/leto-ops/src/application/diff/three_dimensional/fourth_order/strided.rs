@@ -22,7 +22,7 @@ pub(super) fn map_strided<T, const N: usize, const M: usize, const K: usize, F>(
     combine: &F,
 ) where
     T: RealField + FloatElement + Copy,
-    F: Fn([T; N], [T; M]) -> [T; K] + Send + Sync,
+    F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
 {
     for i in planes {
         for j in 0..shape[1] {
@@ -39,10 +39,20 @@ pub(super) fn map_strided<T, const N: usize, const M: usize, const K: usize, F>(
                     })
                 });
                 let at = |window: &PlaneWindow<'_, T>| window.view()[[i - window.first(), j, k]];
-                let values = combine(derivatives, core::array::from_fn(|p| at(&pointwise[p])));
+                let local =
+                    |destination: &PlaneWindowMut<'_, '_, T>| [i - destination.first(), j, k];
+                let held = core::array::from_fn(|d| {
+                    let at = local(&dst[d]);
+                    dst[d].view_mut()[at]
+                });
+                let values = combine(
+                    derivatives,
+                    core::array::from_fn(|p| at(&pointwise[p])),
+                    held,
+                );
                 for (destination, value) in dst.iter_mut().zip(values) {
-                    let local = [i - destination.first(), j, k];
-                    destination.view_mut()[local] = value;
+                    let at = local(destination);
+                    destination.view_mut()[at] = value;
                 }
             }
         }

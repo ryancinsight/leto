@@ -40,7 +40,7 @@ fn divergence_on(
         ],
         [PlaneWindow::whole(scale)],
         [PlaneWindowMut::whole(&mut dst.view_mut())],
-        |[a, b, c], [s]| [(a + b + c) * s],
+        |[a, b, c], [s], _| [(a + b + c) * s],
     )
 }
 
@@ -73,7 +73,7 @@ fn diagonal_on(
             PlaneWindowMut::whole(&mut second),
             PlaneWindowMut::whole(&mut third),
         ],
-        |[exx, eyy, ezz], [la, mv]| diagonal_from(exx, eyy, ezz, la, mv),
+        |[exx, eyy, ezz], [la, mv], _| diagonal_from(exx, eyy, ezz, la, mv),
     )
 }
 
@@ -302,7 +302,7 @@ fn windows_holding_only_what_a_slab_reads_give_the_whole_grid_planes() {
                     terms,
                     [PlaneWindow::new(mu_held.view(), start)],
                     [PlaneWindowMut::new(&mut slab.view_mut(), start)],
-                    |[a, b, c], [s]| [(a + b + c) * s],
+                    |[a, b, c], [s], _| [(a + b + c) * s],
                 )
                 .expect("windows covering the slab");
             assert_bitwise(&slab, |[i, j, k]| whole[[i + start, j, k]], &context);
@@ -324,7 +324,7 @@ fn windows_holding_only_what_a_slab_reads_give_the_whole_grid_planes() {
                         PlaneWindowMut::new(&mut b, start),
                         PlaneWindowMut::new(&mut c, start),
                     ],
-                    |[exx, eyy, ezz], [la, mv]| diagonal_from(exx, eyy, ezz, la, mv),
+                    |[exx, eyy, ezz], [la, mv], _| diagonal_from(exx, eyy, ezz, la, mv),
                 )
                 .expect("windows covering the slab");
             for (slab, whole) in slab_diagonal.iter().zip(&whole_diagonal) {
@@ -387,7 +387,7 @@ fn windows_that_cannot_serve_the_pass_are_refused() {
             terms,
             [scale],
             [PlaneWindowMut::new(&mut slab.view_mut(), 3)],
-            |[a, b], [s]| [(a + b) * s],
+            |[a, b], [s], _| [(a + b) * s],
         );
         match outcome {
             Err(LetoError::InvalidInput(message)) => {
@@ -420,7 +420,7 @@ fn windows_that_cannot_serve_the_pass_are_refused() {
             PlaneWindowMut::new(&mut vb, 3),
             PlaneWindowMut::new(&mut vc, 3),
         ],
-        |[d], []| [d, d, d],
+        |[d], [], _| [d, d, d],
     );
     match outcome {
         Err(LetoError::InvalidInput(message)) => assert!(

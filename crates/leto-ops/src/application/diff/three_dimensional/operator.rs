@@ -166,9 +166,17 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
     }
 
     /// Combine several axis derivatives and pointwise fields into one
-    /// destination in a single pass: `dst[i] = combine(derivatives, values)`,
-    /// where `derivatives[j]` is `∂terms[j].1/∂terms[j].0` at that lane and
-    /// `values[k]` is `pointwise[k]` there.
+    /// destination in a single pass:
+    /// `dst[i] = combine(derivatives, values, dst[i])`, where
+    /// `derivatives[j]` is `∂terms[j].1/∂terms[j].0` at that lane,
+    /// `values[k]` is `pointwise[k]` there, and the last argument is the
+    /// value `dst` held before the pass.
+    ///
+    /// A result that replaces the destination ignores that argument; one
+    /// that updates it -- a velocity advanced by the acceleration these
+    /// derivatives assemble -- reads it here rather than as a pointwise
+    /// input, which could not alias the destination. Ignored, it is never
+    /// loaded: `combine` is inlined into the kernel and the load is dead.
     ///
     /// [`Self::divergence_into`] is the sum of three axis derivatives; this
     /// serves the combinations that are not a sum. An elastic shear stress
@@ -194,15 +202,16 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
         combine: F,
     ) -> Result<()>
     where
-        F: Fn([T; N], [T; M]) -> T + Send + Sync,
+        F: Fn([T; N], [T; M], T) -> T + Send + Sync,
     {
-        self.map_axis_derivatives_many(terms, pointwise, [dst], |derivatives, values| {
-            [combine(derivatives, values)]
+        self.map_axis_derivatives_many(terms, pointwise, [dst], |derivatives, values, [held]| {
+            [combine(derivatives, values, held)]
         })
     }
 
     /// [`Self::map_axis_derivatives`] writing `K` destinations from one
-    /// derivative pass: `combine` returns the value for each.
+    /// derivative pass: `combine` receives each destination's value and
+    /// returns the value for each.
     ///
     /// Where several results read the same axis derivatives -- the diagonal
     /// of an elastic stress tensor reads the same three normal strains, and
@@ -226,7 +235,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
         combine: F,
     ) -> Result<()>
     where
-        F: Fn([T; N], [T; M]) -> [T; K] + Send + Sync,
+        F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
     {
         let Some(first) = dst.first() else {
             return Err(no_destination());
@@ -291,7 +300,7 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
         combine: F,
     ) -> Result<()>
     where
-        F: Fn([T; N], [T; M]) -> [T; K] + Send + Sync,
+        F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
     {
         let destinations = dst
             .each_ref()

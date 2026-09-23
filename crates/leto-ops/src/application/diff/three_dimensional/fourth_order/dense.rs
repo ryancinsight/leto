@@ -96,7 +96,8 @@ pub(super) struct DenseTerm<'a, T> {
 
 /// One fused pass writing `K` destinations: each output lane receives the `N`
 /// axis derivatives named by `terms` and the `M` pointwise values at that
-/// lane, and `combine` returns the `K` values written there.
+/// lane and the `K` values the destinations hold there, and `combine`
+/// returns the `K` values written in their place.
 ///
 /// Fusing is where the traffic goes. A caller that scales a sum of two axis
 /// derivatives by a field -- an elastic shear stress, `K = 1` -- reads its
@@ -125,7 +126,7 @@ pub(super) fn map_dense<T, const N: usize, const M: usize, const K: usize, F>(
     combine: &F,
 ) where
     T: RealField + FloatElement + Copy,
-    F: Fn([T; N], [T; M]) -> [T; K] + Send + Sync,
+    F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
 {
     let [nx, ny, nz] = shape;
     let plane_len = ny * nz;
@@ -188,6 +189,7 @@ pub(super) fn map_dense<T, const N: usize, const M: usize, const K: usize, F>(
                     let values = combine(
                         core::array::from_fn(|j| scratch[j * nz + k]),
                         core::array::from_fn(|p| pointwise[p].0[points[p] + k]),
+                        core::array::from_fn(|d| rows[d][k]),
                     );
                     for (row, value) in rows.iter_mut().zip(values) {
                         row[k] = value;
