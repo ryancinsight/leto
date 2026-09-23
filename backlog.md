@@ -1,5 +1,21 @@
 # Leto Work Backlog
 
+<a id="LETO-LEAPFROG-KERNELS-SPLIT-2026-09-23"></a>
+
+## LETO-LEAPFROG-KERNELS-SPLIT-2026-09-23 — Split the leapfrog kernels file past the size target [patch]
+
+- Status: review; priority: structure; integrator: pi-session; updated: 2026-09-23.
+- **Why it matters.** The staggered gradient/divergence fusion series grew
+  `diff/three_dimensional/leapfrog/kernels.rs` to 517 lines, over the 500-line
+  file target; the Atlas conformance ratchet (`oversized_files 23 -> 24`) holds
+  leto's gitlink back until the file splits.
+- **Scope.** Split into `kernels/{mod,gradient,divergence}.rs` with the shared
+  helpers in the manifest and one family per leaf; no behavior change, the
+  `kernels::` re-export surface stays stable for the leapfrog callers.
+- **Landed in this item:** the split at 517 -> 55 + 230 + 289 lines;
+  613/613 leto-ops tests pass on the serial feature set; the `kernels::`
+  surface is unchanged for the leapfrog map callers.
+
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
