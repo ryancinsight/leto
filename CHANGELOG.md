@@ -8,6 +8,11 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [minor] `StaggeredLeapfrog3D::map_divergence_into(fields, pointwise, dst,
+  combine)` fuses the three staggered divergences of a face-centred vector
+  with the pointwise update that consumes them: each row's three divergences
+  are swept into row buffers and combined into `dst` with the held value.
+  Each divergence is `divergence_into`'s to the bit.
 - [minor] `StaggeredLeapfrog3D::map_gradient_into(axis, field, pointwise, dst,
   combine)` fuses the staggered gradient with the pointwise update that
   consumes it: each row's gradient is swept into a row buffer its task keeps

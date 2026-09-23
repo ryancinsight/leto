@@ -350,21 +350,74 @@ fn divergence_block_gather<T: RealField + FloatElement + Copy>(
     scale: T,
 ) {
     let block = out.len();
+    divergence_gather(op, out, here, extent, scale, |at| {
+        &source[at * block..(at + 1) * block]
+    });
+}
+
+/// Lane `here` of an axis of `extent` lanes, each as long as `out`, gathered
+/// in the scatter's order from `lane(i)`, lane `i` of the source.
+fn divergence_gather<'a, T: RealField + FloatElement + Copy + 'a>(
+    op: &StaggeredLeapfrog3D<T>,
+    out: &mut [T],
+    here: usize,
+    extent: usize,
+    scale: T,
+    lane: impl Fn(usize) -> &'a [T],
+) {
     let reach = extent as isize;
     out.fill(<T as NumericElement>::ZERO);
-    for (from, value) in source.chunks_exact(block).enumerate() {
+    // A lane `2·halo` or more from both walls is reached only by unreflected
+    // taps, from sources within `halo` of it; nearer a wall a reflected tap
+    // can arrive from anywhere the reflection maps. Either way the sources
+    // are walked in ascending order, so the terms keep the scatter's order.
+    let halo = op.halo_width();
+    let sources = if here >= 2 * halo && here + 2 * halo < extent {
+        here - halo..here + halo + 1
+    } else {
+        0..extent
+    };
+    for from in sources {
         for (offset, &c) in op.coefficients().taps().iter().enumerate() {
             let n = offset as isize + 1;
             if reflect(from as isize + n, reach) == here {
-                for (out, &value) in out.iter_mut().zip(value) {
+                for (out, &value) in out.iter_mut().zip(lane(from)) {
                     *out -= c * (value * scale);
                 }
             }
             if reflect(from as isize - n + 1, reach) == here {
-                for (out, &value) in out.iter_mut().zip(value) {
+                for (out, &value) in out.iter_mut().zip(lane(from)) {
                     *out += c * (value * scale);
                 }
             }
+        }
+    }
+}
+
+/// The divergence along `axis` at row `y` of x-plane `x` of a C-contiguous
+/// `source` of `shape`, written into the row `out`: the value [`divergence`]
+/// writes there, by the same terms in the same order.
+pub(super) fn divergence_row<T: RealField + FloatElement + Copy>(
+    op: &StaggeredLeapfrog3D<T>,
+    axis: Axis,
+    source: &[T],
+    out: &mut [T],
+    [x, y]: [usize; 2],
+    shape: [usize; 3],
+) {
+    let (index, extent, scale) = op.axis_geometry(axis, shape);
+    let extent = extent as usize;
+    let [_, ny, nz] = shape;
+    let row_at = |plane: usize, row: usize| {
+        let start = (plane * ny + row) * nz;
+        &source[start..start + nz]
+    };
+    match index {
+        0 => divergence_gather(op, out, x, extent, scale, |plane| row_at(plane, y)),
+        1 => divergence_gather(op, out, y, extent, scale, |row| row_at(x, row)),
+        _ => {
+            out.fill(<T as NumericElement>::ZERO);
+            divergence_line(op, row_at(x, y), out, scale);
         }
     }
 }
