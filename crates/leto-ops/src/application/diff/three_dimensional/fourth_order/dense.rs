@@ -175,10 +175,13 @@ pub(super) fn map_dense<T, const N: usize, const M: usize, const K: usize, F>(
                         }
                     }
                 }
-                let points: [usize; M] =
-                    core::array::from_fn(|p| (x - pointwise[p].1) * plane_len + y * nz);
-                // Every destination row is `nz` long; slicing to exactly
-                // that lets the store below go unchecked.
+                // Every input lane and destination row is sliced to exactly
+                // `nz`, so each access below is provably in bounds.
+                let lanes: [&[T]; N] = core::array::from_fn(|j| &scratch[j * nz..(j + 1) * nz]);
+                let points: [&[T]; M] = core::array::from_fn(|p| {
+                    let start = (x - pointwise[p].1) * plane_len + y * nz;
+                    &pointwise[p].0[start..start + nz]
+                });
                 let mut rows: [&mut [T]; K] = core::array::from_fn(|d| {
                     let row = out_rows[d]
                         .next()
@@ -187,8 +190,8 @@ pub(super) fn map_dense<T, const N: usize, const M: usize, const K: usize, F>(
                 });
                 for k in 0..nz {
                     let values = combine(
-                        core::array::from_fn(|j| scratch[j * nz + k]),
-                        core::array::from_fn(|p| pointwise[p].0[points[p] + k]),
+                        core::array::from_fn(|j| lanes[j][k]),
+                        core::array::from_fn(|p| points[p][k]),
                         core::array::from_fn(|d| rows[d][k]),
                     );
                     for (row, value) in rows.iter_mut().zip(values) {
