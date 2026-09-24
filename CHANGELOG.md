@@ -126,6 +126,15 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [minor] Symmetric Jacobi (`symmetric_eigen_jacobi` and its variants): the
+  tolerance is now relative to `‖A‖_F` (default `ε²`, the rounding floor), so a
+  small-magnitude matrix is no longer accepted unrotated
+  (`[[2e-13, 1e-13], [1e-13, 2e-13]]` returned `{2e-13, 2e-13}`; it now
+  returns `{1e-13, 3e-13}`). Exhausting the `32·n²` rotation budget returns
+  `LetoError::ConvergenceError` instead of a silent `Ok`, and invalid input
+  returns `LetoError::InvalidInput`. The explicit `_with_tolerance` argument
+  is relative as well.
+
 - [patch] Strided unary and binary elementwise micro-tiles now derive their
   side from the cached `CacheGeometry::cache_line_bytes()` value instead of
   assuming 64 bytes. The 64-byte fallback remains in force when topology is

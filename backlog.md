@@ -1,5 +1,13 @@
 # Leto Work Backlog
 
+<a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
+
+## LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23 — Scale-aware Jacobi tolerance and a typed cap [minor] — review
+
+- Defects: the absolute `1e-12` tolerance stops early on small-magnitude matrices (`[[2e-13,1e-13],[1e-13,2e-13]]` returned `{2e-13, 2e-13}`), and exhausting the `32·n²` rotation budget returned `Ok`.
+- Outcome: tolerance relative to `‖A‖_F` (default `ε²`, the rounding floor; scaled norm), `ConvergenceError` on the budget, `InvalidInput` for invalid input.
+- Acceptance: the regression matrix, a scale sweep `s ∈ [1e-300, 1e300]` at `32·n²·ε` relative, the budget error with its residual, existing Jacobi tests.
+
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
