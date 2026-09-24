@@ -13,7 +13,7 @@
 ## LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23 — Scale-aware Jacobi tolerance and a typed cap [minor] — review
 
 - Defects: the absolute `1e-12` tolerance stops early on small-magnitude matrices (`[[2e-13,1e-13],[1e-13,2e-13]]` returned `{2e-13, 2e-13}`), and exhausting the `32·n²` rotation budget returned `Ok`.
-- Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
+- Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `(n + 2)·ε·‖A‖_F`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
 - Acceptance: the regression matrix, a scale sweep `s ∈ [1e-300, 1e300]` at `32·n²·ε` relative, the budget error with its residual, existing Jacobi tests.
 
 <a id="LETO-MIRI-GATE-2026-09-10"></a>

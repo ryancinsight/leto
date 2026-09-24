@@ -134,8 +134,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   `{2e-13, 2e-13}`; it now returns `{1e-13, 3e-13}`); the explicit
   `_with_tolerance` argument is that `τ`. Symmetry acceptance no
   longer reuses the convergence tolerance: a pair is accepted when
-  `|aᵢⱼ − aⱼᵢ| ≤ 2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`, the rounding a matrix
-  assembled symmetric carries. Exhausting the `32·n²` rotation budget returns
+  `|aᵢⱼ − aⱼᵢ| ≤ (n + 2)·ε·‖A‖_F`, the rounding of two length-`n` inner
+  products assembling a symmetric matrix along different paths. The pair
+  criterion gives high relative accuracy for positive definite matrices and
+  the normwise accuracy of QR otherwise. Exhausting the `32·n²` rotation budget returns
   `LetoError::ConvergenceError` instead of a silent `Ok`, and invalid input
   returns `LetoError::InvalidInput`.
 

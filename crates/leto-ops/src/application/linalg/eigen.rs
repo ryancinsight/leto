@@ -25,37 +25,44 @@ pub struct SymmetricEigenDecomposition<T> {
 /// Default convergence tolerance: `ε`, the machine epsilon of `T`.
 ///
 /// Rotation stops when every off-diagonal entry is negligible against the
-/// diagonal entries it couples, `|a_pq| ≤ ε·√(|a_pp|·|a_qq|)` — the
-/// criterion under which Jacobi computes each eigenvalue to high *relative*
-/// accuracy, not only to `ε·‖A‖` (Demmel & Veselić 1992, "Jacobi's method is
-/// more accurate than QR", *SIAM J. Matrix Anal. Appl.* 13(4), §4) — with the
+/// diagonal entries it couples, `|a_pq| ≤ ε·√(|a_pp|·|a_qq|)`, with the
 /// normwise floor `ε·(ε·‖A‖_F)` for pairs whose diagonal has vanished, where
 /// the pair criterion alone would demand an exact zero. Both terms scale with
 /// `A`, so no magnitude stops early; a pair whose diagonals are near `‖A‖`
 /// stops at `ε·‖A‖`, so well-scaled matrices are not charged the `ε²`
 /// normwise cost.
+///
+/// What the criterion guarantees depends on definiteness. For a positive
+/// definite `A = D·H·D` (`D` the square root of the diagonal), Jacobi stopped
+/// this way computes every eigenvalue to relative error `O(n·ε·κ(H))` — high
+/// *relative* accuracy even for eigenvalues far below `ε·‖A‖` (Demmel &
+/// Veselić 1992, "Jacobi's method is more accurate than QR", *SIAM J. Matrix
+/// Anal. Appl.* 13(4), Theorem 4.1 and §4). For an indefinite matrix that
+/// guarantee does not hold: each remaining entry is at most
+/// `ε·max(√(|a_pp a_qq|), ε·‖A‖_F) ≤ ε·‖A‖_F`, so the remainder has Frobenius
+/// norm at most `n·ε·‖A‖_F` and every eigenvalue is accurate to that normwise
+/// bound plus the rotations' own `O(n²)·ε·‖A‖_F` backward error — the accuracy
+/// class of the QR algorithm.
 #[inline]
 fn default_tolerance<T: RealScalar>() -> T {
     machine_epsilon::<T>()
 }
 
-/// Accept `A` as symmetric when every pair satisfies
-/// `|aᵢⱼ − aⱼᵢ| ≤ 2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`.
+/// Largest asymmetry `|aᵢⱼ − aⱼᵢ|` accepted: `(n + 2)·ε·‖A‖_F`.
 ///
-/// Derivation: a matrix symmetric in exact arithmetic but assembled along two
-/// rounding paths carries up to two roundings (`u = ε/2` each) on each side of
-/// a pair, so `|aᵢⱼ − aⱼᵢ| ≤ 4u·max(|aᵢⱼ|, |aⱼᵢ|) = 2ε·max(…)`; `0.1 + 0.2`
-/// against `0.3` differs by one ulp of `0.3`, `5.55e-17 ≤ 2ε·0.3 = 1.3e-16`. The
-/// `‖A‖_F/n` floor covers entries produced by cancellation, whose rounding is
-/// relative to their operands rather than to themselves: an asymmetry of
-/// `2ε·‖A‖_F/n` in each of the `n²` entries has Frobenius norm `2ε·‖A‖_F`,
-/// inside the solver's own backward error.
-fn symmetry_bound<T: RealScalar>(lhs: T, rhs: T, floor: T) -> T {
-    let two_epsilon = machine_epsilon::<T>().mul(T::from_usize(2));
-    let (lhs, rhs) = (lhs.abs(), rhs.abs());
-    let larger = if lhs > rhs { lhs } else { rhs };
-    let scale = if larger > floor { larger } else { floor };
-    two_epsilon.mul(scale)
+/// Derivation: a matrix symmetric in exact arithmetic is typically assembled
+/// entry by entry as a length-`n` inner product of computed factors — `Q·D·Qᵀ`,
+/// `XᵀX`, a Laplacian from weights — along a different rounding path for
+/// `aᵢⱼ` than for `aⱼᵢ`. Each such entry carries error at most
+/// `γ_{n+2}·Σₖ|terms|` (Higham 2002, §3.1: `n` additions and two products per
+/// term, `γ_m ≈ m·u`, `u = ε/2`), and `Σₖ|terms| ≤ ‖A‖₂ ≤ ‖A‖_F` for the
+/// orthogonal and Gram constructions (Cauchy–Schwarz over unit rows), so the
+/// two paths differ by at most `2γ_{n+2}·‖A‖_F ≈ (n + 2)·ε·‖A‖_F`. An accepted
+/// asymmetry `E` then has `‖E‖_F ≤ n·(n + 2)·ε·‖A‖_F`, the same order as the
+/// `O(n²)·ε·‖A‖_F` backward error the rotations commit, so accepting it costs
+/// no accuracy the solver had.
+fn symmetry_bound<T: RealScalar>(norm: T, n: usize) -> T {
+    T::from_usize(n + 2).mul(machine_epsilon::<T>()).mul(norm)
 }
 
 /// Compute the eigendecomposition of a real symmetric matrix with Jacobi rotations.
@@ -120,12 +127,13 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
 ///
 /// Rotations continue until every off-diagonal entry satisfies
 /// `|a_pq| ≤ τ·max(√(|a_pp|·|a_qq|), τ·‖A‖_F)`, `τ = tolerance`: negligible
-/// against the diagonal pair it couples (relative accuracy of small
-/// eigenvalues), floored at `τ²·‖A‖_F` where that pair has vanished. The
-/// stopping point scales with `A`, so a matrix of any magnitude is solved to
-/// the same relative accuracy. Symmetry acceptance is
-/// independent of the tolerance: `|aᵢⱼ − aⱼᵢ| ≤ 2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`,
-/// the rounding a matrix assembled symmetric in exact arithmetic can carry.
+/// against the diagonal pair it couples, floored at `τ²·‖A‖_F` where that pair
+/// has vanished. The stopping point scales with `A`, so no magnitude stops
+/// early. For positive definite `A` this gives eigenvalues to high relative
+/// accuracy; otherwise to the normwise `O(n²)·ε·‖A‖_F` of the QR algorithm
+/// (see the default tolerance's derivation). Symmetry acceptance is
+/// independent of the tolerance: `|aᵢⱼ − aⱼᵢ| ≤ (n + 2)·ε·‖A‖_F`, the rounding
+/// a matrix assembled symmetric in exact arithmetic can carry.
 ///
 /// # Errors
 ///
@@ -189,11 +197,10 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
             index % n
         )));
     }
-    let floor = scaled_frobenius(a).div(T::from_usize(n.max(1)));
+    let bound = symmetry_bound(scaled_frobenius(a), n);
     for row in 0..n {
         for col in (row + 1)..n {
-            let (upper, lower) = (a[row * n + col], a[col * n + row]);
-            if upper.sub(lower).abs() > symmetry_bound(upper, lower, floor) {
+            if a[row * n + col].sub(a[col * n + row]).abs() > bound {
                 return Err(LetoError::InvalidInput(format!(
                     "symmetric eigensolver input is not symmetric at ({row}, {col})"
                 )));
