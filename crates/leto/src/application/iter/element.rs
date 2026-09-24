@@ -55,6 +55,25 @@ fn layout_may_alias_mutable_offsets<const N: usize>(layout: &Layout<N>) -> Resul
     Ok(!layout.is_injective()?)
 }
 
+#[inline]
+fn last_logical_cursor<const N: usize>(
+    layout: &Layout<N>,
+    logical_len: usize,
+) -> ([usize; N], usize) {
+    if logical_len == 0 {
+        return ([0usize; N], layout.offset());
+    }
+
+    let mut idx = [0usize; N];
+    for (axis, item) in idx.iter_mut().enumerate() {
+        *item = layout.shape()[axis] - 1;
+    }
+    let offset = layout
+        .offset_of(idx)
+        .expect("invariant: last index is valid");
+    (idx, offset)
+}
+
 /// Private proof token for one bounds-valid, injective mutable layout.
 ///
 /// The token is created once at the mutable partition boundary. It is not
@@ -114,18 +133,7 @@ impl<'a, T, const N: usize> ElementIter<'a, T, N> {
             None
         };
         let back = view.size();
-        let (back_index, back_offset) = if back > 0 {
-            let mut idx = [0usize; N];
-            for (i, item) in idx.iter_mut().enumerate() {
-                *item = layout.shape()[i] - 1;
-            }
-            let offset = layout
-                .offset_of(idx)
-                .expect("invariant: last index is valid");
-            (idx, offset)
-        } else {
-            ([0usize; N], layout.offset())
-        };
+        let (back_index, back_offset) = last_logical_cursor(&layout, back);
         Self {
             contiguous_iter,
             data: view.data(),
@@ -222,18 +230,7 @@ impl<'a, T, const N: usize> IndexedIter<'a, T, N> {
     pub(crate) fn new(view: &ArrayView<'a, T, N>) -> Self {
         let layout = view.layout();
         let back = view.size();
-        let (back_index, back_offset) = if back > 0 {
-            let mut idx = [0usize; N];
-            for (i, item) in idx.iter_mut().enumerate() {
-                *item = layout.shape()[i] - 1;
-            }
-            let offset = layout
-                .offset_of(idx)
-                .expect("invariant: last index is valid");
-            (idx, offset)
-        } else {
-            ([0usize; N], layout.offset())
-        };
+        let (back_index, back_offset) = last_logical_cursor(&layout, back);
         Self {
             data: view.data(),
             layout,
