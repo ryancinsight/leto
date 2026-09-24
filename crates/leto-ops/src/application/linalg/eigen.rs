@@ -32,8 +32,12 @@ pub struct SymmetricEigenDecomposition<T> {
 /// stops at `ε·‖A‖`, so well-scaled matrices are not charged the `ε²`
 /// normwise cost.
 ///
-/// What the criterion guarantees depends on definiteness. For a positive
-/// definite `A = D·H·D` (`D` the square root of the diagonal), Jacobi stopped
+/// What the criterion guarantees depends on definiteness and is stated for
+/// the exactly symmetric matrix the solver works on — the input's upper
+/// triangle mirrored (see [`symmetric_eigen_jacobi_with_tolerance`]); an
+/// accepted asymmetry is a perturbation of that matrix, bounded by the
+/// symmetry check. For a positive definite `A = D·H·D` (`D` the square root of
+/// the diagonal), Jacobi stopped
 /// this way computes every eigenvalue to relative error `O(n·ε·κ(H))` — high
 /// *relative* accuracy even for eigenvalues far below `ε·‖A‖` (Demmel &
 /// Veselić 1992, "Jacobi's method is more accurate than QR", *SIAM J. Matrix
@@ -116,6 +120,7 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     let n = rows;
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
+    mirror_upper_triangle(&mut a, n);
     let mut target = NoEigenvectors;
 
     diagonalize(&mut a, n, tolerance, &mut target)?;
@@ -133,7 +138,11 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
 /// accuracy; otherwise to the normwise `O(n²)·ε·‖A‖_F` of the QR algorithm
 /// (see the default tolerance's derivation). Symmetry acceptance is
 /// independent of the tolerance: `|aᵢⱼ − aⱼᵢ| ≤ (n + 2)·ε·‖A‖_F`, the rounding
-/// a matrix assembled symmetric in exact arithmetic can carry.
+/// a matrix assembled symmetric in exact arithmetic can carry. Only the upper
+/// triangle (diagonal included) is then used: it is mirrored onto the lower
+/// before the first rotation, so an accepted asymmetric input is resolved by
+/// its upper triangle. ([`symmetric_eigen_qr`](crate::symmetric_eigen_qr)
+/// resolves by the lower triangle instead, the LAPACK `uplo = 'L'` convention.)
 ///
 /// # Errors
 ///
@@ -157,6 +166,7 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let n = rows;
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
+    mirror_upper_triangle(&mut a, n);
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
     diagonalize(&mut a, n, tolerance, &mut target)?;
@@ -208,6 +218,18 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
         }
     }
     Ok(())
+}
+
+/// Copy the strictly upper triangle onto the lower, so an accepted but
+/// asymmetric input is resolved by its upper triangle alone. The rotations
+/// read whole rows and columns; without this they would mix both triangles of
+/// the first pairs they touch.
+fn mirror_upper_triangle<T: Scalar>(a: &mut [T], n: usize) {
+    for row in 0..n {
+        for col in (row + 1)..n {
+            a[col * n + row] = a[row * n + col];
+        }
+    }
 }
 
 fn copy_row_major<T: Scalar>(matrix: &ArrayView2<'_, T>) -> Vec<T> {

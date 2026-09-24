@@ -42,6 +42,7 @@
 mod francis;
 mod standardize;
 
+use crate::application::linalg::scaling;
 use crate::domain::real::RealScalar;
 use leto::Complex;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
@@ -76,13 +77,25 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
         });
     }
 
+    // Balance by an exact power of two; `Q` is scale-invariant, `T` scales.
+    let balanced = scaling::balanced(matrix);
+    let (view, exponent) = match &balanced {
+        Some((scaled, exponent)) => (scaled.view(), *exponent),
+        None => (*matrix, 0),
+    };
+
     // Reduce to Hessenberg (validates finiteness; reused — SSOT). `H = Qᴴᵀ A Qᴴ`.
-    let hess = crate::hessenberg(matrix)?;
+    let hess = crate::hessenberg(&view)?;
     let mut t: Vec<T> = hess.h().storage().as_slice().to_vec();
     let mut q: Vec<T> = hess.q().storage().as_slice().to_vec();
 
     francis::run::<T, true>(&mut t, &mut q, n)?;
     standardize::standardize(&mut t, &mut q, n);
+    scaling::restore(
+        &mut t,
+        exponent,
+        "Schur form entry exceeds the scalar range",
+    )?;
 
     Ok(RealSchur { q, t, n })
 }
@@ -117,19 +130,40 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     // Eigenvalues-only: reduce to Hessenberg without accumulating Q (similarity
     // invariance means the Schur vectors are never needed), saving the O(n³) Q
     // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
-    let (mut h, hn) = crate::application::linalg::hessenberg::hessenberg_values(matrix)?;
+    // Balance by an exact power of two; eigenvalues scale with the matrix.
+    let balanced = scaling::balanced(matrix);
+    let (view, exponent) = match &balanced {
+        Some((scaled, exponent)) => (scaled.view(), *exponent),
+        None => (*matrix, 0),
+    };
+    let (mut h, hn) = crate::application::linalg::hessenberg::hessenberg_values(&view)?;
     debug_assert_eq!(hn, n);
     // No Schur vectors: pass an empty accumulator; the const-generic guarantees
     // it is never touched.
     let mut unused: [T; 0] = [];
     francis::run::<T, false>(&mut h, &mut unused, n)?;
-    Ok(eigenvalues_from_quasi_triangular(&h, n))
+    let mut eigenvalues = eigenvalues_from_quasi_triangular(&h, n);
+    if exponent != 0 {
+        let mut parts: Vec<T> = eigenvalues.iter().flat_map(|z| [z.re, z.im]).collect();
+        scaling::restore(&mut parts, exponent, "eigenvalue exceeds the scalar range")?;
+        for (z, pair) in eigenvalues.iter_mut().zip(parts.chunks_exact(2)) {
+            *z = Complex::new(pair[0], pair[1]);
+        }
+    }
+    Ok(eigenvalues)
 }
 
 /// Read the eigenvalues off a real quasi-upper-triangular matrix `t` (`n × n`):
 /// each 1×1 block is a real eigenvalue, each 2×2 block (nonzero subdiagonal) a
 /// conjugate pair from its quadratic. Shared by [`RealSchur::eigenvalues`] and
 /// [`real_eigenvalues`] (SSOT).
+///
+/// The quadratic squares the block's trace, which underflows or overflows for
+/// entries near the ends of the range — a block at `2⁻⁸⁶` in `f32` squares to
+/// `2⁻¹⁷²`, below the smallest subnormal, and returned `{3, 3}` for `{2, 4}`.
+/// Each block is therefore balanced by its own even power of two
+/// (`linalg::scaling`) before the quadratic and its eigenvalues restored after, both
+/// exactly.
 pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
     t: &[T],
     n: usize,
@@ -139,24 +173,30 @@ pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
     while i < n {
         let is_block = i + 1 < n && t[(i + 1) * n + i] != T::ZERO;
         if is_block {
-            let a = t[i * n + i];
-            let b = t[i * n + i + 1];
-            let c = t[(i + 1) * n + i];
-            let d = t[(i + 1) * n + i + 1];
+            let mut block = [
+                t[i * n + i],
+                t[i * n + i + 1],
+                t[(i + 1) * n + i],
+                t[(i + 1) * n + i + 1],
+            ];
+            let exponent = scaling::balancing_exponent(block).unwrap_or(0);
+            scaling::scale_by_power_of_two(&mut block, -exponent);
+            let [a, b, c, d] = block;
+            let restore = |x: T| x.scale_binary(exponent);
             let tr = a.add(d);
             let det = a.mul(d).sub(b.mul(c));
             let half = T::from_f64(0.5);
             let four = T::from_f64(4.0);
             let disc = tr.mul(tr).sub(four.mul(det));
             if disc < T::ZERO {
-                let re = tr.mul(half);
-                let im = disc.neg().sqrt().mul(half);
+                let re = restore(tr.mul(half));
+                let im = restore(disc.neg().sqrt().mul(half));
                 eigs.push(Complex::new(re, im));
                 eigs.push(Complex::new(re, im.neg()));
             } else {
                 let root = disc.sqrt();
-                eigs.push(Complex::new(tr.add(root).mul(half), T::ZERO));
-                eigs.push(Complex::new(tr.sub(root).mul(half), T::ZERO));
+                eigs.push(Complex::new(restore(tr.add(root).mul(half)), T::ZERO));
+                eigs.push(Complex::new(restore(tr.sub(root).mul(half)), T::ZERO));
             }
             i += 2;
         } else {

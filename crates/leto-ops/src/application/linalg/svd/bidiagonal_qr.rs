@@ -28,6 +28,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
 use super::{validate_input, SvdDecomposition};
+use crate::application::linalg::scaling;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
 
@@ -42,6 +43,20 @@ const MAX_ITER: usize = 4000;
 /// non-convergence.
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     validate_input(matrix)?;
+    if let Some((scaled, exponent)) = scaling::balanced(matrix) {
+        let mut sigmas = singular_values_of_balanced(&scaled.view())?;
+        scaling::restore(
+            &mut sigmas,
+            exponent,
+            "singular value exceeds the scalar range",
+        )?;
+        return Ok(sigmas);
+    }
+    singular_values_of_balanced(matrix)
+}
+
+/// [`singular_values`] of a validated matrix whose entries are in range.
+fn singular_values_of_balanced<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     let [rows, cols] = matrix.shape();
 
     // Bidiagonalization requires `m >= n`; σ(A) = σ(Aᵀ), so transpose wide input.
@@ -512,6 +527,20 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
 /// non-convergence.
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     validate_input(matrix)?;
+    if let Some((scaled, exponent)) = scaling::balanced(matrix) {
+        let mut decomposition = svd_of_balanced(&scaled.view())?;
+        scaling::restore(
+            &mut decomposition.singular_values,
+            exponent,
+            "singular value exceeds the scalar range",
+        )?;
+        return Ok(decomposition);
+    }
+    svd_of_balanced(matrix)
+}
+
+/// [`svd_decompose`] of a validated matrix whose entries are in range.
+fn svd_of_balanced<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     let [m, n] = matrix.shape();
     if m >= n {
         let (u, sigma, v) = svd_tall(matrix)?;

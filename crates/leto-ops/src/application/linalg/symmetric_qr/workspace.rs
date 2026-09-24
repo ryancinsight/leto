@@ -1,6 +1,7 @@
 //! Public entry points: the reusable workspace and the owning decomposition.
 
 use super::{ql, reduce};
+use crate::application::linalg::scaling;
 use crate::application::linalg::SymmetricEigenDecomposition;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, LetoError, Result};
@@ -92,12 +93,15 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
     /// result.
     ///
     /// Only the lower triangle (diagonal included) is read; the strictly upper
-    /// triangle is taken to mirror it, the LAPACK `uplo = 'L'` convention. Any
+    /// triangle is taken to mirror it, the LAPACK `uplo = 'L'` convention, so an
+    /// asymmetric input is resolved by its lower triangle and no symmetry check
+    /// applies. ([`symmetric_eigen_jacobi`](crate::symmetric_eigen_jacobi)
+    /// reads the upper triangle, after checking the two agree to rounding.) Any
     /// layout — contiguous, strided, transposed — is copied into
     /// workspace-owned storage, so reuse at one order allocates nothing.
     ///
     /// The matrix is scaled by the power of two that brings its largest
-    /// entry into `[1, 2)` before the reduction and the eigenvalues are scaled
+    /// entry into `[1, 4)` (an even power) before the reduction and the eigenvalues are scaled
     /// back after it; both scalings are exact (see the
     /// [module documentation](super) for the range argument).
     ///
@@ -129,12 +133,9 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
             });
         }
         let n = rows;
-        let exponent = self.load_lower_triangle(matrix, n)?;
-        if let Some(exponent) = exponent {
-            for value in &mut self.reduced {
-                *value = value.scale_binary(-exponent);
-            }
-        }
+        self.load_lower_triangle(matrix, n)?;
+        let exponent = scaling::balancing_exponent(self.reduced.iter().copied()).unwrap_or(0);
+        scaling::scale_by_power_of_two(&mut self.reduced, -exponent);
         self.values.resize(n, T::ZERO);
         self.off_diagonal.resize(n, T::ZERO);
         self.reflector_scales.resize(n, T::ZERO);
@@ -160,31 +161,24 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
             n,
             budget,
         )?;
-        if let Some(exponent) = exponent {
-            for value in &mut self.values {
-                *value = value.scale_binary(exponent);
-            }
-            if self.values.iter().any(|value| !value.is_finite()) {
-                return Err(LetoError::Overflow {
-                    reason: "symmetric eigensolver: an eigenvalue exceeds the scalar range",
-                });
-            }
-        }
+        scaling::restore(
+            &mut self.values,
+            exponent,
+            "symmetric eigensolver: an eigenvalue exceeds the scalar range",
+        )?;
         self.order = n;
         Ok(())
     }
 
     /// Copy `matrix` into the working buffer as a full symmetric matrix built
-    /// from its lower triangle, rejecting non-finite entries; returns the
-    /// binary exponent of the largest magnitude (`None` for a zero matrix).
-    fn load_lower_triangle(&mut self, matrix: &ArrayView2<'_, T>, n: usize) -> Result<Option<i32>> {
+    /// from its lower triangle, rejecting non-finite entries.
+    fn load_lower_triangle(&mut self, matrix: &ArrayView2<'_, T>, n: usize) -> Result<()> {
         self.reduced.clear();
         if let Some(slice) = matrix.as_slice() {
             self.reduced.extend_from_slice(slice);
         } else {
             self.reduced.extend(matrix.iter().copied());
         }
-        let mut largest = T::ZERO;
         for i in 0..n {
             for j in 0..=i {
                 let value = self.reduced[i * n + j];
@@ -193,13 +187,10 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
                         "symmetric eigensolver input has a non-finite entry at ({i}, {j})"
                     )));
                 }
-                if value.abs() > largest {
-                    largest = value.abs();
-                }
                 self.reduced[j * n + i] = value;
             }
         }
-        Ok(largest.binary_exponent())
+        Ok(())
     }
 }
 

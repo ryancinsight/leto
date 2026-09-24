@@ -2,11 +2,18 @@
 
 <a id="LETO-DENSE-SCALE-RANGE-2026-09-24"></a>
 
-## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — todo
+## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — review
 
-- Evidence: the #233/#234 review probes. `svd_decompose` and `schur` return non-convergence at extreme magnitudes, and `col_piv_qr` of an f64 matrix scaled by 1e160 returns `Ok` with rank 0.
-- Cause to confirm: unscaled sums of squares; `householder::reflect_in_place` is now scaled, so re-probe first.
-- Acceptance: a per-format exponent sweep for each solver (correct result or typed error, never a wrong `Ok`), as in `tests/ops/symmetric_qr.rs`.
+- Evidence (probe at `a2e75bf`): f64 `singular_values`/`svd_decompose` fail to converge below `2⁻²⁵⁸` and above `2²⁵⁴` and return a wrong `Ok` near the edges (σ₁ 1.425 for 4.88 at `2²⁵⁴`); `schur`/`eigenvalues` fail likewise; `col_piv_qr` returns rank 0 outside about `2^±512` (1e160 included); f32 `RealSchur::eigenvalues` returned `{1, 3, 3}` for `{1, 2, 4}` at `2⁻⁸⁷` (2×2-block quadratic underflow).
+- Outcome: shared `linalg::scaling` (even power of two, largest entry in `[1, 4)`, exact; `restore` returns `Overflow`) applied to the SVD, Schur, general eigenvalue, pivoted-QR and symmetric-QL entry points and to each 2×2 Schur block.
+- Acceptance: `tests/ops/scale_range.rs` sweeps every binade of f64, f32, F16 and Bf16 against derived Weyl / Bauer–Fike / residual bounds; the sweeps fail without the scaling; results bitwise identical to `a2e75bf` on 600 matrices from 1e-3 to 1e3.
+
+<a id="LETO-F16-FRANCIS-2026-09-24"></a>
+
+## LETO-F16-FRANCIS-2026-09-24 — F16 Francis QR stagnates on nonsymmetric input [patch] — todo
+
+- Evidence: `schur`/`eigenvalues` of `[[4,1,0.5],[1,3,1],[0.25,1,2]]` in F16 return "Schur QR iteration failed to converge" at every scale, unit included; f32, f64 and Bf16 converge. The scale sweep accepts this typed error for F16 only.
+- Acceptance: F16 converges on the sweep matrices, or a derived reason it cannot, and the sweep exception is removed.
 
 <a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
 

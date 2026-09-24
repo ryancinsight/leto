@@ -334,3 +334,32 @@ fn symmetric_eigen_jacobi_accepts_accumulated_rounding_asymmetry() {
         assert!((value - expected).abs() <= bound, "{value} vs {expected}");
     }
 }
+
+#[test]
+fn symmetric_eigen_jacobi_resolves_an_accepted_asymmetry_by_the_upper_triangle() {
+    // 0.5 + 1e-15 at (2, 0) is within the symmetry bound
+    // (n + 2)·ε·‖A‖_F ≈ 6.5e-15. The first rotation, on the largest pair (0, 1),
+    // reads column entries such as (2, 0); the solver works on the upper
+    // triangle mirrored, so the result is bitwise that of the exactly
+    // symmetric matrix built from the upper triangle.
+    let upper = [2.0_f64, 1.0, 0.5, 1.0, 3.0, 0.25, 0.5, 0.25, 4.0];
+    let mut asymmetric = upper;
+    asymmetric[6] = 0.5 + 1e-15;
+    let from_upper = symmetric_eigen_jacobi(
+        &Array2::from_shape_vec([3, 3], upper.to_vec())
+            .unwrap()
+            .view(),
+    )
+    .unwrap();
+    let resolved = symmetric_eigen_jacobi(
+        &Array2::from_shape_vec([3, 3], asymmetric.to_vec())
+            .unwrap()
+            .view(),
+    )
+    .unwrap();
+    assert_eq!(resolved.eigenvalues, from_upper.eigenvalues);
+    assert_eq!(
+        resolved.eigenvectors.storage().as_slice(),
+        from_upper.eigenvectors.storage().as_slice()
+    );
+}

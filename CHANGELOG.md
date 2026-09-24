@@ -140,6 +140,23 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [patch] `singular_values`, `svd_decompose`, `schur`, `eigenvalues`,
+  `col_piv_qr` (and `pinv` through the SVD) balance their input by an exact
+  even power of two before factoring and restore the scale-carrying results
+  after, so every binade of every supported format factors correctly: f64
+  SVD and Schur failed to converge beyond `2^±256` and returned wrong
+  singular values near that edge, and `col_piv_qr` of an f64 matrix returned
+  rank 0 below `2⁻⁵¹²` and above `2⁵¹²` (a column-norm square that overflows
+  or underflows). `RealSchur::eigenvalues` balances each 2×2 block
+  before its quadratic, which underflowed (f32 at `2⁻⁸⁶` returned `{3, 3}` for
+  `{2, 4}`). An unrepresentable restored result is `LetoError::Overflow`.
+  Results for inputs already in range are bitwise unchanged.
+- [patch] Jacobi (`symmetric_eigen_jacobi`) mirrors the upper triangle onto
+  the lower after the symmetry check, so an accepted rounding-level
+  asymmetry is resolved by the upper triangle; `symmetric_eigen_qr` resolves
+  by the lower. The relative-accuracy statement is for the resulting exactly
+  symmetric matrix.
+
 - [minor] Symmetric Jacobi (`symmetric_eigen_jacobi` and its variants): the
   absolute `1e-12` tolerance is replaced by the scale-aware pair criterion
   `|a_pq| ≤ τ·max(√(|a_pp|·|a_qq|), τ·‖A‖_F)` (default `τ = ε` of the scalar

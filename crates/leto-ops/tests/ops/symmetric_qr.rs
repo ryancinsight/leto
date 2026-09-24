@@ -24,47 +24,13 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
+use super::format::{epsilon, Format};
 use eunomia::{Bf16, F16};
 use leto::{Array2, LetoError, SliceArg, Storage};
 use leto_ops::{
     symmetric_eigen_jacobi_with_tolerance, symmetric_eigen_qr, RealScalar, SymmetricEigenWorkspace,
     Xorshift64,
 };
-
-/// A supported scalar with the exponent range of its normal numbers.
-trait Format: RealScalar {
-    /// Binary exponent of the smallest positive normal value.
-    const MIN_EXPONENT: i32;
-    /// Binary exponent of the largest finite value.
-    const MAX_EXPONENT: i32;
-}
-
-impl Format for f64 {
-    const MIN_EXPONENT: i32 = -1022;
-    const MAX_EXPONENT: i32 = 1023;
-}
-impl Format for f32 {
-    const MIN_EXPONENT: i32 = -126;
-    const MAX_EXPONENT: i32 = 127;
-}
-impl Format for F16 {
-    const MIN_EXPONENT: i32 = -14;
-    const MAX_EXPONENT: i32 = 15;
-}
-impl Format for Bf16 {
-    const MIN_EXPONENT: i32 = -126;
-    const MAX_EXPONENT: i32 = 127;
-}
-
-/// Machine epsilon of `T`, found through `T`'s own addition.
-fn epsilon<T: RealScalar>() -> f64 {
-    let half = T::from_f64(0.5);
-    let mut e = T::ONE;
-    while T::ONE.add(e.mul(half)) > T::ONE {
-        e = e.mul(half);
-    }
-    e.to_f64()
-}
 
 /// Round `values` into `T`, returning the `T` matrix and the exact `f64`
 /// image of what `T` holds.
@@ -490,4 +456,24 @@ fn symmetric_eigen_qr_rejects_a_non_square_matrix() {
         }
         other => panic!("expected ShapeMismatch, got {other:?}"),
     }
+}
+
+#[test]
+fn symmetric_eigen_qr_resolves_an_asymmetric_input_by_the_lower_triangle() {
+    let lower = [2.0_f64, 1.0, 0.5, 1.0, 3.0, 0.25, 0.5, 0.25, 4.0];
+    let mut asymmetric = lower;
+    asymmetric[1] = 7.0; // upper entry (0, 1): never read
+    let from_lower = symmetric_eigen_qr(
+        &Array2::from_shape_vec([3, 3], lower.to_vec())
+            .unwrap()
+            .view(),
+    )
+    .unwrap();
+    let resolved = symmetric_eigen_qr(
+        &Array2::from_shape_vec([3, 3], asymmetric.to_vec())
+            .unwrap()
+            .view(),
+    )
+    .unwrap();
+    assert_eq!(resolved.eigenvalues, from_lower.eigenvalues);
 }
