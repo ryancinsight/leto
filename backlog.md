@@ -197,8 +197,9 @@
 - **Outcome:** Advance Leto's workspace Hermes edge to PR #155 so consumers
   resolve one first-party SIMD and memory-provider source graph.
 - **Acceptance:** Standalone lock resolves Hermes `5a399ee`, Mnemosyne
-  `da5c6be`, and Eunomia `fdbf122`; workspace check, Clippy, nextest,
-  doctests, rustdoc, and diff checks pass; no adapter or compatibility layer.
+  `mnemosyne#123` (proposed, not merged), and Eunomia `fdbf122`; workspace
+  check, Clippy, nextest, doctests, rustdoc, and diff checks pass; no adapter
+  or compatibility layer.
 - **Follow-up source edge:** Moirai PR #256 merged at `70d201a`; this increment
   removes its temporary revision pin and regenerates `Cargo.lock`. Hermes,
   Mnemosyne, and Eunomia remain pinned until their provider increments merge.
