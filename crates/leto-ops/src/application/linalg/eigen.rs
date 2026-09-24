@@ -22,18 +22,40 @@ pub struct SymmetricEigenDecomposition<T> {
     pub eigenvectors: Array2<T>,
 }
 
-/// Default relative convergence tolerance: `ε²`, `ε` the machine epsilon of `T`.
+/// Default convergence tolerance: `ε`, the machine epsilon of `T`.
 ///
-/// An off-diagonal remainder below `ε²·‖A‖_F` moves each eigenvalue by at most
-/// `n·ε²·‖A‖_F` (the Frobenius norm of the remainder), negligible against the
-/// `ε·‖A‖` every rotation already commits: the iteration stops at the
-/// rounding floor, whatever the magnitude of `A`. The target is reachable
-/// because each rotation sets its pivot exactly to zero and the fill it
-/// creates is `ε` times entries that are themselves converging to zero.
+/// Rotation stops when every off-diagonal entry is negligible against the
+/// diagonal entries it couples, `|a_pq| ≤ ε·√(|a_pp|·|a_qq|)` — the
+/// criterion under which Jacobi computes each eigenvalue to high *relative*
+/// accuracy, not only to `ε·‖A‖` (Demmel & Veselić 1992, "Jacobi's method is
+/// more accurate than QR", *SIAM J. Matrix Anal. Appl.* 13(4), §4) — with the
+/// normwise floor `ε·(ε·‖A‖_F)` for pairs whose diagonal has vanished, where
+/// the pair criterion alone would demand an exact zero. Both terms scale with
+/// `A`, so no magnitude stops early; a pair whose diagonals are near `‖A‖`
+/// stops at `ε·‖A‖`, so well-scaled matrices are not charged the `ε²`
+/// normwise cost.
 #[inline]
 fn default_tolerance<T: RealScalar>() -> T {
-    let epsilon = machine_epsilon::<T>();
-    epsilon.mul(epsilon)
+    machine_epsilon::<T>()
+}
+
+/// Accept `A` as symmetric when every pair satisfies
+/// `|aᵢⱼ − aⱼᵢ| ≤ 2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`.
+///
+/// Derivation: a matrix symmetric in exact arithmetic but assembled along two
+/// rounding paths carries up to two roundings (`u = ε/2` each) on each side of
+/// a pair, so `|aᵢⱼ − aⱼᵢ| ≤ 4u·max(|aᵢⱼ|, |aⱼᵢ|) = 2ε·max(…)`; `0.1 + 0.2`
+/// against `0.3` differs by one ulp of `0.3`, `5.55e-17 ≤ 2ε·0.3 = 1.3e-16`. The
+/// `‖A‖_F/n` floor covers entries produced by cancellation, whose rounding is
+/// relative to their operands rather than to themselves: an asymmetry of
+/// `2ε·‖A‖_F/n` in each of the `n²` entries has Frobenius norm `2ε·‖A‖_F`,
+/// inside the solver's own backward error.
+fn symmetry_bound<T: RealScalar>(lhs: T, rhs: T, floor: T) -> T {
+    let two_epsilon = machine_epsilon::<T>().mul(T::from_usize(2));
+    let (lhs, rhs) = (lhs.abs(), rhs.abs());
+    let larger = if lhs > rhs { lhs } else { rhs };
+    let scale = if larger > floor { larger } else { floor };
+    two_epsilon.mul(scale)
 }
 
 /// Compute the eigendecomposition of a real symmetric matrix with Jacobi rotations.
@@ -41,8 +63,8 @@ fn default_tolerance<T: RealScalar>() -> T {
 /// This solver targets the small dense symmetric matrices currently needed by
 /// Apollo graph and fractional Fourier plans. The input may be strided; it is
 /// copied once into row-major working storage. The returned eigenvector matrix
-/// is orthonormal up to the requested tolerance. The tolerance is `ε²`
-/// relative to `‖A‖_F`; see
+/// is orthonormal up to the requested tolerance. The tolerance is `ε`,
+/// applied relative to each coupled diagonal pair; see
 /// [`symmetric_eigen_jacobi_with_tolerance`].
 ///
 /// # Errors
@@ -96,10 +118,14 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
 /// Compute the eigendecomposition of a real symmetric matrix with an explicit
 /// relative tolerance.
 ///
-/// Rotations continue until every off-diagonal entry is at most
-/// `tolerance · ‖A‖_F`, and the input is accepted as symmetric when
-/// `|aᵢⱼ − aⱼᵢ| ≤ tolerance · ‖A‖_F`. The stopping point scales with `A`, so
-/// a matrix of any magnitude is solved to the same relative accuracy.
+/// Rotations continue until every off-diagonal entry satisfies
+/// `|a_pq| ≤ τ·max(√(|a_pp|·|a_qq|), τ·‖A‖_F)`, `τ = tolerance`: negligible
+/// against the diagonal pair it couples (relative accuracy of small
+/// eigenvalues), floored at `τ²·‖A‖_F` where that pair has vanished. The
+/// stopping point scales with `A`, so a matrix of any magnitude is solved to
+/// the same relative accuracy. Symmetry acceptance is
+/// independent of the tolerance: `|aᵢⱼ − aⱼᵢ| ≤ 2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`,
+/// the rounding a matrix assembled symmetric in exact arithmetic can carry.
 ///
 /// # Errors
 ///
@@ -107,8 +133,8 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
 /// - [`LetoError::InvalidInput`] for a negative or non-finite tolerance, a
 ///   non-finite entry, or an asymmetric matrix.
 /// - [`LetoError::ConvergenceError`] when `32·n²` rotations leave an
-///   off-diagonal entry above the tolerance; `residual` is the largest
-///   remaining off-diagonal magnitude relative to `‖A‖_F`.
+///   off-diagonal entry above its threshold; `residual` is the largest such
+///   magnitude relative to `‖A‖_F`.
 pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     tolerance: T,
@@ -163,10 +189,11 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
             index % n
         )));
     }
-    let bound = tolerance.mul(scaled_frobenius(a));
+    let floor = scaled_frobenius(a).div(T::from_usize(n.max(1)));
     for row in 0..n {
         for col in (row + 1)..n {
-            if a[row * n + col].sub(a[col * n + row]).abs() > bound {
+            let (upper, lower) = (a[row * n + col], a[col * n + row]);
+            if upper.sub(lower).abs() > symmetry_bound(upper, lower, floor) {
                 return Err(LetoError::InvalidInput(format!(
                     "symmetric eigensolver input is not symmetric at ({row}, {col})"
                 )));
@@ -205,13 +232,30 @@ fn sort_diagonal<T: RealScalar>(a: &[T], n: usize) -> Vec<T> {
     eigenvalues
 }
 
-fn largest_off_diagonal<T: RealScalar>(a: &[T], n: usize) -> Option<(usize, usize, T)> {
+/// The largest off-diagonal entry not yet negligible against its pair's
+/// diagonal: `|a_pq| > τ·max(√|a_pp|·√|a_qq|, τ·‖A‖_F)`, as
+/// `(p, q, |a_pq|)`. `roots` is scratch for the `n` diagonal square roots.
+fn largest_unconverged<T: RealScalar>(
+    a: &[T],
+    n: usize,
+    tolerance: T,
+    floor: T,
+    roots: &mut [T],
+) -> Option<(usize, usize, T)> {
+    for (index, root) in roots.iter_mut().enumerate() {
+        *root = a[index * n + index].abs().sqrt();
+    }
     let mut best = None;
     let mut best_abs = T::ZERO;
     for row in 0..n {
         for col in (row + 1)..n {
             let value = a[row * n + col].abs();
-            if value > best_abs {
+            if value <= best_abs {
+                continue;
+            }
+            let coupling = roots[row].mul(roots[col]);
+            let scale = if coupling > floor { coupling } else { floor };
+            if value > tolerance.mul(scale) {
                 best_abs = value;
                 best = Some((row, col, value));
             }
@@ -275,24 +319,22 @@ where
     R: RotationTarget<T>,
 {
     let norm = scaled_frobenius(a);
-    let threshold = tolerance.mul(norm);
+    let floor = tolerance.mul(norm);
+    let mut roots = vec![T::ZERO; n];
 
     for _ in 0..max_rotations {
-        let Some((p, q, max_abs)) = largest_off_diagonal(a, n) else {
+        let Some((p, q, _)) = largest_unconverged(a, n, tolerance, floor, &mut roots) else {
             return Ok(());
         };
-        if max_abs <= threshold {
-            return Ok(());
-        }
         rotate(a, target, n, p, q);
     }
-    match largest_off_diagonal(a, n) {
-        Some((_, _, max_abs)) if max_abs > threshold => Err(LetoError::ConvergenceError {
+    match largest_unconverged(a, n, tolerance, floor, &mut roots) {
+        Some((_, _, max_abs)) => Err(LetoError::ConvergenceError {
             max_iters: max_rotations,
             residual: max_abs.div(norm).to_f64(),
             tol: tolerance.to_f64(),
         }),
-        _ => Ok(()),
+        None => Ok(()),
     }
 }
 

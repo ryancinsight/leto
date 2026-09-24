@@ -127,13 +127,17 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 ### Fixed
 
 - [minor] Symmetric Jacobi (`symmetric_eigen_jacobi` and its variants): the
-  tolerance is now relative to `‖A‖_F` (default `ε²`, the rounding floor), so a
-  small-magnitude matrix is no longer accepted unrotated
-  (`[[2e-13, 1e-13], [1e-13, 2e-13]]` returned `{2e-13, 2e-13}`; it now
-  returns `{1e-13, 3e-13}`). Exhausting the `32·n²` rotation budget returns
+  absolute `1e-12` tolerance is replaced by the scale-aware pair criterion
+  `|a_pq| ≤ τ·max(√(|a_pp|·|a_qq|), τ·‖A‖_F)` (default `τ = ε` of the scalar
+  type; Demmel & Veselić 1992), so a small-magnitude matrix is no longer
+  accepted unrotated (`[[2e-13, 1e-13], [1e-13, 2e-13]]` returned
+  `{2e-13, 2e-13}`; it now returns `{1e-13, 3e-13}`); the explicit
+  `_with_tolerance` argument is that `τ`. Symmetry acceptance no
+  longer reuses the convergence tolerance: a pair is accepted when
+  `|aᵢⱼ − aⱼᵢ| ≤ 2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`, the rounding a matrix
+  assembled symmetric carries. Exhausting the `32·n²` rotation budget returns
   `LetoError::ConvergenceError` instead of a silent `Ok`, and invalid input
-  returns `LetoError::InvalidInput`. The explicit `_with_tolerance` argument
-  is relative as well.
+  returns `LetoError::InvalidInput`.
 
 - [patch] Strided unary and binary elementwise micro-tiles now derive their
   side from the cached `CacheGeometry::cache_line_bytes()` value instead of

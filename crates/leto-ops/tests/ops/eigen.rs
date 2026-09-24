@@ -213,7 +213,7 @@ fn seeded_pair(n: usize, rank: usize, seed: u64) -> (Vec<f64>, Vec<f64>) {
 
 #[test]
 fn symmetric_eigen_jacobi_default_tolerance_is_reachable() {
-    // The ε² default must converge inside the 32·n² budget on dense and
+    // The ε default must converge inside the 32·n² budget on dense and
     // rank-deficient 60 × 60 inputs, in both native formats.
     let n = 60;
     let (dense, gram) = seeded_pair(n, 10, 41);
@@ -227,4 +227,34 @@ fn symmetric_eigen_jacobi_default_tolerance_is_reachable() {
             n
         );
     }
+}
+
+#[test]
+fn symmetric_eigen_jacobi_accepts_rounding_level_asymmetry() {
+    // Regression: apollo-gft builds adjacency weights along two rounding
+    // paths; 0.1 + 0.2 and 0.3 differ by one ulp (5.55e-17). The weighted
+    // triangle [[0, w, 1], [w, 0, 1], [1, 1, 0]] with w = 0.3 has eigenvalues
+    // −w and (w ± √(w² + 8))/2.
+    let w = 0.3_f64;
+    let matrix = Array2::from_shape_vec(
+        [3, 3],
+        vec![0.0, 0.1 + 0.2, 1.0, 0.3, 0.0, 1.0, 1.0, 1.0, 0.0],
+    )
+    .unwrap();
+    let values = symmetric_eigenvalues_jacobi(&matrix.view()).unwrap();
+    let root = (w * w + 8.0).sqrt();
+    let expected = [(w - root) / 2.0, -w, (w + root) / 2.0];
+    // Weyl: the one-ulp asymmetry, the rotations' backward error n²·ε·‖A‖_F,
+    // and the stopping remainder n·ε·‖A‖_F, with ‖A‖_F = √(2w² + 4) < 2.1.
+    let bound = (9.0 + 3.0) * f64::EPSILON * 2.1 + 5.6e-17;
+    for (value, expected) in values.iter().zip(expected) {
+        assert!((value - expected).abs() <= bound, "{value} vs {expected}");
+    }
+
+    // An asymmetry far beyond rounding is still rejected.
+    let skewed = Array2::from_shape_vec([2, 2], vec![1.0_f64, 0.5, 0.5 + 1e-9, 1.0]).unwrap();
+    assert!(matches!(
+        symmetric_eigenvalues_jacobi(&skewed.view()),
+        Err(LetoError::InvalidInput(_))
+    ));
 }

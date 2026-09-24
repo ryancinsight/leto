@@ -1,11 +1,19 @@
 # Leto Work Backlog
 
+<a id="LETO-DENSE-SCALE-RANGE-2026-09-24"></a>
+
+## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — todo
+
+- Evidence: the #233/#234 review probes. `svd_decompose` and `schur` return non-convergence at extreme magnitudes, and `col_piv_qr` of an f64 matrix scaled by 1e160 returns `Ok` with rank 0.
+- Cause to confirm: unscaled sums of squares; `householder::reflect_in_place` is now scaled, so re-probe first.
+- Acceptance: a per-format exponent sweep for each solver (correct result or typed error, never a wrong `Ok`), as in `tests/ops/symmetric_qr.rs`.
+
 <a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
 
 ## LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23 — Scale-aware Jacobi tolerance and a typed cap [minor] — review
 
 - Defects: the absolute `1e-12` tolerance stops early on small-magnitude matrices (`[[2e-13,1e-13],[1e-13,2e-13]]` returned `{2e-13, 2e-13}`), and exhausting the `32·n²` rotation budget returned `Ok`.
-- Outcome: tolerance relative to `‖A‖_F` (default `ε²`, the rounding floor; scaled norm), `ConvergenceError` on the budget, `InvalidInput` for invalid input.
+- Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `2ε·max(|aᵢⱼ|, |aⱼᵢ|, ‖A‖_F/n)`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
 - Acceptance: the regression matrix, a scale sweep `s ∈ [1e-300, 1e300]` at `32·n²·ε` relative, the budget error with its residual, existing Jacobi tests.
 
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
@@ -209,24 +217,8 @@
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.
-- **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS` (done),
+- **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS` (done, `62a0434`),
   `ATLAS-LETO-REDUCE-SINGLE-WRITE` (stays filed — see its entry).
-
-### ATLAS-LETO-OPERATOR-OWNED-LHS — operator chains allocate per term [minor] — done 2026-08-28
-
-- **Delivered:** `62a0434` — owned-receiver `Add`/`Sub`/`Mul`/`Div`/`Neg` impls
-  writing through the consumed lhs allocation. Allocation counts (counting
-  global allocator, `crates/leto/tests/operator_allocations.rs`): 3-term chain
-  2 → 1, 5-term 4 → 1, owned scalar/neg → 0. Pinned criterion (P-cores 0-3):
-  3-term 64x64 1.505 → 1.323 us (−12%), 5-term 64x64 3.658 → 2.481 us (−32%);
-  3-term 256x256 unchanged within CI (bandwidth-bound). Miri clean over the
-  arithmetic suite (14/14).
-- **Correction to the filed evidence:** the audit's "closure traversal bypasses
-  the leto-ops SIMD `apply_slice` kernels" is not actionable in core —
-  `leto-ops` depends on `leto`, so the SIMD tier is strictly downstream and
-  core calling it would be circular. Routing operators through those kernels
-  needs the ADR 0001 kernel-relocation option that ADR 0004 explicitly
-  declined; not reopened here.
 
 ### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo
 
