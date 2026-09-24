@@ -103,8 +103,9 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
     ///
     /// # Errors
     ///
-    /// - [`LetoError::InvalidInput`] when `matrix` is not square or its lower
-    ///   triangle holds a NaN or infinity.
+    /// - [`LetoError::ShapeMismatch`] when `matrix` is not square.
+    /// - [`LetoError::InvalidInput`] when its lower triangle holds a NaN or
+    ///   infinity.
     /// - [`LetoError::ConvergenceError`] when the QL iteration does not
     ///   deflate within `30·n` sweeps.
     /// - [`LetoError::Overflow`] when an eigenvalue exceeds the range of `T`,
@@ -122,9 +123,10 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
         self.order = 0;
         let [rows, cols] = matrix.shape();
         if rows != cols {
-            return Err(LetoError::InvalidInput(format!(
-                "symmetric eigensolver needs a square matrix; got {rows}x{cols}"
-            )));
+            return Err(LetoError::ShapeMismatch {
+                lhs: vec![rows, cols],
+                rhs: vec![rows, rows],
+            });
         }
         let n = rows;
         let exponent = self.load_lower_triangle(matrix, n)?;

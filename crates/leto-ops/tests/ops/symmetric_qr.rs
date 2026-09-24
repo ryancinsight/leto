@@ -253,10 +253,13 @@ fn check_scale_sweep<T: Format>() {
                 let s = scale.to_f64();
                 for (value, expected) in eigen.eigenvalues.iter().zip([1.0, 1.0, 4.0]) {
                     let error = (value.to_f64() / s - expected).abs();
-                    // Subnormal entries carry fewer significant bits: allow
-                    // the lost bits, 2^(MIN_EXPONENT − exponent), relative.
+                    // The entries are powers of two and exact even when
+                    // subnormal; scaling is exact, so the only extra error
+                    // is rounding each computed eigenvalue back onto the
+                    // subnormal grid, whose spacing is 2^MIN_EXPONENT·ε: half
+                    // of it, relative to s = 2^exponent.
                     let lost = if exponent < T::MIN_EXPONENT {
-                        2.0_f64.powi(T::MIN_EXPONENT - exponent) * epsilon::<T>() * 8.0
+                        0.5 * 2.0_f64.powi(T::MIN_EXPONENT - exponent) * epsilon::<T>()
                     } else {
                         0.0
                     };
@@ -482,7 +485,9 @@ fn symmetric_eigen_qr_handles_degenerate_orders() {
 fn symmetric_eigen_qr_rejects_a_non_square_matrix() {
     let rectangular = Array2::from_shape_vec([2, 3], vec![1.0_f64; 6]).unwrap();
     match symmetric_eigen_qr(&rectangular.view()) {
-        Err(LetoError::InvalidInput(reason)) => assert!(reason.contains("2x3"), "{reason}"),
-        other => panic!("expected InvalidInput, got {other:?}"),
+        Err(LetoError::ShapeMismatch { lhs, rhs }) => {
+            assert_eq!((lhs, rhs), (vec![2, 3], vec![2, 2]));
+        }
+        other => panic!("expected ShapeMismatch, got {other:?}"),
     }
 }
