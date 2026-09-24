@@ -1,6 +1,7 @@
 //! Implicit-shift QL iteration on a symmetric tridiagonal matrix
 //! (`tql2`, Bowdler, Martin, Reinsch & Wilkinson 1968).
 
+use crate::application::linalg::thresholds::machine_epsilon;
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};
 
@@ -10,6 +11,11 @@ use leto::{LetoError, Result};
 /// cubically, taking under two sweeps per eigenvalue; LAPACK `dsteqr` bounds
 /// the total at `30·n` sweeps, the budget adopted here.
 const SWEEPS_PER_EIGENVALUE: usize = 30;
+
+/// The sweep budget for an order-`n` tridiagonal: `30·n`.
+pub(super) fn sweep_budget(n: usize) -> usize {
+    SWEEPS_PER_EIGENVALUE.saturating_mul(n)
+}
 
 /// `√(x² + y²)` without the overflow or underflow of squaring the larger
 /// operand.
@@ -52,25 +58,42 @@ fn rotate_adjacent_rows<T: RealScalar>(rows: &mut [T], n: usize, i: usize, c: T,
 ///
 /// `off_diagonal[k] = T[k, k+1]` with `off_diagonal[n−1] = 0`.
 ///
+/// The norm estimate `t` is fixed before the first sweep (see the body).
+///
 /// # Errors
 ///
-/// [`LetoError::StorageError`] when `30·n` sweeps do not deflate the matrix.
+/// [`LetoError::ConvergenceError`] when `budget` sweeps do not deflate the
+/// matrix: `residual` is the undeflated `|eₗ|` relative to the norm estimate
+/// `t`, and `tol` is `ε/2`, the relative size below which `t + |eₗ|` rounds
+/// to `t`.
 pub(super) fn diagonalize<T: RealScalar>(
     diagonal: &mut [T],
     off_diagonal: &mut [T],
     vectors: &mut [T],
     n: usize,
+    budget: usize,
 ) -> Result<()> {
     let mut shift_total = T::ZERO;
-    let mut norm_estimate = T::ZERO;
     let mut sweeps = 0_usize;
-    let budget = SWEEPS_PER_EIGENVALUE.saturating_mul(n);
     let two = T::from_usize(2);
+    // `tql2` grows `t` as `l` advances; the full `t = maxᵢ(|dᵢ| + |eᵢ|)` from
+    // the start keeps deflation normwise over the whole matrix, which is what
+    // the backward-error bound assumes, and bounds the shift ratio below: a
+    // surviving `|eₗ| ≥ ε·t/2` gives `|p| = |d_{l+1} − dₗ|/(2|eₗ|) ≤ 4/ε`
+    // (`4096` in `F16`), where a running `t` taken over a tiny leading
+    // diagonal lets `p` overflow the narrow formats.
+    let norm_estimate = diagonal
+        .iter()
+        .zip(off_diagonal.iter())
+        .fold(T::ZERO, |acc, (&d, &e)| {
+            let local = d.abs().add(e.abs());
+            if local > acc {
+                local
+            } else {
+                acc
+            }
+        });
     for l in 0..n {
-        let local = diagonal[l].abs().add(off_diagonal[l].abs());
-        if local > norm_estimate {
-            norm_estimate = local;
-        }
         // `off_diagonal[n − 1] = 0` bounds the scan at `n − 1`.
         let mut m = l;
         while m + 1 < n && !negligible(off_diagonal[m], norm_estimate) {
@@ -80,11 +103,10 @@ pub(super) fn diagonalize<T: RealScalar>(
             loop {
                 sweeps += 1;
                 if sweeps > budget {
-                    return Err(LetoError::StorageError {
-                        reason: format!(
-                            "symmetric tridiagonal QL did not converge within {budget} sweeps \
-                             for a {n}x{n} matrix"
-                        ),
+                    return Err(LetoError::ConvergenceError {
+                        max_iters: budget,
+                        residual: off_diagonal[l].abs().div(norm_estimate).to_f64(),
+                        tol: machine_epsilon::<T>().to_f64() / 2.0,
                     });
                 }
                 // Wilkinson shift from the leading 2×2 of the active block.

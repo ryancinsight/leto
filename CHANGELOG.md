@@ -77,8 +77,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 - [minor] `symmetric_eigen_qr` and `SymmetricEigenWorkspace`: real symmetric
   eigendecomposition by Householder tridiagonalization and implicit-shift QL
   (`tred2` + `tql2`), `O(n³)` against classical Jacobi's `O(n²)` pivot search
-  per rotation. The workspace reuses every buffer across calls and exposes
-  eigenvectors as contiguous rows; only the lower triangle is read.
+  per rotation. The matrix is scaled by a power of two into `[1, 2)` before
+  the reduction, so every format decomposes correctly across its exponent
+  range or returns a typed error. The workspace reuses every buffer across
+  calls, for any input layout, and exposes eigenvectors as contiguous rows;
+  only the lower triangle is read. Failures are `InvalidInput`,
+  `ConvergenceError` and `Overflow`.
+- [patch] The shared Householder reflector scales its input by a power of
+  two before forming `‖x‖²` and `β = 2/vᵀv`, which overflowed in `F16` for
+  `‖x‖` below `2.7e-3`; the reflector and every result it produces are
+  unchanged where no overflow occurred.
 
 - [minor] `leto::transpose_copy_strided` copies a column window of a
   row-major matrix — the source at a pitch wider than the window — into the

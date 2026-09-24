@@ -92,26 +92,47 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
     /// result.
     ///
     /// Only the lower triangle (diagonal included) is read; the strictly upper
-    /// triangle is taken to mirror it, the LAPACK `uplo = 'L'` convention.
+    /// triangle is taken to mirror it, the LAPACK `uplo = 'L'` convention. Any
+    /// layout — contiguous, strided, transposed — is copied into
+    /// workspace-owned storage, so reuse at one order allocates nothing.
+    ///
+    /// The matrix is scaled by the power of two that brings its largest
+    /// entry into `[1, 2)` before the reduction and the eigenvalues are scaled
+    /// back after it; both scalings are exact (see the
+    /// [module documentation](super) for the range argument).
     ///
     /// # Errors
     ///
-    /// - [`LetoError::ShapeMismatch`] when `matrix` is not square.
-    /// - [`LetoError::StorageError`] when the lower triangle holds a NaN or
-    ///   infinity, or the QL iteration does not converge within `30·n` sweeps.
+    /// - [`LetoError::InvalidInput`] when `matrix` is not square or its lower
+    ///   triangle holds a NaN or infinity.
+    /// - [`LetoError::ConvergenceError`] when the QL iteration does not
+    ///   deflate within `30·n` sweeps.
+    /// - [`LetoError::Overflow`] when an eigenvalue exceeds the range of `T`,
+    ///   which needs `n·max|aᵢⱼ|` beyond the largest finite value (every
+    ///   eigenvalue is bounded by `‖A‖₂ ≤ n·max|aᵢⱼ|`).
     ///
     /// On error [`order`](Self::order) is `0` and no eigenpairs are exposed.
     pub fn decompose(&mut self, matrix: &ArrayView2<'_, T>) -> Result<()> {
+        let [rows, _] = matrix.shape();
+        self.decompose_within(matrix, ql::sweep_budget(rows))
+    }
+
+    /// [`decompose`](Self::decompose) with an explicit QL sweep budget.
+    fn decompose_within(&mut self, matrix: &ArrayView2<'_, T>, budget: usize) -> Result<()> {
         self.order = 0;
         let [rows, cols] = matrix.shape();
         if rows != cols {
-            return Err(LetoError::ShapeMismatch {
-                lhs: vec![rows, cols],
-                rhs: vec![rows, rows],
-            });
+            return Err(LetoError::InvalidInput(format!(
+                "symmetric eigensolver needs a square matrix; got {rows}x{cols}"
+            )));
         }
         let n = rows;
-        self.load_lower_triangle(matrix, n)?;
+        let exponent = self.load_lower_triangle(matrix, n)?;
+        if let Some(exponent) = exponent {
+            for value in &mut self.reduced {
+                *value = value.scale_binary(-exponent);
+            }
+        }
         self.values.resize(n, T::ZERO);
         self.off_diagonal.resize(n, T::ZERO);
         self.reflector_scales.resize(n, T::ZERO);
@@ -135,34 +156,48 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
             &mut self.off_diagonal,
             &mut self.vectors,
             n,
+            budget,
         )?;
+        if let Some(exponent) = exponent {
+            for value in &mut self.values {
+                *value = value.scale_binary(exponent);
+            }
+            if self.values.iter().any(|value| !value.is_finite()) {
+                return Err(LetoError::Overflow {
+                    reason: "symmetric eigensolver: an eigenvalue exceeds the scalar range",
+                });
+            }
+        }
         self.order = n;
         Ok(())
     }
 
     /// Copy `matrix` into the working buffer as a full symmetric matrix built
-    /// from its lower triangle, rejecting non-finite entries.
-    fn load_lower_triangle(&mut self, matrix: &ArrayView2<'_, T>, n: usize) -> Result<()> {
+    /// from its lower triangle, rejecting non-finite entries; returns the
+    /// binary exponent of the largest magnitude (`None` for a zero matrix).
+    fn load_lower_triangle(&mut self, matrix: &ArrayView2<'_, T>, n: usize) -> Result<Option<i32>> {
         self.reduced.clear();
         if let Some(slice) = matrix.as_slice() {
             self.reduced.extend_from_slice(slice);
         } else {
-            self.reduced = matrix.to_contiguous().into_storage().into_inner();
+            self.reduced.extend(matrix.iter().copied());
         }
+        let mut largest = T::ZERO;
         for i in 0..n {
             for j in 0..=i {
                 let value = self.reduced[i * n + j];
                 if !value.is_finite() {
-                    return Err(LetoError::StorageError {
-                        reason: format!(
-                            "symmetric eigensolver input has non-finite entry at ({i}, {j})"
-                        ),
-                    });
+                    return Err(LetoError::InvalidInput(format!(
+                        "symmetric eigensolver input has a non-finite entry at ({i}, {j})"
+                    )));
+                }
+                if value.abs() > largest {
+                    largest = value.abs();
                 }
                 self.reduced[j * n + i] = value;
             }
         }
-        Ok(())
+        Ok(largest.binary_exponent())
     }
 }
 
@@ -209,4 +244,36 @@ pub fn symmetric_eigen_qr<T: RealScalar>(
         eigenvalues: workspace.values,
         eigenvectors: Array2::from_shape_vec([n, n], columns)?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SymmetricEigenWorkspace;
+    use leto::{Array2, LetoError};
+
+    #[test]
+    fn exhausted_sweep_budget_is_a_typed_convergence_error() {
+        // [[2,1,1],[1,2,1],[1,1,2]] reduces to a tridiagonal with a nonzero
+        // off-diagonal, so a zero budget cannot deflate it.
+        let matrix = Array2::from_shape_vec(
+            [3, 3],
+            vec![2.0_f64, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0],
+        )
+        .expect("invariant: nine entries");
+        let mut workspace = SymmetricEigenWorkspace::new();
+        let result = workspace.decompose_within(&matrix.view(), 0);
+        let Err(LetoError::ConvergenceError {
+            max_iters,
+            residual,
+            tol,
+        }) = result
+        else {
+            panic!("expected ConvergenceError, got {result:?}");
+        };
+        assert_eq!(max_iters, 0);
+        assert_eq!(tol, f64::EPSILON / 2.0);
+        assert!(residual > tol && residual <= 1.0, "{residual}");
+        assert_eq!(workspace.order(), 0);
+        assert!(workspace.eigenvalues().is_empty());
+    }
 }
