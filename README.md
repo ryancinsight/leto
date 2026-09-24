@@ -266,7 +266,10 @@ trait layer below exposes the same kernels as rank-2 methods.
   column eigenvectors) via Jacobi rotations, with eigenvalues-only variants
   `symmetric_eigenvalues_jacobi` / `symmetric_eigenvalues_jacobi_with_tolerance`.
   This closed Apollo's `nalgebra` dependency: FrFT/GFT eigendecomposition now
-  runs on Leto.
+  runs on Leto. `symmetric_eigen_qr` returns the same decomposition by
+  Householder tridiagonalization and implicit-shift QL in `O(n³)`, and
+  `SymmetricEigenWorkspace` reuses its buffers across many decompositions of
+  one order (row eigenvectors, lower triangle read).
 - Eigen, Hermitian: `hermitian_eigen_jacobi` and `hermitian_eigen_qr`
   (`f64`/`C64`), configured by `HermitianEigenConfig`, descending by default.
 - Eigen, general: `eigenvalues` returns all eigenvalues of a general real

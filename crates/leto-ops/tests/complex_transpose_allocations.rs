@@ -1,4 +1,5 @@
-//! Allocation census for caller-owned complex layout movement.
+//! Allocation census for caller-owned complex layout movement and for
+//! workspace-reusing linear algebra.
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::Cell;
@@ -7,6 +8,8 @@ use leto_ops::{ComplexLayout, SquareTransposeError};
 
 #[path = "ops/layout/payloads.rs"]
 mod payloads;
+#[path = "ops/symmetric_qr_allocations.rs"]
+mod symmetric_qr_allocations;
 use payloads::{assert_bits, expected, values, PayloadScalar};
 
 thread_local! {

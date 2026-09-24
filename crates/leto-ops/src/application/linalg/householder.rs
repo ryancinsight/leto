@@ -26,37 +26,66 @@ pub(crate) struct Reflector<T> {
 /// `α = −sign(x₀)·‖x‖` is chosen so `v₀ = x₀ − α` adds in magnitude rather than
 /// cancels — the numerically stable convention.
 pub(crate) fn reflector<T: RealScalar>(x: &[T]) -> Option<(Reflector<T>, T)> {
-    if x.is_empty() {
+    let mut v = x.to_vec();
+    let (beta, alpha) = reflect_in_place(&mut v)?;
+    Some((Reflector { v, beta }, alpha))
+}
+
+/// Overwrite `x` with the vector `v` of the reflector mapping it to `α·e₁`;
+/// returns `(β, α)` with `β = 2/(vᵀv)`.
+///
+/// The arithmetic of [`reflector`] without its allocation, for reductions that
+/// store `v` in the matrix they are reducing. `None` when `x` is empty or zero;
+/// `x` is then left unchanged.
+///
+/// `x` is first scaled by `2⁻ᵏ`, `k` the binary exponent of `max|xᵢ|`, so its
+/// largest entry lies in `[1, 2)` (the per-row scaling of EISPACK `tred2`).
+/// Unscaled, `‖x‖²` overflows for entries near `√max` and `β = 2/vᵀv`
+/// overflows for `‖x‖` near `√(2/max)` — `2.7e-3` in `F16`. Scaled,
+/// `1 ≤ vᵀv < 16·len` and `β` is bounded accordingly. The reflector is
+/// unchanged: `v` scales by `2⁻ᵏ` and `β` by `2²ᵏ`, both exactly, so
+/// `β v vᵀ` and every application `β (vᵀy) v` are the same values; only `α` is
+/// scaled back.
+pub(crate) fn reflect_in_place<T: RealScalar>(x: &mut [T]) -> Option<(T, T)> {
+    let largest = x.iter().fold(T::ZERO, |acc, &xi| {
+        let magnitude = xi.abs();
+        if magnitude > acc {
+            magnitude
+        } else {
+            acc
+        }
+    });
+    if largest == T::ZERO {
         return None;
     }
+    // A non-finite entry has no exponent; it is left to propagate as before.
+    let exponent = largest.binary_exponent().unwrap_or(0);
+    for xi in x.iter_mut() {
+        *xi = xi.scale_binary(-exponent);
+    }
+    let first = *x.first()?;
     let mut norm_sq = T::ZERO;
-    for &xi in x {
+    for &xi in x.iter() {
         norm_sq = norm_sq.add(xi.mul(xi));
     }
     let norm = norm_sq.sqrt();
-    if norm <= T::ZERO {
-        return None;
-    }
 
-    let sign = if x[0] < T::ZERO {
+    let sign = if first < T::ZERO {
         T::ZERO.sub(T::ONE)
     } else {
         T::ONE
     };
     let alpha = T::ZERO.sub(sign.mul(norm)); // α = −sign·‖x‖
-
-    let mut v = x.to_vec();
-    v[0] = v[0].sub(alpha); // v₀ = x₀ − α
+    x[0] = first.sub(alpha); // v₀ = x₀ − α
 
     let mut vnorm_sq = T::ZERO;
-    for &vi in &v {
+    for &vi in x.iter() {
         vnorm_sq = vnorm_sq.add(vi.mul(vi));
     }
-    if vnorm_sq <= T::ZERO {
-        return None;
-    }
-    let beta = T::ONE.add(T::ONE).div(vnorm_sq);
-    Some((Reflector { v, beta }, alpha))
+    Some((
+        T::ONE.add(T::ONE).div(vnorm_sq),
+        alpha.scale_binary(exponent),
+    ))
 }
 
 /// Left-apply `P` to rows `[base_row .. base_row + v.len())` of a row-major

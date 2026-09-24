@@ -51,6 +51,8 @@ pub(crate) mod reflector_block;
 pub mod schur;
 /// Thin SVD and singular values for finite matrices.
 pub mod svd;
+/// Real symmetric eigensolver (Householder tridiagonalization + implicit QL).
+pub mod symmetric_qr;
 /// Shared relative thresholds for dense factorizations.
 pub(crate) mod thresholds;
 /// Symmetric indefinite unpivoted `U D Uᵀ` factorization.
@@ -87,6 +89,7 @@ pub use properties::{matrix_rank, matrix_rank_with_tolerance, trace};
 pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};
 pub use schur::{schur, RealSchur};
 pub use svd::{pinv, singular_values, svd_decompose, SvdDecomposition};
+pub use symmetric_qr::{symmetric_eigen_qr, SymmetricEigenWorkspace};
 pub use udu::{udu_decompose, UduDecomposition};
 
 /// Complex linear algebra (re-export).
