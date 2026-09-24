@@ -271,6 +271,21 @@ impl SparseLuSolver {
         }
     }
 
+    /// Shared dense-vs-sparse solve dispatch for a validated matrix and RHS.
+    #[inline]
+    fn solve_with_dispatch<T: RealScalar>(
+        &self,
+        n: usize,
+        matrix: &CsrMatrix<T>,
+        rhs: &ArrayView1<'_, T>,
+    ) -> Result<Array1<T>> {
+        if self.use_dense_path(n, matrix.nnz()) {
+            self.solve_dense_fallback(matrix, rhs)
+        } else {
+            self.solve_sparse_path(matrix, rhs)
+        }
+    }
+
     /// Solve `A · x = b` from a native Leto one-dimensional view.
     ///
     /// The right-hand side remains borrowed through validation and the
@@ -298,11 +313,7 @@ impl SparseLuSolver {
         rhs: &ArrayView1<'_, T>,
     ) -> Result<Array1<T>> {
         let n = self.validate(matrix, rhs.shape()[0])?;
-        if self.use_dense_path(n, matrix.nnz()) {
-            self.solve_dense_fallback(matrix, rhs)
-        } else {
-            self.solve_sparse_path(matrix, rhs)
-        }
+        self.solve_with_dispatch(n, matrix, rhs)
     }
 
     /// Solve `A · x = b` for a sparse square system `A`.
@@ -317,11 +328,7 @@ impl SparseLuSolver {
         let n = self.validate(matrix, rhs.len())?;
         let rhs_array = Array1::from_shape_vec([n], rhs.to_vec())
             .expect("rhs length verified equal to n above");
-        let x = if self.use_dense_path(n, matrix.nnz()) {
-            self.solve_dense_fallback(matrix, &rhs_array.view())?
-        } else {
-            self.solve_sparse_path(matrix, &rhs_array.view())?
-        };
+        let x = self.solve_with_dispatch(n, matrix, &rhs_array.view())?;
         Ok(x.iter().copied().collect())
     }
 
