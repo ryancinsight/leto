@@ -224,14 +224,14 @@ where
     /// (leto `iter` parity), respecting arbitrary strides.
     #[inline]
     pub fn iter(&self) -> ElementIter<'_, T, N> {
-        ElementIter::new(&self.view())
+        self.view().iter()
     }
 
     /// Iterator over `(multi-index, &element)` pairs in logical row-major order
     /// (leto `indexed_iter` parity).
     #[inline]
     pub fn indexed_iter(&self) -> IndexedIter<'_, T, N> {
-        IndexedIter::new(&self.view())
+        self.view().indexed_iter()
     }
 
     /// Zero-copy iterator over non-overlapping chunks of `chunk_shape`
@@ -245,7 +245,7 @@ where
     /// `usize`.
     #[inline]
     pub fn exact_chunks(&self, chunk_shape: [usize; N]) -> Result<ExactChunks<'_, T, N>> {
-        ExactChunks::new(&self.view(), chunk_shape)
+        self.view().exact_chunks(chunk_shape)
     }
 
     /// Zero-copy iterator over chunks along `axis` (leto
@@ -258,7 +258,7 @@ where
     /// [`LetoError`] if `axis >= N` or `chunk_len == 0`.
     #[inline]
     pub fn axis_chunks_iter(&self, axis: usize, chunk_len: usize) -> Result<AxisChunks<'_, T, N>> {
-        AxisChunks::new(&self.view(), axis, chunk_len)
+        self.view().axis_chunks_iter(axis, chunk_len)
     }
 
     /// Zero-copy iterator over every sliding window of shape `window_shape`
@@ -269,7 +269,7 @@ where
     /// `shape[i]`.
     #[inline]
     pub fn windows(&self, window_shape: [usize; N]) -> Result<Windows<'_, T, N>> {
-        Windows::new(&self.view(), window_shape)
+        self.view().windows(window_shape)
     }
 
     /// Zero-copy iterator over the read-only 1-D lanes along `axis`
@@ -293,15 +293,13 @@ where
     /// Slice the array, returning a read-only view.
     #[inline]
     pub fn slice(&self, ranges: &[(usize, usize, isize); N]) -> Result<ArrayView<'_, T, N>> {
-        let sliced_layout = self.layout.slice(ranges)?;
-        Ok(ArrayView::new(sliced_layout, self.storage.as_slice()))
+        self.view().slice(ranges)
     }
 
     /// Slice the array with leto-style arguments, returning a read-only view.
     #[inline]
     pub fn slice_with<const M: usize>(&self, args: &[SliceArg]) -> Result<ArrayView<'_, T, M>> {
-        let sliced_layout = self.layout.slice_with(args)?;
-        Ok(ArrayView::new(sliced_layout, self.storage.as_slice()))
+        self.view().slice_with(args)
     }
 
     /// Fix one axis at `index`, reducing the rank by 1 (leto `index_axis` parity).
@@ -336,8 +334,7 @@ where
     /// Transpose the array, returning a read-only view.
     #[inline]
     pub fn transpose(&self, axes: [usize; N]) -> Result<ArrayView<'_, T, N>> {
-        let transposed_layout = self.layout.transpose(axes)?;
-        Ok(ArrayView::new(transposed_layout, self.storage.as_slice()))
+        self.view().transpose(axes)
     }
 
     /// Broadcast the array, returning a read-only view.
@@ -346,8 +343,7 @@ where
         &self,
         target_shape: [usize; M],
     ) -> Result<ArrayView<'_, T, M>> {
-        let broadcasted_layout = self.layout.broadcast(target_shape)?;
-        Ok(ArrayView::new(broadcasted_layout, self.storage.as_slice()))
+        self.view().broadcast(target_shape)
     }
 
     /// Reinterpret this array with a new shape without copying.
@@ -356,8 +352,7 @@ where
     /// the same logical element count.
     #[inline]
     pub fn reshape<const M: usize>(&self, shape: [usize; M]) -> Result<ArrayView<'_, T, M>> {
-        let reshaped_layout = self.layout.reshape(shape)?;
-        Ok(ArrayView::new(reshaped_layout, self.storage.as_slice()))
+        self.view().reshape(shape)
     }
 
     /// Consume this array and reinterpret its storage with a new shape without copying.
@@ -373,7 +368,7 @@ where
     /// Named alias for [`transpose`](Self::transpose).
     #[inline]
     pub fn permute(&self, axes: [usize; N]) -> Result<ArrayView<'_, T, N>> {
-        self.transpose(axes)
+        self.view().permute(axes)
     }
 
     /// Materialize this array into C-contiguous row-major storage.
@@ -574,11 +569,7 @@ where
         &mut self,
         ranges: &[(usize, usize, isize); N],
     ) -> Result<ArrayViewMut<'_, T, N>> {
-        let sliced_layout = self.layout.slice(ranges)?;
-        Ok(ArrayViewMut::new(
-            sliced_layout,
-            self.storage.as_mut_slice(),
-        ))
+        self.view_mut().slice_mut(ranges)
     }
 
     /// Slice the array with leto-style arguments, returning a mutable view.
@@ -587,11 +578,7 @@ where
         &mut self,
         args: &[SliceArg],
     ) -> Result<ArrayViewMut<'_, T, M>> {
-        let sliced_layout = self.layout.slice_with(args)?;
-        Ok(ArrayViewMut::new(
-            sliced_layout,
-            self.storage.as_mut_slice(),
-        ))
+        self.view_mut().slice_with_mut(args)
     }
 
     /// Fix one axis at `index`, reducing the rank by 1 (leto `index_axis_mut` parity).
@@ -618,11 +605,7 @@ where
     /// Transpose the array, returning a mutable view.
     #[inline]
     pub fn transpose_mut(&mut self, axes: [usize; N]) -> Result<ArrayViewMut<'_, T, N>> {
-        let transposed_layout = self.layout.transpose(axes)?;
-        Ok(ArrayViewMut::new(
-            transposed_layout,
-            self.storage.as_mut_slice(),
-        ))
+        self.view_mut().transpose_mut(axes)
     }
 
     /// Reinterpret this mutable array with a new shape without copying.
@@ -634,11 +617,7 @@ where
         &mut self,
         shape: [usize; M],
     ) -> Result<ArrayViewMut<'_, T, M>> {
-        let reshaped_layout = self.layout.reshape(shape)?;
-        Ok(ArrayViewMut::new(
-            reshaped_layout,
-            self.storage.as_mut_slice(),
-        ))
+        self.view_mut().reshape_mut(shape)
     }
 
     /// Named mutable alias for [`transpose_mut`](Self::transpose_mut).

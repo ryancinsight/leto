@@ -20,6 +20,66 @@ fn dense_block_range<const N: usize>(layout: &Layout<N>) -> Option<core::ops::Ra
     Some(start..end)
 }
 
+const SHARED_WINDOW_ACCESS_MESSAGE: &str =
+    "window is shared with sibling lane/axis views; a whole-window \
+     slice would alias their elements (use per-element access instead)";
+
+#[inline]
+fn checked_block_range<const N: usize>(
+    layout: &Layout<N>,
+    len: usize,
+) -> Option<core::ops::Range<usize>> {
+    let range = dense_block_range(layout)?;
+    (range.end <= len).then_some(range)
+}
+
+#[inline]
+fn assert_exclusive_window(window_shared: bool) {
+    assert!(!window_shared, "{SHARED_WINDOW_ACCESS_MESSAGE}");
+}
+
+#[inline]
+unsafe fn raw_slice_from_ptr<'a, T>(ptr: std::ptr::NonNull<T>, len: usize) -> &'a [T] {
+    // SAFETY: callers guarantee `ptr` is valid for `len` elements.
+    unsafe { std::slice::from_raw_parts(ptr.as_ptr(), len) }
+}
+
+#[inline]
+unsafe fn raw_slice_from_ptr_mut<'a, T>(ptr: std::ptr::NonNull<T>, len: usize) -> &'a mut [T] {
+    // SAFETY: callers guarantee `ptr` is valid for `len` elements and uniquely borrowed.
+    unsafe { std::slice::from_raw_parts_mut(ptr.as_ptr(), len) }
+}
+
+#[inline]
+unsafe fn raw_range_from_ptr<'a, T>(
+    ptr: std::ptr::NonNull<T>,
+    range: core::ops::Range<usize>,
+) -> &'a [T] {
+    // SAFETY: callers guarantee the sub-range is in bounds for `ptr`.
+    unsafe { std::slice::from_raw_parts(ptr.as_ptr().add(range.start), range.len()) }
+}
+
+#[inline]
+unsafe fn raw_range_from_ptr_mut<'a, T>(
+    ptr: std::ptr::NonNull<T>,
+    range: core::ops::Range<usize>,
+) -> &'a mut [T] {
+    // SAFETY: callers guarantee the sub-range is in bounds for `ptr` and uniquely borrowed.
+    unsafe { std::slice::from_raw_parts_mut(ptr.as_ptr().add(range.start), range.len()) }
+}
+
+#[inline]
+unsafe fn raw_ref_from_ptr<'a, T>(ptr: std::ptr::NonNull<T>, offset: usize) -> &'a T {
+    // SAFETY: callers guarantee `offset` is in bounds for `ptr`.
+    unsafe { &*ptr.as_ptr().add(offset) }
+}
+
+#[inline]
+unsafe fn raw_mut_from_ptr<'a, T>(ptr: std::ptr::NonNull<T>, offset: usize) -> &'a mut T {
+    // SAFETY: callers guarantee `offset` is in bounds for `ptr` and uniquely borrowed.
+    unsafe { &mut *ptr.as_ptr().add(offset) }
+}
+
 /// A read-only zero-copy view of an N-dimensional strided array.
 #[derive(Clone, Copy)]
 pub struct ArrayView<'a, T, const N: usize> {
@@ -372,6 +432,29 @@ pub struct ArrayViewMut<'a, T, const N: usize> {
 }
 
 impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
+    #[inline]
+    fn with_layout<const M: usize>(self, layout: Layout<M>) -> ArrayViewMut<'a, T, M> {
+        ArrayViewMut {
+            layout,
+            ptr: self.ptr,
+            len: self.len,
+            window_shared: self.window_shared,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    #[inline]
+    fn element(&self, offset: usize) -> &T {
+        // SAFETY: callers validate `offset < self.len`.
+        unsafe { raw_ref_from_ptr(self.ptr, offset) }
+    }
+
+    #[inline]
+    fn element_mut(&mut self, offset: usize) -> &mut T {
+        // SAFETY: callers validate `offset < self.len` and hold `&mut self`.
+        unsafe { raw_mut_from_ptr(self.ptr, offset) }
+    }
+
     /// Create a new ArrayViewMut from a layout and mutable slice.
     #[inline]
     pub fn new(layout: Layout<N>, data: &'a mut [T]) -> Self {
@@ -418,15 +501,11 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// references. Use [`get`](Self::get) or indexing for element reads there.
     #[inline]
     pub fn as_view(&self) -> ArrayView<'_, T, N> {
-        assert!(
-            !self.window_shared,
-            "window is shared with sibling lane/axis views; a whole-window \
-             slice would alias their elements (use per-element access instead)"
-        );
+        assert_exclusive_window(self.window_shared);
         // SAFETY: `ptr` is valid for `len` elements for the duration of the
         // borrow of `self`, and the assertion above establishes the window is
         // exclusively owned, so no sibling view can mint `&mut` into it.
-        let data = unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) };
+        let data = unsafe { raw_slice_from_ptr(self.ptr, self.len) };
         ArrayView::new(self.layout, data)
     }
 
@@ -480,14 +559,10 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// interleaved layout (see [`as_view`](Self::as_view)).
     #[inline]
     pub fn data(&self) -> &[T] {
-        assert!(
-            !self.window_shared,
-            "window is shared with sibling lane/axis views; a whole-window \
-             slice would alias their elements (use per-element access instead)"
-        );
+        assert_exclusive_window(self.window_shared);
         // SAFETY: self.ptr is valid for self.len elements, and the assertion
         // above establishes the window is exclusively owned.
-        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+        unsafe { raw_slice_from_ptr(self.ptr, self.len) }
     }
 
     /// Returns the raw mutable data slice.
@@ -498,14 +573,10 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// interleaved layout (see [`as_view`](Self::as_view)).
     #[inline]
     pub fn data_mut(&mut self) -> &mut [T] {
-        assert!(
-            !self.window_shared,
-            "window is shared with sibling lane/axis views; a whole-window \
-             slice would alias their elements (use per-element access instead)"
-        );
+        assert_exclusive_window(self.window_shared);
         // SAFETY: self.ptr is valid for self.len elements, and the assertion
         // above establishes the window is exclusively owned.
-        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+        unsafe { raw_slice_from_ptr_mut(self.ptr, self.len) }
     }
 
     /// Iterator over `(multi-index, &mut element)` pairs in logical row-major
@@ -551,14 +622,10 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     /// interleaved layout (see [`as_view`](Self::as_view)).
     #[inline]
     pub fn into_slice(self) -> &'a mut [T] {
-        assert!(
-            !self.window_shared,
-            "window is shared with sibling lane/axis views; a whole-window \
-             slice would alias their elements (use per-element access instead)"
-        );
+        assert_exclusive_window(self.window_shared);
         // SAFETY: self.ptr is valid for self.len elements and lifetime 'a, and
         // the assertion above establishes the window is exclusively owned.
-        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+        unsafe { raw_slice_from_ptr_mut(self.ptr, self.len) }
     }
 
     /// Get a reference to the element at the specified index.
@@ -573,8 +640,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
                 ),
             });
         }
-        // SAFETY: self.ptr is valid for self.len elements.
-        unsafe { Ok(&*self.ptr.as_ptr().add(offset)) }
+        Ok(self.element(offset))
     }
 
     /// Get a mutable reference to the element at the specified index.
@@ -589,8 +655,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
                 ),
             });
         }
-        // SAFETY: self.ptr is valid for self.len elements.
-        unsafe { Ok(&mut *self.ptr.as_ptr().add(offset)) }
+        Ok(self.element_mut(offset))
     }
 
     /// Set every element of the view to a clone of `value` (leto `fill`
@@ -633,13 +698,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn slice_mut(self, ranges: &[(usize, usize, isize); N]) -> Result<ArrayViewMut<'a, T, N>> {
         let sliced_layout = self.layout.slice(ranges)?;
-        Ok(ArrayViewMut {
-            layout: sliced_layout,
-            ptr: self.ptr,
-            len: self.len,
-            window_shared: self.window_shared,
-            _marker: std::marker::PhantomData,
-        })
+        Ok(self.with_layout(sliced_layout))
     }
 
     /// Slice the mutable view with leto-style arguments.
@@ -649,26 +708,14 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
         args: &[SliceArg],
     ) -> Result<ArrayViewMut<'a, T, M>> {
         let sliced_layout = self.layout.slice_with(args)?;
-        Ok(ArrayViewMut {
-            layout: sliced_layout,
-            ptr: self.ptr,
-            len: self.len,
-            window_shared: self.window_shared,
-            _marker: std::marker::PhantomData,
-        })
+        Ok(self.with_layout(sliced_layout))
     }
 
     /// Transpose the mutable view by permuting axes.
     #[inline]
     pub fn transpose_mut(self, axes: [usize; N]) -> Result<ArrayViewMut<'a, T, N>> {
         let transposed_layout = self.layout.transpose(axes)?;
-        Ok(ArrayViewMut {
-            layout: transposed_layout,
-            ptr: self.ptr,
-            len: self.len,
-            window_shared: self.window_shared,
-            _marker: std::marker::PhantomData,
-        })
+        Ok(self.with_layout(transposed_layout))
     }
 
     /// Broadcast the mutable view to a larger dimensional shape.
@@ -686,13 +733,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
                 to: target_shape.to_vec(),
             });
         }
-        Ok(ArrayViewMut {
-            layout: broadcasted_layout,
-            ptr: self.ptr,
-            len: self.len,
-            window_shared: self.window_shared,
-            _marker: std::marker::PhantomData,
-        })
+        Ok(self.with_layout(broadcasted_layout))
     }
 
     /// Reinterpret this mutable view with a new shape without copying.
@@ -702,13 +743,7 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn reshape_mut<const M: usize>(self, shape: [usize; M]) -> Result<ArrayViewMut<'a, T, M>> {
         let reshaped_layout = self.layout.reshape(shape)?;
-        Ok(ArrayViewMut {
-            layout: reshaped_layout,
-            ptr: self.ptr,
-            len: self.len,
-            window_shared: self.window_shared,
-            _marker: std::marker::PhantomData,
-        })
+        Ok(self.with_layout(reshaped_layout))
     }
 
     /// Named alias for [`transpose_mut`](Self::transpose_mut).
@@ -790,22 +825,12 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_slice(&self) -> Option<&[T]> {
         if self.layout.is_c_dense() {
-            let range = dense_block_range(&self.layout)?;
-            if range.end <= self.len {
-                // SAFETY: `ptr` is valid for `len` elements and
-                // `range.end <= len`, so the sub-range is in bounds; a C-dense
-                // layout's block is exactly the view's own elements, so this
-                // slice never covers a sibling view's elements even when the
-                // window is shared.
-                unsafe {
-                    Some(std::slice::from_raw_parts(
-                        self.ptr.as_ptr().add(range.start),
-                        range.len(),
-                    ))
-                }
-            } else {
-                None
-            }
+            let range = checked_block_range(&self.layout, self.len)?;
+            // SAFETY: `ptr` is valid for `len` elements and `range` is in
+            // bounds; a C-dense layout's block is exactly the view's own
+            // elements, so this slice never covers a sibling view's elements
+            // even when the window is shared.
+            unsafe { Some(raw_range_from_ptr(self.ptr, range)) }
         } else {
             None
         }
@@ -816,21 +841,12 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_mut_slice(&mut self) -> Option<&mut [T]> {
         if self.layout.is_c_dense() {
-            let range = dense_block_range(&self.layout)?;
-            if range.end <= self.len {
-                // SAFETY: `ptr` is valid for `len` elements and
-                // `range.end <= len`; a C-dense block is exactly the view's own
-                // elements, which the view exclusively owns even when yielded
-                // by a mutable iterator (sibling views' elements are disjoint).
-                unsafe {
-                    Some(std::slice::from_raw_parts_mut(
-                        self.ptr.as_ptr().add(range.start),
-                        range.len(),
-                    ))
-                }
-            } else {
-                None
-            }
+            let range = checked_block_range(&self.layout, self.len)?;
+            // SAFETY: `ptr` is valid for `len` elements and `range` is in
+            // bounds; a C-dense block is exactly the view's own elements,
+            // which the view exclusively owns even when yielded by a mutable
+            // iterator (sibling views' elements are disjoint).
+            unsafe { Some(raw_range_from_ptr_mut(self.ptr, range)) }
         } else {
             None
         }
@@ -841,20 +857,11 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_slice_memory_order(&self) -> Option<&[T]> {
         if self.layout.is_contiguous() {
-            let range = dense_block_range(&self.layout)?;
-            if range.end <= self.len {
-                // SAFETY: `ptr` is valid for `len` elements and
-                // `range.end <= len`; a contiguous layout's dense block is
-                // exactly the view's own elements (no sibling overlap).
-                unsafe {
-                    Some(std::slice::from_raw_parts(
-                        self.ptr.as_ptr().add(range.start),
-                        range.len(),
-                    ))
-                }
-            } else {
-                None
-            }
+            let range = checked_block_range(&self.layout, self.len)?;
+            // SAFETY: `ptr` is valid for `len` elements and `range` is in
+            // bounds; a contiguous layout's dense block is exactly the view's
+            // own elements (no sibling overlap).
+            unsafe { Some(raw_range_from_ptr(self.ptr, range)) }
         } else {
             None
         }
@@ -867,21 +874,12 @@ impl<'a, T, const N: usize> ArrayViewMut<'a, T, N> {
     #[inline]
     pub fn as_mut_slice_memory_order(&mut self) -> Option<&mut [T]> {
         if self.layout.is_contiguous() {
-            let range = dense_block_range(&self.layout)?;
-            if range.end <= self.len {
-                // SAFETY: `ptr` is valid for `len` elements and
-                // `range.end <= len`; a contiguous layout's dense block is
-                // exactly the view's own elements, exclusively owned even for
-                // iterator-yielded sub-views (siblings are disjoint).
-                unsafe {
-                    Some(std::slice::from_raw_parts_mut(
-                        self.ptr.as_ptr().add(range.start),
-                        range.len(),
-                    ))
-                }
-            } else {
-                None
-            }
+            let range = checked_block_range(&self.layout, self.len)?;
+            // SAFETY: `ptr` is valid for `len` elements and `range` is in
+            // bounds; a contiguous layout's dense block is exactly the view's
+            // own elements, exclusively owned even for iterator-yielded
+            // sub-views (siblings are disjoint).
+            unsafe { Some(raw_range_from_ptr_mut(self.ptr, range)) }
         } else {
             None
         }
@@ -962,9 +960,7 @@ impl<'a, T, const N: usize> std::ops::Index<[usize; N]> for ArrayViewMut<'a, T, 
             "ArrayViewMut index physical offset {offset} exceeds backing length {}",
             self.len
         );
-        // SAFETY: ptr is valid for len elements for the lifetime of the view,
-        // and the assertion above establishes `offset < len`.
-        unsafe { &*self.ptr.as_ptr().add(offset) }
+        self.element(offset)
     }
 }
 
@@ -981,9 +977,7 @@ impl<'a, T, const N: usize> std::ops::IndexMut<[usize; N]> for ArrayViewMut<'a, 
             "ArrayViewMut index_mut physical offset {offset} exceeds backing length {}",
             self.len
         );
-        // SAFETY: ptr is valid for len elements for the lifetime of the view,
-        // and the assertion above establishes `offset < len`.
-        unsafe { &mut *self.ptr.as_ptr().add(offset) }
+        self.element_mut(offset)
     }
 }
 
@@ -1014,9 +1008,7 @@ impl<'a, T> std::ops::Index<usize> for ArrayViewMut<'a, T, 1> {
             "ArrayViewMut1 index physical offset {offset} exceeds backing length {}",
             self.len
         );
-        // SAFETY: ptr is valid for len elements, and the assertion above
-        // establishes `offset < len`.
-        unsafe { &*self.ptr.as_ptr().add(offset) }
+        self.element(offset)
     }
 }
 
@@ -1033,9 +1025,7 @@ impl<'a, T> std::ops::IndexMut<usize> for ArrayViewMut<'a, T, 1> {
             "ArrayViewMut1 index_mut physical offset {offset} exceeds backing length {}",
             self.len
         );
-        // SAFETY: ptr is valid for len elements, and the assertion above
-        // establishes `offset < len`.
-        unsafe { &mut *self.ptr.as_ptr().add(offset) }
+        self.element_mut(offset)
     }
 }
 
