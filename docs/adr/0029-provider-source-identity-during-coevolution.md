@@ -69,10 +69,10 @@ Eunomia PR #87 and Aequitas PR #51 merged. This restores one Eunomia trait
 identity for Leto and unpinned Gaia consumers. Hermes PR #155 was then merged
 and its temporary pin removed; Mnemosyne remains pinned while PR #123 is open.
 
-2026-09-04: Advanced the retained Mnemosyne pin to PR #123's current head,
-`a07f999`, after dependency-tree inspection showed the previous `da5c6be`
-revision still selected pre-merge Eunomia types. That head removes Mnemosyne's
-obsolete Eunomia PR #87 revision after the provider merge.
+2026-09-04: Advanced the retained Mnemosyne pin to `mnemosyne#123`'s current
+head (proposed, not merged), after dependency-tree inspection showed the PR's
+earlier revision still selected pre-merge Eunomia types. That head removes
+Mnemosyne's obsolete Eunomia PR #87 revision after the provider merge.
 
 2026-09-04: Closed obsolete Mnemosyne PR #123 after confirming its source-only
 correction already exists on `main`; independent review rejected the stale PR's
