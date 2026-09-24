@@ -3,6 +3,7 @@
 <a id="LETO-DENSE-SCALE-RANGE-2026-09-24"></a>
 
 ## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — todo
+- priority: correctness
 
 - Evidence: the #233/#234 review probes. `svd_decompose` and `schur` return non-convergence at extreme magnitudes, and `col_piv_qr` of an f64 matrix scaled by 1e160 returns `Ok` with rank 0.
 - Cause to confirm: unscaled sums of squares; `householder::reflect_in_place` is now scaled, so re-probe first.
@@ -11,6 +12,7 @@
 <a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
 
 ## LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23 — Scale-aware Jacobi tolerance and a typed cap [minor] — review
+- priority: correctness
 
 - Defects: the absolute `1e-12` tolerance stops early on small-magnitude matrices (`[[2e-13,1e-13],[1e-13,2e-13]]` returned `{2e-13, 2e-13}`), and exhausting the `32·n²` rotation budget returned `Ok`.
 - Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `(n + 2)·ε·‖A‖_F`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
