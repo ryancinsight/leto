@@ -126,6 +126,21 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [minor] Symmetric Jacobi (`symmetric_eigen_jacobi` and its variants): the
+  absolute `1e-12` tolerance is replaced by the scale-aware pair criterion
+  `|a_pq| ≤ τ·max(√(|a_pp|·|a_qq|), τ·‖A‖_F)` (default `τ = ε` of the scalar
+  type; Demmel & Veselić 1992), so a small-magnitude matrix is no longer
+  accepted unrotated (`[[2e-13, 1e-13], [1e-13, 2e-13]]` returned
+  `{2e-13, 2e-13}`; it now returns `{1e-13, 3e-13}`); the explicit
+  `_with_tolerance` argument is that `τ`. Symmetry acceptance no
+  longer reuses the convergence tolerance: a pair is accepted when
+  `|aᵢⱼ − aⱼᵢ| ≤ (n + 2)·ε·‖A‖_F`, the rounding of two length-`n` inner
+  products assembling a symmetric matrix along different paths. The pair
+  criterion gives high relative accuracy for positive definite matrices and
+  the normwise accuracy of QR otherwise. Exhausting the `32·n²` rotation budget returns
+  `LetoError::ConvergenceError` instead of a silent `Ok`, and invalid input
+  returns `LetoError::InvalidInput`.
+
 - [patch] Strided unary and binary elementwise micro-tiles now derive their
   side from the cached `CacheGeometry::cache_line_bytes()` value instead of
   assuming 64 bytes. The 64-byte fallback remains in force when topology is
