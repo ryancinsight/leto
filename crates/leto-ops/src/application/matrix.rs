@@ -507,6 +507,38 @@ pub fn matmul_accumulate<T: Scalar>(
     }
 }
 
+#[inline(always)]
+fn accumulate_matmul_row<T: Scalar>(
+    lhs_ptr: *const T,
+    rhs_ptr: *const T,
+    out_ptr: *mut T,
+    row: usize,
+    layout: MatmulLayout,
+) {
+    let lhs_row_offset = layout.lhs_offset + row as isize * layout.lhs_stride_row;
+    let out_row_offset = layout.out_offset + row as isize * layout.out_stride_row;
+
+    for shared in 0..layout.shared {
+        // SAFETY: `validate_matmul` validates the input storage span and this
+        // row/shared loop only reads logical LHS indices from that validated span.
+        let lhs_value =
+            unsafe { *lhs_ptr.offset(lhs_row_offset + shared as isize * layout.lhs_stride_col) };
+        if lhs_value == T::ZERO {
+            continue;
+        }
+
+        let rhs_row_offset = layout.rhs_offset + shared as isize * layout.rhs_stride_row;
+        multiply_row(
+            lhs_value,
+            rhs_ptr,
+            out_ptr,
+            rhs_row_offset,
+            out_row_offset,
+            layout,
+        );
+    }
+}
+
 #[inline]
 fn serial_matmul<T: Scalar>(
     lhs: &ArrayView<'_, T, 2>,
@@ -533,29 +565,7 @@ fn serial_matmul<T: Scalar>(
     let out_ptr = out.data_mut().as_mut_ptr();
 
     for row in 0..layout.rows {
-        let lhs_row_offset = layout.lhs_offset + row as isize * layout.lhs_stride_row;
-        let out_row_offset = layout.out_offset + row as isize * layout.out_stride_row;
-
-        for shared in 0..layout.shared {
-            // SAFETY: `validate_matmul` validates the input storage span for
-            // every logical `lhs` index used by this loop nest.
-            let lhs_value = unsafe {
-                *lhs_ptr.offset(lhs_row_offset + shared as isize * layout.lhs_stride_col)
-            };
-            if lhs_value == T::ZERO {
-                continue;
-            }
-
-            let rhs_row_offset = layout.rhs_offset + shared as isize * layout.rhs_stride_row;
-            multiply_row(
-                lhs_value,
-                rhs_ptr,
-                out_ptr,
-                rhs_row_offset,
-                out_row_offset,
-                layout,
-            );
-        }
+        accumulate_matmul_row(lhs_ptr, rhs_ptr, out_ptr, row, layout);
     }
 }
 
@@ -858,29 +868,7 @@ fn parallel_matmul<T: Scalar>(
         let lhs_ptr = lhs_ptr as *const T;
         let rhs_ptr = rhs_ptr as *const T;
         let out_ptr = out_ptr as *mut T;
-        let lhs_row_offset = layout.lhs_offset + row as isize * layout.lhs_stride_row;
-        let out_row_offset = layout.out_offset + row as isize * layout.out_stride_row;
-
-        for shared in 0..layout.shared {
-            // SAFETY: `validate_matmul` validates the input storage span and
-            // each worker owns one logical output row.
-            let lhs_value = unsafe {
-                *lhs_ptr.offset(lhs_row_offset + shared as isize * layout.lhs_stride_col)
-            };
-            if lhs_value == T::ZERO {
-                continue;
-            }
-
-            let rhs_row_offset = layout.rhs_offset + shared as isize * layout.rhs_stride_row;
-            multiply_row(
-                lhs_value,
-                rhs_ptr,
-                out_ptr,
-                rhs_row_offset,
-                out_row_offset,
-                layout,
-            );
-        }
+        accumulate_matmul_row(lhs_ptr, rhs_ptr, out_ptr, row, layout);
     });
 }
 
