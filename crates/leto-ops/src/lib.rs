@@ -75,6 +75,7 @@ pub use application::linalg::{
     svd_decompose,
     symmetric_eigen_jacobi,
     symmetric_eigen_jacobi_with_tolerance,
+    symmetric_eigen_qr,
     symmetric_eigenvalues_jacobi,
     symmetric_eigenvalues_jacobi_with_tolerance,
     trace,
@@ -110,6 +111,7 @@ pub use application::linalg::{
 
     SvdDecomposition,
     SymmetricEigenDecomposition,
+    SymmetricEigenWorkspace,
     UduDecomposition,
 };
 pub use application::loss::{

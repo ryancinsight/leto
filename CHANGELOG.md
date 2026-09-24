@@ -74,6 +74,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] `symmetric_eigen_qr` and `SymmetricEigenWorkspace`: real symmetric
+  eigendecomposition by Householder tridiagonalization and implicit-shift QL
+  (`tred2` + `tql2`), `O(n³)` against classical Jacobi's `O(n²)` pivot search
+  per rotation. The workspace reuses every buffer across calls and exposes
+  eigenvectors as contiguous rows; only the lower triangle is read.
+
 - [minor] `leto::transpose_copy_strided` copies a column window of a
   row-major matrix — the source at a pitch wider than the window — into the
   matching rows of its transpose, with the checked extents, clone accounting

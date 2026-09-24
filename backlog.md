@@ -16,6 +16,16 @@
 - Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `(n + 2)·ε·‖A‖_F`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
 - Acceptance: the regression matrix, a scale sweep `s ∈ [1e-300, 1e300]` at `32·n²·ε` relative, the budget error with its residual, existing Jacobi tests.
 
+<a id="LETO-SYMMETRIC-EIGEN-QR-2026-09-23"></a>
+
+## LETO-SYMMETRIC-EIGEN-QR-2026-09-23 — O(n³) symmetric eigensolver with a reusable workspace [minor] — review
+
+- Driver: ritk MP-PCA denoising decomposes one 60×60 Gram matrix per voxel. Classical Jacobi converges in a few thousand rotations there, but each rotation scans all `n²/2` off-diagonal entries for its pivot: 6.2 ms per matrix.
+- Outcome: `symmetric_eigen_qr` and `SymmetricEigenWorkspace` (power-of-two scaling, Householder tridiagonalization, implicit QL `tql2`), allocation-free on reuse for any input layout, typed `ConvergenceError`/`InvalidInput`.
+- Acceptance: closed forms; residual and orthonormality within `n²·ε(T)·‖A‖_F` for f64, f32, F16 and Bf16; clusters and wide dynamic range; a scale sweep across each format's range with no wrong `Ok`; Jacobi agreement; rank-deficient Gram; workspace reuse bitwise and allocation-free.
+- Follow-up (not in this item): route `MatrixDecompose::symmetric_eigen` through the QL solver.
+
+)
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]

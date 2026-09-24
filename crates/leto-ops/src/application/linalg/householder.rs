@@ -26,11 +26,22 @@ pub(crate) struct Reflector<T> {
 /// `α = −sign(x₀)·‖x‖` is chosen so `v₀ = x₀ − α` adds in magnitude rather than
 /// cancels — the numerically stable convention.
 pub(crate) fn reflector<T: RealScalar>(x: &[T]) -> Option<(Reflector<T>, T)> {
-    if x.is_empty() {
-        return None;
-    }
+    let mut v = x.to_vec();
+    let (beta, alpha) = reflect_in_place(&mut v)?;
+    Some((Reflector { v, beta }, alpha))
+}
+
+/// Overwrite `x` with the vector `v` of the reflector mapping it to `α·e₁`;
+/// returns `(β, α)` with `β = 2/(vᵀv)`.
+///
+/// The arithmetic of [`reflector`] without its allocation, for reductions that
+/// store `v` in the matrix they are reducing. `None` when `x` is empty or its
+/// norm is zero; `x[0]` may then already hold `x₀ − α` and must not be read
+/// as a reflector.
+pub(crate) fn reflect_in_place<T: RealScalar>(x: &mut [T]) -> Option<(T, T)> {
+    let first = *x.first()?;
     let mut norm_sq = T::ZERO;
-    for &xi in x {
+    for &xi in x.iter() {
         norm_sq = norm_sq.add(xi.mul(xi));
     }
     let norm = norm_sq.sqrt();
@@ -38,25 +49,22 @@ pub(crate) fn reflector<T: RealScalar>(x: &[T]) -> Option<(Reflector<T>, T)> {
         return None;
     }
 
-    let sign = if x[0] < T::ZERO {
+    let sign = if first < T::ZERO {
         T::ZERO.sub(T::ONE)
     } else {
         T::ONE
     };
     let alpha = T::ZERO.sub(sign.mul(norm)); // α = −sign·‖x‖
-
-    let mut v = x.to_vec();
-    v[0] = v[0].sub(alpha); // v₀ = x₀ − α
+    x[0] = first.sub(alpha); // v₀ = x₀ − α
 
     let mut vnorm_sq = T::ZERO;
-    for &vi in &v {
+    for &vi in x.iter() {
         vnorm_sq = vnorm_sq.add(vi.mul(vi));
     }
     if vnorm_sq <= T::ZERO {
         return None;
     }
-    let beta = T::ONE.add(T::ONE).div(vnorm_sq);
-    Some((Reflector { v, beta }, alpha))
+    Some((T::ONE.add(T::ONE).div(vnorm_sq), alpha))
 }
 
 /// Left-apply `P` to rows `[base_row .. base_row + v.len())` of a row-major
