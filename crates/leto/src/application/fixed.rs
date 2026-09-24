@@ -36,6 +36,37 @@ impl<T, const N: usize> FixedVector<T, N> {
     pub fn iter(&self) -> core::slice::Iter<'_, T> {
         self.data.iter()
     }
+
+    #[inline]
+    fn for_each_mut<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut T, usize),
+    {
+        for i in 0..N {
+            f(&mut self.data[i], i);
+        }
+    }
+}
+
+impl<T, const N: usize> FixedVector<T, N>
+where
+    T: Copy,
+{
+    #[inline]
+    fn map<U, F>(self, mut f: F) -> FixedVector<U, N>
+    where
+        F: FnMut(T) -> U,
+    {
+        FixedVector::new(std::array::from_fn(|i| f(self.data[i])))
+    }
+
+    #[inline]
+    fn zip_map<U, F>(self, rhs: Self, mut f: F) -> FixedVector<U, N>
+    where
+        F: FnMut(T, T) -> U,
+    {
+        FixedVector::new(std::array::from_fn(|i| f(self.data[i], rhs.data[i])))
+    }
 }
 
 impl<T, const N: usize> FixedVector<T, N>
@@ -85,7 +116,7 @@ where
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Self::new(std::array::from_fn(|i| self.data[i] + rhs.data[i]))
+        self.zip_map(rhs, |lhs, rhs| lhs + rhs)
     }
 }
 
@@ -94,9 +125,7 @@ where
     T: Copy + AddAssign,
 {
     fn add_assign(&mut self, rhs: Self) {
-        for i in 0..N {
-            self.data[i] += rhs.data[i];
-        }
+        self.for_each_mut(|value, i| *value += rhs.data[i]);
     }
 }
 
@@ -107,7 +136,7 @@ where
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Self::new(std::array::from_fn(|i| self.data[i] - rhs.data[i]))
+        self.zip_map(rhs, |lhs, rhs| lhs - rhs)
     }
 }
 
@@ -118,7 +147,7 @@ where
     type Output = Self;
 
     fn mul(self, rhs: T) -> Self::Output {
-        Self::new(std::array::from_fn(|i| self.data[i] * rhs))
+        self.map(|value| value * rhs)
     }
 }
 
@@ -129,7 +158,7 @@ where
     type Output = Self;
 
     fn div(self, rhs: T) -> Self::Output {
-        Self::new(std::array::from_fn(|i| self.data[i] / rhs))
+        self.map(|value| value / rhs)
     }
 }
 
@@ -140,7 +169,7 @@ where
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        Self::new(std::array::from_fn(|i| -self.data[i]))
+        self.map(|value| -value)
     }
 }
 
@@ -169,6 +198,43 @@ impl<T, const R: usize, const C: usize> FixedMatrix<T, R, C> {
     /// Iterate over matrix entries in row-major order.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.data.iter().flat_map(|row| row.iter())
+    }
+
+    #[inline]
+    fn for_each_mut<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut T, usize, usize),
+    {
+        for row in 0..R {
+            for col in 0..C {
+                f(&mut self.data[row][col], row, col);
+            }
+        }
+    }
+}
+
+impl<T, const R: usize, const C: usize> FixedMatrix<T, R, C>
+where
+    T: Copy,
+{
+    #[inline]
+    fn map<U, F>(self, mut f: F) -> FixedMatrix<U, R, C>
+    where
+        F: FnMut(T) -> U,
+    {
+        FixedMatrix::from_rows(std::array::from_fn(|row| {
+            std::array::from_fn(|col| f(self.data[row][col]))
+        }))
+    }
+
+    #[inline]
+    fn zip_map<U, F>(self, rhs: Self, mut f: F) -> FixedMatrix<U, R, C>
+    where
+        F: FnMut(T, T) -> U,
+    {
+        FixedMatrix::from_rows(std::array::from_fn(|row| {
+            std::array::from_fn(|col| f(self.data[row][col], rhs.data[row][col]))
+        }))
     }
 }
 
@@ -542,11 +608,7 @@ where
     T: Copy + AddAssign,
 {
     fn add_assign(&mut self, rhs: Self) {
-        for row in 0..R {
-            for col in 0..C {
-                self.data[row][col] += rhs.data[row][col];
-            }
-        }
+        self.for_each_mut(|value, row, col| *value += rhs.data[row][col]);
     }
 }
 
@@ -596,9 +658,7 @@ where
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Self::from_rows(std::array::from_fn(|row| {
-            std::array::from_fn(|col| self.data[row][col] + rhs.data[row][col])
-        }))
+        self.zip_map(rhs, |lhs, rhs| lhs + rhs)
     }
 }
 
@@ -609,9 +669,7 @@ where
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Self::from_rows(std::array::from_fn(|row| {
-            std::array::from_fn(|col| self.data[row][col] - rhs.data[row][col])
-        }))
+        self.zip_map(rhs, |lhs, rhs| lhs - rhs)
     }
 }
 
@@ -622,9 +680,7 @@ where
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        Self::from_rows(std::array::from_fn(|row| {
-            std::array::from_fn(|col| -self.data[row][col])
-        }))
+        self.map(|value| -value)
     }
 }
 
@@ -635,9 +691,7 @@ where
     type Output = Self;
 
     fn mul(self, rhs: T) -> Self::Output {
-        Self::from_rows(std::array::from_fn(|row| {
-            std::array::from_fn(|col| self.data[row][col] * rhs)
-        }))
+        self.map(|value| value * rhs)
     }
 }
 
@@ -648,9 +702,7 @@ where
     type Output = Self;
 
     fn div(self, rhs: T) -> Self::Output {
-        Self::from_rows(std::array::from_fn(|row| {
-            std::array::from_fn(|col| self.data[row][col] / rhs)
-        }))
+        self.map(|value| value / rhs)
     }
 }
 
@@ -659,11 +711,7 @@ where
     T: Copy + SubAssign,
 {
     fn sub_assign(&mut self, rhs: Self) {
-        for row in 0..R {
-            for col in 0..C {
-                self.data[row][col] -= rhs.data[row][col];
-            }
-        }
+        self.for_each_mut(|value, row, col| *value -= rhs.data[row][col]);
     }
 }
 
@@ -672,11 +720,7 @@ where
     T: Copy + MulAssign,
 {
     fn mul_assign(&mut self, rhs: T) {
-        for row in 0..R {
-            for col in 0..C {
-                self.data[row][col] *= rhs;
-            }
-        }
+        self.for_each_mut(|value, _, _| *value *= rhs);
     }
 }
 
@@ -685,11 +729,7 @@ where
     T: Copy + DivAssign,
 {
     fn div_assign(&mut self, rhs: T) {
-        for row in 0..R {
-            for col in 0..C {
-                self.data[row][col] /= rhs;
-            }
-        }
+        self.for_each_mut(|value, _, _| *value /= rhs);
     }
 }
 
