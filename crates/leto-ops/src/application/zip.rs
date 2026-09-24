@@ -1,6 +1,29 @@
 use crate::application::index::{validate_mutable_output, RowMajorTraversal};
 use leto::{ArrayView, ArrayViewMut, Layout, LetoError, Result};
 
+#[inline]
+fn for_each_row_major_indexed<RowState, InitRow, Visit, const N: usize>(
+    traversal: RowMajorTraversal<N>,
+    mut init_row: InitRow,
+    mut visit: Visit,
+) -> Result<()>
+where
+    InitRow: FnMut([usize; N]) -> Result<RowState>,
+    Visit: FnMut([usize; N], &mut RowState),
+{
+    for row in 0..traversal.rows() {
+        let mut index = traversal.base_index(row);
+        let mut row_state = init_row(index)?;
+        for k in 0..traversal.inner() {
+            if N > 0 {
+                index[N - 1] = k;
+            }
+            visit(index, &mut row_state);
+        }
+    }
+    Ok(())
+}
+
 /// Fold two read-only views into one accumulator.
 ///
 /// This is the reduction analogue of [`zip_mut_with`]. Both views must have the
@@ -91,20 +114,20 @@ where
         return Ok(init);
     };
     let step = traversal.last_axis_stride(layout);
-    let mut acc = init;
-    for row in 0..traversal.rows() {
-        let mut index = traversal.base_index(row);
-        let mut offset = layout.offset_of(index)? as isize;
-        for k in 0..traversal.inner() {
-            if N > 0 {
-                index[N - 1] = k;
-            }
-            acc = f(acc, index, &data[offset as usize]);
-            offset += step;
-        }
-    }
+    let mut acc = Some(init);
+    for_each_row_major_indexed(
+        traversal,
+        |index| Ok(layout.offset_of(index)? as isize),
+        |index, offset| {
+            let current = acc
+                .take()
+                .expect("invariant: indexed fold accumulator is always present");
+            acc = Some(f(current, index, &data[*offset as usize]));
+            *offset += step;
+        },
+    )?;
 
-    Ok(acc)
+    Ok(acc.expect("invariant: indexed fold accumulator is always present"))
 }
 
 /// Fold one read-only view with the logical Fortran/column-major index order.
@@ -170,17 +193,14 @@ where
         return Ok(());
     };
     let step = traversal.last_axis_stride(layout);
-    for row in 0..traversal.rows() {
-        let mut index = traversal.base_index(row);
-        let mut offset = layout.offset_of(index)? as isize;
-        for k in 0..traversal.inner() {
-            if N > 0 {
-                index[N - 1] = k;
-            }
-            f(index, &mut data[offset as usize]);
-            offset += step;
-        }
-    }
+    for_each_row_major_indexed(
+        traversal,
+        |index| Ok(layout.offset_of(index)? as isize),
+        |index, offset| {
+            f(index, &mut data[*offset as usize]);
+            *offset += step;
+        },
+    )?;
 
     Ok(())
 }
@@ -402,29 +422,30 @@ where
     let b_step = traversal.last_axis_stride(b_layout);
     let c_step = traversal.last_axis_stride(c_layout);
     let d_step = traversal.last_axis_stride(d_layout);
-    for row in 0..traversal.rows() {
-        let mut index = traversal.base_index(row);
-        let mut a_offset = a_layout.offset_of(index)? as isize;
-        let mut b_offset = b_layout.offset_of(index)? as isize;
-        let mut c_offset = c_layout.offset_of(index)? as isize;
-        let mut d_offset = d_layout.offset_of(index)? as isize;
-        for k in 0..traversal.inner() {
-            if N > 0 {
-                index[N - 1] = k;
-            }
+    for_each_row_major_indexed(
+        traversal,
+        |index| {
+            Ok((
+                a_layout.offset_of(index)? as isize,
+                b_layout.offset_of(index)? as isize,
+                c_layout.offset_of(index)? as isize,
+                d_layout.offset_of(index)? as isize,
+            ))
+        },
+        |index, offsets| {
             f(
                 index,
-                &mut a_data[a_offset as usize],
-                &mut b_data[b_offset as usize],
-                &mut c_data[c_offset as usize],
-                &mut d_data[d_offset as usize],
+                &mut a_data[offsets.0 as usize],
+                &mut b_data[offsets.1 as usize],
+                &mut c_data[offsets.2 as usize],
+                &mut d_data[offsets.3 as usize],
             );
-            a_offset += a_step;
-            b_offset += b_step;
-            c_offset += c_step;
-            d_offset += d_step;
-        }
-    }
+            offsets.0 += a_step;
+            offsets.1 += b_step;
+            offsets.2 += c_step;
+            offsets.3 += d_step;
+        },
+    )?;
 
     Ok(())
 }
@@ -714,25 +735,26 @@ where
     let output_step = traversal.last_axis_stride(output_layout);
     let source_steps = sources.steps();
 
-    for row in 0..traversal.rows() {
-        let mut index = traversal.base_index(row);
-        let mut output_offset = zip_offset(output_layout, index)?;
-        let mut source_offsets = sources.offsets_at(index)?;
-        for k in 0..traversal.inner() {
-            if N > 0 {
-                index[N - 1] = k;
-            }
-            let output_index = usize::try_from(output_offset)
+    for_each_row_major_indexed(
+        traversal,
+        |index| {
+            Ok((
+                zip_offset(output_layout, index)?,
+                sources.offsets_at(index)?,
+            ))
+        },
+        |index, offsets| {
+            let output_index = usize::try_from(offsets.0)
                 .expect("invariant: validated zip output offset is non-negative");
             f(
                 index,
                 &mut output_data[output_index],
-                sources.values(source_offsets),
+                sources.values(offsets.1),
             );
-            output_offset += output_step;
-            sources.advance(&mut source_offsets, source_steps);
-        }
-    }
+            offsets.0 += output_step;
+            sources.advance(&mut offsets.1, source_steps);
+        },
+    )?;
     Ok(())
 }
 
@@ -904,24 +926,26 @@ macro_rules! impl_indexed_zip_mut_outputs_for_tuple {
                 let output_steps = ($(traversal.last_axis_stride(output_layouts.$index),)+);
                 let source_steps = sources.steps();
 
-                for row in 0..traversal.rows() {
-                    let mut index = traversal.base_index(row);
-                    let mut output_offsets = ($(zip_offset(output_layouts.$index, index)?,)+);
-                    let mut source_offsets = sources.offsets_at(index)?;
-                    for k in 0..traversal.inner() {
-                        if N > 0 {
-                            index[N - 1] = k;
-                        }
+                for_each_row_major_indexed(
+                    traversal,
+                    |index| {
+                        Ok((
+                            ($(zip_offset(output_layouts.$index, index)?,)+),
+                            sources.offsets_at(index)?,
+                        ))
+                    },
+                    |index, state| {
+                        let (output_offsets, source_offsets) = state;
                         f(
                             index,
                             ($(&mut $data[usize::try_from(output_offsets.$index)
                                 .expect("invariant: validated zip output offset is non-negative")],)+),
-                            sources.values(source_offsets),
+                            sources.values(*source_offsets),
                         );
                         $(output_offsets.$index += output_steps.$index;)+
-                        sources.advance(&mut source_offsets, source_steps);
-                    }
-                }
+                        sources.advance(source_offsets, source_steps);
+                    },
+                )?;
                 Ok(())
             }
         }
