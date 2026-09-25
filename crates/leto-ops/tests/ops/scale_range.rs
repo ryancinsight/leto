@@ -5,48 +5,42 @@
 //! their products scale-safely and the matrix-tier gate covers the rest
 //! (`linalg::scaling`), so no exponent of any format is exempt.
 //!
-//! # Error bounds (empirical backward-error envelope)
+//! # Error bounds
 //!
 //! Work in units of `s`. Let `Â = image / s` be what `T` actually holds
 //! (exact in `f64`), `δ = ‖Â − A‖_F` the input rounding (zero wherever `s·A`
 //! is representable; nonzero only in the subnormal binades and, for `Bf16`,
 //! where an entry needs more than 8 significant bits), and `η·‖Â‖_F` the
-//! factorization's backward error.
-//!
-//! `η = n²·ε` is an **empirical envelope, not a derived bound.** The
-//! first-order worst case composes Higham, *Accuracy and Stability of
-//! Numerical Algorithms*, 2nd ed. (2002), over the enumerated
-//! transformations — `γ̃_m` per length-`m` Householder reflector (§19.3,
-//! Lemmas 19.2–19.3, `γ̃_k = c·k·u/(1 − c·k·u)` with `c` unspecified) and
-//! `γ₆` per Givens rotation (§19.6, Lemmas 19.7–19.8), `u = ε/2` — and is
-//! larger: at `n = 3` the `2n − 1 = 5` bidiagonal reflectors alone give
-//! `5·γ̃₃ ≈ 15·c·u`, before any of the sweeps, whose count is bounded only by
-//! each kernel's cap (`francis::MAX_ITER`, `bidiagonal_qr`'s iteration cap).
-//! The envelope is what the computations actually meet: measured at this
-//! revision against the `f64` factorization of the same image, the largest
-//! singular-value error over the random general, symmetric and graded
-//! inputs of the differential probe (`n ∈ {2, 3, 4, 5, 8}`, `f32`, `F16`,
-//! `Bf16`, magnitudes inside the gates; 4,320 results with the symmetric
-//! eigenvalues of `symmetric_qr`) was `0.44·n²·ε·‖Â‖_F`, a margin of `2.3×`. A result outside
-//! the envelope fails these assertions — it is checked, not assumed.
+//! factorization's backward error, `η` derived in `backward_error.rs` for
+//! each routine ([`svd`](super::backward_error::svd),
+//! [`francis`](super::backward_error::francis),
+//! [`col_piv_qr`](super::backward_error::col_piv_qr)) from Higham's `γ`
+//! bounds over the enumerated transformations at the code's iteration caps.
+//! These are worst cases at the caps — for `f64` about `10⁻¹⁰` relative,
+//! loose to vacuous for the 8- and 11-bit formats — and the errors actually
+//! measured are far below them; the measured values are reported, never
+//! asserted.
 //! Restoring a result by `s` rounds it once onto `T`'s grid; in the subnormal
 //! binades that costs at most half the subnormal spacing,
 //! `0.5·2^(MIN−e)·ε` in units of `s`.
 //!
-//! - Singular values (Weyl): `|σ̂ − σ| ≤ δ + η‖Â‖_F + 0.5·2^(MIN−e)·ε`.
+//! - Singular values (Weyl): `|σ̂ − σ| ≤ δ + η‖Â‖_F + ρ + 0.5·2^(MIN−e)·ε`,
+//!   `ρ` the error of the `f64` reference `√λ(AᵀA)`: `η_QL(ε₆₄)‖AᵀA‖_F/σ_min`.
 //! - Eigenvalues (Bauer–Fike): `|λ̂ − λ| ≤ κ·(δ + η‖Â‖_F) + ρ + 0.5·2^(MIN−e)·ε`,
 //!   with `κ ≥ κ₂(V)`: for `SIMILAR = S·diag(1, 2, 4)·S⁻¹`,
 //!   `κ = ‖S‖_F·‖S⁻¹‖_F = 3.675` in closed form; for `GENERAL`, `κ` from its
 //!   `f64` left and right eigenvectors (`spectral_condition`), `ρ` the `f64`
-//!   reference's own `κ·9ε₆₄·‖A‖_F`.
-//! - Pivoted QR: `‖Â·P − Q·R̂‖_F ≤ η‖Â‖_F + n·0.5·2^(MIN−e)·ε`, and the rank
-//!   is 3 whenever `δ < σ_min(A)/2`.
+//!   reference's own `κ·η(ε₆₄)·‖A‖_F`.
+//! - Pivoted QR: `‖Â·P − Q·R̂‖_F ≤ η‖Â‖_F + n·0.5·2^(MIN−e)·ε`, plus the `f64`
+//!   evaluation's `γ_{n+1}·‖|Q||R|‖_F`, and the rank is 3 whenever
+//!   `δ < σ_min(A)/2`.
 
 #![expect(
     clippy::unwrap_used,
     reason = "test scope: failed precondition = test failure"
 )]
 
+use super::backward_error;
 use super::format::{epsilon, Format};
 use super::spectral_condition::bauer_fike_factor;
 use eunomia::{Bf16, F16};
@@ -84,7 +78,8 @@ struct Sample<T> {
     matrix: Array2<T>,
     unit: Vec<f64>,
     input_error: f64,
-    backward: f64,
+    norm: f64,
+    epsilon: f64,
     grid: f64,
 }
 
@@ -100,7 +95,8 @@ fn sample<T: Format>(base: &[f64], exponent: i32) -> Sample<T> {
     Sample {
         matrix: Array2::from_shape_vec([N, N], values).unwrap(),
         input_error: frobenius(&difference),
-        backward: (N * N) as f64 * epsilon * frobenius(&unit),
+        norm: frobenius(&unit),
+        epsilon,
         grid: 0.5 * scale(1.0, T::MIN_EXPONENT - exponent) * epsilon,
         unit,
     }
@@ -113,8 +109,9 @@ fn exponents<T: Format>() -> std::ops::RangeInclusive<i32> {
 }
 
 /// Singular values of `GENERAL` by an independent route: `√λ(AᵀA)` through
-/// the symmetric solver, in `f64`, descending.
-fn general_singular_values() -> Vec<f64> {
+/// the symmetric solver, in `f64`, descending, with their error bound
+/// `|√λ̂ − √λ| ≤ |λ̂ − λ|/√λ ≤ η_QL(ε₆₄)·‖AᵀA‖_F/σ_min`.
+fn general_singular_values() -> (Vec<f64>, f64) {
     let mut gram = vec![0.0; N * N];
     for i in 0..N {
         for j in 0..N {
@@ -123,15 +120,21 @@ fn general_singular_values() -> Vec<f64> {
                 .sum();
         }
     }
+    let bound = backward_error::ql(N, f64::EPSILON) * frobenius(&gram);
     let eigen = symmetric_eigen_qr(&Array2::from_shape_vec([N, N], gram).unwrap().view()).unwrap();
-    eigen.eigenvalues.iter().rev().map(|l| l.sqrt()).collect()
+    let sigmas: Vec<f64> = eigen.eigenvalues.iter().rev().map(|l| l.sqrt()).collect();
+    let error = bound / (sigmas[N - 1] * sigmas[N - 1] - bound).max(0.0).sqrt();
+    (sigmas, error)
 }
 
 fn check_singular_values<T: Format>() {
-    let reference = general_singular_values();
+    let (reference, reference_error) = general_singular_values();
     for exponent in exponents::<T>() {
         let sample = sample::<T>(&GENERAL, exponent);
-        let bound = sample.input_error + sample.backward + sample.grid;
+        let bound = sample.input_error
+            + backward_error::svd(N, N, sample.epsilon) * sample.norm
+            + reference_error
+            + sample.grid;
         let values = singular_values(&sample.matrix.view())
             .unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
         let full = svd_decompose(&sample.matrix.view())
@@ -204,14 +207,15 @@ fn general_spectrum() -> Spectrum {
         matrix: GENERAL,
         eigenvalues,
         condition,
-        reference_error: condition * (N * N) as f64 * f64::EPSILON * frobenius(&GENERAL),
+        reference_error: condition * backward_error::francis(N, f64::EPSILON) * frobenius(&GENERAL),
     }
 }
 
 fn check_eigenvalues<T: Format>(spectrum: &Spectrum) {
     for exponent in exponents::<T>() {
         let sample = sample::<T>(&spectrum.matrix, exponent);
-        let bound = spectrum.condition * (sample.input_error + sample.backward)
+        let backward = backward_error::francis(N, sample.epsilon) * sample.norm;
+        let bound = spectrum.condition * (sample.input_error + backward)
             + spectrum.reference_error
             + sample.grid;
         let results = [
@@ -234,7 +238,7 @@ fn check_eigenvalues<T: Format>(spectrum: &Spectrum) {
 }
 
 fn check_pivoted_qr<T: Format>() {
-    let sigma_min = *general_singular_values().last().unwrap();
+    let sigma_min = *general_singular_values().0.last().unwrap();
     for exponent in exponents::<T>() {
         let sample = sample::<T>(&GENERAL, exponent);
         let decomposition = col_piv_qr(&sample.matrix.view())
@@ -246,17 +250,22 @@ fn check_pivoted_qr<T: Format>() {
         let r = decomposition.r();
         let (q, r) = (q.storage().as_slice(), r.storage().as_slice());
         let permutation = decomposition.permutation();
-        let mut residual = 0.0;
+        let (mut residual, mut rounding) = (0.0, 0.0);
         for i in 0..N {
             for (k, &column) in permutation.iter().enumerate() {
                 // R in units of s before multiplying, so no f64 product is subnormal.
-                let qr: f64 = (0..N)
-                    .map(|j| q[i * N + j].to_f64() * scale(r[j * N + k].to_f64(), -exponent))
-                    .sum();
+                let terms =
+                    (0..N).map(|j| q[i * N + j].to_f64() * scale(r[j * N + k].to_f64(), -exponent));
+                let qr: f64 = terms.clone().sum();
+                let magnitude: f64 = terms.map(f64::abs).sum();
                 residual += (sample.unit[i * N + column] - qr).powi(2);
+                rounding +=
+                    (backward_error::gamma(N as f64 + 1.0, f64::EPSILON) * magnitude).powi(2);
             }
         }
-        let bound = sample.backward + N as f64 * sample.grid;
+        let bound = backward_error::col_piv_qr(N, N, sample.epsilon) * sample.norm
+            + N as f64 * sample.grid
+            + rounding.sqrt();
         assert!(
             residual.sqrt() <= bound,
             "2^{exponent}: ‖ÂP − QR‖ {} > {bound:e}",

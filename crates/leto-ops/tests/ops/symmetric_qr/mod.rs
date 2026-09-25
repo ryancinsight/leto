@@ -2,44 +2,36 @@
 //! residuals over every supported scalar, clusters, dynamic range, the full
 //! exponent range of each format, and differential agreement with Jacobi.
 //!
-//! # Error bounds (empirical backward-error envelope)
+//! # Error bounds
 //!
-//! The computed decomposition is exact for `A + E`. The asserted
-//! `‖E‖_F ≤ n²·ε·‖A‖_F` (`ε` the machine epsilon of the scalar the solver
-//! runs in) is an **empirical envelope, not a derived bound.** Composing
-//! Higham, *Accuracy and Stability of Numerical Algorithms*, 2nd ed. (2002),
-//! over the enumerated transformations gives a larger first-order worst case:
+//! The computed decomposition is exact for `A + E` with `‖E‖_F ≤ η·‖A‖_F`,
+//! and each computed eigenvector is within `η_Q` of the corresponding column
+//! of that exact orthogonal basis — `η` and `η_Q` derived in
+//! `backward_error.rs` ([`ql`](super::backward_error::ql),
+//! [`ql_vectors`](super::backward_error::ql_vectors)) from Higham's `γ`
+//! bounds over the enumerated reflectors, rotations, shifts and deflations,
+//! at the code's sweep cap (`30·n`), `ε` the machine epsilon of the scalar
+//! the solver runs in. Then:
 //!
-//! - Householder tridiagonalization applies exactly `n − 2` reflectors (Golub
-//!   & Van Loan, *Matrix Computations*, 4th ed., Algorithm 8.3.1), each
-//!   committing `γ̃_n` per column (§19.3, Lemmas 19.2–19.3,
-//!   `γ̃_k = c·k·u/(1 − c·k·u)` with `c` unspecified, `u = ε/2`).
-//! - The implicit QL chase applies `k − 1` Givens rotations per sweep over an
-//!   active block of order `k`, each committing `γ₆` (§19.6, Lemmas
-//!   19.7–19.8), for at most LAPACK `dsteqr`'s `30·n` sweeps (`ql.rs`'s
-//!   `SWEEPS_PER_EIGENVALUE`; exhausting them is a typed error): at `n = 3`,
-//!   `γ̃₃ + 90·2·γ₆ ≈ 3·c·u + 540·u` — far above `9ε`.
+//! - eigenvalues (Weyl): `|λ̂ᵢ − λᵢ| ≤ η·‖A‖_F`;
+//! - residuals: `‖A·v̂ⱼ − λ̂ⱼ·v̂ⱼ‖₂ ≤ ‖E‖₂ + (‖A‖₂ + |λⱼ|)·η_Q ≤
+//!   (η + 2η_Q(1 + η))·‖A‖_F`, plus the `f64` evaluation's
+//!   `γ_{n+2}·2‖A‖_F`;
+//! - orthonormality: `|v̂ᵢᵀv̂ⱼ − δᵢⱼ| ≤ 2η_Q + η_Q²`, plus `γ_n`.
 //!
-//! The envelope is what the solver actually meets: measured at this revision
-//! against the `f64` solve of the same image, the largest eigenvalue error
-//! over the random symmetric inputs of the differential probe (`n ∈ {2, 3,
-//! 4, 5, 8}`, `f32`, `F16`, `Bf16`, magnitudes inside the gate) was
-//! `0.34·n²·ε·‖A‖_F`, a margin of `2.9×`; a result outside it fails these
-//! assertions.
-//! Weyl's inequality turns that into `|λ̂ᵢ − λᵢ| ≤ n²·ε·‖A‖_F`; the residual `‖A v̂ − λ̂ v̂‖₂` obeys the same bound
-//! and the accumulated eigenvectors are orthonormal to `n²·ε`. Where the
-//! reference spectrum belongs to the `f64` matrix before rounding it into `T`,
-//! the rounding adds `ε/2·‖A‖_F` (entrywise relative `ε/2`). Residuals and
-//! orthogonality are evaluated in `f64` on the exact `f64` images of the `T`
-//! values, whose own error (`n·ε₆₄`) is negligible against every bound here.
-//! The Jacobi reference stops once every off-diagonal entry is below
-//! `τ·‖A‖_F`, adding at most `n·τ·‖A‖_F` to its own `n²·ε·‖A‖_F`.
+//! Where the reference spectrum belongs to the `f64` matrix before rounding
+//! it into `T`, the rounding adds `ε/2·‖A‖_F` (entrywise relative `ε/2`).
+//! The Jacobi reference is certified a posteriori from its own eigenbasis
+//! ([`symmetric_certificate`](super::backward_error::symmetric_certificate)).
+//! The bounds are worst cases at the cap; the errors actually measured are
+//! far smaller and are not asserted.
 
 #![expect(
     clippy::unwrap_used,
     reason = "test scope: failed precondition = test failure"
 )]
 
+use super::backward_error::{gamma, ql, ql_vectors, symmetric_certificate};
 use super::format::epsilon;
 use eunomia::{Bf16, F16};
 use leto::{Array2, LetoError, SliceArg, Storage};
@@ -122,19 +114,22 @@ fn frobenius(values: &[f64]) -> f64 {
             .sqrt()
 }
 
-/// `n²·ε(T)·‖A‖_F`, the backward-error envelope (module documentation).
+/// `η·‖A‖_F`, the derived eigenvalue bound (module documentation).
 pub(super) fn backward_bound<T: RealScalar>(values: &[f64], n: usize) -> f64 {
-    (n * n) as f64 * epsilon::<T>() * frobenius(values)
+    ql(n, epsilon::<T>()) * frobenius(values)
 }
 
 /// Decompose `values` in `T` and assert every eigenpair's residual and the
-/// eigenvectors' orthonormality against the envelope; returns the
+/// eigenvectors' orthonormality against the derived bounds; returns the
 /// eigenvalues as `f64`.
 fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) -> Vec<f64> {
     let (matrix, image) = round_into::<T>(values, n);
     let mut workspace = SymmetricEigenWorkspace::new();
     workspace.decompose(&matrix.view()).unwrap();
-    let bound = backward_bound::<T>(&image, n);
+    let eps = epsilon::<T>();
+    let (eta, eta_q) = (ql(n, eps), ql_vectors(n, eps));
+    let bound = (eta + 2.0 * eta_q * (1.0 + eta) + 2.0 * gamma(n as f64 + 2.0, f64::EPSILON))
+        * frobenius(&image);
     let vectors: Vec<Vec<f64>> = workspace
         .eigenvectors()
         .map(|v| v.iter().map(|x| x.to_f64()).collect())
@@ -151,7 +146,7 @@ fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) -> Vec<f64> {
             .sqrt();
         assert!(residual <= bound, "residual {residual:e} exceeds {bound:e}");
     }
-    let orthogonality = (n * n) as f64 * epsilon::<T>();
+    let orthogonality = 2.0 * eta_q + eta_q * eta_q + gamma(n as f64, f64::EPSILON);
     for (a, u) in vectors.iter().enumerate() {
         for (b, w) in vectors.iter().enumerate() {
             let dot: f64 = u.iter().zip(w).map(|(x, y)| x * y).sum();
@@ -231,12 +226,11 @@ fn check_matches_closed_forms<T: RealScalar>() {
     let pair_values = [2.0_f64, 1.0, 1.0, 2.0];
     let (pair, image) = round_into::<T>(&pair_values, 2);
     let eigen = symmetric_eigen_qr(&pair.view()).unwrap();
-    // n²·ε(T)·‖A‖_F (`backward_bound`), n = 2: the backward-error envelope
-    // for a 2×2 closed form (see the module documentation), on the exact
-    // image `T` holds.
+    // The derived eigenvalue bound for n = 2 (module documentation), on the
+    // exact image `T` holds.
     let bound = backward_bound::<T>(&image, 2);
-    // Eigenvector orthonormality bound: n²·ε(T) (see `assert_backward_stable`).
-    let orthogonality = 4.0 * epsilon::<T>();
+    // Each eigenvector is within η_Q of the exact one, ±(1, 1)/√2 here.
+    let orthogonality = ql_vectors(2, epsilon::<T>());
     let values: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
     assert!((values[0] - 1.0).abs() <= bound, "{}", values[0]);
     assert!((values[1] - 3.0).abs() <= bound, "{}", values[1]);
@@ -288,8 +282,10 @@ fn symmetric_eigen_qr_agrees_with_jacobi_within_backward_error() {
         let computed = assert_backward_stable::<f64>(&values, n);
         let matrix = Array2::from_shape_vec([n, n], values.clone()).unwrap();
         let reference = symmetric_eigen_jacobi_with_tolerance(&matrix.view(), tolerance).unwrap();
-        let bound =
-            2.0 * backward_bound::<f64>(&values, n) + n as f64 * tolerance * frobenius(&values);
+        // The Jacobi reference is certified from its own eigenbasis.
+        let basis = reference.eigenvectors.storage().as_slice();
+        let bound = backward_bound::<f64>(&values, n)
+            + symmetric_certificate(&values, &reference.eigenvalues, basis, n);
         for (qr, jacobi) in computed.iter().zip(&reference.eigenvalues) {
             assert!(
                 (qr - jacobi).abs() <= bound,

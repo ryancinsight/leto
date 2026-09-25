@@ -3,6 +3,7 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
+use super::backward_error::symmetric_certificate;
 use super::format::{epsilon, Format};
 use eunomia::{Bf16, F16};
 use leto::LetoError;
@@ -422,37 +423,65 @@ fn symmetric_jacobi_factors_a_diagonal_exactly_in_every_format() {
 
 /// `M·(J₄ − 2I)` (`J₄` the all-ones 4×4) has eigenvalues `{−2M, −2M, −2M,
 /// 2M}` and `‖A‖_F = 4M = 2²·‖A‖_max`, so its Jacobi gate bound is
-/// `2^(1+2)`. At `M = 0.3·Ω` every entry is `≤ Ω/2` and the eigenvalues
-/// `±0.6·Ω` are representable, but the rotations' `a_qq − a_pp` between the
-/// emerging `+2M` and `−2M` reaches `4M = 1.2·Ω`: only the Frobenius-ratio
-/// term `r = 2` of the bound moves the input down before it overflows
-/// (without it the solver returned `−M` four times as a wrong `Ok`). Weyl
-/// bounds each eigenvalue within `n²·ε·‖A‖_F` (the backward-error envelope
-/// of `scale_range.rs`).
+/// `2^(1+2)` and its upper end `Ω/8`. At `M = 0.3·Ω` every entry is `≤ Ω/2`
+/// and the eigenvalues `±0.6·Ω` are representable, but the rotations'
+/// `a_qq − a_pp` between the emerging `+2M` and `−2M` reaches `4M = 1.2·Ω`:
+/// only the Frobenius-ratio term `r = 2` of the bound moves the input down
+/// (without it the solver returned `−M` four times as a wrong `Ok`). The
+/// minimal move is exactly two binades (`M/2 = 0.15·Ω > Ω/8 ≥ M/4`), so the
+/// result must be, bit for bit, `4×` the solver's result on `M/4·(J₄ − 2I)`,
+/// an input it factors unscaled — and that result is certified against the
+/// exact spectrum from its own eigenbasis (`symmetric_certificate`).
 fn check_near_overflow_uses_the_norm_ratio<T: Format>() {
     let largest = T::ONE.scale_binary(T::MAX_EXPONENT).to_f64() * (2.0 - epsilon::<T>());
     let m = T::from_f64(largest * 0.3);
-    let mut values = vec![m; 16];
-    for i in 0..4 {
-        values[i * 5] = m.neg();
-    }
-    let matrix = Array2::from_shape_vec([4, 4], values).unwrap();
-    let two_m = 2.0 * m.to_f64();
-    let bound = 16.0 * epsilon::<T>() * 2.0 * two_m;
-    let expected = [-two_m, -two_m, -two_m, two_m];
+    let build = |m: T| {
+        let mut values = vec![m; 16];
+        for i in 0..4 {
+            values[i * 5] = m.neg();
+        }
+        Array2::from_shape_vec([4, 4], values).unwrap()
+    };
+    let quarter = m.scale_binary(-2);
+    let (matrix, reduced) = (build(m), build(quarter));
     let values = symmetric_eigenvalues_jacobi(&matrix.view())
         .unwrap_or_else(|error| panic!("eigenvalues: {error}"));
     let full = symmetric_eigen_jacobi(&matrix.view())
-        .unwrap_or_else(|error| panic!("decomposition: {error}"))
-        .eigenvalues;
-    for computed in [values, full] {
-        for (value, expected) in computed.iter().zip(expected) {
-            let value = value.to_f64();
-            assert!(
-                (value - expected).abs() <= bound,
-                "{value:e} vs {expected:e}, bound {bound:e}"
-            );
-        }
+        .unwrap_or_else(|error| panic!("decomposition: {error}"));
+    let reduced_full = symmetric_eigen_jacobi(&reduced.view()).unwrap();
+    let expected: Vec<T> = reduced_full
+        .eigenvalues
+        .iter()
+        .map(|v| v.scale_binary(2))
+        .collect();
+    assert_eq!(values, expected);
+    assert_eq!(full.eigenvalues, expected);
+
+    let image: Vec<f64> = reduced
+        .storage()
+        .as_slice()
+        .iter()
+        .map(|v| v.to_f64())
+        .collect();
+    let lambdas: Vec<f64> = reduced_full
+        .eigenvalues
+        .iter()
+        .map(|v| v.to_f64())
+        .collect();
+    let basis: Vec<f64> = reduced_full
+        .eigenvectors
+        .storage()
+        .as_slice()
+        .iter()
+        .map(|v| v.to_f64())
+        .collect();
+    let bound = symmetric_certificate(&image, &lambdas, &basis, 4);
+    let two_q = 2.0 * quarter.to_f64();
+    for (value, exact) in lambdas.iter().zip([-two_q, -two_q, -two_q, two_q]) {
+        assert!(
+            (value - exact).abs() <= bound,
+            "{value:e} vs {exact:e}, bound {bound:e}"
+        );
     }
 }
 

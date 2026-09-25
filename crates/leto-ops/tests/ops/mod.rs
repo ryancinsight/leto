@@ -1,4 +1,5 @@
 pub mod attention;
+pub mod backward_error;
 pub mod bidiagonal;
 pub mod bunch_kaufman;
 pub mod col_piv_qr;
