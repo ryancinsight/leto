@@ -27,6 +27,7 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
+use super::triangular_pair::triangular_svd;
 use super::{validate_input, SvdDecomposition};
 use crate::application::linalg::scaling::{self, GateBound, KernelWindow};
 use crate::application::linalg::thresholds;
@@ -48,6 +49,15 @@ const MAX_ITER: usize = 4000;
 /// column-major one has `|vᵢ| ≤ 1`) and `‖A‖_F ≤ 2^r·‖A‖_max`
 /// ([`scaling::norm_ratio_log2`]). The rotation updates and deflation sums
 /// stay below `2‖B‖ ≤ 2‖A‖_F` (`|c|, |s| ≤ 1`), inside the same bound.
+///
+/// The range the gate applies is degree 2, LAPACK `dgesvd`'s
+/// `[√safmin/ε, ε/√safmin]` form (`scaling::balanced(matrix, 2, …)`): the
+/// bound needs only degree 1, and `(Ω·2^−f)^½ ≤ Ω·2^−f` keeps it, but the
+/// sweep needs headroom below `‖A‖_max` for the small singular values it
+/// converges on. At the degree-1 lower end `smlnum` they sat within a few
+/// binades of `safmin` in the narrow formats, where the shifted sweep lost
+/// the relative precision it converges on and cycled (Bf16 skew-symmetric
+/// tridiagonals at `2⁻¹¹⁴`).
 ///
 /// Deflation floor: [`qr_iterate`] also deflates at or below
 /// [`deflation_floor`]`(k)`, `k = min(rows, cols)`, so the gate's lower end is
@@ -148,7 +158,7 @@ impl<T: RealScalar> Deflation<T> {
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols))? {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 2, svd_bound(rows, cols))? {
         let mut sigmas = singular_values_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut sigmas,
@@ -486,6 +496,19 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
             }
             p -= 1;
         }
+        // A 2×2 block is diagonalized directly (`dbdsqr` with `dlasv2`): shifted
+        // steps on it cycle when its smaller singular value is subnormal.
+        if q == p + 1 {
+            let pair = triangular_svd(d[p], e[p], d[q]);
+            d[p] = pair.ssmax;
+            e[p] = T::ZERO;
+            d[q] = pair.ssmin;
+            if VEC {
+                rotate_row_pair(v, n, p, q, pair.csr, pair.snr); // V accumulated transposed
+                rotate_row_pair(u, m, p, q, pair.csl, pair.snl); // U accumulated transposed
+            }
+            continue;
+        }
         // `dbdsqr`'s relative convergence tests inside the block.
         if let Some(i) = deflation.forward_split(d, e, p, q) {
             e[i] = T::ZERO;
@@ -674,7 +697,7 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols))? {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 2, svd_bound(rows, cols))? {
         let mut decomposition = svd_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut decomposition.singular_values,
@@ -869,5 +892,27 @@ mod tests {
                 "the chased direction must be exactly zero, got {d:?}"
             );
         }
+    }
+
+    /// `dbdsqr`'s forward test splits at `|eᵢ| ≤ tol·μ` with
+    /// `tol = tolmul·ε`, `tolmul = min(100, ε^(−1/8)) ≈ 90.5` in `f64`: in
+    /// `d = (1, 1, 1)`, `e = (50ε, ½)` the recurrence starts at
+    /// `μ = |d₀| = 1`, so `e₀` splits before any rotation, and row 0 of both
+    /// accumulated factors stays exactly `e₀ᵀ` (the `½` couples only the
+    /// trailing pair). With `tol = ε` the block stays whole and the sweep's
+    /// rotations mix row 0 by `O(e₀)`.
+    #[test]
+    fn forward_test_splits_at_tolmul_eps() {
+        let mut d = vec![1.0f64, 1.0, 1.0];
+        let mut e = vec![50.0 * f64::EPSILON, 0.5, 0.0];
+        let identity = |n: usize| -> Vec<f64> {
+            (0..n * n)
+                .map(|i| if i % (n + 1) == 0 { 1.0 } else { 0.0 })
+                .collect()
+        };
+        let (mut u, mut v) = (identity(3), identity(3));
+        qr_iterate::<f64, true>(&mut d, &mut e, 3, &mut u, 3, &mut v, 3).unwrap();
+        assert_eq!(&u[..3], &[1.0, 0.0, 0.0], "U row 0: {u:?}");
+        assert_eq!(&v[..3], &[1.0, 0.0, 0.0], "V row 0: {v:?}");
     }
 }
