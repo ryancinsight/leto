@@ -4,17 +4,14 @@
 
 Status: Accepted
 
-Revision 2026-09-25: Francis and Golub–Kahan kernels now form their products
-scale-safely (LAPACK `dlartg`/`dlarfg`/`dlahqr`/`dlanv2` pattern), so the
-`[1, 4)` recentring exception and every recorded F16/Bf16 non-convergence
-are gone; gate upper ends are the overflow threshold, not `ε/safmin`.
-Evidence: third independent review of PR #237 (variant tree measuring zero
-failures across every exponent once the kernels were scale-safe).
-Revision 2026-09-25 (later): deflation gains LAPACK's absolute underflow
-threshold (`dbdsqr` `maxitr·n²·unfl`; `dlahqr`'s small-subdiagonal test) and
-the gates a matching floor, after the fourth review's graded random scan
-found non-convergence at normal magnitudes (Bf16 near `2⁻¹²⁶`, F16 at
-`2⁻¹⁰..2⁻¹⁴`).
+Revision 2026-09-25: Francis follows LAPACK `dlahqr` (shifts,
+exceptional shifts, first column, Ahues–Tisseur deflation) and `dlanv2`
+(2×2 standardization and eigenvalues); the Golub–Kahan iteration follows
+`dbdsqr`'s relative-accuracy deflation; an empty gate range is a typed
+error. Evidence: the fifth review's `schur` wrong `Ok` at the gate edge
+(`1.0163` for `1.002`, a non-orthogonal 2×2 rotation whose norm
+underflowed) and its extended scan (Bf16 and F16 non-convergence on
+clustered and rank-deficient input).
 
 ## Context
 
@@ -26,96 +23,102 @@ beyond `2^±256`, `RealSchur::eigenvalues` returned `{3, 3}` for `{2, 4}` at
 `2⁻⁸⁶` in f32, f64 `col_piv_qr` returned rank 0 beyond `2^±512`, and F16/Bf16
 Francis stalled on ordinary nonsymmetric input.
 
-Balancing the whole matrix by a power of two only moves the problem: a local
-product such as a Givens norm `a² + b²` or a Wilkinson discriminant
-`δ² + t₁₂²` depends on the local magnitudes during the iteration, not on
-`‖A‖_max`, and a fixed landing either leaves them unsafe or scales entries far
-below the largest into underflow (`diag(1e300, 1e-300)`).
+Balancing the whole matrix alone does not fix it: a local product such as a
+Givens norm depends on the local magnitudes during the iteration, not on
+`‖A‖_max`, and a fixed landing scales entries far below the largest into
+underflow (`diag(1e300, 1e-300)`).
 
 ## Decision
 
-Two tiers (`linalg::scaling`).
+**Kernel tier (`linalg::scaling`).** Local products are formed scale-safely.
 
-**Kernel tier.** Every local product in the Francis and Golub–Kahan kernels is
-formed unscaled while its local magnitude `m` lies in the kernel window
-`[safmin^(1/dₗ), (Ω·2⁻ᶠ)^(1/dᵤ)]` (`thresholds::kernel_window`,
-`scaling::KernelWindow`), and otherwise from operands divided by the power of
-two bringing `m` into `[1, 2)`. Inside the window the arithmetic is
-bit-for-bit the unscaled arithmetic.
-
-| Kernel | Product | window `(dₗ, dᵤ, f)` | LAPACK reference |
+| Kernel | Product | Form | LAPACK reference |
 |---|---|---|---|
-| `bidiagonal_qr::givens` | `a² + b² ≤ 2m²` | (2, 2, 1) | `dlartg` (`rtmin`, `rtmax`) |
-| `bidiagonal_qr::qr_step` shift + first column | `δ² + t₁₂² ≤ 2m⁴`, `y ≤ 4m²` | (4, 4, 1) | `dbdsqr`, `dlas2` |
-| `bidiagonal::colmajor::larfg` | `α² + ‖x‖² ≤ len·m²`, `len ≤ rows` | (2, 2, ⌈log₂ rows⌉) | `dlarfg` via `dnrm2`/`dlapy2` |
-| `francis::stack_reflector` | `vᵀv ≤ 12m²` | (2, 2, 4) | `dlarfg` |
-| `francis_step` first column | `x ≤ 9m²`, `y ≤ 5m²` | (2, 2, 4) | `dlahqr` (`S`-normalized `V`) |
-| `standardize` 2×2 | `disc ≤ 8m²`, `ex² + ey² < 2⁵m²` | (2, 2, 5) | `dlanv2` |
-| `eigenvalues_from_quasi_triangular` | `tr² − 4det ≤ 12m²` | (2, 2, 4) | `dlanv2` |
+| `bidiagonal_qr::givens` | `a² + b² ≤ 2m²` | window `(2, 2, 1)` | `dlartg` (`rtmin`, `rtmax`) |
+| `bidiagonal_qr::qr_step` shift + first column | `δ² + t₁₂² ≤ 2m⁴` | window `(4, 4, 1)` | `dbdsqr`, `dlas2` |
+| `bidiagonal::colmajor::larfg` | `α² + ‖x‖² ≤ len·m²`, `len ≤ rows` | window `(2, 2, ⌈log₂ rows⌉)` | `dlarfg` via `dnrm2` |
+| `francis::stack_reflector` | `vᵀv ≤ 12m²` | window `(2, 2, 4)` | `dlarfg` |
+| `francis` shift pair and first column | ratios of entries | by construction | `dlahqr` (shifts from the `s`-scaled 2×2; `V` divided by `S`, then by `‖V‖₁`) |
+| `standard_block` (2×2 standardization and eigenvalues) | ratios and square roots | by construction | `dlanv2` |
 
-The shift window's lower degree is 4, not 2: an underflowed `t₁₂²` degrades the
-Wilkinson shift to the Rayleigh shift `t₂₂`, which stagnates on a nearly equal
-trailing pair (probed: a Bf16 2×2 failed at every exponent `2⁻¹³⁰..2⁻³²`).
+A window `(dₗ, dᵤ, f)` forms the product unscaled while the local magnitude
+`m` lies in `[safmin^(1/dₗ), (Ω·2⁻ᶠ)^(1/dᵤ)]` and otherwise divides the
+operands by the power of two bringing `m` into `[1, 2)`. The shift window's
+lower degree is 4: an underflowed `t₁₂²` degrades the Wilkinson shift to the
+Rayleigh shift, which stagnates on a nearly equal pair. `dlanv2`'s
+real-versus-complex decision compares `z/scale` rather than `dlanv2`'s `z`,
+which carries the block's units. The standardization applies its rotation
+outside the block (`dlahqr`'s `DROT` calls) and writes the block from
+`dlanv2`, so rounding residue left and below the block never enters its
+subdiagonal. The previous quadratic `tr ± √(tr² − 4·det)` cancelled to
+`O(√ε)` on double eigenvalues, and the previous standardization formed its
+rotation's norm `√(ex² + ey²)` from unscaled products that underflowed at
+the gate's lower end.
 
-**Deflation.** A relative deflation test alone is met only by an exact zero
-once the off-diagonals it compares reach the subnormals, and the sweep then
-cycles. Both iterations also deflate below an absolute floor:
+**Deflation.**
 
-- Golub–Kahan (`svd/bidiagonal_qr.rs`): `|eᵢ|` below the rounding of its
-  neighbouring diagonals (the relative split, in precision-exact form) or
-  `|eᵢ| ≤ 2^⌈log₂(6k²)⌉·safmin` — LAPACK `dbdsqr`'s `maxitr·n²·unfl`
-  (`maxitr = 6`, `k` the bidiagonal order), rounded up to a power of two.
-- Francis (`schur/francis.rs`): LAPACK `dlahqr`'s small-subdiagonal test,
-  `|h_{k,k−1}| ≤ max(ulp·(|h_{k−1,k−1}| + |h_{k,k}|), floor)`, `ulp = ε`. The
-  earlier precision-exact form demanded `≲ ε/2` and an 8-bit Bf16 step could
-  not always reach it (the block cycled with period two). The floor is
-  `2^⌈log₂ n⌉·safmin`, not `dlahqr`'s `safmin·n/ulp`, which assumes
-  `ulp² ≫ safmin` and in F16 (`ε² = 2⁻²⁰ < safmin = 2⁻¹⁴`) would deflate
-  subdiagonals near `0.19` at unit scale.
-
-Each floor is `2^g·safmin`, and the routine's gate raises its lower end to
-`2^g·smlnum` (below), so a floor deflation perturbs `A` by at most
-`ε·‖A‖_max`.
+- Golub–Kahan (`svd/bidiagonal_qr.rs`): `dbdsqr`'s relative-accuracy tests —
+  `tol = tolmul·ε`, `tolmul = max(10, min(100, ε^(−1/8)))`; split where
+  `|eᵢ| ≤ thresh = max(tol·σ̃_min, floor)` (`σ̃_min` its `SMINOA` estimate);
+  the bottom test `|e_{q−1}| ≤ tol·|d_q|` and the forward recurrence
+  `|eᵢ| ≤ tol·μ`. The floor is `2^⌈log₂ k⌉·safmin`, not `dbdsqr`'s
+  `maxitr·n²·unfl`, which assumes `n²·unfl ≪ ulp` and in F16 at `k = 24`
+  (`≈ 0.2`) would split superdiagonals of unit-scale matrices.
+- Francis (`schur/francis.rs`): `dlahqr`'s test — `|h_{k,k−1}| ≤ floor`, or
+  the pre-check `|h_{k,k−1}| ≤ ulp·tst` and the Ahues–Tisseur test
+  (LAWN 122); `dlahqr`'s neighbour fallback for `tst = 0` is not taken (no
+  test input distinguishes it). The floor is
+  `2^⌈log₂ n⌉·safmin` in place of `dlahqr`'s `safmin·n/ulp`, which assumes
+  `ulp² ≫ safmin` (false in F16: `ε² = 2⁻²⁰ < safmin = 2⁻¹⁴`).
 
 **Matrix tier.** What the kernels cannot rescale locally is gated on
-`‖A‖_max ∈ [smlnum^(1/d), (Ω·2⁻ᶠ)^(1/d)]` (`thresholds::homogeneous_safe_range`;
-`smlnum = safmin/ε`, `Ω` the overflow threshold), with the lower end raised
-to `2^g·smlnum` for a routine whose deflation floor is `2^g·safmin`. The bound factor enters by
-exponent arithmetic only (no `128n⁴` formed in F16) and never divides
-`smlnum`. `2^r ≥ ‖A‖_F/‖A‖_max` (`scaling::norm_ratio_log2`) keeps the bound
-tight. Inside the range the input is factored unscaled; outside it, by the
-minimal power of two back inside (`scaling::balancing_exponent`), results
-multiplied back by `scaling::restore` (typed `Overflow` if unrepresentable).
+`‖A‖_max ∈ [max(smlnum^(1/d), 2^g·smlnum), (Ω·2⁻ᶠ)^(1/d)]`
+(`thresholds::homogeneous_safe_range`; `smlnum = safmin/ε`, `Ω` the
+overflow threshold, `2^g·safmin` the routine's deflation floor). The bound
+factor enters by exponent arithmetic only and never divides `smlnum`. When
+the floor end would pass the upper end, the lower end stops at the upper end
+(overflow is the hard constraint). When even `smlnum^(1/d)` exceeds the
+upper end — the bound factor exceeds `Ω/smlnum`, about `2²⁰` in F16 — the
+routine returns `LetoError::Overflow` naming the limit, never a false value.
+Inside the range the input is factored unscaled; outside it, by the minimal
+power of two back inside, results multiplied back by `scaling::restore`.
 
-| Routine | Remaining intermediate | `d` | `f` |
-|---|---|---|---|
-| Jacobi | `2a_pq`, `a_qq − a_pp`, diagonal partial sums `≤ 2‖A‖₂` | 1 | `1 + r` |
-| Symmetric QL | chase correction `e_{l+1}·eₗ ≤ ‖A‖₂²` (`ql.rs`) | 2 | `2r` |
-| Column-pivoted QR | `tail_norm_sq ≤ rows·‖A‖_max²` (`decompose.rs`) | 2 | `⌈log₂ rows⌉` |
-| Francis (`schur`, `eigenvalues`) | `vᵀH`, unscaled `‖v‖₂ < √Ω` times `‖H‖_F`; floor `g = ⌈log₂ n⌉` | 2 | `2r` |
-| Golub–Kahan (SVD family) | reflector dots `‖v‖₂·‖A‖_F`, `‖v‖₂ ≤ 4√M`; floor `g = ⌈log₂(6k²)⌉` | 1 | `2 + ⌈⌈log₂ M⌉/2⌉ + r` |
+| Routine | Remaining intermediate | `d` | `f` | `g` |
+|---|---|---|---|---|
+| Jacobi | `2a_pq`, `a_qq − a_pp`, diagonal partial sums `≤ 2‖A‖₂` | 1 | `1 + r` | 0 |
+| Symmetric QL | chase correction `e_{l+1}·eₗ ≤ ‖A‖₂²` (`ql.rs`) | 2 | `2r` | 0 |
+| Column-pivoted QR | `tail_norm_sq ≤ rows·‖A‖_max²` (`decompose.rs`) | 2 | `⌈log₂ rows⌉` | 0 |
+| Francis (`schur`, `eigenvalues`) | `vᵀH`, unscaled `‖v‖₂ < √Ω` times `‖H‖_F` | 2 | `2r` | `⌈log₂ n⌉` |
+| Golub–Kahan (SVD family) | reflector dots `‖v‖₂·‖A‖_F`, `‖v‖₂ ≤ 4√M` | 1 | `2 + ⌈⌈log₂ M⌉/2⌉ + r` | `⌈log₂ k⌉` |
 
-Each call site carries its derivation. Scaling up is exact; scaling down can
-underflow an entry far below the largest, which the upper ends — the
-overflow threshold itself — confine to inputs within `2^f` of overflowing.
-There the backward-error bound, not entrywise exactness, is the guarantee.
+`2^r ≥ ‖A‖_F/‖A‖_max` (`scaling::norm_ratio_log2`). Scaling up is exact;
+scaling down can underflow an entry far below the largest, which the upper
+ends — the overflow threshold itself — confine to inputs within `2^f` of
+overflowing.
+
+**Tests assert derived bounds.** `tests/ops/backward_error.rs` composes
+Higham's `γ_k` bounds (standard model, Lemmas 3.1 and 3.3, §3.1 inner
+products, Lemmas 19.7–19.8 for rotations) over the enumerated reflectors,
+rotations, shifts and deflations of each routine at its iteration cap; the
+per-reflector constant `γ_{8m+29}`, the rank-2 update's `γ_{17m+42}` and the
+QL sweep's entry counts are derived in its documentation. Weyl (singular
+values, symmetric eigenvalues) and Bauer–Fike (general eigenvalues, `κ` from
+`f64` left and right eigenvectors) turn them into value bounds. At the caps
+they are loose (about `10⁻¹⁰` relative for `f64`, vacuous for the 8- and
+11-bit formats); measured errors are reported, not asserted.
 
 ## Rejected alternatives
 
-- Recentring Francis/Golub–Kahan inputs to `[1, 4)` (the previous revision).
-  Rejected: it worked around unsafe kernel products instead of removing them,
-  left F16/Bf16 non-convergences recorded as exemptions, and moved inputs
-  further than needed.
-- Divide-by-max normalization in the kernels (the reviewer's probe variant).
-  Rejected for the delivered form: a non-power-of-two divisor changes the
-  rounding of in-window inputs; the power-of-two window keeps them
-  bit-for-bit unscaled.
-- LAPACK's `ε/safmin` upper margin for the gate. Rejected: it scales
-  `diag(1e300, 1e-300)` (Jacobi) and f32 `diag(1e38, 1e-38)` down and loses the
-  small entry; the kernels' own products need only the overflow threshold.
-- One uniform `(d, c)` for every routine. Rejected: Jacobi is degree 1, the QL
-  correction and Francis application degree 2; one range over- or
-  under-scales each.
+- Recentring inputs to `[1, 4)`: worked around unsafe kernel products.
+- A power-of-two window around the old first column and the old 2×2
+  standardization (the previous revision). Rejected: the window tested the
+  block's largest entry, not the operands of the rotation-norm product,
+  which underflowed while the block was in window; `dlahqr`/`dlanv2` are
+  scale-safe by construction.
+- `dbdsqr`'s and `dlahqr`'s floor constants verbatim. Rejected: both assume
+  `ulp² ≫ safmin` or `n²·unfl ≪ ulp`, false in F16.
+- An empirical `n²·ε` tolerance envelope in the tests. Rejected by review:
+  tolerances must be derived.
 
 ## Consequences
 
@@ -123,34 +126,29 @@ What the tests establish, for `f64`, `f32`, `F16` and `Bf16`:
 
 - `tests/ops/scale_range.rs`: `SIMILAR` and `GENERAL` at every binary
   exponent from the smallest subnormal to three below the largest converge
-  in `schur`, `eigenvalues`, both SVD entry points and pivoted QR, within
-  Weyl/Bauer–Fike bounds on the `n²·ε` backward-error envelope; no exponent
-  is exempt.
-- `tests/ops/graded_scan.rs`: seeded random `2×2`–`4×4` matrices with rows
-  graded by `2⁻²ⁱ`, twelve per exponent at every exponent from the smallest
-  normal to three below the largest, converge in all four routines, and
-  `singular_values` agrees with `svd_decompose`; random subnormal blocks
-  beside a unit entry deflate at the floors.
+  in `schur`, `eigenvalues`, both SVD entry points and pivoted QR within the
+  derived bounds; no exponent is exempt.
+- `tests/ops/graded_scan.rs`: seeded graded, clustered and rank-deficient
+  matrices of order 2 to 8 at every exponent from the smallest normal to
+  three below the largest converge in all four routines within the derived
+  Weyl/Bauer–Fike bounds, and `singular_values` agrees with `svd_decompose`;
+  F16 order 48 and Bf16 order 64 factor; subnormal blocks deflate at the
+  floors.
+- `tests/ops/schur.rs`: the clustered family at the Francis gate's edge
+  (`n = 8`, `2⁻⁶⁰⁰ … 2⁵⁰⁰`) is within the derived Weyl bound.
 - `tests/ops/eigen.rs`: Jacobi returns 295 diagonals per format exactly, and
-  a near-overflow `M·(J₄ − 2I)` correctly through the Frobenius-ratio bound.
-- The `n²·ε` tolerance is an empirical envelope with a measured margin
-  (`tests/ops/scale_range.rs`), not a derived bound.
+  a near-overflow `M·(J₄ − 2I)` bit-for-bit `4×` its unscaled quarter.
 
-Against the pre-change tree, in-gate results are bit-identical except where a
-kernel window fires — at its lower edge on a subnormal product, or at its
-upper edge (the SVD shift window's `(Ω/2)^¼ ≈ 2²⁵⁶` in `f64`: f64 SVD
-results at `2²⁷⁰` differ) — where Francis now deflates between `ε/2` and
-`ε` relative, or where a deflation-floor gate moves a small input up. The
-differential probe measured every in-gate singular-value and
-symmetric-eigenvalue error, differing or not, within `0.44·n²·ε·‖A‖_F`.
-- `pinv` reports `LetoError::Overflow` when a retained singular value's
-  reciprocal is not finite.
+In-range results are **not** bit-identical to the pre-change tree: the
+`dlahqr` shifts, the Ahues–Tisseur deflation, `dlanv2`, `dbdsqr`'s
+deflation and the kernel windows (at both edges — the SVD shift window
+starts rescaling at `(Ω/2)^¼ ≈ 2²⁵⁶` in `f64`) change the rounding path.
+`pinv` reports `LetoError::Overflow` when a retained singular value's
+reciprocal is not finite.
 
 ## Driving evidence
 
 `backlog.md#LETO-DENSE-SCALE-RANGE-2026-09-24` (delivered by PR #237), the
-three independent reviews on PRs #233 and #237, `scaling.rs`/`thresholds.rs`
-module documentation, `tests/ops/scale_range.rs`, `tests/ops/schur.rs`
-(Bauer–Fike bound with an independently computed eigenvector condition), and
-`tests/ops/eigen.rs` (Jacobi diagonal exactness), and
-`tests/ops/graded_scan.rs` (graded random scan, subnormal-block deflation).
+five independent reviews on PRs #233 and #237, `scaling.rs`/`thresholds.rs`
+module documentation, `tests/ops/backward_error.rs`, `tests/ops/scale_range.rs`,
+`tests/ops/graded_scan.rs`, `tests/ops/schur.rs` and `tests/ops/eigen.rs`.
