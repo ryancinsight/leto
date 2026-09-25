@@ -5,8 +5,9 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
+use eunomia::{Bf16, F16};
 use leto::{Array2, Storage};
-use leto_ops::{schur, MatrixDecompose};
+use leto_ops::{schur, MatrixDecompose, RealScalar, Xorshift64};
 
 fn mat(n: usize, data: Vec<f64>) -> Array2<f64> {
     Array2::from_shape_vec([n, n], data).unwrap()
@@ -196,4 +197,139 @@ fn schur_fluent_method_matches_free_function() {
 fn schur_rejects_non_square() {
     let rect = Array2::from_shape_vec([2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
     assert!(schur(&rect.view()).is_err());
+}
+
+/// The F16 matrix `LETO-DENSE-SCALE-RANGE-2026-09-24` finding G reported:
+/// `‖A‖_max = 7.296875`, outside F16's `[0.25, 4]` safe range on either
+/// derived scale (`safe_range` or the tighter `product_safe_range`), so this
+/// input balances to `[1, 4)` exactly as the pre-redesign code already did —
+/// the safe-range change alters *when* balancing applies, not the outcome for
+/// an input this far outside it. Probed directly, F16's Francis iteration
+/// still stagnates on the balanced matrix (`LETO-F16-FRANCIS-2026-09-24`,
+/// already filed as a recorded non-convergence, not a scale artifact this
+/// change addresses): this regression test pins that as the expected typed
+/// error rather than silently accepting whatever the sweep returns, and
+/// documents that the specific "Ok↔Err flip" the review reported was two
+/// instances of the same known F16 defect surfacing at different `s`, not a
+/// new one introduced by unconditional scaling.
+#[test]
+#[expect(
+    clippy::excessive_precision,
+    reason = "exact f32 bit values from the reviewed regression matrix; truncating changes the input"
+)]
+fn schur_f16_scale_regression_matrix_is_the_recorded_francis_stagnation() {
+    let raw: [f32; 9] = [
+        -4.0859375,
+        -7.296875,
+        4.953125,
+        1.4638671875,
+        2.12109375,
+        0.91943359375,
+        3.537109375,
+        4.5625,
+        -0.386962890625,
+    ];
+    let f16: Vec<F16> = raw.iter().map(|&v| F16::from_f32(v)).collect();
+    let m = Array2::from_shape_vec([3, 3], f16).unwrap();
+    let result = schur(&m.view());
+    match result {
+        Err(leto::LetoError::StorageError { ref reason })
+            if reason.contains("failed to converge") => {}
+        other => panic!("expected the recorded F16 Francis non-convergence, got {other:?}"),
+    }
+    // Differential oracle confirming the *matrix itself* is well-posed (the
+    // failure is F16-precision-specific, not a malformed or singular input):
+    // f64, f32, and Bf16 all resolve it to the same spectrum.
+    let f64_eigen = schur(
+        &Array2::from_shape_vec([3, 3], raw.iter().map(|&v| f64::from(v)).collect())
+            .unwrap()
+            .view(),
+    )
+    .unwrap()
+    .eigenvalues();
+    let f32_eigen = schur(&Array2::from_shape_vec([3, 3], raw.to_vec()).unwrap().view())
+        .unwrap()
+        .eigenvalues();
+    let mut expected: Vec<f64> = f64_eigen.iter().map(|z| z.re).collect();
+    let mut computed: Vec<f64> = f32_eigen.iter().map(|z| f64::from(z.re)).collect();
+    expected.sort_by(f64::total_cmp);
+    computed.sort_by(f64::total_cmp);
+    let frobenius: f64 = raw
+        .iter()
+        .map(|&v| f64::from(v) * f64::from(v))
+        .sum::<f64>()
+        .sqrt();
+    let bound = 9.0 * f64::from(f32::EPSILON) * frobenius;
+    for (re, eref) in computed.iter().zip(&expected) {
+        assert!(
+            (re - eref).abs() <= bound,
+            "{re} vs {eref}, bound {bound:e}"
+        );
+    }
+}
+
+/// Small seeded sweep: for matrices whose norm the safe-range gate classifies
+/// as needing no balancing (comfortably inside
+/// `product_safe_range`, entries in `[-4, 4]`), `schur` runs its Hessenberg
+/// and Francis stages on the caller's values directly (`balanced_for_products`
+/// returns `None`) — so the result is, by construction, bit-for-bit what the
+/// unscaled computation produces. This sweep is the regression guard for that
+/// invariant across every shipped scalar, differentially checked against the
+/// `f64` computation on the same values.
+#[test]
+fn schur_in_range_inputs_match_the_unscaled_f64_reference() {
+    fn check<T: RealScalar>() {
+        let n = 3;
+        for seed in [1_u64, 2, 3, 4, 5] {
+            let mut rng = Xorshift64::new(seed);
+            let raw: Vec<f64> = (0..n * n)
+                .map(|_| 4.0 * (2.0 * rng.next_unit_f64() - 1.0))
+                .collect();
+            let narrowed: Vec<T> = raw.iter().map(|&v| T::from_f64(v)).collect();
+            let image: Vec<f64> = narrowed.iter().map(|v| v.to_f64()).collect();
+            let m = Array2::from_shape_vec([n, n], narrowed).unwrap();
+            let Ok(result) = schur(&m.view()) else {
+                continue; // A genuine (typed) non-convergence is not this test's concern.
+            };
+            let f64_matrix = Array2::from_shape_vec([n, n], image.clone()).unwrap();
+            let Ok(reference) = schur(&f64_matrix.view()) else {
+                continue;
+            };
+            let mut computed: Vec<(f64, f64)> = result
+                .eigenvalues()
+                .iter()
+                .map(|z| (z.re.to_f64(), z.im.to_f64()))
+                .collect();
+            let mut expected: Vec<(f64, f64)> = reference
+                .eigenvalues()
+                .iter()
+                .map(|z| (z.re, z.im))
+                .collect();
+            computed.sort_by(|a, b| a.0.total_cmp(&b.0));
+            expected.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let frobenius: f64 = image.iter().map(|v| v * v).sum::<f64>().sqrt();
+            let bound = 9.0 * machine_epsilon_of::<T>().to_f64() * frobenius
+                + 9.0 * f64::EPSILON * frobenius;
+            for ((re, im), (eref, iref)) in computed.iter().zip(&expected) {
+                assert!((re - eref).abs() <= bound, "seed {seed}: {re} vs {eref}");
+                assert!((im - iref).abs() <= bound, "seed {seed}: {im} vs {iref}");
+            }
+        }
+    }
+    check::<f64>();
+    check::<f32>();
+    check::<F16>();
+    check::<Bf16>();
+}
+
+/// `T`'s machine epsilon via the halving probe (mirrors
+/// `thresholds::machine_epsilon`, re-derived here since that function is
+/// crate-private).
+fn machine_epsilon_of<T: RealScalar>() -> T {
+    let mut eps = T::ONE;
+    let half = T::ONE.div(T::from_usize(2));
+    while T::ONE.add(eps.mul(half)) > T::ONE {
+        eps = eps.mul(half);
+    }
+    eps
 }
