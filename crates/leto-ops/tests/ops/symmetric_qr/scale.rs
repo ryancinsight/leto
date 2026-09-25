@@ -149,10 +149,11 @@ fn machine_epsilon_of<T: RealScalar>() -> T {
 /// balances) far more tightly than the normwise backward bound alone would
 /// guarantee — both algorithms see the identical, unscaled entries.
 fn check_in_range_norm_matches_unscaled_jacobi<T: RealScalar>() {
-    // diag(3, 1e-6): norm 3 is deep inside every shipped format's safe range
-    // (even F16's narrowest, `[0.25, 4]`); 1e-6 is representable at that
-    // scale in every format without underflow.
-    let values = [3.0_f64, 0.0, 0.0, 1e-6];
+    // diag(1, 1e-6): norm 1 is inside every shipped format's safe range for
+    // both the QL solver's degree-2 gate and Jacobi's degree-1 gate (F16's
+    // narrowest is QL's `[0.177, 2.83]`); 1e-6 is representable (as a
+    // subnormal in F16/Bf16) without underflowing to zero.
+    let values = [1.0_f64, 0.0, 0.0, 1e-6];
     let (matrix, image) = round_into::<T>(&values, 2);
     let qr_eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
     let jacobi_eigen =
