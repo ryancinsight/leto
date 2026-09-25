@@ -4,12 +4,23 @@
 //!
 //! # Tolerance derivation
 //!
-//! Householder tridiagonalization and QL apply `O(n)` orthogonal
-//! transformations, each with backward error `O(n)·ε·‖A‖`, so the computed
-//! decomposition is exact for `A + E` with `‖E‖₂ ≤ ‖E‖_F ≤ n²·ε·‖A‖_F`
-//! (Higham, *Accuracy and Stability of Numerical Algorithms*, 2nd ed., Lemma
-//! 19.3 with `r = n` transformations of `γ̃_n` each), `ε` the machine epsilon
-//! of the scalar the solver runs in. Weyl's inequality turns that into
+//! Householder tridiagonalization applies exactly `n − 2` reflectors (Golub &
+//! Van Loan, *Matrix Computations*, 4th ed., Algorithm 8.3.1); the implicit QL
+//! sweep applies one Givens rotation per active off-diagonal entry per sweep,
+//! bounded at `30·n` sweeps total by LAPACK `dsteqr` (`ql.rs`'s
+//! `SWEEPS_PER_EIGENVALUE`) but empirically cubically convergent — under two
+//! sweeps per deflated eigenvalue, `O(n)` rotations overall, matching the
+//! reflector count's order (the `30·n` figure bounds the *sweep budget*
+//! before declaring non-convergence, not the typical transformation count).
+//! Both stages together apply `O(n)` orthogonal transformations, each with
+//! backward error `O(n)·ε·‖A‖` (Higham, *Accuracy and Stability of Numerical
+//! Algorithms*, 2nd ed., §19, Lemma 19.3: `‖E‖_F ≤ γ̃_{cn}·‖A‖_F` for `r`
+//! transformations of `γ̃_n` each collapses to `‖E‖_F ≲ r·n·ε·‖A‖_F`), so the
+//! computed decomposition is exact for `A + E` with
+//! `‖E‖₂ ≤ ‖E‖_F ≤ n²·ε·‖A‖_F` at `r = n` — the constant is `1`, absorbed into
+//! the `O(n)` transformation count derived above rather than asserted bare,
+//! `ε` the machine epsilon of the scalar the solver runs in. Weyl's inequality
+//! turns that into
 //! `|λ̂ᵢ − λᵢ| ≤ n²·ε·‖A‖_F`; the residual `‖A v̂ − λ̂ v̂‖₂` obeys the same bound
 //! and the accumulated eigenvectors are orthonormal to `n²·ε`. Where the
 //! reference spectrum belongs to the `f64` matrix before rounding it into `T`,
@@ -277,6 +288,94 @@ fn symmetric_eigen_qr_is_backward_stable_for_every_scalar() {
     check_random_matrices::<f32>(60);
 }
 
+/// Finding `LETO-DENSE-SCALE-RANGE-2026-09-24`/A: a diagonal matrix whose
+/// norm (its largest entry) sits far outside the LAPACK safe range, so the
+/// fallback bring-to-`[1,4)` scale still applies, and can still lose the far
+/// smaller entry to underflow (`f64 diag(1e300, 1e-300)` scales by roughly
+/// `2⁻⁹⁹⁶`, sending `1e-300 · 2⁻⁹⁹⁶` to `0`). The module documentation states
+/// this loss is bounded by the factorization's own backward error, never
+/// exact — this test is the falsifiable form of that claim: the result must
+/// land within the derived `n²·ε·‖A‖_F` bound, which a normwise bound
+/// against a `1e300`-scale norm satisfies trivially for a `1e-300`-scale
+/// discrepancy, rather than the wrong, unbounded `[0, 1e300]` a defect
+/// elsewhere in the pipeline (a NaN, an unrelated overflow) could also
+/// produce.
+fn check_far_out_of_range_entry_loss_stays_within_bound<T: RealScalar>(large: f64, small: f64) {
+    let values = [large, 0.0, 0.0, small];
+    let (matrix, image) = round_into::<T>(&values, 2);
+    let eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
+    let mut expected = [image[0], image[3]];
+    expected.sort_by(f64::total_cmp);
+    let mut computed: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
+    computed.sort_by(f64::total_cmp);
+    let bound = backward_bound::<T>(&image, 2);
+    for (value, expected) in computed.iter().zip(&expected) {
+        assert!(
+            (value - expected).abs() <= bound,
+            "large={large} small={small}: {value} vs {expected}, bound {bound:e}"
+        );
+    }
+}
+
+#[test]
+fn symmetric_eigen_qr_far_out_of_range_entry_loss_stays_within_the_backward_bound() {
+    check_far_out_of_range_entry_loss_stays_within_bound::<f64>(1e300, 1e-300);
+    check_far_out_of_range_entry_loss_stays_within_bound::<f32>(1e38, 1e-38);
+    // F16: `32768 = 2¹⁵` exceeds F16's `rmax = 4`, so this also exercises the
+    // fallback scale (the reported `diag(32768, 1.0009765625) → 1.0`).
+    check_far_out_of_range_entry_loss_stays_within_bound::<F16>(32768.0, 1.0009765625);
+}
+
+/// Finding A's other half: an input whose norm the safe-range gate classifies
+/// as needing **no** balancing is factored on the caller's exact values, so
+/// its eigenvalues match a same-input Jacobi decomposition (which never
+/// balances) far more tightly than the normwise backward bound alone would
+/// guarantee — both algorithms see the identical, unscaled entries.
+fn check_in_range_norm_matches_unscaled_jacobi<T: RealScalar>() {
+    // diag(3, 1e-6): norm 3 is deep inside every shipped format's safe range
+    // (even F16's narrowest, `[0.25, 4]`); 1e-6 is representable at that
+    // scale in every format without underflow.
+    let values = [3.0_f64, 0.0, 0.0, 1e-6];
+    let (matrix, image) = round_into::<T>(&values, 2);
+    let qr_eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
+    let jacobi_eigen =
+        symmetric_eigen_jacobi_with_tolerance(&matrix.view(), machine_epsilon_of::<T>()).unwrap();
+    let mut qr: Vec<f64> = qr_eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
+    let mut jacobi: Vec<f64> = jacobi_eigen
+        .eigenvalues
+        .iter()
+        .map(|v| v.to_f64())
+        .collect();
+    qr.sort_by(f64::total_cmp);
+    jacobi.sort_by(f64::total_cmp);
+    let mut expected = [image[0], image[3]];
+    expected.sort_by(f64::total_cmp);
+    // Both are exact for a diagonal input (no rotation changes an
+    // already-diagonal matrix), so all three agree bit for bit.
+    assert_eq!(qr, expected);
+    assert_eq!(jacobi, expected);
+}
+
+#[test]
+fn symmetric_eigen_qr_in_range_norm_matches_unscaled_jacobi() {
+    check_in_range_norm_matches_unscaled_jacobi::<f64>();
+    check_in_range_norm_matches_unscaled_jacobi::<f32>();
+    check_in_range_norm_matches_unscaled_jacobi::<F16>();
+    check_in_range_norm_matches_unscaled_jacobi::<Bf16>();
+}
+
+/// `T`'s machine epsilon via the halving probe (mirrors
+/// `thresholds::machine_epsilon`, re-derived here since that function is
+/// crate-private).
+fn machine_epsilon_of<T: RealScalar>() -> T {
+    let mut eps = T::ONE;
+    let half = T::ONE.div(T::from_usize(2));
+    while T::ONE.add(eps.mul(half)) > T::ONE {
+        eps = eps.mul(half);
+    }
+    eps
+}
+
 #[test]
 fn symmetric_eigen_qr_resolves_clusters_for_every_scalar() {
     check_clustered_spectrum::<f64>();
@@ -309,17 +408,38 @@ fn symmetric_eigen_qr_rejects_non_finite_input_for_every_scalar() {
     check_non_finite_input::<Bf16>();
 }
 
-#[test]
-fn symmetric_eigen_qr_matches_closed_forms() {
+/// [`symmetric_eigen_qr_matches_closed_forms`]'s body, instantiated over
+/// every shipped scalar so a known-spectrum regression in `T`'s own
+/// arithmetic (not just `f64`'s) fails this test (finding
+/// `LETO-DENSE-SCALE-RANGE-2026-09-24`, item D).
+fn check_matches_closed_forms<T: RealScalar>() {
     // [[2,1],[1,2]]: 1, 3.
-    let pair = Array2::from_shape_vec([2, 2], vec![2.0_f64, 1.0, 1.0, 2.0]).unwrap();
+    let pair_values = [2.0_f64, 1.0, 1.0, 2.0];
+    let (pair, image) = round_into::<T>(&pair_values, 2);
     let eigen = symmetric_eigen_qr(&pair.view()).unwrap();
-    assert!((eigen.eigenvalues[0] - 1.0).abs() <= 4.0 * f64::EPSILON);
-    assert!((eigen.eigenvalues[1] - 3.0).abs() <= 4.0 * 3.0 * f64::EPSILON);
+    // n²·ε(T)·‖A‖_F (`backward_bound`), n = 2: the derived backward-error
+    // bound for a 2×2 closed form (see the module derivation), on the exact
+    // image `T` holds.
+    let bound = backward_bound::<T>(&image, 2);
+    // Eigenvector orthonormality bound: n²·ε(T) (see `assert_backward_stable`).
+    let orthogonality = 4.0 * epsilon::<T>();
+    let values: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
+    assert!((values[0] - 1.0).abs() <= bound, "{}", values[0]);
+    assert!((values[1] - 3.0).abs() <= bound, "{}", values[1]);
     // Eigenvectors as columns: column 1 is ±(1, 1)/√2.
-    let columns = eigen.eigenvectors.storage().as_slice();
-    assert!((columns[1].abs() - std::f64::consts::FRAC_1_SQRT_2).abs() <= 4.0 * f64::EPSILON);
-    assert!((columns[1] - columns[3]).abs() <= 4.0 * f64::EPSILON);
+    let columns: Vec<f64> = eigen
+        .eigenvectors
+        .storage()
+        .as_slice()
+        .iter()
+        .map(|v| v.to_f64())
+        .collect();
+    assert!(
+        (columns[1].abs() - std::f64::consts::FRAC_1_SQRT_2).abs() <= orthogonality,
+        "{}",
+        columns[1]
+    );
+    assert!((columns[1] - columns[3]).abs() <= orthogonality);
 
     // Path-graph Laplacian P_n: λ_k = 2 − 2 cos(kπ/n), k = 0 … n−1.
     let n = 12;
@@ -335,7 +455,15 @@ fn symmetric_eigen_qr_matches_closed_forms() {
     let spectrum: Vec<f64> = (0..n)
         .map(|k| 2.0 - 2.0 * (k as f64 * std::f64::consts::PI / n as f64).cos())
         .collect();
-    assert_spectrum::<f64>(&laplacian, &spectrum);
+    assert_spectrum::<T>(&laplacian, &spectrum);
+}
+
+#[test]
+fn symmetric_eigen_qr_matches_closed_forms() {
+    check_matches_closed_forms::<f64>();
+    check_matches_closed_forms::<f32>();
+    check_matches_closed_forms::<F16>();
+    check_matches_closed_forms::<Bf16>();
 }
 
 #[test]
@@ -357,14 +485,13 @@ fn symmetric_eigen_qr_agrees_with_jacobi_within_backward_error() {
     }
 }
 
-#[test]
-fn symmetric_eigen_qr_resolves_rank_deficient_gram_matrices() {
+fn check_resolves_rank_deficient_gram_matrices<T: RealScalar>() {
     // A rank-10 Gram matrix of order 60: fifty zero eigenvalues, the exact
     // geometry of a noise-free MP-PCA window.
     let (rank, n) = (10, 60);
     let gram = random_gram(rank, n, 29);
-    let computed = assert_backward_stable::<f64>(&gram, n);
-    let bound = backward_bound::<f64>(&gram, n);
+    let computed = assert_backward_stable::<T>(&gram, n);
+    let bound = backward_bound::<T>(&gram, n);
     for &value in &computed[..n - rank] {
         assert!(
             value.abs() <= bound,
@@ -377,16 +504,38 @@ fn symmetric_eigen_qr_resolves_rank_deficient_gram_matrices() {
 }
 
 #[test]
-fn symmetric_eigen_qr_sorts_a_diagonal_matrix_exactly() {
-    let diagonal = [4.0, -2.0, 7.0, -2.0, 0.0];
+fn symmetric_eigen_qr_resolves_rank_deficient_gram_matrices() {
+    check_resolves_rank_deficient_gram_matrices::<f64>();
+    check_resolves_rank_deficient_gram_matrices::<f32>();
+    check_resolves_rank_deficient_gram_matrices::<F16>();
+    check_resolves_rank_deficient_gram_matrices::<Bf16>();
+}
+
+fn check_sorts_a_diagonal_matrix_exactly<T: RealScalar>() {
+    let diagonal = [4.0_f64, -2.0, 7.0, -2.0, 0.0];
     let n = diagonal.len();
     let mut values = vec![0.0; n * n];
     for (i, &d) in diagonal.iter().enumerate() {
         values[i * n + i] = d;
     }
-    let eigen =
-        symmetric_eigen_qr(&Array2::from_shape_vec([n, n], values).unwrap().view()).unwrap();
-    assert_eq!(eigen.eigenvalues, vec![-2.0, -2.0, 0.0, 4.0, 7.0]);
+    let (matrix, _) = round_into::<T>(&values, n);
+    let eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
+    let expected = [-2.0_f64, -2.0, 0.0, 4.0, 7.0];
+    // A diagonal input needs no reduction (its reflectors are all identity)
+    // and the QL sweep never runs (every off-diagonal is already zero), so
+    // sorting a set of exactly representable values is exact in every
+    // format, not merely close.
+    for (value, &expected) in eigen.eigenvalues.iter().zip(&expected) {
+        assert_eq!(value.to_f64(), expected);
+    }
+}
+
+#[test]
+fn symmetric_eigen_qr_sorts_a_diagonal_matrix_exactly() {
+    check_sorts_a_diagonal_matrix_exactly::<f64>();
+    check_sorts_a_diagonal_matrix_exactly::<f32>();
+    check_sorts_a_diagonal_matrix_exactly::<F16>();
+    check_sorts_a_diagonal_matrix_exactly::<Bf16>();
 }
 
 #[test]
@@ -405,17 +554,13 @@ fn symmetric_eigen_workspace_reuse_is_bitwise_identical_to_a_fresh_solve() {
     assert!(reused.eigenvectors().eq(fresh.eigenvectors()));
 }
 
-#[test]
-fn symmetric_eigen_qr_reads_only_the_lower_triangle_of_strided_views() {
+fn check_reads_only_the_lower_triangle_of_strided_views<T: RealScalar>() {
     // The even rows and columns form [[4, 1], [1, 4]] below the diagonal; the
     // upper entry is garbage the solver must not read.
-    let matrix = Array2::from_shape_vec(
-        [4, 4],
-        vec![
-            4.0_f64, 0.0, 99.0, 0.0, 0.0, 9.0, 0.0, 8.0, 1.0, 0.0, 4.0, 0.0, 0.0, 8.0, 0.0, 9.0,
-        ],
-    )
-    .unwrap();
+    let raw = [
+        4.0_f64, 0.0, 99.0, 0.0, 0.0, 9.0, 0.0, 8.0, 1.0, 0.0, 4.0, 0.0, 0.0, 8.0, 0.0, 9.0,
+    ];
+    let (matrix, _) = round_into::<T>(&raw, 4);
     let view = matrix
         .view()
         .slice_with::<2>(&[
@@ -424,27 +569,45 @@ fn symmetric_eigen_qr_reads_only_the_lower_triangle_of_strided_views() {
         ])
         .unwrap();
     let eigen = symmetric_eigen_qr(&view).unwrap();
-    assert!((eigen.eigenvalues[0] - 3.0).abs() <= 8.0 * f64::EPSILON);
-    assert!((eigen.eigenvalues[1] - 5.0).abs() <= 8.0 * 5.0 * f64::EPSILON);
+    // n²·ε(T)·‖A‖_F (`backward_bound`), n = 2, on the read [[4,1],[1,4]] block.
+    let block = [4.0_f64, 1.0, 1.0, 4.0];
+    let bound = backward_bound::<T>(&block, 2);
+    let values: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
+    assert!((values[0] - 3.0).abs() <= bound, "{}", values[0]);
+    assert!((values[1] - 5.0).abs() <= bound, "{}", values[1]);
+}
+
+#[test]
+fn symmetric_eigen_qr_reads_only_the_lower_triangle_of_strided_views() {
+    check_reads_only_the_lower_triangle_of_strided_views::<f64>();
+    check_reads_only_the_lower_triangle_of_strided_views::<f32>();
+    check_reads_only_the_lower_triangle_of_strided_views::<F16>();
+    check_reads_only_the_lower_triangle_of_strided_views::<Bf16>();
+}
+
+fn check_handles_degenerate_orders<T: RealScalar>() {
+    let empty = Array2::<T>::from_shape_vec([0, 0], vec![]).unwrap();
+    let eigen = symmetric_eigen_qr(&empty.view()).unwrap();
+    assert!(eigen.eigenvalues.is_empty());
+
+    let zero = Array2::from_shape_vec([2, 2], vec![T::ZERO; 4]).unwrap();
+    let zero_eigen = symmetric_eigen_qr(&zero.view()).unwrap();
+    assert_eq!(zero_eigen.eigenvalues.len(), 2);
+    assert!(zero_eigen.eigenvalues.iter().all(|&v| v == T::ZERO));
+
+    let single = Array2::from_shape_vec([1, 1], vec![T::from_f64(-3.5)]).unwrap();
+    let mut workspace = SymmetricEigenWorkspace::new();
+    workspace.decompose(&single.view()).unwrap();
+    assert_eq!(workspace.eigenvalues(), &[T::from_f64(-3.5)]);
+    assert_eq!(workspace.eigenvectors().next().unwrap(), &[T::ONE]);
 }
 
 #[test]
 fn symmetric_eigen_qr_handles_degenerate_orders() {
-    let empty = Array2::<f64>::from_shape_vec([0, 0], vec![]).unwrap();
-    let eigen = symmetric_eigen_qr(&empty.view()).unwrap();
-    assert!(eigen.eigenvalues.is_empty());
-
-    let zero = Array2::from_shape_vec([2, 2], vec![0.0_f64; 4]).unwrap();
-    assert_eq!(
-        symmetric_eigen_qr(&zero.view()).unwrap().eigenvalues,
-        vec![0.0, 0.0]
-    );
-
-    let single = Array2::from_shape_vec([1, 1], vec![-3.5]).unwrap();
-    let mut workspace = SymmetricEigenWorkspace::new();
-    workspace.decompose(&single.view()).unwrap();
-    assert_eq!(workspace.eigenvalues(), &[-3.5]);
-    assert_eq!(workspace.eigenvectors().next().unwrap(), &[1.0]);
+    check_handles_degenerate_orders::<f64>();
+    check_handles_degenerate_orders::<f32>();
+    check_handles_degenerate_orders::<F16>();
+    check_handles_degenerate_orders::<Bf16>();
 }
 
 #[test]
