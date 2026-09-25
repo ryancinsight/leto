@@ -578,3 +578,37 @@ fn singular_values_agree_with_full_svd_at_exact_rank_deficiency() {
         compare::<f64>(rows, cols, &entries, norm);
     }
 }
+
+/// Finding F: `pinv` computed `1/sigma` for every retained singular value
+/// with no range check, returning a wrong `Ok([inf, NaN, ...])` when `sigma`
+/// is small enough that its reciprocal exceeds the scalar's range while
+/// still above the rank cutoff. Both the F16 and f64 cases below hit exactly
+/// that: the matrix is full rank (every singular value above the `1e-12`
+/// relative cutoff), but the smallest one's reciprocal overflows.
+#[test]
+fn pinv_reports_overflow_for_a_non_finite_reciprocal() {
+    use eunomia::F16;
+    use leto::LetoError;
+
+    // GENERAL from tests/ops/scale_range.rs, scaled so its smallest singular
+    // value (~0.146, see `singular_values_match_diagonal_closed_form`-style
+    // battery) times 2^-17 underflows toward F16's subnormal floor while the
+    // largest entry (4.0) stays representable, so this is genuinely full
+    // rank in F16, not rejected by the rank cutoff.
+    let general: [f32; 9] = [4.0, 1.0, 0.5, 1.0, 3.0, 1.0, 0.25, 1.0, 2.0];
+    let scale = 2.0_f32.powi(-17);
+    let f16: Vec<F16> = general.iter().map(|&v| F16::from_f32(v * scale)).collect();
+    let m = Array2::from_shape_vec([3, 3], f16).unwrap();
+    match pinv(&m.view()) {
+        Err(LetoError::Overflow { .. }) => {}
+        other => panic!("expected Overflow, got {other:?}"),
+    }
+
+    let scale = 2.0_f64.powi(-1030);
+    let f64_general: Vec<f64> = general.iter().map(|&v| f64::from(v) * scale).collect();
+    let m = Array2::from_shape_vec([3, 3], f64_general).unwrap();
+    match pinv(&m.view()) {
+        Err(LetoError::Overflow { .. }) => {}
+        other => panic!("expected Overflow, got {other:?}"),
+    }
+}
