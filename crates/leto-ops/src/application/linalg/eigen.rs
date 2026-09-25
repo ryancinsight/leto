@@ -122,12 +122,7 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
-    // Degree 1, dimension factor n: Jacobi's rotation update is a convex
-    // combination (c^2+s^2=1) of entries already at ||A||_max scale, and
-    // diagonal entries stay within the Gershgorin bound n*||A||_max (eigen.rs
-    // rotate(), the app'/aqq' updates).
-    let dimension_factor = T::from_usize(n.max(1));
-    let exponent = scaling::balancing_exponent(a.iter().copied(), 1, dimension_factor).unwrap_or(0);
+    let exponent = jacobi_gate_exponent(&a);
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut target = NoEigenvectors;
 
@@ -184,12 +179,7 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
-    // Degree 1, dimension factor n: Jacobi's rotation update is a convex
-    // combination (c^2+s^2=1) of entries already at ||A||_max scale, and
-    // diagonal entries stay within the Gershgorin bound n*||A||_max (eigen.rs
-    // rotate(), the app'/aqq' updates).
-    let dimension_factor = T::from_usize(n.max(1));
-    let exponent = scaling::balancing_exponent(a.iter().copied(), 1, dimension_factor).unwrap_or(0);
+    let exponent = jacobi_gate_exponent(&a);
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
@@ -251,6 +241,27 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
         }
     }
     Ok(())
+}
+
+/// The matrix-tier gate for Jacobi (degree 1, bound `2^(1+r)`), `0` when the
+/// input is factored unscaled.
+///
+/// Every entry of every iterate of a symmetric `A` is at most
+/// `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max` (orthogonal similarity; `r` from
+/// [`scaling::norm_ratio_log2`]). The largest intermediates of `rotate` are
+/// `2·a_pq` and `a_qq − a_pp` (the `atan2` arguments) and the partial sum
+/// `c²·a_pp − 2sc·a_pq` of the diagonal update, each at most `2‖A‖₂`
+/// (`c² + s² = 1`, `|2sc| ≤ 1`); the row updates `c·a_kp − s·a_kq` are at most
+/// `√2·‖A‖₂`. So the gate's upper end is the overflow threshold divided by
+/// `2^(1+r)` — no `ε/safmin` margin: a diagonal input such as
+/// `diag(1e300, 1e-300)` or `f32` `diag(1e38, 1e-38)` has `r = 0` and is
+/// factored unscaled, exactly. The lower end (`smlnum`) only ever scales up,
+/// which is exact.
+fn jacobi_gate_exponent<T: RealScalar>(a: &[T]) -> i32 {
+    scaling::gate_exponent(a, 1, |values, largest| {
+        1 + scaling::norm_ratio_log2(values, largest)
+    })
+    .unwrap_or(0)
 }
 
 /// Copy the strictly upper triangle onto the lower, so an accepted but

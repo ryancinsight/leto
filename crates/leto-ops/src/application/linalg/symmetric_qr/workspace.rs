@@ -103,16 +103,14 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
     /// layout — contiguous, strided, transposed — is copied into
     /// workspace-owned storage, so reuse at one order allocates nothing.
     ///
-    /// When the matrix norm lies outside the LAPACK safe range, it is scaled
-    /// by the power of two that brings its largest entry into `[1, 4)` (an
-    /// even power) before the reduction, and the eigenvalues are scaled back
-    /// after it; a norm already in the safe range is factored unscaled. Power
-    /// of two scaling is exact only while every scaled entry stays
-    /// representable — an entry far below the largest can underflow under a
-    /// scale chosen for the largest one — so the result is within the
-    /// algorithm's backward-error bound, not exact entrywise (see the
-    /// [module documentation](super) for the range argument and the
-    /// exactness caveat).
+    /// When the matrix norm lies outside the solver's gate range (see the
+    /// [module documentation](super)), it is first moved by the minimal power
+    /// of two into that range and the eigenvalues are scaled back after; a
+    /// norm already in range is factored unscaled. Power-of-two scaling is
+    /// exact only while every scaled entry stays representable — an entry far
+    /// below the largest can underflow under a scale chosen for the largest
+    /// one — so the result is within the algorithm's backward-error bound, not
+    /// exact entrywise.
     ///
     /// # Errors
     ///
@@ -143,26 +141,23 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
         }
         let n = rows;
         self.load_lower_triangle(matrix, n)?;
-        // Degree 2, dimension factor n. The Householder reflector
-        // (`householder::reflect_in_place`) normalizes its own vector
-        // internally, so tridiagonalization's rank-2 update (`reduce.rs`)
-        // stays at `‖A‖_max` scale (degree 1) by itself. The QL sweep
-        // (`ql.rs`) is not: its Wilkinson-shift ratio
-        // `p = (d_{l+1} − dₗ)/(2·eₗ)` is a genuine ratio of two `‖A‖_max`-scale
-        // quantities (degree 0 mathematically), but `eₗ` underflows to exact
-        // `0` before the numerator does at extreme scale (probed: f64 at
-        // `2⁵³⁷` produces `p = ∞`, then `eₗ.mul(p.add(r))` computes `0·∞ = NaN`
-        // — `diagonal[l+1] = off_diagonal[l].mul(p.add(r))`). Gating on the
-        // plain `degree = 2` range (the same one `dsyev`/`dsteqr` use)
-        // keeps `‖A‖_max` far enough from `safmin`/`bignum` that no
-        // intermediate — including this ratio's denominator — reaches exact
-        // `0` or `∞` before deflation. `dimension_factor = n`: the
-        // Gershgorin/Frobenius bound shared with Jacobi (eigenvalues stay
-        // within `n·‖A‖_max`).
-        let dimension_factor = T::from_usize(n.max(1));
-        let exponent =
-            scaling::balancing_exponent(self.reduced.iter().copied(), 2, dimension_factor)
-                .unwrap_or(0);
+        // Matrix-tier gate, degree 2, bound `2^(2r)` (`r` from
+        // `scaling::norm_ratio_log2`). The reduction (`reduce.rs`) applies
+        // `householder::reflect_in_place` reflectors, normalized to `[1, 2)`,
+        // so it stays degree 1. The QL chase (`ql.rs`) is also degree 1 but
+        // for one product: the closing correction
+        // `p = −s·s₂·c₃·e_{l+1}·eₗ / d_{l+1}` multiplies two off-diagonals
+        // before dividing, and each is at most `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max`
+        // (orthogonal similarity), so `|e_{l+1}·eₗ| ≤ 2^(2r)·‖A‖_max²`.
+        // Unguarded it overflows first (probed: `f64` at `2⁵³⁷` gave
+        // `∞`, then `0·∞ = NaN`). The shift ratio `p = (d_{l+1} − dₗ)/(2eₗ)` is
+        // degree 0, bounded by `4/ε` through the fixed norm estimate (`ql.rs`),
+        // and every other intermediate is at most `3‖A‖₂ ≤ 3·√Ω` inside this
+        // range.
+        let exponent = scaling::gate_exponent(&self.reduced, 2, |values, largest| {
+            2 * scaling::norm_ratio_log2(values, largest)
+        })
+        .unwrap_or(0);
         scaling::scale_by_power_of_two(&mut self.reduced, -exponent);
         self.values.resize(n, T::ZERO);
         self.off_diagonal.resize(n, T::ZERO);

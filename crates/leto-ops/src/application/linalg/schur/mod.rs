@@ -42,27 +42,30 @@
 mod francis;
 mod standardize;
 
-use crate::application::linalg::scaling;
+use crate::application::linalg::scaling::{self, KernelWindow};
 use crate::domain::real::RealScalar;
 use leto::Complex;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
-/// Degree and dimension factor for the Francis double-shift reflector
-/// (`schur::francis::stack_reflector`, fed by the `x`/`y`/`zz` formed at
-/// `francis.rs`'s double-shift step): an orthogonal similarity preserves the
-/// 2-norm, so every Hessenberg entry is bounded by `‖A‖_2 ≤ ‖A‖_F ≤ n·‖A‖_max`.
-/// `x = h00·h00 + h01·h10 − s·h00 + t` sums four such degree-2 terms
-/// (`s`, the local trace, is itself `≤ 2n·‖A‖_max`; `t`, the local
-/// determinant, `≤ 2n²·‖A‖_max²`), giving `|x| ≤ 6n²·‖A‖_max²`; `y`, `zz` are
-/// bounded the same way. The reflector then forms `x² + y² + zz²`
-/// (`stack_reflector`'s `norm_sq`) — a **second** squaring, so the relied-upon
-/// intermediate is degree 4 in the original entries, bounded by
-/// `3·(6n²)²·‖A‖_max⁴ = 108n⁴·‖A‖_max⁴`; rounded up to `128n⁴` for margin.
-fn francis_dimension_factor<T: RealScalar>(n: usize) -> T {
-    let n = T::from_usize(n.max(1));
-    let n2 = n.mul(n);
-    let n4 = n2.mul(n2);
-    T::from_usize(128).mul(n4)
+/// The matrix-tier gate for the Francis family (`schur`, `eigenvalues`):
+/// degree 2, bound `2^(2r)`, `r = ⌈log₂(‖A‖_F/‖A‖_max)⌉`
+/// ([`scaling::norm_ratio_log2`]).
+///
+/// The kernels form every local product scale-safely (`francis.rs`'s first
+/// column and `stack_reflector`, `standardize.rs`, the 2×2 eigenvalue
+/// quadratic below, the Hessenberg reflector). What remains is the
+/// reflector application `w = vᵀ·H[rows, cols]` (`francis::apply_left`,
+/// `apply_right`): `stack_reflector` leaves `v` unscaled up to its window's
+/// upper end, `‖v‖₂ ≤ √(12·Ω/16) < √Ω`, and every column of `H` has 2-norm at
+/// most `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max` (orthogonal similarity), so
+/// `|w| ≤ √Ω·2^r·‖A‖_max` — finite when `2^(2r)·‖A‖_max² ≤ Ω`: a degree-2
+/// product of an unscaled reflector (itself up to a square of entries) with
+/// an entry. The degree-1 sums (the Hessenberg reduction's `vᵀ·A` with
+/// `‖v‖₂ ≤ 4√n`, `householder::reflect_in_place`; the deflation test's
+/// `|hᵢᵢ| + |hᵢ₊₁ᵢ₊₁|`) are at most `4√n·√Ω` inside this range, finite for
+/// every order `n ≤ Ω/16` a format can index.
+fn francis_factor_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
+    2 * scaling::norm_ratio_log2(values, largest)
 }
 
 /// Real Schur decomposition `A = Q T Qᵀ`.
@@ -96,7 +99,7 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
     }
 
     // Balance by an exact power of two; `Q` is scale-invariant, `T` scales.
-    let balanced = scaling::balanced_recentered(matrix, 4, francis_dimension_factor::<T>(n));
+    let balanced = scaling::balanced(matrix, 2, francis_factor_log2);
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -149,7 +152,7 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     // invariance means the Schur vectors are never needed), saving the O(n³) Q
     // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
     // Balance by an exact power of two; eigenvalues scale with the matrix.
-    let balanced = scaling::balanced_recentered(matrix, 4, francis_dimension_factor::<T>(n));
+    let balanced = scaling::balanced(matrix, 2, francis_factor_log2);
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -179,13 +182,18 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
 /// The quadratic squares the block's trace, which underflows or overflows for
 /// entries near the ends of the range — a block at `2⁻⁸⁶` in `f32` squares to
 /// `2⁻¹⁷²`, below the smallest subnormal, and returned `{3, 3}` for `{2, 4}`.
-/// Each block is therefore balanced by its own even power of two
-/// (`linalg::scaling`) before the quadratic and its eigenvalues restored after, both
-/// exactly.
+/// Each block is therefore formed scale-safely (the kernel tier of
+/// `linalg::scaling`, as LAPACK `dlanv2` guards the same quadratic): unscaled
+/// while its largest entry keeps the discriminant normal and finite, and
+/// otherwise divided by the power of two bringing that entry into `[1, 2)`,
+/// its eigenvalues multiplied back after — both exactly.
 pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
     t: &[T],
     n: usize,
 ) -> Vec<Complex<T>> {
+    // `tr² ≤ 4m²` and `4·|det| ≤ 8m²` (`m` a block's largest entry), so
+    // `|disc| ≤ 12m² < 2⁴m²`: degree 2, bound `2⁴`.
+    let window = KernelWindow::new(2, 2, 4);
     let mut eigs = Vec::with_capacity(n);
     let mut i = 0usize;
     while i < n {
@@ -197,11 +205,7 @@ pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
                 t[(i + 1) * n + i],
                 t[(i + 1) * n + i + 1],
             ];
-            // Degree 2, dimension factor 12: `tr = a+d`, `det = ad-bc` are
-            // each degree-2 bounded by `2*block_max^2`; the discriminant
-            // `tr^2 - 4*det` sums those, giving `|disc| <= 4*block_max^2 +
-            // 8*block_max^2 = 12*block_max^2` (a fixed 2x2, no n-dependence).
-            let exponent = scaling::balancing_exponent(block, 2, T::from_usize(12)).unwrap_or(0);
+            let exponent = window.exponent(&block);
             scaling::scale_by_power_of_two(&mut block, -exponent);
             let [a, b, c, d] = block;
             let restore = |x: T| x.scale_binary(exponent);

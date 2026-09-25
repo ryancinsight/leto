@@ -25,6 +25,7 @@ pub mod reduction;
 pub mod scale_range;
 pub mod schur;
 pub mod sparse;
+pub mod spectral_condition;
 pub mod stateful_update;
 pub mod stencil;
 pub mod storage_bounds;

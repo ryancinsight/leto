@@ -1,44 +1,38 @@
-//! Exact power-of-two balancing of dense factorization inputs, scaled by the
-//! *minimal* move only when a routine's own intermediates would otherwise
-//! leave the representable range.
+//! Exact power-of-two scaling of dense factorization inputs, in two tiers.
 //!
-//! Each dense factorization relies on some largest intermediate quantity
-//! that is homogeneous of some degree `d` in the input entries (a sum of
-//! squares is degree 2; a discriminant built from an already-squared term is
-//! degree 4; a rotation update that only recombines entries linearly is
-//! degree 1) and bounded above by a derived dimension factor `c` times
-//! `‖A‖_max^d`. Unscaled, that intermediate overflows or underflows long
-//! before `A` itself leaves the range of the scalar (f64 SVD failed to
-//! converge below `2⁻²⁵⁸` and above `2²⁵⁴`). Each call site here states its
-//! own `(d, c)`, derived from its actual formulas — see
-//! [`thresholds::homogeneous_safe_range`](super::thresholds::homogeneous_safe_range)
-//! for the range this implies and each caller for its derivation.
+//! **Kernel tier.** The Francis double-shift and Golub–Kahan bidiagonal QR
+//! kernels form their products scale-safely: each local quantity that is a
+//! product of entries (a Givens norm, a reflector norm, a shift's first
+//! column, a 2×2 block's discriminant) is formed unscaled while its local
+//! magnitude lies in the kernel's representable window
+//! ([`thresholds::kernel_window`](super::thresholds::kernel_window)) and, only
+//! outside it, from operands rescaled by the power of two bringing the local
+//! magnitude into `[1, 2)` ([`window_exponent`]) — the LAPACK `dlartg` /
+//! `dnrm2` / `dlahqr` pattern. Inside the window the kernel's arithmetic is
+//! bit-for-bit the unscaled arithmetic.
 //!
-//! **When `‖A‖_max` already lies in that range, the matrix is factored
-//! completely unscaled** — no power-of-two multiply touches it at all. Only
-//! when it falls outside does the routine factor `2⁻ᵏ·A` instead, `k` the
-//! *smallest* integer (in magnitude, either sign) bringing `‖A‖_max` back
-//! inside the range — never a fixed target like `[1, 4)` — and the
-//! scale-carrying results are multiplied back by `2ᵏ`. The minimal move
-//! keeps as many low bits of every entry as scaling can: recentring to a
-//! fixed target moves entries further than the correctness argument needs,
-//! costing precision in exactly the small-entry-underflow way the
-//! module-level exactness caveat below describes.
+//! **Matrix tier.** What the kernels cannot rescale locally — an intermediate
+//! that is a product of entries accumulated across the whole matrix
+//! (a pivoted-QR column norm, the QL chase's `e₁·eₗ`) or a degree-1 sum whose
+//! bound grows with the dimension — is guarded by the gate: each routine
+//! states the degree `d` and a power-of-two bound `2^f` with
+//! `|intermediate| ≤ 2^f·‖A‖_max^d`, derived from its formulas at the call
+//! site, and [`thresholds::homogeneous_safe_range`](super::thresholds::homogeneous_safe_range)
+//! turns that into the range of `‖A‖_max` factored unscaled. **An input
+//! inside it is factored completely unscaled**, bit-for-bit the unscaled
+//! algorithm. Outside it the routine factors `2⁻ᵏ·A`, `k` the minimal move
+//! (either sign) bringing `‖A‖_max` back inside ([`balancing_exponent`]),
+//! and multiplies the scale-carrying results back by `2ᵏ` ([`restore`]).
 //!
 //! **Exactness.** Multiplying by a power of two changes only the exponent, so
-//! it is exact whenever neither operand nor result leaves the normal range.
-//! This is exact only while every scaled entry stays representable: an entry
-//! already far below the largest one can underflow to zero under a scale
-//! chosen for the largest entry (`diag(1e300, 1e-300)` in `f64`), exactly as
-//! LAPACK's own scaling can lose small entries. That loss is bounded by the
-//! factorizations' backward-error guarantee, never promised as exact — the
-//! guarantee this module keeps is over the *whole* computation, not
-//! entrywise. The minimal-move policy above is precisely what minimizes this
-//! loss: it never scales further than the correctness argument requires.
-//!
-//! **In-range inputs are bitwise unchanged.** When `‖A‖_max` already lies in
-//! the applicable range, no scaling is applied, so the factorization runs on
-//! `A` itself and its result is bit-for-bit that of the unscaled algorithm.
+//! it is exact whenever the result stays normal. Scaling *up* is therefore
+//! always exact; scaling *down* can underflow an entry far below the largest
+//! one (`diag(1e300, 1e-300)` would lose `1e-300` if `f64` had to scale it
+//! down). The minimal move scales down only as far as the gate's upper end
+//! requires, and the upper ends are the overflow threshold itself (not the
+//! LAPACK `ε/safmin` margin), so such loss occurs only for inputs within
+//! `2^f` of overflowing; there the factorizations' backward-error bound, not
+//! entrywise exactness, is the guarantee.
 
 use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
@@ -46,7 +40,7 @@ use leto::{Array2, ArrayView2, LetoError, Result};
 
 /// The largest finite magnitude in `values`, or `None` when it is empty, all
 /// zero, or holds a non-finite entry (which the caller's validation reports).
-fn largest_magnitude<T: RealScalar>(values: impl IntoIterator<Item = T>) -> Option<T> {
+pub(crate) fn largest_magnitude<T: RealScalar>(values: impl IntoIterator<Item = T>) -> Option<T> {
     let mut largest = T::ZERO;
     for value in values {
         if !value.is_finite() {
@@ -64,32 +58,31 @@ fn largest_magnitude<T: RealScalar>(values: impl IntoIterator<Item = T>) -> Opti
     }
 }
 
-/// Extra bits of margin applied to the landing target, beyond the strict
-/// minimum move. Probed at `1`: it did not fix the one remaining known
-/// non-convergence (`schur` on `SIMILAR` at f32's smallest subnormal
-/// exponent, `2⁻¹⁴⁹` — a genuine input-degeneracy case, not a boundary-margin
-/// one: `0.5·2⁻¹⁴⁹` itself underflows to exact `0` when the test constructs
-/// the scaled matrix, before any balancing runs, giving Francis a
-/// structurally different, degenerate input) and *did* regress a separately
-/// probed, working F16 case (`tests/ops/schur.rs`'s
-/// `schur_resolves_the_f16_scale_regression_matrix`, which converges landing
-/// exactly at the boundary and stops converging with one bit of margin).
-/// Kept at `0` (no margin): the "boundary imprecision" hypothesis this was
-/// meant to test is not supported by the evidence, and the two known
-/// remaining non-convergences are each their own recorded, narrower cause
-/// (`LETO-F16-FRANCIS-2026-09-24`; the f32-subnormal case documented at its
-/// call site) rather than a general boundary-margin problem this constant
-/// would fix.
-const MARGIN_BITS: i32 = 0;
+/// `⌈log₂(‖A‖_F / ‖A‖_max)⌉` for the entries `values` whose largest magnitude
+/// is `largest`: the power-of-two bound on the ratio that lets a gate state
+/// `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max` tightly (a diagonal-dominated matrix has
+/// `r = 0`, where the dimension bound `√(mn)` would charge up to `log₂ n`).
+/// Falls back to the dimension bound `⌈⌈log₂ len⌉/2⌉` when the ratio's sum of
+/// squares itself leaves the range of `T` (a narrow format at large `len`).
+pub(crate) fn norm_ratio_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
+    let sum = values.iter().fold(T::ZERO, |acc, &value| {
+        let ratio = value.div(largest);
+        acc.add(ratio.mul(ratio))
+    });
+    let ratio = sum.sqrt();
+    if ratio.is_finite() && ratio >= T::ONE {
+        thresholds::ceil_log2(ratio)
+    } else {
+        (thresholds::ceil_log2_count(values.len()) + 1) / 2
+    }
+}
 
-/// The near-minimal-magnitude integer `k` (either sign) with `largest·2⁻ᵏ`
-/// inside `(rmin, rmax)`, landing [`MARGIN_BITS`] inside rather than exactly
-/// at the boundary. `largest` is assumed already outside `(rmin, rmax)` (the
+/// The minimal-magnitude integer `k` (either sign) with `largest·2⁻ᵏ`
+/// inside `[rmin, rmax]`. `largest` is assumed already outside it (the
 /// caller checks); `rmin < rmax`, both positive and finite.
 fn minimal_exponent_to_range<T: RealScalar>(largest: T, rmin: T, rmax: T) -> i32 {
-    if largest >= rmax {
-        // Scale down: the smallest k > 0 with `largest / 2^k <= rmax`,
-        // then `MARGIN_BITS` further down.
+    if largest > rmax {
+        // Scale down: the smallest k > 0 with `largest / 2^k <= rmax`.
         let mut k = largest.binary_exponent().unwrap_or(0) - rmax.binary_exponent().unwrap_or(0);
         if k < 1 {
             k = 1;
@@ -100,10 +93,10 @@ fn minimal_exponent_to_range<T: RealScalar>(largest: T, rmin: T, rmax: T) -> i32
         while k > 1 && largest.scale_binary(-(k - 1)) <= rmax {
             k -= 1;
         }
-        k + MARGIN_BITS
+        k
     } else {
-        // largest <= rmin: scale up (k negative), the smallest |k| with
-        // `largest / 2^k >= rmin`, then `MARGIN_BITS` further up.
+        // largest < rmin: scale up (k negative), the smallest |k| with
+        // `largest / 2^k >= rmin`.
         let mut k = largest.binary_exponent().unwrap_or(0) - rmin.binary_exponent().unwrap_or(0);
         if k > -1 {
             k = -1;
@@ -114,66 +107,52 @@ fn minimal_exponent_to_range<T: RealScalar>(largest: T, rmin: T, rmax: T) -> i32
         while k < -1 && largest.scale_binary(-(k + 1)) >= rmin {
             k += 1;
         }
-        k - MARGIN_BITS
+        k
     }
 }
 
-/// The minimal-move exponent `k` bringing `values`' largest magnitude into
-/// [`thresholds::homogeneous_safe_range`]`(degree, dimension_factor)`, or
-/// `None` when `values` is empty, all zero, holds a non-finite entry (the
-/// caller's validation reports that), or the norm is already in range (the
-/// caller factors the input unscaled).
-pub(crate) fn balancing_exponent<T: RealScalar>(
-    values: impl IntoIterator<Item = T>,
-    degree: u32,
-    dimension_factor: T,
-) -> Option<i32> {
-    let largest = largest_magnitude(values)?;
-    let (rmin, rmax) = thresholds::homogeneous_safe_range::<T>(degree, dimension_factor);
-    if largest > rmin && largest < rmax {
+/// The minimal-move exponent `k` bringing `largest` into `range`, or `None`
+/// when it already lies inside (the caller factors its input unscaled).
+pub(crate) fn balancing_exponent<T: RealScalar>(largest: T, range: (T, T)) -> Option<i32> {
+    let (rmin, rmax) = range;
+    if largest >= rmin && largest <= rmax {
         return None;
     }
     Some(minimal_exponent_to_range(largest, rmin, rmax))
 }
 
-/// The even exponent `k` with `max|xᵢ|·2⁻ᵏ ∈ [1, 4)`, or `None` when `largest`
-/// is already in `[1, 4)`.
-fn even_exponent_to_one_four<T: RealScalar>(largest: T) -> Option<i32> {
-    let exponent = largest.binary_exponent()?;
-    // Round toward −∞ to an even exponent: e ∈ {2j, 2j+1} ↦ 2j.
-    Some(exponent - exponent.rem_euclid(2))
+/// A kernel's representable window for its local magnitude `m` (the
+/// largest operand it reads): the kernel tier's gate, computed once per
+/// routine call from [`thresholds::kernel_window`] and passed down to the
+/// hot kernels.
+#[derive(Clone, Copy)]
+pub(crate) struct KernelWindow<T> {
+    low: T,
+    high: T,
 }
 
-/// As [`balancing_exponent`], but recentring to `[1, 4)` instead of a
-/// minimal move once the norm is judged out of range.
-///
-/// **Empirical exception to the minimal-move policy**, for the Francis
-/// double-shift QR (`schur`, `eigenvalues`) and Golub–Kahan bidiagonal QR
-/// (the SVD family) specifically: probing `schur` on the `SIMILAR` matrix
-/// (`tests/ops/scale_range.rs`) across every exponent found the *minimal*-move
-/// landing — near the computed `(rmin, rmax)` boundary — non-convergent
-/// across a wide band (Bf16: essentially every exponent from `2⁻¹³³` to
-/// `2⁻³³`; f32: `2⁻¹⁴⁹`), while recentring the same out-of-range inputs to
-/// `[1, 4)` converges throughout. The `(degree, dimension_factor)` derivation
-/// is unaffected — it still decides correctly whether an input needs
-/// scaling at all, so in-range inputs remain bitwise unscaled — but a value
-/// that does need scaling is recentred rather than moved minimally, because
-/// these two algorithms' shift/discriminant formulas are evidently more
-/// numerically fragile near the derived boundary than the degree/dimension
-/// analysis alone predicts (`LETO-FRANCIS-QUARTIC-SCALE-2026-09-24` tracks
-/// closing that gap with scale-invariant formulas, which would let these
-/// routines drop back to the minimal move).
-pub(crate) fn balancing_exponent_recentered<T: RealScalar>(
-    values: impl IntoIterator<Item = T>,
-    degree: u32,
-    dimension_factor: T,
-) -> Option<i32> {
-    let largest = largest_magnitude(values)?;
-    let (rmin, rmax) = thresholds::homogeneous_safe_range::<T>(degree, dimension_factor);
-    if largest > rmin && largest < rmax {
-        return None;
+impl<T: RealScalar> KernelWindow<T> {
+    /// The window keeping the kernel's smallest relied-upon product (degree
+    /// `lower_degree`) normal and its largest (degree `upper_degree`, bounded
+    /// by `2^factor_log2·m^dᵤ`) finite.
+    pub(crate) fn new(lower_degree: u32, upper_degree: u32, factor_log2: i32) -> Self {
+        let (low, high) = thresholds::kernel_window::<T>(lower_degree, upper_degree, factor_log2);
+        Self { low, high }
     }
-    even_exponent_to_one_four(largest)
+
+    /// `0` when the largest magnitude among `operands` lies in the window (or
+    /// is zero or non-finite — nothing to rescale), otherwise its binary
+    /// exponent `k`, so the operands divided by `2ᵏ` have their largest
+    /// magnitude in `[1, 2)`.
+    pub(crate) fn exponent(self, operands: &[T]) -> i32 {
+        let largest = operands
+            .iter()
+            .fold(T::ZERO, |acc, v| if v.abs() > acc { v.abs() } else { acc });
+        if largest == T::ZERO || (largest >= self.low && largest <= self.high) {
+            return 0;
+        }
+        largest.binary_exponent().unwrap_or(0)
+    }
 }
 
 /// Multiply every entry of `values` by `2^exponent` (exact while the results
@@ -184,68 +163,41 @@ pub(crate) fn scale_by_power_of_two<T: RealScalar>(values: &mut [T], exponent: i
     }
 }
 
-/// Which exponent policy [`balanced_with`] uses once a norm is judged out of
-/// range: [`balancing_exponent`]'s minimal move, or
-/// [`balancing_exponent_recentered`]'s recentre to `[1, 4)`.
-#[derive(Clone, Copy)]
-enum ExponentPolicy {
-    Minimal,
-    Recentered,
+/// The matrix-tier gate over the entries `values`: `Some(k)`, the minimal
+/// move, when `‖values‖_max` lies outside
+/// [`thresholds::homogeneous_safe_range`]`(degree, f)` with `f =
+/// factor_log2(values, ‖values‖_max)`; `None` when it lies inside or `values`
+/// is empty, all zero, or holds a non-finite entry.
+pub(crate) fn gate_exponent<T: RealScalar>(
+    values: &[T],
+    degree: u32,
+    factor_log2: impl FnOnce(&[T], T) -> i32,
+) -> Option<i32> {
+    let largest = largest_magnitude(values.iter().copied())?;
+    let factor = factor_log2(values, largest);
+    balancing_exponent(
+        largest,
+        thresholds::homogeneous_safe_range::<T>(degree, factor),
+    )
 }
 
-fn balanced_with<T: RealScalar>(
+/// `matrix` multiplied by `2⁻ᵏ` as an owned contiguous copy, `k` from
+/// [`gate_exponent`]; `None` when no scaling applies, in which case the
+/// caller factors `matrix` itself, bit-for-bit unscaled.
+pub(crate) fn balanced<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     degree: u32,
-    dimension_factor: T,
-    policy: ExponentPolicy,
+    factor_log2: impl FnOnce(&[T], T) -> i32,
 ) -> Option<(Array2<T>, i32)> {
-    let exponent_of = |values: &[T]| match policy {
-        ExponentPolicy::Minimal => {
-            balancing_exponent(values.iter().copied(), degree, dimension_factor)
-        }
-        ExponentPolicy::Recentered => {
-            balancing_exponent_recentered(values.iter().copied(), degree, dimension_factor)
-        }
-    };
-    let exponent = match matrix.as_slice() {
-        Some(slice) => exponent_of(slice),
-        None => {
-            let owned: Vec<T> = matrix.iter().copied().collect();
-            exponent_of(&owned)
-        }
-    }?;
     let mut values = match matrix.as_slice() {
         Some(slice) => slice.to_vec(),
         None => matrix.iter().copied().collect(),
     };
+    let exponent = gate_exponent(&values, degree, factor_log2)?;
     scale_by_power_of_two(&mut values, -exponent);
     let array = Array2::from_shape_vec(matrix.shape(), values)
         .expect("invariant: a copy of a view keeps its shape and length");
     Some((array, exponent))
-}
-
-/// `matrix` multiplied by `2⁻ᵏ` as an owned contiguous copy, with `k`
-/// ([`balancing_exponent`]'s minimal move for `(degree, dimension_factor)`);
-/// `None` when no scaling applies (a zero or empty matrix, a non-finite
-/// entry, or `‖matrix‖_max` already in range), in which case the caller
-/// factors `matrix` itself, bit-for-bit unscaled.
-pub(crate) fn balanced<T: RealScalar>(
-    matrix: &ArrayView2<'_, T>,
-    degree: u32,
-    dimension_factor: T,
-) -> Option<(Array2<T>, i32)> {
-    balanced_with(matrix, degree, dimension_factor, ExponentPolicy::Minimal)
-}
-
-/// As [`balanced`], but using [`balancing_exponent_recentered`] once out of
-/// range — see its documentation for why the Francis/bidiagonal-QR family
-/// uses this instead of the minimal move.
-pub(crate) fn balanced_recentered<T: RealScalar>(
-    matrix: &ArrayView2<'_, T>,
-    degree: u32,
-    dimension_factor: T,
-) -> Option<(Array2<T>, i32)> {
-    balanced_with(matrix, degree, dimension_factor, ExponentPolicy::Recentered)
 }
 
 /// Multiply scale-carrying results back by `2ᵏ`.
@@ -270,98 +222,97 @@ pub(crate) fn restore<T: RealScalar>(
 
 #[cfg(test)]
 mod tests {
-    use super::{balancing_exponent, balancing_exponent_recentered, restore};
+    use super::{gate_exponent, norm_ratio_log2, restore, scale_by_power_of_two, KernelWindow};
     use crate::application::linalg::thresholds::homogeneous_safe_range;
     use leto::LetoError;
 
-    #[test]
-    fn in_range_values_are_not_scaled() {
-        // Degree 2, dimension_factor 1: f64's range is about
-        // [1e-146, 1e146] (rmin*rmax = 1); every one of these needs no
-        // scaling at all.
-        let (rmin, rmax) = homogeneous_safe_range::<f64>(2, 1.0);
-        assert!(rmin > 0.0 && rmin < 1e-100, "{rmin}");
-        assert!(rmax > 1e100, "{rmax}");
-        for value in [1.0_f64, 3.99, 4.0, 0.5, 0.25, 0.2, 1e100, 1e-100] {
-            assert_eq!(
-                balancing_exponent([value, -value / 3.0], 2, 1.0),
-                None,
-                "{value} should factor unscaled"
-            );
-        }
-        assert_eq!(balancing_exponent([0.0_f64, -0.0], 2, 1.0), None);
-        assert_eq!(balancing_exponent([1.0_f64, f64::INFINITY], 2, 1.0), None);
-        assert_eq!(balancing_exponent(Vec::<f64>::new(), 2, 1.0), None);
+    fn no_factor(_: &[f64], _: f64) -> i32 {
+        0
     }
 
     #[test]
-    fn recentered_variant_also_leaves_in_range_values_unscaled() {
-        // Kills the "always scale Schur/SVD" mutant: `balancing_exponent_recentered`
-        // (used by `balanced_recentered`, the Francis/bidiagonal-QR path)
-        // must skip scaling exactly like the minimal-move variant when the
-        // norm is already in range — the exponent policy differs only for
-        // out-of-range norms.
-        for value in [1.0_f64, 3.99, 0.5, 100.0] {
+    fn in_range_values_are_not_scaled() {
+        // Degree 2, bound 2⁰: f64's range is [√(2⁻⁹⁷⁰), √Ω) ≈ [2⁻⁴⁸⁵, 2⁵¹²).
+        let (rmin, rmax) = homogeneous_safe_range::<f64>(2, 0);
+        assert!(
+            rmin > 2.0_f64.powi(-486) && rmin < 2.0_f64.powi(-484),
+            "{rmin}"
+        );
+        assert!(
+            rmax > 2.0_f64.powi(511) && rmax < 2.0_f64.powi(512),
+            "{rmax}"
+        );
+        for value in [1.0_f64, 3.99, 4.0, 0.5, 0.2, 1e100, 1e-100, 1e150, 1e-145] {
             assert_eq!(
-                balancing_exponent_recentered([value, -value / 3.0], 2, 1.0),
+                gate_exponent(&[value, -value / 3.0], 2, no_factor),
                 None,
                 "{value} should factor unscaled"
             );
         }
-        assert!(balancing_exponent_recentered([1e300_f64], 2, 1.0).is_some());
+        assert_eq!(gate_exponent(&[0.0_f64, -0.0], 2, no_factor), None);
+        assert_eq!(gate_exponent(&[1.0_f64, f64::INFINITY], 2, no_factor), None);
+        assert_eq!(gate_exponent(&Vec::<f64>::new(), 2, no_factor), None);
+    }
+
+    #[test]
+    fn degree_one_upper_end_is_the_overflow_threshold() {
+        // Degree 1 takes no root: the upper end is exactly Ω·2⁻ᶠ, so
+        // `1.5·2¹⁰²²` (≤ Ω/2) is in range at bound 2¹ and out at 2².
+        let value = 1.5 * 2.0_f64.powi(1022);
+        assert_eq!(gate_exponent(&[value], 1, |_, _| 1), None);
+        assert_eq!(gate_exponent(&[value], 1, |_, _| 2), Some(1));
+        let (_, rmax) = homogeneous_safe_range::<f64>(1, 1);
+        assert_eq!(rmax, f64::MAX / 2.0);
     }
 
     #[test]
     fn out_of_range_values_scale_by_the_minimal_move() {
-        // 1e300 exceeds f64's degree-2 rmax (~1e146): the near-minimal move
-        // brings it just inside (one `MARGIN_BITS` shy of the boundary), not
-        // to a fixed [1,4) target.
-        let (_, rmax) = homogeneous_safe_range::<f64>(2, 1.0);
-        let k = balancing_exponent([1e300_f64], 2, 1.0).expect("1e300 is out of range");
+        let (rmin, rmax) = homogeneous_safe_range::<f64>(2, 0);
+        let k = gate_exponent(&[1e300_f64], 2, no_factor).expect("1e300 is out of range");
         let mut scaled = [1e300_f64];
-        super::scale_by_power_of_two(&mut scaled, -k);
+        scale_by_power_of_two(&mut scaled, -k);
         assert!(scaled[0] <= rmax, "{} > {rmax}", scaled[0]);
-        // Near-minimality: giving up the margin bit (k - MARGIN_BITS, the
-        // exponent the boundary search alone would pick) still lands at or
-        // under rmax — it is the *next* step down, past the boundary
-        // search's own minimum, that overshoots.
-        let mut without_margin = [1e300_f64];
-        super::scale_by_power_of_two(&mut without_margin, -(k - super::MARGIN_BITS));
-        assert!(
-            without_margin[0] <= rmax,
-            "{k} added more than the {}-bit margin",
-            super::MARGIN_BITS
-        );
-        let mut one_further_less = [1e300_f64];
-        super::scale_by_power_of_two(&mut one_further_less, -(k - super::MARGIN_BITS - 1));
-        assert!(one_further_less[0] > rmax, "{k} was not near-minimal");
+        let mut one_less = [1e300_f64];
+        scale_by_power_of_two(&mut one_less, -(k - 1));
+        assert!(one_less[0] > rmax, "{k} was not minimal");
 
-        // Subnormal minimum in f64 scales up minimally too.
-        let (rmin, _) = homogeneous_safe_range::<f64>(2, 1.0);
-        let k = balancing_exponent([f64::from_bits(1)], 2, 1.0).expect("subnormal is out of range");
-        let mut scaled = [f64::from_bits(1)];
-        super::scale_by_power_of_two(&mut scaled, -k);
+        let tiny = f64::from_bits(1);
+        let k = gate_exponent(&[tiny], 2, no_factor).expect("subnormal is out of range");
+        assert!(k < 0);
+        let mut scaled = [tiny];
+        scale_by_power_of_two(&mut scaled, -k);
         assert!(scaled[0] >= rmin, "{} < {rmin}", scaled[0]);
-        let mut without_margin = [f64::from_bits(1)];
-        super::scale_by_power_of_two(&mut without_margin, -(k + super::MARGIN_BITS));
-        assert!(
-            without_margin[0] >= rmin,
-            "{k} added more than the {}-bit margin",
-            super::MARGIN_BITS
-        );
-        let mut one_further_less = [f64::from_bits(1)];
-        super::scale_by_power_of_two(&mut one_further_less, -(k + super::MARGIN_BITS + 1));
-        assert!(one_further_less[0] < rmin, "{k} was not near-minimal");
+        let mut one_less = [tiny];
+        scale_by_power_of_two(&mut one_less, -(k + 1));
+        assert!(one_less[0] < rmin, "{k} was not minimal");
     }
 
     #[test]
-    fn dimension_factor_narrows_the_range() {
-        // A larger dimension_factor (more entries contributing to the
-        // relied-upon intermediate) shrinks the safe interval symmetrically
-        // in the sense that a value safe at factor 1 may need scaling at a
-        // much larger factor.
-        assert_eq!(balancing_exponent([100.0_f64], 2, 1.0), None);
-        assert!(balancing_exponent([100.0_f64], 4, 1e290).is_some());
+    fn bound_factor_narrows_only_the_upper_end() {
+        let (rmin0, rmax0) = homogeneous_safe_range::<f64>(4, 0);
+        let (rmin, rmax) = homogeneous_safe_range::<f64>(4, 1000);
+        assert_eq!(rmin, rmin0);
+        assert!(rmax < rmax0);
+        assert_eq!(gate_exponent(&[100.0_f64], 4, no_factor), None);
+        assert!(gate_exponent(&[100.0_f64], 4, |_, _| 1000).is_some());
+    }
+
+    #[test]
+    fn window_exponent_rescales_only_outside_the_window() {
+        let window = KernelWindow::<f64>::new(2, 2, 1);
+        assert_eq!(window.exponent(&[3.0, -1e-300]), 0);
+        assert_eq!(window.exponent(&[0.0, -0.0]), 0);
+        assert_eq!(window.exponent(&[1.0, -(2.0_f64.powi(600))]), 600);
+        assert_eq!(window.exponent(&[1.5 * 2.0_f64.powi(-600)]), -600);
+    }
+
+    #[test]
+    fn norm_ratio_is_tight_for_a_diagonal_and_bounded_by_the_dimension() {
+        assert_eq!(norm_ratio_log2(&[1e300_f64, 0.0, 0.0, 1e-300], 1e300), 0);
+        // All-ones 4×4: ‖A‖_F/‖A‖_max = 4 = 2².
+        assert_eq!(norm_ratio_log2(&[1.0_f64; 16], 1.0), 2);
+        // All-ones 3×3: 3, rounded up to 2².
+        assert_eq!(norm_ratio_log2(&[1.0_f64; 9], 1.0), 2);
     }
 
     #[test]

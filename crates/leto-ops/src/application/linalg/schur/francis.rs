@@ -61,6 +61,7 @@
 //! `8·√(ε‖A‖)` tolerance accordingly. The `ACCUMULATE_Q` (Schur) path keeps the
 //! full sweep because `T` and the Schur vectors are outputs.
 
+use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};
 
@@ -75,19 +76,55 @@ const MAX_ITER: usize = 2000;
 /// matrices stay scalar. Derived empirically (f64 AVX2: crossover ≈ 32 columns).
 const SPAN_SIMD_MIN: usize = 32;
 
+/// The kernel window of a Francis step, computed once per run: the first
+/// column's `x, y, zz ≤ 9m²` and the stack reflector's `vᵀv ≤ 12m²` are both
+/// degree 2 with bound `2⁴`.
+fn step_window<T: RealScalar>() -> KernelWindow<T> {
+    KernelWindow::new(2, 2, 4)
+}
+
+/// Per-run state a Francis step reuses: the left-apply accumulator
+/// (`apply_left`'s `scratch`, sized `n`) and the step's [`KernelWindow`].
+struct StepWorkspace<'a, T> {
+    scratch: &'a mut [T],
+    window: KernelWindow<T>,
+}
+
 struct StackReflector<T> {
     v: [T; 3],
     len: usize,
     beta: T,
 }
 
-fn stack_reflector<T: RealScalar>(x: &[T]) -> Option<(StackReflector<T>, T)> {
+/// The reflector mapping the stack vector `x` (length 2 or 3) to `α·e₁`;
+/// returns `(reflector, α)`.
+///
+/// Scale-safe (LAPACK `dlarfg` via `dlapy2`/`dnrm2`): with `m = max|xᵢ|`,
+/// `‖x‖² ≤ 3m²` and `vᵀv ≤ 4‖x‖² ≤ 12m²` (degree 2, bound `2⁴`). They are
+/// formed unscaled while `m` keeps them normal and finite (`window`,
+/// [`step_window`]); otherwise `x` is first divided by the
+/// power of two bringing `m` into `[1, 2)`. The reflector `β·v·vᵀ` is
+/// invariant under `v ← 2⁻ᵏv`, `β ← 2²ᵏβ` (both exact), and `α` is
+/// multiplied back, so inside the window the result is bit-for-bit the
+/// unscaled one. The window's upper end also bounds the unscaled
+/// `‖v‖₂ ≤ 2‖x‖₂ ≤ 2√3·√(Ω/16) < √Ω` the applications multiply into `H` —
+/// the degree-2 matrix-tier gate in `schur/mod.rs` keeps `‖H‖_F ≤ √Ω`, so
+/// `vᵀ·H` stays finite.
+fn stack_reflector<T: RealScalar>(
+    x: &[T],
+    window: KernelWindow<T>,
+) -> Option<(StackReflector<T>, T)> {
     let len = x.len();
     if len == 0 || len > 3 {
         return None;
     }
+    let exponent = window.exponent(x);
+    let mut v = [T::ZERO; 3];
+    for (slot, &xi) in v.iter_mut().zip(x) {
+        *slot = xi.scale_binary(-exponent);
+    }
     let mut norm_sq = T::ZERO;
-    for &xi in x {
+    for &xi in &v[..len] {
         norm_sq = norm_sq.add(xi.mul(xi));
     }
     let norm = norm_sq.sqrt();
@@ -95,15 +132,12 @@ fn stack_reflector<T: RealScalar>(x: &[T]) -> Option<(StackReflector<T>, T)> {
         return None;
     }
 
-    let sign = if x[0] < T::ZERO {
+    let sign = if v[0] < T::ZERO {
         T::ZERO.sub(T::ONE)
     } else {
         T::ONE
     };
     let alpha = T::ZERO.sub(sign.mul(norm)); // α = −sign·‖x‖
-
-    let mut v = [T::ZERO; 3];
-    v[..len].copy_from_slice(&x[..len]);
     v[0] = v[0].sub(alpha); // v₀ = x₀ − α
 
     let mut vnorm_sq = T::ZERO;
@@ -114,7 +148,10 @@ fn stack_reflector<T: RealScalar>(x: &[T]) -> Option<(StackReflector<T>, T)> {
         return None;
     }
     let beta = T::ONE.add(T::ONE).div(vnorm_sq);
-    Some((StackReflector { v, len, beta }, alpha))
+    Some((
+        StackReflector { v, len, beta },
+        alpha.scale_binary(exponent),
+    ))
 }
 
 #[inline]
@@ -227,30 +264,42 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
     hi: usize,
     n: usize,
     exceptional: bool,
-    scratch: &mut [T],
+    workspace: &mut StepWorkspace<'_, T>,
 ) {
-    // Shift sum `s = μ₁ + μ₂` and product `t = μ₁ μ₂`.
+    let window = workspace.window;
+    let scratch = &mut *workspace.scratch;
+    // First column of `H² − sH + tI` at the block top, from the shift sum
+    // `s = μ₁ + μ₂` and product `t = μ₁μ₂`, formed scale-safely as LAPACK
+    // `dlahqr` normalizes it (by `S = |H21| + |H22 − RT2R| + |RT1I|`). With
+    // `m` the largest of the entries read, `|s| ≤ 3m`, `|t| ≤ 4m²`
+    // (exceptional: `s = 1.5·σ`, `t = σ²`, `σ ≤ 2m`), so `|x| ≤ 9m²`,
+    // `|y| ≤ 5m²`, `|zz| ≤ m²` — degree 2, bound `2⁴`. Unscaled while `m`
+    // keeps them normal and finite; otherwise the entries are divided by the
+    // power of two bringing `m` into `[1, 2)`, exactly. Only the direction of
+    // `(x, y, zz)` enters the first reflector (its `α` is not written back),
+    // so the rescaled column yields the same step.
+    let local = [
+        at(h, lo, lo, n),
+        at(h, lo, lo + 1, n),
+        at(h, lo + 1, lo, n),
+        at(h, lo + 1, lo + 1, n),
+        at(h, lo + 2, lo + 1, n),
+        at(h, hi - 1, hi - 1, n),
+        at(h, hi, hi, n),
+        at(h, hi - 1, hi, n),
+        at(h, hi, hi - 1, n),
+        at(h, hi - 1, hi - 2, n),
+    ];
+    let exponent = window.exponent(&local);
+    let [h00, h01, h10, h11, h21, a, d, b, c, below] = local.map(|v| v.scale_binary(-exponent));
     let (s, t) = if exceptional {
         // Ad-hoc Wilkinson shift to break cycles.
-        let scale = at(h, hi, hi - 1, n)
-            .abs()
-            .add(at(h, hi - 1, hi - 2, n).abs());
+        let scale = c.abs().add(below.abs());
         let three_halves = T::from_f64(1.5);
         (three_halves.mul(scale), scale.mul(scale))
     } else {
-        let a = at(h, hi - 1, hi - 1, n);
-        let d = at(h, hi, hi, n);
-        let b = at(h, hi - 1, hi, n);
-        let c = at(h, hi, hi - 1, n);
         (a.add(d), a.mul(d).sub(b.mul(c)))
     };
-
-    // First column of (H² − sH + tI) restricted to the block top.
-    let h00 = at(h, lo, lo, n);
-    let h01 = at(h, lo, lo + 1, n);
-    let h10 = at(h, lo + 1, lo, n);
-    let h11 = at(h, lo + 1, lo + 1, n);
-    let h21 = at(h, lo + 2, lo + 1, n);
     let mut x = h00.mul(h00).add(h01.mul(h10)).sub(s.mul(h00)).add(t);
     let mut y = h10.mul(h00.add(h11).sub(s));
     let mut zz = h10.mul(h21);
@@ -259,10 +308,10 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
         let len = if k < hi - 1 { 3 } else { 2 };
         let refl_opt = if len == 3 {
             let arr = [x, y, zz];
-            stack_reflector(&arr)
+            stack_reflector(&arr, window)
         } else {
             let arr = [x, y, T::ZERO];
-            stack_reflector(&arr[..2])
+            stack_reflector(&arr[..2], window)
         };
         if let Some((refl, alpha)) = refl_opt {
             let v_slice = &refl.v[..refl.len];
@@ -333,6 +382,10 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
         scratch_vec.resize(n, T::ZERO);
         &mut scratch_vec[..]
     };
+    let mut workspace = StepWorkspace {
+        scratch,
+        window: step_window(),
+    };
     let mut hi = n - 1;
     let mut iter = 0usize;
     loop {
@@ -374,7 +427,7 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
                 reason: "Schur QR iteration failed to converge".to_string(),
             });
         }
-        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10), &mut *scratch);
+        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10), &mut workspace);
     }
     Ok(())
 }

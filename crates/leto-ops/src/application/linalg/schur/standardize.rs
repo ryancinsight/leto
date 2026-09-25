@@ -2,6 +2,7 @@
 //! **real** eigenvalues into two 1×1 blocks, leaving 2×2 blocks only for genuine
 //! complex-conjugate pairs.
 
+use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
 
 #[inline]
@@ -43,16 +44,27 @@ fn apply_rotation<T: RealScalar>(h: &mut [T], z: &mut [T], p: usize, c: T, s: T,
 /// triangularizes the block, since `Gᵀ T G e₁ = λ e₁`. Complex blocks
 /// (`disc < 0`) are left intact.
 pub(super) fn standardize<T: RealScalar>(h: &mut [T], z: &mut [T], n: usize) {
+    let window = KernelWindow::new(2, 2, 5);
     let mut p = 0usize;
     while p + 1 < n {
         if at(h, p + 1, p, n) == T::ZERO {
             p += 1;
             continue;
         }
-        let a = at(h, p, p, n);
-        let b = at(h, p, p + 1, n);
-        let c = at(h, p + 1, p, n);
-        let d = at(h, p + 1, p + 1, n);
+        // Scale-safe as LAPACK `dlanv2`: with `m` the block's largest entry,
+        // `disc ≤ 8m²` and `ex² + ey² ≤ 2·(3.5m)² < 2⁵m²` (degree 2). Formed
+        // unscaled while `m` keeps them normal and finite, otherwise from the
+        // block divided by the power of two bringing `m` into `[1, 2)`; the
+        // rotation `(cs, sn)` is scale-invariant, so inside the window it is
+        // bit-for-bit the unscaled one and it is applied to the unscaled `h`.
+        let block = [
+            at(h, p, p, n),
+            at(h, p, p + 1, n),
+            at(h, p + 1, p, n),
+            at(h, p + 1, p + 1, n),
+        ];
+        let exponent = window.exponent(&block);
+        let [a, b, c, d] = block.map(|v| v.scale_binary(-exponent));
         let diff = a.sub(d);
         let four = T::from_f64(4.0);
         let disc = diff.mul(diff).add(four.mul(b).mul(c));

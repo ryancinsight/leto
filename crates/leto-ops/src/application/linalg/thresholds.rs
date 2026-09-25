@@ -55,51 +55,136 @@ pub(crate) fn safe_min<T: RealScalar>() -> T {
     }
 }
 
-/// The generalized LAPACK safe range for a routine whose largest relied-upon
-/// intermediate is homogeneous of degree `degree` in the input entries and
-/// bounded above by `dimension_factor · ‖A‖_max^degree` (a derived bound —
-/// every call site cites its own derivation): the range of `‖A‖_max` keeping
-/// that intermediate between `safmin/ε` (below which relative precision
-/// degrades to gradual underflow) and `ε/safmin` (above which it risks
-/// overflow).
-///
-/// [`safe_range`]'s `rmin = √smlnum, rmax = √bignum` is the `degree = 2`,
-/// `dimension_factor = 1` case (`dsyev.f`'s `ISCALE` block: a single entry
-/// product, no extra dimension factor). This generalizes it: an intermediate
-/// bounded by `c·A_max^d` needs `smlnum ≤ c·A_max^d ≤ bignum`, i.e.
-/// `A_max ∈ [(smlnum/c)^(1/d), (bignum/c)^(1/d)]`.
-///
-/// `degree` must be a power of two (`1`, `2`, or `4` — every routine here
-/// needs one of those), computed by iterated `sqrt` so every step stays
-/// exact for values that are themselves exact (as `smlnum`/`bignum`/`c` are
-/// for the integer or power-of-two `dimension_factor`s used here).
-pub(crate) fn homogeneous_safe_range<T: RealScalar>(degree: u32, dimension_factor: T) -> (T, T) {
-    debug_assert!(
-        degree == 1 || degree == 2 || degree == 4,
-        "homogeneous_safe_range: degree must be 1, 2, or 4"
-    );
-    let smlnum = safe_min::<T>().div(machine_epsilon::<T>());
-    let bignum = T::ONE.div(smlnum);
-    let mut rmin = smlnum.div(dimension_factor);
-    let mut rmax = bignum.div(dimension_factor);
-    let mut remaining = degree;
-    while remaining > 1 {
-        rmin = rmin.sqrt();
-        rmax = rmax.sqrt();
-        remaining /= 2;
+/// The largest finite value of `T`, `Ω = (2 − ε)·2^emax` (LAPACK
+/// `dlamch('O')`), found by doubling from `1` to the largest finite power of
+/// two — computed through `T`'s own arithmetic like [`safe_min`]. (The scalar
+/// contract's `MAX_VALUE` is the reduction identity `+∞`, not this.)
+pub(crate) fn overflow_threshold<T: RealScalar>() -> T {
+    let two = T::from_usize(2);
+    let mut power = T::ONE;
+    loop {
+        let next = power.mul(two);
+        if !next.is_finite() {
+            return power.mul(two.sub(machine_epsilon::<T>()));
+        }
+        power = next;
     }
-    (rmin, rmax)
 }
 
-/// [`homogeneous_safe_range`] at `degree = 2`, `dimension_factor = 1` —
-/// LAPACK `dsyev`/`dsteqr`'s own range, `rmin = √smlnum`, `rmax = √bignum`
-/// (`smlnum = safmin/ε`, `bignum = 1/smlnum`). Kept as a test fixture for the
-/// symmetry/derivation checks below; production call sites derive their own
-/// `(degree, dimension_factor)` from their actual formulas instead of
-/// assuming this reference case applies.
+/// Which side of the exact root [`root`] may land on.
+#[derive(Clone, Copy)]
+enum RootRounding {
+    /// `root^degree ≤ y`: an upper bound that must not be exceeded.
+    NotAbove,
+    /// `root^degree ≥ y`: a lower bound that must not be undercut.
+    NotBelow,
+}
+
+/// `y^(1/degree)` for `degree ∈ {1, 2, 4}` by iterated `sqrt`, moved one
+/// relative `ε` to the requested side when `degree > 1`: each correctly
+/// rounded `sqrt` errs by at most half an ulp, so one `ε` step covers the
+/// (at most two) roundings.
+fn root<T: RealScalar>(y: T, degree: u32, rounding: RootRounding) -> T {
+    debug_assert!(
+        degree == 1 || degree == 2 || degree == 4,
+        "root: degree must be 1, 2, or 4"
+    );
+    let mut value = y;
+    let mut remaining = degree;
+    while remaining > 1 {
+        value = value.sqrt();
+        remaining /= 2;
+    }
+    if degree == 1 {
+        return value;
+    }
+    let step = value.mul(machine_epsilon::<T>());
+    match rounding {
+        RootRounding::NotAbove => value.sub(step),
+        RootRounding::NotBelow => value.add(step),
+    }
+}
+
+/// The range of `‖A‖_max` inside which a routine factors `A` unscaled
+/// (the matrix-level gate): its largest relied-upon intermediate is
+/// homogeneous of degree `degree` in the entries and bounded by
+/// `2^factor_log2 · ‖A‖_max^degree` (each call site derives its own bound).
+///
+/// - Upper end: the intermediate stays finite, `2^f·‖A‖_max^d ≤ Ω` (`Ω` the
+///   overflow threshold), i.e. `‖A‖_max ≤ (Ω·2^−f)^(1/d)`. The bound factor is
+///   applied by exponent arithmetic (`scale_binary`), never formed in `T`, so
+///   a factor such as `n⁴` cannot overflow the narrow formats.
+/// - Lower end: an intermediate of magnitude `‖A‖_max^d` keeps its
+///   `ε`-relative rounding normal, `‖A‖_max^d ≥ smlnum = safmin/ε` (LAPACK
+///   `dsyev`/`dgeev` `SMLNUM`), i.e. `‖A‖_max ≥ smlnum^(1/d)`. The upper-bound
+///   factor plays no part here: it bounds the intermediate from above, and
+///   dividing `smlnum` by it would lower `rmin` and admit exactly the inputs
+///   whose intermediates underflow. Scaling *up* into this end is exact (no
+///   entry can underflow), so the lower end costs no precision.
+pub(crate) fn homogeneous_safe_range<T: RealScalar>(degree: u32, factor_log2: i32) -> (T, T) {
+    let smlnum = safe_min::<T>().div(machine_epsilon::<T>());
+    (
+        root(smlnum, degree, RootRounding::NotBelow),
+        root(
+            overflow_threshold::<T>().scale_binary(-factor_log2),
+            degree,
+            RootRounding::NotAbove,
+        ),
+    )
+}
+
+/// The window of a kernel-local magnitude `m` inside which a kernel forms its
+/// products unscaled (the LAPACK `dlartg`/`dnrm2` "medium" range, `rtmin =
+/// √safmin`, `rtmax = √(safmax/2)` for a two-term sum of squares): the
+/// smallest relied-upon product, of degree `lower_degree`, stays normal,
+/// `m^dₗ ≥ safmin`; the largest, of degree `upper_degree` and bounded by
+/// `2^factor_log2·m^dᵤ`, stays finite. Outside it the kernel rescales its
+/// local operands by a power of two (exact) before forming them.
+pub(crate) fn kernel_window<T: RealScalar>(
+    lower_degree: u32,
+    upper_degree: u32,
+    factor_log2: i32,
+) -> (T, T) {
+    (
+        root(safe_min::<T>(), lower_degree, RootRounding::NotBelow),
+        root(
+            overflow_threshold::<T>().scale_binary(-factor_log2),
+            upper_degree,
+            RootRounding::NotAbove,
+        ),
+    )
+}
+
+/// `⌈log₂ x⌉` for a finite `x ≥ 1`: the exponent of the smallest power of two
+/// not below `x`, found from `x`'s binary exponent (exponent arithmetic, no
+/// product that could overflow).
+pub(crate) fn ceil_log2<T: RealScalar>(x: T) -> i32 {
+    let exponent = x.binary_exponent().unwrap_or(0);
+    if T::ONE.scale_binary(exponent) == x {
+        exponent
+    } else {
+        exponent + 1
+    }
+}
+
+/// `⌈log₂ n⌉` for a count `n ≥ 1`, in integer arithmetic.
+pub(crate) fn ceil_log2_count(n: usize) -> i32 {
+    let n = n.max(1);
+    let floor = usize::BITS - 1 - n.leading_zeros();
+    let floor = i32::try_from(floor).expect("invariant: a bit index fits in i32");
+    if n.is_power_of_two() {
+        floor
+    } else {
+        floor + 1
+    }
+}
+
+/// [`homogeneous_safe_range`] at `degree = 2`, `factor_log2 = 0` — the
+/// LAPACK `dsyev` lower end `√smlnum` with an overflow-threshold upper end.
+/// Kept as a test fixture for the derivation checks below.
 #[cfg(test)]
 pub(crate) fn safe_range<T: RealScalar>() -> (T, T) {
-    homogeneous_safe_range::<T>(2, T::ONE)
+    homogeneous_safe_range::<T>(2, 0)
 }
 
 /// `‖A‖_F` of `values` without overflow or underflow in the squares: the
@@ -125,7 +210,10 @@ pub(crate) fn scaled_frobenius<T: RealScalar>(values: &[T]) -> T {
 
 #[cfg(test)]
 mod tests {
-    use super::{machine_epsilon, rank_pivot_ratio, safe_min, safe_range, scaled_frobenius};
+    use super::{
+        ceil_log2, ceil_log2_count, homogeneous_safe_range, kernel_window, machine_epsilon,
+        rank_pivot_ratio, safe_min, safe_range, scaled_frobenius,
+    };
     use eunomia::{Bf16, F16};
 
     #[test]
@@ -145,29 +233,54 @@ mod tests {
     }
 
     #[test]
-    fn safe_range_is_symmetric_around_one_in_log_space() {
-        // rmin·rmax = √(smlnum·bignum) = √(smlnum · ε/smlnum) = 1 exactly:
-        // `rmax = 1/rmin` (checked to a few ULP against the derived product).
+    fn safe_range_ends_bound_the_intermediate_on_the_safe_side() {
+        // Degree 2, bound 2⁰: rmin² ≥ smlnum = safmin/ε and rmax² ≤ Ω, each
+        // within two roundings of equality (the roots are stepped one ε
+        // toward the safe side).
         let (rmin, rmax) = safe_range::<f64>();
-        assert!(rmin > 0.0 && rmin < 1.0, "{rmin}");
-        assert!(rmax > 1.0, "{rmax}");
-        assert!(
-            (rmin * rmax - 1.0).abs() <= 8.0 * f64::EPSILON,
-            "{rmin} * {rmax}"
-        );
-        let (rmin, rmax) = safe_range::<f32>();
-        assert!(rmin > 0.0 && rmin < 1.0, "{rmin}");
-        assert!(rmax > 1.0, "{rmax}");
-        assert!(
-            (f64::from(rmin) * f64::from(rmax) - 1.0).abs() <= 8.0 * f64::from(f32::EPSILON),
-            "{rmin} * {rmax}"
-        );
-        // F16's 5-bit exponent gives the narrowest safe range of the four
-        // shipped scalars: rmin = √(safmin/ε) = √(2⁻¹⁴/2⁻¹⁰) = √(2⁻⁴) = 0.25,
-        // rmax = √(ε/safmin) = √(2⁴) = 4.
+        let smlnum = f64::MIN_POSITIVE / f64::EPSILON;
+        assert!(rmin * rmin >= smlnum && rmin * rmin <= smlnum * (1.0 + 4.0 * f64::EPSILON));
+        assert!(rmax * rmax <= f64::MAX && rmax * rmax >= f64::MAX * (1.0 - 4.0 * f64::EPSILON));
+        // F16: rmin = √(2⁻¹⁴/2⁻¹⁰) = 0.25 (stepped up one ε), rmax just below
+        // √65504 ≈ 255.94.
         let (rmin, rmax) = safe_range::<F16>();
-        assert_eq!(rmin.to_f32(), 0.25);
-        assert_eq!(rmax.to_f32(), 4.0);
+        let (rmin, rmax) = (f64::from(rmin.to_f32()), f64::from(rmax.to_f32()));
+        let eps = f64::from(2.0_f32.powi(-10));
+        assert!((0.25..=0.25 * (1.0 + 2.0 * eps)).contains(&rmin), "{rmin}");
+        assert!(
+            rmax * rmax <= 65504.0 && rmax >= 255.94 * (1.0 - 2.0 * eps),
+            "{rmax}"
+        );
+        // The bound factor divides only the overflow side.
+        let (rmin4, rmax4) = homogeneous_safe_range::<F16>(2, 4);
+        assert_eq!(f64::from(rmin4.to_f32()), rmin);
+        assert!(f64::from(rmax4.to_f32()) * f64::from(rmax4.to_f32()) <= 65504.0 / 16.0);
+        // A bound such as 128·n⁴ at n = 100 (≈ 2³³·⁶) exceeds F16's range as a
+        // value but not as an exponent: the upper end is small and finite.
+        let (_, rmax_large) = homogeneous_safe_range::<F16>(4, 34);
+        assert!(rmax_large.to_f32() > 0.0 && rmax_large.to_f32() < 1.0);
+    }
+
+    #[test]
+    fn kernel_window_matches_the_dlartg_thresholds() {
+        // dlartg: rtmin = √safmin, rtmax = √(safmax/2) (Ω here).
+        let (low, high) = kernel_window::<f64>(2, 2, 1);
+        assert!(
+            low >= 2.0_f64.powi(-511) && low <= 2.0_f64.powi(-511) * (1.0 + 2.0 * f64::EPSILON)
+        );
+        assert!(high * high * 2.0 <= f64::MAX);
+        assert!(high >= (f64::MAX / 2.0).sqrt() * (1.0 - 2.0 * f64::EPSILON));
+    }
+
+    #[test]
+    fn ceil_log2_rounds_up_to_the_next_power_of_two() {
+        assert_eq!(ceil_log2(1.0_f64), 0);
+        assert_eq!(ceil_log2(4.0_f64), 2);
+        assert_eq!(ceil_log2(4.5_f64), 3);
+        assert_eq!(ceil_log2_count(1), 0);
+        assert_eq!(ceil_log2_count(3), 2);
+        assert_eq!(ceil_log2_count(4), 2);
+        assert_eq!(ceil_log2_count(5), 3);
     }
 
     #[test]

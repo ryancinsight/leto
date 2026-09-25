@@ -28,7 +28,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
 use super::{validate_input, SvdDecomposition};
-use crate::application::linalg::scaling;
+use crate::application::linalg::scaling::{self, KernelWindow};
+use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
 
@@ -36,19 +37,22 @@ use leto::{Array2, ArrayView2, Result, Storage};
 /// converges in `O(n)` sweeps).
 const MAX_ITER: usize = 4000;
 
-/// Degree and dimension factor for the Wilkinson shift's discriminant
-/// (`wilkinson_shift`, `t11`/`t22`/`t12` and `delta.mul(delta).add(t12.mul(t12))`
-/// above): bidiagonalization is an orthogonal transform, so every bidiagonal
-/// entry is bounded by `‖A‖_2 ≤ ‖A‖_F ≤ M·‖A‖_max`, `M = max(rows, cols)`.
-/// `t11 = dq1² + eq2²` and `t22` are each `≤ 2M²·‖A‖_max²`; `t12 = dq1·eq1`
-/// is `≤ M²·‖A‖_max²`; `delta = (t11 − t22)/2` is `≤ 2M²·‖A‖_max²`. The
-/// discriminant `delta² + t12²` is therefore `≤ 5M⁴·‖A‖_max⁴` — degree 4;
-/// rounded up to `8M⁴` for margin.
-fn wilkinson_dimension_factor<T: RealScalar>(rows: usize, cols: usize) -> T {
-    let m = T::from_usize(rows.max(cols).max(1));
-    let m2 = m.mul(m);
-    let m4 = m2.mul(m2);
-    T::from_usize(8).mul(m4)
+/// The matrix-tier gate's power-of-two bound `2^f` for the SVD family
+/// (degree 1): with the kernels' products scale-safe (`givens`,
+/// `qr_step`'s shift, the bidiagonal reflectors), every remaining
+/// intermediate is a sum of entry-scale terms. The largest is a reflector
+/// application's dot product `vᵀ·col` (`bidiagonal/colmajor.rs`,
+/// `householder::apply_left`): `|vᵀ·col| ≤ ‖v‖₂·‖A‖_F`, with `‖v‖₂ ≤ 4√M`
+/// (`M = max(rows, cols)`; the shared reflector's `v` has entries below 4
+/// after its `[1, 2)` normalization, `householder::reflect_in_place`; the
+/// column-major one has `|vᵢ| ≤ 1`) and `‖A‖_F ≤ 2^r·‖A‖_max`
+/// ([`scaling::norm_ratio_log2`]). The rotation updates and deflation sums
+/// stay below `2‖B‖ ≤ 2‖A‖_F` (`|c|, |s| ≤ 1`), inside the same bound.
+fn svd_factor_log2<T: RealScalar>(rows: usize, cols: usize) -> impl FnOnce(&[T], T) -> i32 {
+    move |values, largest| {
+        let half_log2_m = (thresholds::ceil_log2_count(rows.max(cols)) + 1) / 2;
+        2 + half_log2_m + scaling::norm_ratio_log2(values, largest)
+    }
 }
 
 /// Singular values of a finite matrix, sorted descending, via bidiagonal QR.
@@ -59,8 +63,7 @@ fn wilkinson_dimension_factor<T: RealScalar>(rows: usize, cols: usize) -> T {
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    let dimension_factor = wilkinson_dimension_factor::<T>(rows, cols);
-    if let Some((scaled, exponent)) = scaling::balanced_recentered(matrix, 4, dimension_factor) {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_factor_log2(rows, cols)) {
         let mut sigmas = singular_values_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut sigmas,
@@ -127,26 +130,33 @@ fn transpose_to_owned<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array
 /// `c·a + s·b` — `givens` already formed `√(a²+b²)` to normalize, so re-deriving
 /// it at the call site is pure redundant arithmetic (the leto `cancel_y`
 /// pattern, which returns the norm alongside the rotation).
+///
+/// Scale-safe as LAPACK `dlartg` (3.10, Anderson 2017): `a² + b² ≤ 2m²`,
+/// `m = max(|a|, |b|)`, is formed unscaled while `m` lies in
+/// `[√safmin, √(Ω/2)]` — `dlartg`'s `rtmin`/`rtmax` — and otherwise from
+/// `a, b` divided by the power of two bringing `m` into `[1, 2)`. `c`, `s`
+/// are scale-invariant and `r` is multiplied back, all exactly, so inside the
+/// window the result is bit-for-bit the unscaled formula. `window` is
+/// [`SweepWindows::rotation`].
 #[inline]
-fn givens<T: RealScalar>(a: T, b: T) -> (T, T, T) {
+fn givens<T: RealScalar>(a: T, b: T, window: KernelWindow<T>) -> (T, T, T) {
     if b == T::ZERO {
         return (T::ONE, T::ZERO, a);
     }
+    let exponent = window.exponent(&[a, b]);
+    let (a, b) = (a.scale_binary(-exponent), b.scale_binary(-exponent));
     // One reciprocal + two mults rather than two divides by the same `r`
     // (division is several× a multiply; the sweep calls this O(n²) times). The
     // extra rounding of `1/r` is within the SVD's differential tolerance.
     let r = a.mul(a).add(b.mul(b)).sqrt();
     let inv_r = T::ONE.div(r);
-    (a.mul(inv_r), b.mul(inv_r), r)
+    (a.mul(inv_r), b.mul(inv_r), r.scale_binary(exponent))
 }
 
 /// Wilkinson shift: the eigenvalue of the trailing 2×2 of `T = BᵀB` (rows
-/// `q-1, q`) nearest the corner `T[q,q]`.
-fn wilkinson_shift<T: RealScalar>(d: &[T], e: &[T], p: usize, q: usize) -> T {
-    let dq = d[q];
-    let dq1 = d[q - 1];
-    let eq1 = e[q - 1];
-    let eq2 = if q >= p + 2 { e[q - 2] } else { T::ZERO };
+/// `q-1, q`) nearest the corner `T[q,q]`, from `dq = d[q]`, `dq1 = d[q-1]`,
+/// `eq1 = e[q-1]`, `eq2 = e[q-2]` (zero when the block has two rows).
+fn wilkinson_shift<T: RealScalar>(dq: T, dq1: T, eq1: T, eq2: T) -> T {
     let t11 = dq1.mul(dq1).add(eq2.mul(eq2));
     let t22 = dq.mul(dq).add(eq1.mul(eq1));
     let t12 = dq1.mul(eq1);
@@ -272,6 +282,7 @@ fn chase_negligible_diagonal_row<T: RealScalar, const VEC: bool>(
     q: usize,
     u: &mut [T],
     m: usize,
+    rotation: KernelWindow<T>,
 ) {
     d[i] = T::ZERO;
     let mut fill = e[i];
@@ -279,7 +290,7 @@ fn chase_negligible_diagonal_row<T: RealScalar, const VEC: bool>(
     for j in (i + 1)..=q {
         // Annihilate row `i`'s column-`j` entry against `d[j]`, keeping `d[j]`
         // as the surviving lead: the pair is ordered `(j, i)`.
-        let (c, s, r) = givens(d[j], fill);
+        let (c, s, r) = givens(d[j], fill, rotation);
         if VEC {
             rotate_row_pair(u, m, j, i, c, s); // U accumulated transposed
         }
@@ -308,13 +319,14 @@ fn chase_negligible_diagonal_column<T: RealScalar, const VEC: bool>(
     q: usize,
     v: &mut [T],
     n: usize,
+    rotation: KernelWindow<T>,
 ) {
     d[q] = T::ZERO;
     let mut fill = e[q - 1];
     e[q - 1] = T::ZERO;
     let mut j = q - 1;
     loop {
-        let (c, s, r) = givens(d[j], fill);
+        let (c, s, r) = givens(d[j], fill, rotation);
         if VEC {
             rotate_row_pair(v, n, j, q, c, s); // V accumulated transposed
         }
@@ -325,6 +337,25 @@ fn chase_negligible_diagonal_column<T: RealScalar, const VEC: bool>(
         fill = s.mul(e[j - 1]).neg();
         e[j - 1] = c.mul(e[j - 1]);
         j -= 1;
+    }
+}
+
+/// The kernel windows of one bidiagonal QR run, computed once per call.
+#[derive(Clone, Copy)]
+struct SweepWindows<T> {
+    /// [`givens`]: `a² + b² ≤ 2m²` (degree 2, bound `2¹`).
+    rotation: KernelWindow<T>,
+    /// [`qr_step`]'s shift and first column: the degree-4 discriminant
+    /// `≤ 2m⁴` kept normal and finite.
+    shift: KernelWindow<T>,
+}
+
+impl<T: RealScalar> SweepWindows<T> {
+    fn new() -> Self {
+        Self {
+            rotation: KernelWindow::new(2, 2, 1),
+            shift: KernelWindow::new(4, 4, 1),
+        }
     }
 }
 
@@ -345,6 +376,7 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
     if k <= 1 {
         return Ok(());
     }
+    let windows = SweepWindows::new();
     let mut q = k - 1;
     let mut iter = 0usize;
     loop {
@@ -394,14 +426,14 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
         // fires at most once per index and the iteration always makes progress.
         if let Some(i) = (p..=q).find(|&i| diagonal_is_negligible(d, e, i, p, q)) {
             if i < q {
-                chase_negligible_diagonal_row::<T, VEC>(d, e, i, q, u, m);
+                chase_negligible_diagonal_row::<T, VEC>(d, e, i, q, u, m, windows.rotation);
             } else {
-                chase_negligible_diagonal_column::<T, VEC>(d, e, p, q, v, n);
+                chase_negligible_diagonal_column::<T, VEC>(d, e, p, q, v, n, windows.rotation);
             }
             continue;
         }
 
-        qr_step::<T, VEC>(d, e, p, q, u, m, v, n);
+        qr_step::<T, VEC>(d, e, p, q, u, m, v, n, windows);
     }
 }
 
@@ -416,15 +448,30 @@ fn qr_step<T: RealScalar, const VEC: bool>(
     m: usize,
     v: &mut [T],
     n: usize,
+    windows: SweepWindows<T>,
 ) {
-    let mu = wilkinson_shift(d, e, p, q);
-    // First column of (BᵀB − μI).
-    let mut y = d[p].mul(d[p]).sub(mu);
-    let mut z = d[p].mul(e[p]);
+    // First column of (BᵀB − μI), formed scale-safely (LAPACK `dbdsqr`'s
+    // shift, with `dlas2`'s care for the squares): with `m` the largest of
+    // the six entries it reads, `t11, t22 ≤ 2m²`, `|t12| ≤ m²`, `|δ| ≤ m²`,
+    // so the shift's discriminant `δ² + t12² ≤ 2m⁴` (degree 4, bound 2¹) and
+    // `|y| ≤ m² + 3m²`, `|z| ≤ m²` (degree 2). Unscaled while `m` keeps the
+    // degree-4 term normal and finite (`safmin ≤ m⁴`, `2m⁴ ≤ Ω`): an
+    // underflowed `t12²` degrades the Wilkinson shift to the Rayleigh shift
+    // `t22`, which stagnates on a nearly equal trailing pair (probed: a
+    // `Bf16` 2×2 at every exponent from `2⁻¹³⁰` to `2⁻³²`); otherwise the six entries are divided by the power of two bringing
+    // `m` into `[1, 2)` — exact, and only `c, s` of the first rotation are
+    // used (its `r` is discarded below), which are scale-invariant.
+    let eq2 = if q >= p + 2 { e[q - 2] } else { T::ZERO };
+    let local = [d[q], d[q - 1], e[q - 1], eq2, d[p], e[p]];
+    let exponent = windows.shift.exponent(&local);
+    let [dq, dq1, eq1, eq2, dp, ep] = local.map(|v| v.scale_binary(-exponent));
+    let mu = wilkinson_shift(dq, dq1, eq1, eq2);
+    let mut y = dp.mul(dp).sub(mu);
+    let mut z = dp.mul(ep);
 
     for k in p..q {
         // Right rotation (mixes columns k, k+1) annihilating z → accumulate V.
-        let (c, s, r_right) = givens(y, z);
+        let (c, s, r_right) = givens(y, z, windows.rotation);
         if VEC {
             rotate_row_pair(v, n, k, k + 1, c, s); // V accumulated transposed
         }
@@ -439,7 +486,7 @@ fn qr_step<T: RealScalar, const VEC: bool>(
         d[k] = f;
 
         // Left rotation (mixes rows k, k+1) annihilating the bulge → accumulate U.
-        let (c, s, r_left) = givens(d[k], bulge_col);
+        let (c, s, r_left) = givens(d[k], bulge_col, windows.rotation);
         if VEC {
             rotate_row_pair(u, m, k, k + 1, c, s); // U accumulated transposed
         }
@@ -545,8 +592,7 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    let dimension_factor = wilkinson_dimension_factor::<T>(rows, cols);
-    if let Some((scaled, exponent)) = scaling::balanced_recentered(matrix, 4, dimension_factor) {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_factor_log2(rows, cols)) {
         let mut decomposition = svd_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut decomposition.singular_values,
