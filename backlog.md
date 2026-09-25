@@ -1,22 +1,5 @@
 # Leto Work Backlog
 
-<a id="LETO-F16-FRANCIS-2026-09-24"></a>
-
-## LETO-F16-FRANCIS-2026-09-24 — F16/Bf16 Francis QR stagnates on nonsymmetric input [patch] — todo
-- priority: correctness
-
-- Evidence: `schur`/`eigenvalues` of `[[4,1,0.5],[1,3,1],[0.25,1,2]]` in F16 return "Schur QR iteration failed to converge" at every scale, unit included; f64 converges. Confirmed still present after the per-routine safe-range redesign (ADR 0033; `tests/ops/schur.rs::schur_f16_scale_regression_matrix_converges_except_the_recorded_f16_defect`), so it is F16's 11-bit precision, not a scale artifact. The same class recurs, more sparsely, for Bf16 (8-bit mantissa) at isolated exponents (`tests/ops/scale_range.rs`'s `francis_may_fail`, keyed on `T::PRECISION <= 11`).
-- Acceptance: F16 and Bf16 converge on the sweep matrices, or a derived reason they cannot, and the sweep exception is removed.
-
-<a id="LETO-FRANCIS-QUARTIC-SCALE-2026-09-24"></a>
-
-## LETO-FRANCIS-QUARTIC-SCALE-2026-09-24 — Francis/Golub-Kahan shift formulas are not scale-invariant [patch] — todo
-- priority: correctness
-
-- Evidence: probing `schur` on a fixed nonsymmetric matrix across every exponent found the *minimal-move* landing (bringing the norm just inside the routine's derived `(degree=4, dimension_factor)` range — ADR 0033) non-convergent across a wide band: Bf16 failed nearly every exponent from `2⁻¹³³` to `2⁻³³`, f32 failed at its smallest subnormal exponent. Recentring the same out-of-range inputs to `[1, 4)` (`scaling::balancing_exponent_recentered`) converges throughout, at the cost of one specific F16 regression matrix (finding G, `LETO-DENSE-SCALE-RANGE-2026-09-24`) reverting to the pre-existing `LETO-F16-FRANCIS-2026-09-24` non-convergence.
-- Outcome (interim mitigation, this item covers the underlying rewrite): `schur`, `eigenvalues`, and the SVD family recentre to `[1, 4)` instead of the minimal move the other balanced routines (Jacobi, symmetric QL, column-pivoted QR) use. The shift/discriminant formulas themselves remain not proven scale-invariant near the derived boundary.
-- Acceptance: derive and implement scale-invariant Francis double-shift and Golub-Kahan shift formulas (or a rigorous bound proving a minimal-move landing is safe for every shipped scalar and matrix order), then switch `schur`/`eigenvalues`/the SVD family to `scaling::balancing_exponent`/`balanced` (the minimal move) and remove this item.
-
 <a id="LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25"></a>
 
 ## LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25 — `MatrixDecompose::symmetric_eigen` still runs classical Jacobi [minor] — todo
