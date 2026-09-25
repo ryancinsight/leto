@@ -78,7 +78,7 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
     }
 
     // Balance by an exact power of two; `Q` is scale-invariant, `T` scales.
-    let balanced = scaling::balanced(matrix);
+    let balanced = scaling::balanced_for_products(matrix);
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -131,7 +131,7 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     // invariance means the Schur vectors are never needed), saving the O(n³) Q
     // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
     // Balance by an exact power of two; eigenvalues scale with the matrix.
-    let balanced = scaling::balanced(matrix);
+    let balanced = scaling::balanced_for_products(matrix);
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -179,7 +179,7 @@ pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
                 t[(i + 1) * n + i],
                 t[(i + 1) * n + i + 1],
             ];
-            let exponent = scaling::balancing_exponent(block).unwrap_or(0);
+            let exponent = scaling::balancing_exponent_for_products(block).unwrap_or(0);
             scaling::scale_by_power_of_two(&mut block, -exponent);
             let [a, b, c, d] = block;
             let restore = |x: T| x.scale_binary(exponent);

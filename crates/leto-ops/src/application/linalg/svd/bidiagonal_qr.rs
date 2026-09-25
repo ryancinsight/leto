@@ -43,7 +43,7 @@ const MAX_ITER: usize = 4000;
 /// non-convergence.
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     validate_input(matrix)?;
-    if let Some((scaled, exponent)) = scaling::balanced(matrix) {
+    if let Some((scaled, exponent)) = scaling::balanced_for_products(matrix) {
         let mut sigmas = singular_values_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut sigmas,
@@ -527,7 +527,7 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
 /// non-convergence.
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     validate_input(matrix)?;
-    if let Some((scaled, exponent)) = scaling::balanced(matrix) {
+    if let Some((scaled, exponent)) = scaling::balanced_for_products(matrix) {
         let mut decomposition = svd_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut decomposition.singular_values,
