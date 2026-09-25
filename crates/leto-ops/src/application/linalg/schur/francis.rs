@@ -89,7 +89,7 @@ pub(super) fn deflation_floor_log2(n: usize) -> i32 {
 /// `2^⌈log₂ n⌉·safmin ≥ n·safmin`: a subdiagonal driven into the subnormals,
 /// where no relative test can be met short of an exact zero, still
 /// deflates. The matrix-tier gate (`schur/mod.rs`) raises its lower end so
-/// this stays below `ε·‖A‖_max`.
+/// this stays below `ε·‖A‖_F`.
 pub(super) fn deflation_floor<T: RealScalar>(n: usize) -> T {
     crate::application::linalg::thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(n))
 }

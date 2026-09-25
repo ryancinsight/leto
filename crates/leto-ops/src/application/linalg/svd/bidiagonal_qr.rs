@@ -61,13 +61,15 @@ const MAX_ITER: usize = 4000;
 ///
 /// Deflation floor: [`qr_iterate`] also deflates at or below
 /// [`deflation_floor`]`(k)`, `k = min(rows, cols)`, so the gate's lower end is
-/// raised to keep that floor below `ε·‖A‖_max`.
+/// raised to keep that floor below `ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
+/// ([`scaling::norm_ratio_floor_log2`]).
 fn svd_bound<T: RealScalar>(rows: usize, cols: usize) -> impl FnOnce(&[T], T) -> GateBound {
     move |values, largest| {
         let half_log2_m = (thresholds::ceil_log2_count(rows.max(cols)) + 1) / 2;
         GateBound {
             factor_log2: 2 + half_log2_m + scaling::norm_ratio_log2(values, largest),
-            floor_log2: deflation_floor_log2(rows.min(cols)),
+            floor_log2: deflation_floor_log2(rows.min(cols))
+                - scaling::norm_ratio_floor_log2(values, largest),
         }
     }
 }
@@ -84,7 +86,7 @@ fn deflation_floor_log2(k: usize) -> i32 {
 /// superdiagonals of unit-scale matrices). The floor keeps its purpose — an
 /// `eᵢ` driven into the subnormals, where no relative test can be met short
 /// of an exact zero, still deflates — and the gate keeps it below
-/// `ε·‖A‖_max`.
+/// `ε·‖A‖_F`.
 fn deflation_floor<T: RealScalar>(k: usize) -> T {
     thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(k))
 }
@@ -914,5 +916,28 @@ mod tests {
         qr_iterate::<f64, true>(&mut d, &mut e, 3, &mut u, 3, &mut v, 3).unwrap();
         assert_eq!(&u[..3], &[1.0, 0.0, 0.0], "U row 0: {u:?}");
         assert_eq!(&v[..3], &[1.0, 0.0, 0.0], "V row 0: {v:?}");
+    }
+
+    /// The SVD gate keeps the floor within `ε·‖A‖_F`: F16, `k = 8`, a single
+    /// nonzero entry (`‖A‖_F = ‖A‖_max`, `l = 0`); the root end `√smlnum =
+    /// 0.25` lies below the floor end `2³·smlnum = 0.5`, so an entry at `0.3`
+    /// is moved up until `2³·safmin ≤ ε·‖A‖_F`.
+    #[test]
+    fn gate_keeps_the_deflation_floor_below_epsilon_times_the_norm() {
+        use super::{deflation_floor, svd_bound};
+        use crate::application::linalg::{scaling, thresholds};
+        use eunomia::{FloatElement, NumericElement, F16};
+        let k = 8;
+        let largest = F16::from_f64(0.3);
+        let mut values = vec![F16::from_f64(0.0); k * k];
+        values[0] = largest;
+        let exponent = scaling::gate_exponent(&values, 2, svd_bound(k, k))
+            .expect("the range is non-empty")
+            .expect("0.3 is below the floor end");
+        let moved = largest.scale_binary(-exponent);
+        let floor = deflation_floor::<F16>(k).to_f64();
+        let eps = thresholds::machine_epsilon::<F16>().to_f64();
+        assert!(floor <= eps * moved.to_f64(), "{exponent}");
+        assert!(floor > eps * largest.to_f64());
     }
 }

@@ -49,7 +49,7 @@ use super::backward_error::{self, informative};
 use super::format::{epsilon, Format};
 use super::spectral_condition::bauer_fike_factor;
 use eunomia::{Bf16, F16};
-use leto::{Array2, LetoError, Storage};
+use leto::{Array2, Storage};
 use leto_ops::{
     col_piv_qr, eigenvalues, schur, singular_values, svd_decompose, symmetric_eigen_qr,
 };
@@ -436,16 +436,16 @@ fn in_range_inputs_are_factored_unscaled() {
     check_in_range_input_is_factored_unscaled::<Bf16>();
 }
 
-/// The absolute deflation floor stays below `ε·‖A‖_max`
+/// The absolute deflation floor stays below `ε·‖A‖_F`
 /// (`thresholds::homogeneous_safe_range`). `dbdsqr`'s `6k²·safmin` does not
 /// in `F16`: at `k = 24` it is `6·24²·2⁻¹⁴ ≈ 0.21`, and would split every
 /// superdiagonal below that of a unit-scale matrix. Twelve copies of the block
 /// `[[1, a], [0, 1]]`, `a = 1/16` (already bidiagonal, so the reduction
-/// applies identity reflectors; the gate moves `‖A‖_max = 1` up to its
-/// raised lower end `2^5·smlnum = 2`, where `2a = ⅛` is still below `0.21`),
-/// have singular values `√(1 + a²/4) ± a/2 ≈ 1.0317, 0.9692`; a split returns
-/// `1` for both. The check separates the two structurally: every `σ̂` more
-/// than `a/4` from `1` (the exact values are `≥ 0.030` away, the split `0`).
+/// applies identity reflectors; `‖A‖_max = 1` sits at the gate's raised lower
+/// end `2^(5−1)·smlnum = 1` and is not moved), have singular values
+/// `√(1 + a²/4) ± a/2 ≈ 1.0317, 0.9692`; a split returns `1` for both. The
+/// check separates the two structurally: every `σ̂` more than `a/4` from `1`
+/// (the exact values are `≥ 0.030` away, the split `0`).
 #[test]
 fn deflation_floor_keeps_unit_scale_superdiagonals_in_f16() {
     let (k, a) = (24, 0.0625_f64);
@@ -471,28 +471,67 @@ fn deflation_floor_keeps_unit_scale_superdiagonals_in_f16() {
     }
 }
 
-/// Where no scaling keeps the deflation floor `2^g·safmin` (`g = ⌈log₂ n⌉`)
-/// at or below `ε·‖A‖_max`, the gate reports [`LetoError::Overflow`] instead
-/// of factoring with a floor outside the backward error. Both gates are
-/// degree 2 in `F16`: upper end `(Ω·2⁻ᶠ)^½ < 2^(8 − f/2)`, raised lower end
-/// `2^g·smlnum = 2^(g − 4)`, so a gate empties once `g + f/2 ≥ 12`. With
-/// `r = ⌈log₂(‖A‖_F/‖A‖_max)⌉ = log₂ n` for the all-ones matrix: the SVD
-/// (`f = 2 + ⌈⌈log₂ n⌉/2⌉ + r`) at `n = 256` has `8 + 7 = 15`; Francis
-/// (`f = 2r`) at `n = 128` has `7 + 7 = 14`; at `n = 32` they have
-/// `5 + 5 = 10` and `5 + 5 = 10`, and factor.
+/// The all-ones matrix in `F16` at orders 64, 96 and 128 (spectrum `{n, 0, …}`,
+/// singular values `{n, 0, …}`): the floor condition is `floor ≤ ε·‖A‖_F`, and
+/// `‖A‖_F = n·‖A‖_max` leaves the gates room (at `n = 64` the floor `2⁻⁸`
+/// against `ε·‖A‖_F = 2⁻⁴`), so every routine factors — a condition on
+/// `ε·‖A‖_max` alone refused all of them. Each returned eigenvalue of `T̂` and
+/// singular value is certified a posteriori (`a_posteriori.rs`) against the
+/// exact spectrum.
 #[test]
-fn f16_orders_past_the_deflation_floor_are_typed_overflow() {
-    let ones = |n: usize| Array2::from_shape_vec([n, n], vec![F16::from_f64(1.0); n * n]).unwrap();
-    let floor = |result: Result<(), LetoError>| match result {
-        Err(LetoError::Overflow { reason }) => {
-            assert!(reason.contains("deflation floor"), "{reason}")
+fn f16_all_ones_factor_at_orders_past_the_max_norm_floor() {
+    for n in [64_usize, 96, 128] {
+        let matrix = Array2::from_shape_vec([n, n], vec![F16::from_f64(1.0); n * n]).unwrap();
+        let image = vec![1.0_f64; n * n];
+        let nf = n as f64;
+        let as_f64 = |m: &Array2<F16>| -> Vec<f64> {
+            m.storage()
+                .as_slice()
+                .iter()
+                .map(|v| f64::from(v.to_f32()))
+                .collect()
+        };
+        eigenvalues(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: eigenvalues: {e}"));
+        singular_values(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: singular_values: {e}"));
+        let decomposition = schur(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: schur: {e}"));
+        let (q, t) = (as_f64(&decomposition.q()), as_f64(&decomposition.t()));
+        let residual = a_posteriori::residual(&image, &q, &t, &q, n, n, n);
+        let radius =
+            a_posteriori::schur_certificate(residual, a_posteriori::gram_defect(&q, n, n), &t);
+        for BlockEigenvalue { re, im, error } in a_posteriori::quasi_triangular_eigenvalues(&t, n) {
+            let nearest = re.hypot(im).min((re - nf).hypot(im));
+            assert!(
+                nearest <= radius + error,
+                "n = {n}: λ(T̂) {re}+{im}i is {nearest:e} from {{0, {n}}}, certified {radius:e}"
+            );
         }
-        other => panic!("expected the deflation-floor overflow, got {other:?}"),
-    };
-    floor(singular_values(&ones(256).view()).map(drop));
-    floor(svd_decompose(&ones(256).view()).map(drop));
-    floor(schur(&ones(128).view()).map(drop));
-    floor(eigenvalues(&ones(128).view()).map(drop));
-    schur(&ones(32).view()).unwrap();
-    svd_decompose(&ones(32).view()).unwrap();
+        let full = svd_decompose(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: svd: {e}"));
+        let sigmas: Vec<f64> = full
+            .singular_values
+            .iter()
+            .map(|v| f64::from(v.to_f32()))
+            .collect();
+        let (u, v) = (
+            as_f64(&full.left_singular_vectors),
+            as_f64(&full.right_singular_vectors),
+        );
+        let mut diagonal = vec![0.0; n * n];
+        for (i, sigma) in sigmas.iter().enumerate() {
+            diagonal[i * n + i] = *sigma;
+        }
+        let residual = a_posteriori::residual(&image, &u, &diagonal, &v, n, n, n);
+        let radius = a_posteriori::svd_certificate(
+            residual,
+            a_posteriori::gram_defect(&u, n, n),
+            a_posteriori::gram_defect(&v, n, n),
+            &sigmas,
+        );
+        for (i, sigma) in sigmas.iter().enumerate() {
+            let exact = if i == 0 { nf } else { 0.0 };
+            assert!(
+                (sigma - exact).abs() <= radius,
+                "n = {n}: σ{i} {sigma} vs {exact}, certified {radius:e}"
+            );
+        }
+    }
 }

@@ -63,9 +63,10 @@ fn standardization_is_power_of_two_equivariant_beyond_the_gate() {
 fn gate_keeps_the_deflation_floor_below_epsilon_times_the_norm() {
     use crate::application::linalg::{scaling, thresholds};
     use eunomia::{FloatElement, NumericElement, F16};
-    // F16, n = 8: the degree-2 root end is √smlnum = 0.25, below the floor
-    // end 2³·smlnum = 0.5 that keeps the deflation floor 2³·safmin within
-    // ε·‖A‖_max. An input at 0.3 must therefore be moved up.
+    // F16, n = 8, a single nonzero entry (‖A‖_F = ‖A‖_max, so l = 0): the
+    // degree-2 root end is √smlnum = 0.25, below the floor end 2³·smlnum =
+    // 0.5 that keeps the deflation floor 2³·safmin within ε·‖A‖_F. An input at
+    // 0.3 must therefore be moved up.
     let n = 8;
     let largest = F16::from_f64(0.3);
     let mut values = vec![F16::from_f64(0.0); n * n];

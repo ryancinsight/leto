@@ -72,11 +72,13 @@ use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 ///
 /// Deflation floor: `francis::run` also deflates a subdiagonal at or below
 /// [`francis::deflation_floor`]`(n) = 2^⌈log₂ n⌉·safmin`, so the gate's lower
-/// end is raised to keep that floor below `ε·‖A‖_max`.
+/// end is raised to keep that floor below `ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
+/// ([`scaling::norm_ratio_floor_log2`]).
 fn francis_bound<T: RealScalar>(n: usize) -> impl FnOnce(&[T], T) -> GateBound {
     move |values, largest| GateBound {
         factor_log2: 2 * scaling::norm_ratio_log2(values, largest),
-        floor_log2: francis::deflation_floor_log2(n),
+        floor_log2: francis::deflation_floor_log2(n)
+            - scaling::norm_ratio_floor_log2(values, largest),
     }
 }
 

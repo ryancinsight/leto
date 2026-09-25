@@ -122,12 +122,14 @@ fn root<T: RealScalar>(y: T, degree: u32, rounding: RootRounding) -> T {
 ///   whose intermediates underflow. Scaling *up* into this end is exact (no
 ///   entry can underflow), so the lower end costs no precision.
 /// - Deflation floor: a routine whose convergence test also zeroes an entry
-///   at or below an absolute threshold `2^g·safmin` perturbs the matrix by at
+///   at or below an absolute threshold `floor` perturbs the matrix by at
 ///   most that threshold per deflation. For that to cost no more than a
 ///   relative `ε` — the property the backward-error analyses rely on, "a
-///   deflated entry below the floor contributes at most `ε·‖A‖` backward
-///   error" — the threshold must satisfy `2^g·safmin ≤ ε·‖A‖_max ≤ ε·‖A‖_F`,
-///   i.e. `‖A‖_max ≥ 2^g·smlnum`: the lower end is raised there.
+///   deflated entry below the floor contributes at most `ε·‖A‖_F` backward
+///   error" — the threshold must satisfy `floor ≤ ε·‖A‖_F`. The caller passes
+///   `2^g = floor/(safmin·2^l)` with `2^l ≤ ‖A‖_F/‖A‖_max`
+///   (`scaling::norm_ratio_floor_log2`), so `‖A‖_max ≥ 2^g·smlnum` gives
+///   `floor ≤ ε·2^l·‖A‖_max ≤ ε·‖A‖_F`: the lower end is raised there.
 ///
 /// # Errors
 ///
@@ -136,11 +138,11 @@ fn root<T: RealScalar>(y: T, degree: u32, rounding: RootRounding) -> T {
 ///   `Ω/smlnum`, so no power-of-two scaling keeps both ends.
 /// - [`EmptyRange::DeflationFloor`] when the raised lower end passes the
 ///   upper end, `2^g·smlnum > (Ω·2^−f)^(1/d)`: every admissible scaling
-///   leaves the floor above `ε·‖A‖_max` (a narrow format at a large order —
-///   `F16` has only `Ω/smlnum ≈ 2²⁰` of headroom, so a degree-1 gate
+///   leaves the floor above `ε·2^l·‖A‖_max` (a narrow format at a very large
+///   order — `F16` has only `Ω/smlnum ≈ 2²⁰` of headroom, so a degree-1 gate
 ///   empties at `f + g ≥ 20`). Clamping the lower end to the upper one would
-///   return results whose deflations each cost more than `ε·‖A‖_max`,
-///   outside the backward error every caller documents.
+///   return results whose deflations each cost more than that, outside the
+///   backward error every caller documents.
 pub(crate) fn homogeneous_safe_range<T: RealScalar>(
     degree: u32,
     factor_log2: i32,
@@ -175,7 +177,7 @@ pub(crate) enum EmptyRange {
     /// finite.
     Intermediates,
     /// No scaling keeps the absolute deflation floor at or below
-    /// `ε·‖A‖_max`.
+    /// `ε·2^l·‖A‖_max ≤ ε·‖A‖_F`.
     DeflationFloor,
 }
 

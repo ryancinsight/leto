@@ -81,22 +81,10 @@ pub(crate) fn largest_magnitude<T: RealScalar>(values: impl IntoIterator<Item = 
 /// `c ≥ ½`, or the sum leaves the range, the dimension bound
 /// `⌈⌈log₂ len⌉/2⌉` is used.
 pub(crate) fn norm_ratio_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
-    let log2_len = thresholds::ceil_log2_count(values.len());
-    let dimension_bound = (log2_len + 1) / 2;
-    let roundings = usize::try_from(log2_len + 2).expect("invariant: a bit count is non-negative");
-    let log2_eps = thresholds::ceil_log2(thresholds::machine_epsilon::<T>());
-    let rounding_log2 = log2_eps - 1 + thresholds::ceil_log2_count(4 * roundings + 4);
-    let underflow_log2 = thresholds::ceil_log2(thresholds::safe_min::<T>())
-        + log2_eps
-        + thresholds::ceil_log2_count(2 * values.len());
-    let slack = T::ONE.scale_binary(rounding_log2.max(underflow_log2) + 1);
-    if slack.scale_binary(1) >= T::ONE {
+    let dimension_bound = (thresholds::ceil_log2_count(values.len()) + 1) / 2;
+    let Some((sum, slack)) = ratio_sum(values, largest) else {
         return dimension_bound;
-    }
-    let sum = pairwise_squares(values, largest);
-    if !sum.is_finite() || sum < T::ONE {
-        return dimension_bound;
-    }
+    };
     // `sum ≤ 2^k`; `1 − slack` is exact (a power of two at least `ε`, below
     // one half), so the band test is exact.
     let mut k = thresholds::ceil_log2(sum);
@@ -105,6 +93,36 @@ pub(crate) fn norm_ratio_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
         k += 1;
     }
     ((k + 1) / 2).min(dimension_bound)
+}
+
+/// A lower bound `l` on `log₂(‖A‖_F / ‖A‖_max)`, `2^l ≤ ‖A‖_F/‖A‖_max`, from
+/// the same sum as [`norm_ratio_log2`]: with `s ≥ ŝ·(1 − c) ≥ ŝ/2` (the rounding
+/// bound there read the other way, `ŝ ≤ s·(1 + γ_ℓ) + len·η ≤ s·(1 + c)`),
+/// `s ≥ 2^(⌊log₂ ŝ⌋ − 1)` and `l = ⌊(⌊log₂ ŝ⌋ − 1)/2⌋`. `0` (the ratio is at
+/// least `1`) where the sum is not formed.
+pub(crate) fn norm_ratio_floor_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
+    ratio_sum(values, largest).map_or(0, |(sum, _)| {
+        (sum.binary_exponent().unwrap_or(0) - 1).max(0) / 2
+    })
+}
+
+/// The pairwise sum `ŝ` of `(vᵢ/largest)²` and the power of two `c` bounding
+/// its relative rounding, or `None` where `c ≥ ½` or the sum leaves the
+/// range ([`norm_ratio_log2`]).
+fn ratio_sum<T: RealScalar>(values: &[T], largest: T) -> Option<(T, T)> {
+    let log2_len = thresholds::ceil_log2_count(values.len());
+    let roundings = usize::try_from(log2_len + 2).expect("invariant: a bit count is non-negative");
+    let log2_eps = thresholds::ceil_log2(thresholds::machine_epsilon::<T>());
+    let rounding_log2 = log2_eps - 1 + thresholds::ceil_log2_count(4 * roundings + 4);
+    let underflow_log2 = thresholds::ceil_log2(thresholds::safe_min::<T>())
+        + log2_eps
+        + thresholds::ceil_log2_count(2 * values.len());
+    let slack = T::ONE.scale_binary(rounding_log2.max(underflow_log2) + 1);
+    if slack.scale_binary(1) >= T::ONE {
+        return None;
+    }
+    let sum = pairwise_squares(values, largest);
+    (sum.is_finite() && sum >= T::ONE).then_some((sum, slack))
 }
 
 /// `Σ (vᵢ/largest)²` by pairwise summation: halves recursively, each half
@@ -226,9 +244,10 @@ pub(crate) fn scale_by_power_of_two<T: RealScalar>(values: &mut [T], exponent: i
 
 /// A gate's power-of-two bounds (see
 /// [`thresholds::homogeneous_safe_range`]): `2^factor_log2` bounds the
-/// relied-upon intermediate from above, `2^floor_log2·safmin` is the
-/// routine's absolute deflation threshold (`0` when it has none beyond
-/// `safmin`).
+/// relied-upon intermediate from above; `2^floor_log2·safmin` is the
+/// routine's absolute deflation threshold divided by `2^l ≤ ‖A‖_F/‖A‖_max`
+/// ([`norm_ratio_floor_log2`]), so that `floor ≤ ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
+/// is what the lower end secures (`0` when it has none beyond `safmin`).
 #[derive(Clone, Copy)]
 pub(crate) struct GateBound {
     pub(crate) factor_log2: i32,
@@ -257,7 +276,7 @@ impl GateBound {
 /// ([`thresholds::EmptyRange`]): the bound factor exceeds the format's
 /// `Ω/smlnum`, so the routine's intermediates cannot be kept finite at this
 /// order in `T` whatever the scaling, or no scaling keeps the routine's
-/// deflation floor at or below `ε·‖A‖_max`.
+/// deflation floor at or below `ε·‖A‖_F` (through its `2^l ≤ ‖A‖_F/‖A‖_max`).
 pub(crate) fn gate_exponent<T: RealScalar>(
     values: &[T],
     degree: u32,
@@ -274,7 +293,7 @@ pub(crate) fn gate_exponent<T: RealScalar>(
         |empty| LetoError::Overflow {
             reason: match empty {
                 thresholds::EmptyRange::Intermediates => "the matrix order exceeds the scalar's exponent range: its bounded intermediates cannot be kept finite",
-                thresholds::EmptyRange::DeflationFloor => "the matrix order exceeds the scalar's exponent range: no scaling keeps the absolute deflation floor 2^ceil(log2 n)*safmin at or below eps*max|a_ij|",
+                thresholds::EmptyRange::DeflationFloor => "the matrix order exceeds the scalar's exponent range: no scaling keeps the absolute deflation floor 2^ceil(log2 n)*safmin at or below eps*||A||_F",
             },
         },
     )?;
@@ -437,6 +456,23 @@ mod tests {
             gate_exponent(&values, 1, |_, _| GateBound::factor(20)),
             Err(LetoError::Overflow { .. })
         ));
+    }
+
+    #[test]
+    fn an_unfittable_deflation_floor_is_a_typed_overflow() {
+        // F16, degree 2, no bound factor: upper end √Ω < 2⁸; a floor needing
+        // ‖A‖_max ≥ 2^13·smlnum = 2⁹ cannot be met by any scaling.
+        let one = eunomia::F16::from_f64(1.0);
+        let floor = |_: &[eunomia::F16], _| GateBound {
+            factor_log2: 0,
+            floor_log2: 13,
+        };
+        match gate_exponent(&[one], 2, floor) {
+            Err(LetoError::Overflow { reason }) => {
+                assert!(reason.contains("deflation floor"), "{reason}");
+            }
+            other => panic!("expected the deflation-floor overflow, got {other:?}"),
+        }
     }
 
     #[test]

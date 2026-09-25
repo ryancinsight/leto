@@ -170,8 +170,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   unscaled, one outside it is moved by the minimal power of two and its
   results scaled back, and an order too large for the format's exponent
   range — including one where no scaling keeps the underflow floor below
-  `ε·‖A‖_max` (in `F16`, dense matrices from order 64 upward, by
-  `‖A‖_F/‖A‖_max`) — is `LetoError::Overflow`.
+  `ε·‖A‖_F` (in `F16`, from about order 512, by `‖A‖_F/‖A‖_max`) — is
+  `LetoError::Overflow`.
   The SVD gate uses `dgesvd`'s degree-2 range. The gate's upper end is the
   overflow threshold, so Jacobi returns `diag(1e300, 1e-300)` and `f32`
   `diag(1e38, 1e-38)` exactly. Results for in-range inputs are not

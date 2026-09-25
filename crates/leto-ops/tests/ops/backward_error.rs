@@ -25,9 +25,10 @@
 //! The per-operation bounds below are derived in their own documentation;
 //! the per-routine functions count operations from the code, at its caps.
 //! The gates keep every relied-upon intermediate normal and finite, and
-//! place each routine's absolute deflation floor at or below `ε·‖A‖_max`
-//! (`linalg::thresholds::homogeneous_safe_range`); a floor deflation is
-//! therefore counted as a relative `ε`. The bounds are first order in `u`
+//! place each routine's absolute deflation floor at or below `ε·‖A‖_F`
+//! (`linalg::thresholds::homogeneous_safe_range`, through a lower bound
+//! `2^l ≤ ‖A‖_F/‖A‖_max`); a floor deflation is therefore counted as a
+//! relative `ε`. The bounds are first order in `u`
 //! within each operation (`γ` absorbs the products by Lemma 3.3) and exact
 //! in their composition.
 //!
@@ -142,7 +143,7 @@ fn dbdsqr_tol(eps: f64) -> f64 {
 ///   `ĉ = a·(1/r)`, `θ₅`), plus at most `k − 1` zero-diagonal chases of
 ///   `k − 1` rotations each;
 /// - deflations: at most `k − 1` superdiagonals zeroed, each below
-///   `dbdsqr`'s `tol` times a diagonal (or the floor, `≤ ε‖A‖_max`), and at
+///   `dbdsqr`'s `tol` times a diagonal (or the floor, `≤ ε‖A‖_F`), and at
 ///   most `k` diagonals zeroed below `u` times their neighbours' sum.
 pub fn svd(rows: usize, cols: usize, eps: f64) -> f64 {
     let (big, small) = (rows.max(cols), rows.min(cols));

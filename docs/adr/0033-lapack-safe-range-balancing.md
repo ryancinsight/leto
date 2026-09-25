@@ -48,9 +48,9 @@ false in F16. ⁴ Recursive sums stagnate in F16 (`2048 + 1 = 2048`); a
 computed sum strictly inside its rounding band below a power of two is
 charged the next one.
 
-**Deflation.** A deflated entry costs at most `ε‖A‖` backward error only if
-the absolute floor satisfies `floor ≤ ε·‖A‖_max` for every admitted input;
-each gate raises its lower end to `floor/ε` for that.
+**Deflation.** A deflated entry costs at most `ε‖A‖_F` backward error only
+if `floor ≤ ε·‖A‖_F` for every admitted input; with `2^l ≤ ‖A‖_F/‖A‖_max`
+(`norm_ratio_floor_log2`) each gate raises its lower end to `floor/(ε·2^l)`.
 
 - Golub–Kahan: `dbdsqr`'s relative tests (`tol = tolmul·ε`,
   `tolmul = max(10, min(100, ε^(−1/8)))`, split at
@@ -91,8 +91,8 @@ power of two back inside, results restored by `scaling::restore`.
 Francis and Golub–Kahan need only degree 1 for their bounds; they take the
 `dgees`/`dgesvd` form `[√safmin/ε, ε/√safmin]`, whose lower end leaves the
 converging entries headroom above `safmin` (at the degree-1 lower end the
-SVD cycled in Bf16). In F16 the gates empty once `g + f/2 ≥ 12`: dense
-matrices from order 64 upward, by the norm ratio.
+SVD cycled in Bf16). In F16 the floor end `2^(g−l−4)` first passes the
+upper end `2^(8−f/2)` near order 512 (the SVD of a single nonzero entry).
 
 **Tests.** `tests/ops/backward_error.rs` composes Higham's `γ_k` (standard
 model, Lemmas 3.1, 3.3, 19.7–19.8, §3.1) over each routine's enumerated
@@ -123,7 +123,8 @@ derived bound certifies the factors themselves.
   `0.21 = 216ε` at `k = 24` and would need `‖A‖_max ≥ 216`, past every
   order-24 upper end (`≈ 45`).
 - Clamping the raised lower end to the upper end: each floor deflation then
-  costs more than `ε·‖A‖_max`.
+  costs more than `ε·‖A‖_F`. A condition on `ε·‖A‖_max` instead refused
+  F16 all-ones at orders 64–128, which factor to a few `ε`.
 - A power-of-two window around the old first column and 2×2
   standardization: it tested the block's largest entry, not the operands of
   the rotation-norm product, which underflowed in window.
@@ -135,7 +136,7 @@ derived bound certifies the factors themselves.
 For f64, f32, F16 and Bf16 the tests establish: `scale_range.rs` —
 `SIMILAR` and `GENERAL` at every exponent from the smallest subnormal to
 three below the largest converge in every routine within the certificates
-and the informative bounds, and F16 orders past the floor are `Overflow`;
+and the informative bounds, and F16 all-ones at orders 64–128 factor;
 `graded_scan.rs` — graded, clustered, rank-deficient and skew-symmetric
 matrices of order 2–8 at every normal exponent likewise, F16 order 48 and
 Bf16 order 64 factor, subnormal blocks deflate at the floors;
