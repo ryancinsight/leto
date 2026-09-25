@@ -44,7 +44,7 @@ use super::backward_error;
 use super::format::{epsilon, Format};
 use super::spectral_condition::bauer_fike_factor;
 use eunomia::{Bf16, F16};
-use leto::{Array2, Storage};
+use leto::{Array2, LetoError, Storage};
 use leto_ops::{
     col_piv_qr, eigenvalues, schur, singular_values, svd_decompose, symmetric_eigen_qr,
 };
@@ -359,4 +359,65 @@ fn in_range_inputs_are_factored_unscaled() {
     check_in_range_input_is_factored_unscaled::<f32>();
     check_in_range_input_is_factored_unscaled::<F16>();
     check_in_range_input_is_factored_unscaled::<Bf16>();
+}
+
+/// The absolute deflation floor stays below `ε·‖A‖_max`
+/// (`thresholds::homogeneous_safe_range`). `dbdsqr`'s `6k²·safmin` does not
+/// in `F16`: at `k = 24` it is `6·24²·2⁻¹⁴ ≈ 0.21`, and would split every
+/// superdiagonal below that of a unit-scale matrix. Twelve copies of the block
+/// `[[1, a], [0, 1]]`, `a = 1/16` (already bidiagonal, so the reduction
+/// applies identity reflectors; the gate moves `‖A‖_max = 1` up to its
+/// raised lower end `2^5·smlnum = 2`, where `2a = ⅛` is still below `0.21`),
+/// have singular values `√(1 + a²/4) ± a/2 ≈ 1.0317, 0.9692`; a split returns
+/// `1` for both. The check separates the two structurally: every `σ̂` more
+/// than `a/4` from `1` (the exact values are `≥ 0.030` away, the split `0`).
+#[test]
+fn deflation_floor_keeps_unit_scale_superdiagonals_in_f16() {
+    let (k, a) = (24, 0.0625_f64);
+    let mut values = vec![F16::from_f64(0.0); k * k];
+    for block in 0..k / 2 {
+        let i = 2 * block;
+        values[i * k + i] = F16::from_f64(1.0);
+        values[i * k + i + 1] = F16::from_f64(a);
+        values[(i + 1) * k + i + 1] = F16::from_f64(1.0);
+    }
+    let matrix = Array2::from_shape_vec([k, k], values).unwrap();
+    for sigmas in [
+        singular_values(&matrix.view()).unwrap(),
+        svd_decompose(&matrix.view()).unwrap().singular_values,
+    ] {
+        for sigma in sigmas {
+            let sigma = f64::from(sigma.to_f32());
+            assert!(
+                (sigma - 1.0).abs() > a / 4.0,
+                "σ {sigma}: the superdiagonal {a} was deflated"
+            );
+        }
+    }
+}
+
+/// Where no scaling keeps the deflation floor `2^g·safmin` (`g = ⌈log₂ n⌉`)
+/// at or below `ε·‖A‖_max`, the gate reports [`LetoError::Overflow`] instead
+/// of factoring with a floor outside the backward error. Both gates are
+/// degree 2 in `F16`: upper end `(Ω·2⁻ᶠ)^½ < 2^(8 − f/2)`, raised lower end
+/// `2^g·smlnum = 2^(g − 4)`, so a gate empties once `g + f/2 ≥ 12`. With
+/// `r = ⌈log₂(‖A‖_F/‖A‖_max)⌉ = log₂ n` for the all-ones matrix: the SVD
+/// (`f = 2 + ⌈⌈log₂ n⌉/2⌉ + r`) at `n = 256` has `8 + 7 = 15`; Francis
+/// (`f = 2r`) at `n = 128` has `7 + 7 = 14`; at `n = 32` they have
+/// `5 + 5 = 10` and `5 + 5 = 10`, and factor.
+#[test]
+fn f16_orders_past_the_deflation_floor_are_typed_overflow() {
+    let ones = |n: usize| Array2::from_shape_vec([n, n], vec![F16::from_f64(1.0); n * n]).unwrap();
+    let floor = |result: Result<(), LetoError>| match result {
+        Err(LetoError::Overflow { reason }) => {
+            assert!(reason.contains("deflation floor"), "{reason}")
+        }
+        other => panic!("expected the deflation-floor overflow, got {other:?}"),
+    };
+    floor(singular_values(&ones(256).view()).map(drop));
+    floor(svd_decompose(&ones(256).view()).map(drop));
+    floor(schur(&ones(128).view()).map(drop));
+    floor(eigenvalues(&ones(128).view()).map(drop));
+    schur(&ones(32).view()).unwrap();
+    svd_decompose(&ones(32).view()).unwrap();
 }

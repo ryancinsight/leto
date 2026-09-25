@@ -121,23 +121,31 @@ fn root<T: RealScalar>(y: T, degree: u32, rounding: RootRounding) -> T {
 ///   dividing `smlnum` by it would lower `rmin` and admit exactly the inputs
 ///   whose intermediates underflow. Scaling *up* into this end is exact (no
 ///   entry can underflow), so the lower end costs no precision.
-/// - Deflation floor: a routine whose convergence test also deflates below an
-///   absolute threshold `2^g·safmin` raises the lower end toward `2^g·smlnum`,
-///   so that threshold is at most `ε·‖A‖_max` and each such deflation stays
-///   inside the backward error. Where that would pass the upper end (a narrow
-///   format at a large order — `F16` has only `Ω/smlnum ≈ 2²⁰` of headroom),
-///   the lower end stops at the upper end: overflow is the hard constraint,
-///   and the floor then costs at most `2^g·safmin` per deflation.
+/// - Deflation floor: a routine whose convergence test also zeroes an entry
+///   at or below an absolute threshold `2^g·safmin` perturbs the matrix by at
+///   most that threshold per deflation. For that to cost no more than a
+///   relative `ε` — the property the backward-error analyses rely on, "a
+///   deflated entry below the floor contributes at most `ε·‖A‖` backward
+///   error" — the threshold must satisfy `2^g·safmin ≤ ε·‖A‖_max ≤ ε·‖A‖_F`,
+///   i.e. `‖A‖_max ≥ 2^g·smlnum`: the lower end is raised there.
 ///
-/// `None` when even the unraised range is empty, `smlnum^(1/d) > (Ω·2^−f)^(1/d)`:
-/// the bound factor `2^f` itself exceeds `Ω/smlnum`, so no power-of-two
-/// scaling keeps both ends — the order is past what the format can factor
-/// with these intermediates.
+/// # Errors
+///
+/// - [`EmptyRange::Intermediates`] when even the unraised range is empty,
+///   `smlnum^(1/d) > (Ω·2^−f)^(1/d)`: the bound factor `2^f` itself exceeds
+///   `Ω/smlnum`, so no power-of-two scaling keeps both ends.
+/// - [`EmptyRange::DeflationFloor`] when the raised lower end passes the
+///   upper end, `2^g·smlnum > (Ω·2^−f)^(1/d)`: every admissible scaling
+///   leaves the floor above `ε·‖A‖_max` (a narrow format at a large order —
+///   `F16` has only `Ω/smlnum ≈ 2²⁰` of headroom, so a degree-1 gate
+///   empties at `f + g ≥ 20`). Clamping the lower end to the upper one would
+///   return results whose deflations each cost more than `ε·‖A‖_max`,
+///   outside the backward error every caller documents.
 pub(crate) fn homogeneous_safe_range<T: RealScalar>(
     degree: u32,
     factor_log2: i32,
     floor_log2: i32,
-) -> Option<(T, T)> {
+) -> Result<(T, T), EmptyRange> {
     let smlnum = safe_min::<T>().div(machine_epsilon::<T>());
     let root_end = root(smlnum, degree, RootRounding::NotBelow);
     let upper = root(
@@ -146,16 +154,29 @@ pub(crate) fn homogeneous_safe_range<T: RealScalar>(
         RootRounding::NotAbove,
     );
     if root_end > upper {
-        return None;
+        return Err(EmptyRange::Intermediates);
     }
     let floor_end = smlnum.scale_binary(floor_log2);
-    let floor_end = if floor_end < upper { floor_end } else { upper };
+    if floor_end > upper {
+        return Err(EmptyRange::DeflationFloor);
+    }
     let lower = if floor_end > root_end {
         floor_end
     } else {
         root_end
     };
-    Some((lower, upper))
+    Ok((lower, upper))
+}
+
+/// Why [`homogeneous_safe_range`] admits no scaling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EmptyRange {
+    /// The bound factor exceeds `Ω/smlnum`: the intermediates cannot be kept
+    /// finite.
+    Intermediates,
+    /// No scaling keeps the absolute deflation floor at or below
+    /// `ε·‖A‖_max`.
+    DeflationFloor,
 }
 
 /// The window of a kernel-local magnitude `m` inside which a kernel forms its
@@ -237,7 +258,7 @@ pub(crate) fn scaled_frobenius<T: RealScalar>(values: &[T]) -> T {
 mod tests {
     use super::{
         ceil_log2, ceil_log2_count, homogeneous_safe_range, kernel_window, machine_epsilon,
-        rank_pivot_ratio, safe_min, safe_range, scaled_frobenius,
+        rank_pivot_ratio, safe_min, safe_range, scaled_frobenius, EmptyRange,
     };
     use eunomia::{Bf16, F16};
 
@@ -284,12 +305,22 @@ mod tests {
         // value but not as an exponent: the upper end is small and finite.
         // …and a factor of 2²⁰, past `Ω/smlnum = 65504·2⁴`, empties the range:
         // reported, never a lower end above the upper one.
-        assert!(homogeneous_safe_range::<F16>(1, 20, 0).is_none());
+        assert_eq!(
+            homogeneous_safe_range::<F16>(1, 20, 0),
+            Err(EmptyRange::Intermediates)
+        );
         let (lower, upper) = homogeneous_safe_range::<F16>(1, 19, 0).expect("non-empty");
         assert!(lower <= upper);
-        // A deflation floor past the upper end stops at it.
-        let (lower, upper) = homogeneous_safe_range::<F16>(1, 12, 30).expect("non-empty");
-        assert_eq!(lower.to_f32(), upper.to_f32());
+        // A deflation floor 2^g·safmin fits below ε·‖A‖_max exactly while
+        // 2^g·smlnum ≤ Ω·2^−f, i.e. f + g < 20 in F16 (Ω = 65504 < 2¹⁶,
+        // smlnum = 2⁻⁴; the upper end rounds down, so f + g = 20 is empty).
+        let (lower, upper) = homogeneous_safe_range::<F16>(1, 12, 7).expect("non-empty");
+        assert_eq!(lower.to_f32(), 2.0_f32.powi(3));
+        assert!(lower <= upper);
+        assert_eq!(
+            homogeneous_safe_range::<F16>(1, 12, 8),
+            Err(EmptyRange::DeflationFloor)
+        );
     }
 
     #[test]

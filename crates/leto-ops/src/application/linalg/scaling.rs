@@ -206,9 +206,11 @@ impl GateBound {
 ///
 /// # Errors
 ///
-/// [`LetoError::Overflow`] when the range is empty: the bound factor exceeds
-/// the format's `Ω/smlnum`, so the routine's intermediates cannot be kept
-/// finite at this order in `T` whatever the scaling.
+/// [`LetoError::Overflow`] when the range is empty
+/// ([`thresholds::EmptyRange`]): the bound factor exceeds the format's
+/// `Ω/smlnum`, so the routine's intermediates cannot be kept finite at this
+/// order in `T` whatever the scaling, or no scaling keeps the routine's
+/// deflation floor at or below `ε·‖A‖_max`.
 pub(crate) fn gate_exponent<T: RealScalar>(
     values: &[T],
     degree: u32,
@@ -221,9 +223,12 @@ pub(crate) fn gate_exponent<T: RealScalar>(
         factor_log2,
         floor_log2,
     } = bound(values, largest);
-    let range = thresholds::homogeneous_safe_range::<T>(degree, factor_log2, floor_log2).ok_or(
-        LetoError::Overflow {
-            reason: "the matrix order exceeds the scalar's exponent range: its bounded intermediates cannot be kept finite",
+    let range = thresholds::homogeneous_safe_range::<T>(degree, factor_log2, floor_log2).map_err(
+        |empty| LetoError::Overflow {
+            reason: match empty {
+                thresholds::EmptyRange::Intermediates => "the matrix order exceeds the scalar's exponent range: its bounded intermediates cannot be kept finite",
+                thresholds::EmptyRange::DeflationFloor => "the matrix order exceeds the scalar's exponent range: no scaling keeps the absolute deflation floor 2^ceil(log2 n)*safmin at or below eps*max|a_ij|",
+            },
         },
     )?;
     Ok(balancing_exponent(largest, range))
