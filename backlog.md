@@ -26,25 +26,6 @@
 - Outcome (interim mitigation, this item covers the underlying rewrite): `schur`, `eigenvalues`, and the SVD family gate their balancing decision on the narrower `product_safe_range` instead of `safe_range`, which the exhaustive sweep in `tests/ops/scale_range.rs` and `tests/ops/schur.rs` confirms closes the observed failure band. The shift/discriminant formulas themselves remain not proven scale-invariant throughout the wider range.
 - Acceptance: derive and implement scale-invariant Francis double-shift and Golub-Kahan shift formulas (or a rigorous bound proving `product_safe_range`'s margin is sufficient for every shipped scalar and matrix order), then widen the balancing gate back to `safe_range` and remove this item.
 
-<a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
-
-## LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23 — Scale-aware Jacobi tolerance and a typed cap [minor] — review
-- priority: correctness
-
-- Defects: the absolute `1e-12` tolerance stops early on small-magnitude matrices (`[[2e-13,1e-13],[1e-13,2e-13]]` returned `{2e-13, 2e-13}`), and exhausting the `32·n²` rotation budget returned `Ok`.
-- Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `(n + 2)·ε·‖A‖_F`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
-- Acceptance: the regression matrix, a scale sweep `s ∈ [1e-300, 1e300]` at `32·n²·ε` relative, the budget error with its residual, existing Jacobi tests.
-
-<a id="LETO-SYMMETRIC-EIGEN-QR-2026-09-23"></a>
-
-## LETO-SYMMETRIC-EIGEN-QR-2026-09-23 — O(n³) symmetric eigensolver with a reusable workspace [minor] — review
-
-- Driver: ritk MP-PCA denoising decomposes one 60×60 Gram matrix per voxel. Classical Jacobi converges in a few thousand rotations there, but each rotation scans all `n²/2` off-diagonal entries for its pivot: 6.2 ms per matrix.
-- Outcome: `symmetric_eigen_qr` and `SymmetricEigenWorkspace` (power-of-two scaling, Householder tridiagonalization, implicit QL `tql2`), allocation-free on reuse for any input layout, typed `ConvergenceError`/`InvalidInput`.
-- Acceptance: closed forms; residual and orthonormality within `n²·ε(T)·‖A‖_F` for f64, f32, F16 and Bf16; clusters and wide dynamic range; a scale sweep across each format's range with no wrong `Ok`; Jacobi agreement; rank-deficient Gram; workspace reuse bitwise and allocation-free.
-- Follow-up (not in this item): route `MatrixDecompose::symmetric_eigen` through the QL solver.
-
-)
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
