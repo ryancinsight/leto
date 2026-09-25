@@ -41,4 +41,4 @@
 | [0030](0030-temporal-label-alignment.md) | Own temporal label alignment in Leto | Accepted |
 | [0031](0031-runtime-rank-layout-contract.md) | Runtime-rank broadcast and injectivity contract | Accepted |
 | [0032](0032-fused-passes-any-destination-count-over-plane-windows.md) | Fused derivative passes write any destination count, over plane windows | Accepted |
-| [0033](0033-lapack-safe-range-balancing.md) | LAPACK safe-range balancing for dense factorizations | Accepted |
+| [0033](0033-lapack-safe-range-balancing.md) | Per-routine safe-range balancing for dense factorizations | Accepted |
