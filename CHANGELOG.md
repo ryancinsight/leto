@@ -142,13 +142,18 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 - [patch] `singular_values`, `svd_decompose`, `pinv`, `schur`, `eigenvalues`,
   `col_piv_qr`, `symmetric_eigen_jacobi`/`symmetric_eigenvalues_jacobi` and
-  `symmetric_eigen_qr` factor every binade of every supported format
-  (`f64`, `f32`, `F16`, `Bf16`) without a wrong `Ok` or a non-convergence.
-  The Francis and Golub–Kahan kernels form their Givens norms, reflector
-  norms, shifts and 2×2 quadratics scale-safely (LAPACK `dlartg`, `dlarfg`,
-  `dlahqr`, `dlanv2`), which also removes the F16/Bf16 Francis stalls on
-  nonsymmetric input. The remaining whole-matrix intermediates are guarded
-  by a per-routine gate (ADR 0033): an input inside it is factored unscaled,
+  `symmetric_eigen_qr` return neither a wrong `Ok` nor a non-convergence on
+  what the tests cover, in `f64`, `f32`, `F16` and `Bf16`: fixed 3×3 matrices
+  at every binary exponent from the smallest subnormal to three below the
+  largest (all of these routines), and seeded graded random matrices up to
+  4×4 at every normal exponent (the SVD entry points, which agree, and
+  `schur`/`eigenvalues`). The Francis and
+  Golub–Kahan kernels form their Givens norms, reflector norms, shifts and
+  2×2 quadratics scale-safely (LAPACK `dlartg`, `dlarfg`, `dlahqr`,
+  `dlanv2`), and both iterations deflate below LAPACK's absolute underflow
+  threshold (`dbdsqr`, `dlahqr`), which also removes the F16/Bf16 Francis
+  stalls on nonsymmetric input. The remaining whole-matrix intermediates are
+  guarded by a per-routine gate (ADR 0033): an input inside it is factored unscaled,
   one outside it is moved by the minimal power of two and its results scaled
   back. The gate's upper end is the overflow threshold, so Jacobi returns
   `diag(1e300, 1e-300)` and `f32` `diag(1e38, 1e-38)` exactly. Originally:
