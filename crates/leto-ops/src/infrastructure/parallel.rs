@@ -22,24 +22,29 @@ pub(crate) const PARALLEL_MIN_BYTES: usize = 1024 * 1024;
 /// The caller decides whether to parallelize at all: an elementwise op gates on
 /// its own arithmetic and working set. This decides only the task width, from
 /// the bytes a unit moves, as moirai ADR 0059 requires, and hands each task a
-/// real slice rather than an index range to rebuild. Without the `parallel`
-/// feature the whole output runs on the calling thread.
-pub(crate) fn for_each_unit_run_mut<T, F>(
-    output: &mut [T],
-    #[cfg_attr(
-        not(feature = "parallel"),
-        expect(
-            unused_variables,
-            reason = "only the parallel arm sizes tasks by bytes"
-        )
-    )]
-    element_bytes: usize,
-    run: F,
-) where
+/// real slice rather than an index range to rebuild.
+#[cfg(feature = "parallel")]
+pub(crate) fn for_each_unit_run_mut<T, F>(output: &mut [T], element_bytes: usize, run: F)
+where
     T: Send,
     F: Fn(usize, &mut [T]) + Send + Sync,
 {
-    #[cfg(feature = "parallel")]
+    schedule_unit_runs_mut(output, element_bytes, &run);
+}
+
+/// The scheduling half of [`for_each_unit_run_mut`], generic over the element
+/// type only. Every kernel passes its own closure type; erasing it here
+/// instantiates moirai's task split, job storage, and panic capture once per
+/// element type instead of once per kernel, scalar, and rank. The cost is one
+/// indirect call per unit task; the run body keeps its inlined element loop.
+// dyn exception: type erasure at unit-task granularity bounds the scheduler's
+// instantiation count; the per-element loop stays monomorphized inside `run`.
+#[cfg(feature = "parallel")]
+fn schedule_unit_runs_mut<T: Send>(
+    output: &mut [T],
+    element_bytes: usize,
+    run: &(dyn Fn(usize, &mut [T]) + Sync),
+) {
     moirai::for_each_unit_task_mut_with::<moirai::Parallel, _, _, _, _>(
         output,
         1,
@@ -47,8 +52,6 @@ pub(crate) fn for_each_unit_run_mut<T, F>(
         || (),
         |(), first_index, values| run(first_index, values),
     );
-    #[cfg(not(feature = "parallel"))]
-    run(0, output);
 }
 
 /// Runs `run(first_unit, count)` over consecutive runs of `units` units the
@@ -59,33 +62,29 @@ pub(crate) fn for_each_unit_run_mut<T, F>(
 /// whose units are rows, tiles or output indices rather than a slice the
 /// runtime can split, so the caller keeps the disjointness proof for what its
 /// indices address and the decision whether to parallelize at all; moirai
-/// decides the width from the bytes a unit moves (moirai ADR 0059). Without
-/// the `parallel` feature every unit runs on the calling thread.
-pub(crate) fn for_each_unit_range<F>(
-    units: usize,
-    #[cfg_attr(
-        not(feature = "parallel"),
-        expect(
-            unused_variables,
-            reason = "only the parallel arm sizes tasks by bytes"
-        )
-    )]
-    unit_bytes: usize,
-    run: F,
-) where
+/// decides the width from the bytes a unit moves (moirai ADR 0059).
+#[cfg(feature = "parallel")]
+pub(crate) fn for_each_unit_range<F>(units: usize, unit_bytes: usize, run: F)
+where
     F: Fn(usize, usize) + Send + Sync,
 {
-    #[cfg(feature = "parallel")]
+    schedule_unit_ranges(units, unit_bytes, &run);
+}
+
+/// The scheduling half of [`for_each_unit_range`], compiled once. Erasing the
+/// caller's closure keeps moirai's scheduler out of every kernel's
+/// instantiation; each unit task pays one indirect call into a body that keeps
+/// its inlined row or tile loop.
+// dyn exception: type erasure at unit-task granularity bounds the scheduler's
+// instantiation count; the per-element loop stays monomorphized inside `run`.
+#[cfg(feature = "parallel")]
+fn schedule_unit_ranges(units: usize, unit_bytes: usize, run: &(dyn Fn(usize, usize) + Sync)) {
     moirai::for_each_unit_task_range_with::<moirai::Parallel, _, _, _>(
         units,
         unit_bytes,
         || (),
         |(), first_unit, count| run(first_unit, count),
     );
-    #[cfg(not(feature = "parallel"))]
-    if units > 0 {
-        run(0, units);
-    }
 }
 
 /// Runs `plane(&mut state, index, planes)` over the x-planes of `K` dense
