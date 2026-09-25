@@ -1,5 +1,16 @@
 # Leto Work Backlog
 
+<a id="LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25"></a>
+
+## LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25 — No derived oracle bounds F16/Bf16 factor accuracy [patch] — todo
+- priority: verification
+- needs: none
+- scope: `crates/leto-ops/tests/ops/backward_error.rs`, `crates/leto-ops/tests/ops/a_posteriori.rs`, `crates/leto-ops/tests/ops/graded_scan.rs`, `crates/leto-ops/tests/ops/scale_range.rs`
+- Evidence: PR #237's deterministic γ bounds are vacuous for the iterative routines in F16/Bf16 (one length-3 reflector costs γ₅₃ ≈ 0.026/0.21); the a-posteriori certificates bind values to factors but assert nothing about the factors' residual or orthogonality in those formats (ADR 0033, Tests).
+- Outcome: assert F16/Bf16 factor accuracy against a derived probabilistic bound: Higham & Mary, "A new approach to probabilistic rounding error analysis", SIAM J. Sci. Comput. 41(5), A2815–A2835 (2019) — `γ̃_n(λ) = exp(λ√n·u + n·u²/(1 − u)) − 1` with probability ≥ `1 − 2exp(−λ²(1 − u)²/2)` per product (Theorem 2.4, eqs. 2.1, 2.3; verified against MIMS EPrint 2018.33; volume and pages from citing literature). Its Model 2.1 (independent mean-zero rounding errors) is an assumption about round-to-nearest, to be stated with the failure probability chosen. Alternative oracle: the deterministic bound at an instrumented transformation count.
+- Acceptance: tests assert F16 and Bf16 residual and orthogonality below that bound across the scan families.
+- Next step: derive the per-entry rounding count of the Francis and Golub–Kahan paths so `γ̃` replaces `γ` term by term.
+
 <a id="LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25"></a>
 
 ## LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25 — `MatrixDecompose::symmetric_eigen` still runs classical Jacobi [minor] — todo
