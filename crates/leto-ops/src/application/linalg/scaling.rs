@@ -163,21 +163,45 @@ pub(crate) fn scale_by_power_of_two<T: RealScalar>(values: &mut [T], exponent: i
     }
 }
 
+/// A gate's power-of-two bounds (see
+/// [`thresholds::homogeneous_safe_range`]): `2^factor_log2` bounds the
+/// relied-upon intermediate from above, `2^floor_log2·safmin` is the
+/// routine's absolute deflation threshold (`0` when it has none beyond
+/// `safmin`).
+#[derive(Clone, Copy)]
+pub(crate) struct GateBound {
+    pub(crate) factor_log2: i32,
+    pub(crate) floor_log2: i32,
+}
+
+impl GateBound {
+    /// A bound with no deflation floor.
+    pub(crate) fn factor(factor_log2: i32) -> Self {
+        Self {
+            factor_log2,
+            floor_log2: 0,
+        }
+    }
+}
+
 /// The matrix-tier gate over the entries `values`: `Some(k)`, the minimal
 /// move, when `‖values‖_max` lies outside
-/// [`thresholds::homogeneous_safe_range`]`(degree, f)` with `f =
-/// factor_log2(values, ‖values‖_max)`; `None` when it lies inside or `values`
-/// is empty, all zero, or holds a non-finite entry.
+/// [`thresholds::homogeneous_safe_range`] for `degree` and
+/// `bound(values, ‖values‖_max)`; `None` when it lies inside or `values` is
+/// empty, all zero, or holds a non-finite entry.
 pub(crate) fn gate_exponent<T: RealScalar>(
     values: &[T],
     degree: u32,
-    factor_log2: impl FnOnce(&[T], T) -> i32,
+    bound: impl FnOnce(&[T], T) -> GateBound,
 ) -> Option<i32> {
     let largest = largest_magnitude(values.iter().copied())?;
-    let factor = factor_log2(values, largest);
+    let GateBound {
+        factor_log2,
+        floor_log2,
+    } = bound(values, largest);
     balancing_exponent(
         largest,
-        thresholds::homogeneous_safe_range::<T>(degree, factor),
+        thresholds::homogeneous_safe_range::<T>(degree, factor_log2, floor_log2),
     )
 }
 
@@ -187,13 +211,13 @@ pub(crate) fn gate_exponent<T: RealScalar>(
 pub(crate) fn balanced<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     degree: u32,
-    factor_log2: impl FnOnce(&[T], T) -> i32,
+    bound: impl FnOnce(&[T], T) -> GateBound,
 ) -> Option<(Array2<T>, i32)> {
     let mut values = match matrix.as_slice() {
         Some(slice) => slice.to_vec(),
         None => matrix.iter().copied().collect(),
     };
-    let exponent = gate_exponent(&values, degree, factor_log2)?;
+    let exponent = gate_exponent(&values, degree, bound)?;
     scale_by_power_of_two(&mut values, -exponent);
     let array = Array2::from_shape_vec(matrix.shape(), values)
         .expect("invariant: a copy of a view keeps its shape and length");
@@ -222,18 +246,20 @@ pub(crate) fn restore<T: RealScalar>(
 
 #[cfg(test)]
 mod tests {
-    use super::{gate_exponent, norm_ratio_log2, restore, scale_by_power_of_two, KernelWindow};
+    use super::{
+        gate_exponent, norm_ratio_log2, restore, scale_by_power_of_two, GateBound, KernelWindow,
+    };
     use crate::application::linalg::thresholds::homogeneous_safe_range;
     use leto::LetoError;
 
-    fn no_factor(_: &[f64], _: f64) -> i32 {
-        0
+    fn no_factor(_: &[f64], _: f64) -> GateBound {
+        GateBound::factor(0)
     }
 
     #[test]
     fn in_range_values_are_not_scaled() {
         // Degree 2, bound 2⁰: f64's range is [√(2⁻⁹⁷⁰), √Ω) ≈ [2⁻⁴⁸⁵, 2⁵¹²).
-        let (rmin, rmax) = homogeneous_safe_range::<f64>(2, 0);
+        let (rmin, rmax) = homogeneous_safe_range::<f64>(2, 0, 0);
         assert!(
             rmin > 2.0_f64.powi(-486) && rmin < 2.0_f64.powi(-484),
             "{rmin}"
@@ -259,15 +285,21 @@ mod tests {
         // Degree 1 takes no root: the upper end is exactly Ω·2⁻ᶠ, so
         // `1.5·2¹⁰²²` (≤ Ω/2) is in range at bound 2¹ and out at 2².
         let value = 1.5 * 2.0_f64.powi(1022);
-        assert_eq!(gate_exponent(&[value], 1, |_, _| 1), None);
-        assert_eq!(gate_exponent(&[value], 1, |_, _| 2), Some(1));
-        let (_, rmax) = homogeneous_safe_range::<f64>(1, 1);
+        assert_eq!(
+            gate_exponent(&[value], 1, |_, _| GateBound::factor(1)),
+            None
+        );
+        assert_eq!(
+            gate_exponent(&[value], 1, |_, _| GateBound::factor(2)),
+            Some(1)
+        );
+        let (_, rmax) = homogeneous_safe_range::<f64>(1, 1, 0);
         assert_eq!(rmax, f64::MAX / 2.0);
     }
 
     #[test]
     fn out_of_range_values_scale_by_the_minimal_move() {
-        let (rmin, rmax) = homogeneous_safe_range::<f64>(2, 0);
+        let (rmin, rmax) = homogeneous_safe_range::<f64>(2, 0, 0);
         let k = gate_exponent(&[1e300_f64], 2, no_factor).expect("1e300 is out of range");
         let mut scaled = [1e300_f64];
         scale_by_power_of_two(&mut scaled, -k);
@@ -289,12 +321,24 @@ mod tests {
 
     #[test]
     fn bound_factor_narrows_only_the_upper_end() {
-        let (rmin0, rmax0) = homogeneous_safe_range::<f64>(4, 0);
-        let (rmin, rmax) = homogeneous_safe_range::<f64>(4, 1000);
+        let (rmin0, rmax0) = homogeneous_safe_range::<f64>(4, 0, 0);
+        let (rmin, rmax) = homogeneous_safe_range::<f64>(4, 1000, 0);
         assert_eq!(rmin, rmin0);
         assert!(rmax < rmax0);
         assert_eq!(gate_exponent(&[100.0_f64], 4, no_factor), None);
-        assert!(gate_exponent(&[100.0_f64], 4, |_, _| 1000).is_some());
+        assert!(gate_exponent(&[100.0_f64], 4, |_, _| GateBound::factor(1000)).is_some());
+    }
+
+    #[test]
+    fn deflation_floor_raises_only_the_lower_end() {
+        // Degree 1: the lower end is smlnum = 2⁻⁹⁷⁰, raised to 2⁶·smlnum by a
+        // 2⁶·safmin deflation floor so that floor is ε·‖A‖_max at most.
+        let (rmin, rmax) = homogeneous_safe_range::<f64>(1, 0, 0);
+        let (floor_rmin, floor_rmax) = homogeneous_safe_range::<f64>(1, 0, 6);
+        assert_eq!(rmin, 2.0_f64.powi(-970));
+        assert_eq!(floor_rmin, 2.0_f64.powi(-964));
+        assert_eq!(floor_rmax, rmax);
+        assert!(64.0 * f64::MIN_POSITIVE <= f64::EPSILON * floor_rmin);
     }
 
     #[test]

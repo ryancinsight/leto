@@ -44,7 +44,7 @@ mod standardize;
 #[cfg(test)]
 mod tests;
 
-use crate::application::linalg::scaling::{self, KernelWindow};
+use crate::application::linalg::scaling::{self, GateBound, KernelWindow};
 use crate::domain::real::RealScalar;
 use leto::Complex;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
@@ -66,8 +66,15 @@ use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 /// `‖v‖₂ ≤ 4√n`, `householder::reflect_in_place`; the deflation test's
 /// `|hᵢᵢ| + |hᵢ₊₁ᵢ₊₁|`) are at most `4√n·√Ω` inside this range, finite for
 /// every order `n ≤ Ω/16` a format can index.
-fn francis_factor_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
-    2 * scaling::norm_ratio_log2(values, largest)
+///
+/// Deflation floor: `francis::run` also deflates a subdiagonal at or below
+/// [`francis::deflation_floor`]`(n) = 2^⌈log₂ n⌉·safmin`, so the gate's lower
+/// end is raised to keep that floor below `ε·‖A‖_max`.
+fn francis_bound<T: RealScalar>(n: usize) -> impl FnOnce(&[T], T) -> GateBound {
+    move |values, largest| GateBound {
+        factor_log2: 2 * scaling::norm_ratio_log2(values, largest),
+        floor_log2: francis::deflation_floor_log2(n),
+    }
 }
 
 /// Real Schur decomposition `A = Q T Qᵀ`.
@@ -101,7 +108,7 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
     }
 
     // Balance by an exact power of two; `Q` is scale-invariant, `T` scales.
-    let balanced = scaling::balanced(matrix, 2, francis_factor_log2);
+    let balanced = scaling::balanced(matrix, 2, francis_bound(n));
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -154,7 +161,7 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     // invariance means the Schur vectors are never needed), saving the O(n³) Q
     // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
     // Balance by an exact power of two; eigenvalues scale with the matrix.
-    let balanced = scaling::balanced(matrix, 2, francis_factor_log2);
+    let balanced = scaling::balanced(matrix, 2, francis_bound(n));
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),

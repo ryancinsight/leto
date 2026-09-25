@@ -28,7 +28,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
 use super::{validate_input, SvdDecomposition};
-use crate::application::linalg::scaling::{self, KernelWindow};
+use crate::application::linalg::scaling::{self, GateBound, KernelWindow};
 use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
@@ -48,11 +48,37 @@ const MAX_ITER: usize = 4000;
 /// column-major one has `|vᵢ| ≤ 1`) and `‖A‖_F ≤ 2^r·‖A‖_max`
 /// ([`scaling::norm_ratio_log2`]). The rotation updates and deflation sums
 /// stay below `2‖B‖ ≤ 2‖A‖_F` (`|c|, |s| ≤ 1`), inside the same bound.
-fn svd_factor_log2<T: RealScalar>(rows: usize, cols: usize) -> impl FnOnce(&[T], T) -> i32 {
+///
+/// Deflation floor: [`qr_iterate`] also deflates at or below
+/// [`deflation_floor`]`(k)`, `k = min(rows, cols)`, so the gate's lower end is
+/// raised to keep that floor below `ε·‖A‖_max`.
+fn svd_bound<T: RealScalar>(rows: usize, cols: usize) -> impl FnOnce(&[T], T) -> GateBound {
     move |values, largest| {
         let half_log2_m = (thresholds::ceil_log2_count(rows.max(cols)) + 1) / 2;
-        2 + half_log2_m + scaling::norm_ratio_log2(values, largest)
+        GateBound {
+            factor_log2: 2 + half_log2_m + scaling::norm_ratio_log2(values, largest),
+            floor_log2: deflation_floor_log2(rows.min(cols)),
+        }
     }
+}
+
+/// LAPACK `dbdsqr`'s bound on its iterations per singular value, `MAXITR`.
+const DBDSQR_MAXITR: usize = 6;
+
+/// `⌈log₂(MAXITR·k²)⌉`, the exponent of [`deflation_floor`] over `safmin`.
+fn deflation_floor_log2(k: usize) -> i32 {
+    thresholds::ceil_log2_count(DBDSQR_MAXITR.saturating_mul(k).saturating_mul(k))
+}
+
+/// The absolute deflation threshold of an order-`k` bidiagonal: LAPACK
+/// `dbdsqr`'s `maxitr·n²·unfl` (`unfl = safmin`), rounded up to a power of
+/// two. `dbdsqr` takes `thresh = max(tol·σ_min-estimate, maxitr·n²·unfl)`: the
+/// relative split is kept here in its precision-exact form (an `eᵢ` below the
+/// rounding of its neighbouring diagonals), and this absolute floor deflates
+/// an `eᵢ` driven into the subnormals, where the relative test can only be
+/// met by an exact zero and the sweep otherwise stalls.
+fn deflation_floor<T: RealScalar>(k: usize) -> T {
+    thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(k))
 }
 
 /// Singular values of a finite matrix, sorted descending, via bidiagonal QR.
@@ -63,7 +89,7 @@ fn svd_factor_log2<T: RealScalar>(rows: usize, cols: usize) -> impl FnOnce(&[T],
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_factor_log2(rows, cols)) {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols)) {
         let mut sigmas = singular_values_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut sigmas,
@@ -377,6 +403,7 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
         return Ok(());
     }
     let windows = SweepWindows::new();
+    let floor = deflation_floor::<T>(k);
     let mut q = k - 1;
     let mut iter = 0usize;
     loop {
@@ -387,7 +414,7 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
         // `delimit_subproblem`; the prior `0..q` rescan was `O(q)` per step).
         while q > 0 {
             let scale = d[q - 1].abs().add(d[q].abs());
-            if scale.add(e[q - 1].abs()) == scale {
+            if scale.add(e[q - 1].abs()) == scale || e[q - 1].abs() <= floor {
                 e[q - 1] = T::ZERO;
             }
             if e[q - 1] != T::ZERO {
@@ -403,7 +430,7 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
         let mut p = q;
         while p > 0 {
             let scale = d[p - 1].abs().add(d[p].abs());
-            if scale.add(e[p - 1].abs()) == scale {
+            if scale.add(e[p - 1].abs()) == scale || e[p - 1].abs() <= floor {
                 e[p - 1] = T::ZERO;
                 break;
             }
@@ -592,7 +619,7 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_factor_log2(rows, cols)) {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols)) {
         let mut decomposition = svd_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut decomposition.singular_values,

@@ -1,7 +1,7 @@
 //! Public entry points: the reusable workspace and the owning decomposition.
 
 use super::{ql, reduce};
-use crate::application::linalg::scaling;
+use crate::application::linalg::scaling::{self, GateBound};
 use crate::application::linalg::SymmetricEigenDecomposition;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, LetoError, Result};
@@ -25,7 +25,7 @@ use leto::{Array2, ArrayView2, LetoError, Result};
 /// let a = Array2::from_shape_vec([2, 2], vec![2.0_f64, 1.0, 1.0, 2.0])?;
 /// let mut workspace = SymmetricEigenWorkspace::new();
 /// workspace.decompose(&a.view())?;
-/// // Derived backward-error bound n²·ε·‖A‖_F (see the module documentation),
+/// // Backward-error envelope n²·ε·‖A‖_F (empirical; see the test suite),
 /// // n = 2, ‖A‖_F = √10.
 /// let bound = 4.0 * f64::EPSILON * 10.0_f64.sqrt();
 /// assert!((workspace.eigenvalues()[0] - 1.0).abs() <= bound);
@@ -155,7 +155,7 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
         // and every other intermediate is at most `3‖A‖₂ ≤ 3·√Ω` inside this
         // range.
         let exponent = scaling::gate_exponent(&self.reduced, 2, |values, largest| {
-            2 * scaling::norm_ratio_log2(values, largest)
+            GateBound::factor(2 * scaling::norm_ratio_log2(values, largest))
         })
         .unwrap_or(0);
         scaling::scale_by_power_of_two(&mut self.reduced, -exponent);
@@ -239,7 +239,7 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
 /// // Path-graph Laplacian: eigenvalues 0, 1, 3.
 /// let a = Array2::from_shape_vec([3, 3], vec![1.0_f64, -1.0, 0.0, -1.0, 2.0, -1.0, 0.0, -1.0, 1.0])?;
 /// let eigen = symmetric_eigen_qr(&a.view())?;
-/// // Derived backward-error bound n²·ε·‖A‖_F, n = 3, ‖A‖_F = √9 = 3.
+/// // Backward-error envelope n²·ε·‖A‖_F (empirical), n = 3, ‖A‖_F = √9 = 3.
 /// let bound = 9.0 * f64::EPSILON * 3.0;
 /// for (value, expected) in eigen.eigenvalues.iter().zip([0.0, 1.0, 3.0]) {
 ///     assert!((value - expected).abs() <= bound);

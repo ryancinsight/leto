@@ -58,3 +58,26 @@ fn standardization_is_power_of_two_equivariant_beyond_the_gate() {
         assert_eq!(q, unit_q, "2^{exponent}: Q");
     }
 }
+
+#[test]
+fn gate_keeps_the_deflation_floor_below_epsilon_times_the_norm() {
+    use crate::application::linalg::{scaling, thresholds};
+    use eunomia::{FloatElement, NumericElement, F16};
+    // F16, n = 8: the degree-2 root end is √smlnum = 0.25, below the floor
+    // end 2³·smlnum = 0.5 that keeps the deflation floor 2³·safmin within
+    // ε·‖A‖_max. An input at 0.3 must therefore be moved up.
+    let n = 8;
+    let largest = F16::from_f64(0.3);
+    let mut values = vec![F16::from_f64(0.0); n * n];
+    values[0] = largest;
+    let exponent = scaling::gate_exponent(&values, 2, super::francis_bound(n))
+        .expect("0.3 is below the floor end");
+    let moved = largest.scale_binary(-exponent);
+    let floor = francis::deflation_floor::<F16>(n);
+    let eps = thresholds::machine_epsilon::<F16>();
+    assert!(
+        floor.to_f64() <= eps.to_f64() * moved.to_f64(),
+        "{exponent}"
+    );
+    assert!(floor.to_f64() > eps.to_f64() * largest.to_f64());
+}

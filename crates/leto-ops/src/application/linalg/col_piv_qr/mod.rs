@@ -24,7 +24,8 @@
 
 mod decompose;
 
-use crate::application::linalg::{scaling, thresholds};
+use crate::application::linalg::scaling::{self, GateBound};
+use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result};
 
@@ -156,7 +157,9 @@ pub fn col_piv_qr<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<ColPivQrD
     // entries of a trailing column, whose 2-norm the reflectors preserve —
     // so `Σrᵢ² ≤ rows·‖A‖_max²`.
     let rows = matrix.shape()[0];
-    let f = match scaling::balanced(matrix, 2, |_, _| thresholds::ceil_log2_count(rows)) {
+    let f = match scaling::balanced(matrix, 2, |_, _| {
+        GateBound::factor(thresholds::ceil_log2_count(rows))
+    }) {
         Some((scaled, exponent)) => {
             let mut f = decompose::factor(&scaled.view())?;
             scaling::restore(&mut f.r, exponent, "R entry exceeds the scalar range")?;

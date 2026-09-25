@@ -76,6 +76,26 @@ const MAX_ITER: usize = 2000;
 /// matrices stay scalar. Derived empirically (f64 AVX2: crossover ≈ 32 columns).
 const SPAN_SIMD_MIN: usize = 32;
 
+/// `⌈log₂ n⌉`, the exponent of [`deflation_floor`] over `safmin`.
+pub(super) fn deflation_floor_log2(n: usize) -> i32 {
+    crate::application::linalg::thresholds::ceil_log2_count(n)
+}
+
+/// The absolute deflation threshold of an order-`n` run,
+/// `2^⌈log₂ n⌉·safmin ≥ n·safmin`.
+///
+/// LAPACK `dlahqr` deflates `|h_{k,k−1}| ≤ smlnum` with
+/// `smlnum = safmin·(nh/ulp)`. That form assumes `ulp² ≫ safmin`, which
+/// fails in `F16` (`ε² = 2⁻²⁰ < safmin = 2⁻¹⁴`): there it is `≈ 0.19` for
+/// `n = 3`, deflating at unit scale. The floor keeps `dlahqr`'s purpose —
+/// a subdiagonal driven into the subnormals, where the ulp-relative test can
+/// only ever be met by an exact zero, still deflates — at `n·safmin`
+/// (LAPACK `dbdsqr`'s `unfl`-based form), and the matrix-tier gate
+/// (`schur/mod.rs`) keeps it below `ε·‖A‖_max`.
+pub(super) fn deflation_floor<T: RealScalar>(n: usize) -> T {
+    crate::application::linalg::thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(n))
+}
+
 /// The kernel window of a Francis step, computed once per run: the first
 /// column's `x, y, zz ≤ 9m²` and the stack reflector's `vᵀv ≤ 12m²` are both
 /// degree 2 with bound `2⁴`.
@@ -382,6 +402,8 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
         scratch_vec.resize(n, T::ZERO);
         &mut scratch_vec[..]
     };
+    let floor = deflation_floor::<T>(n);
+    let ulp = crate::application::linalg::thresholds::machine_epsilon::<T>();
     let mut workspace = StepWorkspace {
         scratch,
         window: step_window(),
@@ -390,12 +412,21 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     let mut iter = 0usize;
     loop {
         // Bottom-most unreduced block: scan up while the subdiagonal is
-        // non-negligible (precision-exact `d + |sub| == d`).
+        // non-negligible — LAPACK `dlahqr`'s small-subdiagonal test,
+        // `|h_{k,k−1}| ≤ max(ulp·tst, floor)` with `tst = |h_{k−1,k−1}| +
+        // |h_{k,k}|` and `ulp = ε` (`dlamch('P')`); `dlahqr`'s fallback to the
+        // neighbouring subdiagonals when `tst = 0` is not taken — there only
+        // the absolute `floor` deflates, and the iteration continues otherwise. The precision-exact `tst + |sub| == tst` it
+        // replaces demanded `|sub| ≲ ε·tst/2`, which an 8-bit `Bf16` step
+        // cannot always reach: its updates round away and the block cycles
+        // with period two (probed: a 4×4 graded matrix at `2⁻⁶⁰`). Deflating
+        // at `ε·tst` perturbs `H` by at most `ε·‖H‖`, inside the backward
+        // error.
         let mut lo = hi;
         while lo > 0 {
             let sub = at(h, lo, lo - 1, n).abs();
             let d = at(h, lo - 1, lo - 1, n).abs().add(at(h, lo, lo, n).abs());
-            if d.add(sub) == d {
+            if sub <= ulp.mul(d) || sub <= floor {
                 h[lo * n + (lo - 1)] = T::ZERO;
                 break;
             }

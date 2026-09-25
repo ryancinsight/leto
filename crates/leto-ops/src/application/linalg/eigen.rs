@@ -1,4 +1,4 @@
-use crate::application::linalg::scaling;
+use crate::application::linalg::scaling::{self, GateBound};
 use crate::application::linalg::thresholds::{machine_epsilon, scaled_frobenius};
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
@@ -259,7 +259,7 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
 /// which is exact.
 fn jacobi_gate_exponent<T: RealScalar>(a: &[T]) -> i32 {
     scaling::gate_exponent(a, 1, |values, largest| {
-        1 + scaling::norm_ratio_log2(values, largest)
+        GateBound::factor(1 + scaling::norm_ratio_log2(values, largest))
     })
     .unwrap_or(0)
 }

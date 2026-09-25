@@ -121,10 +121,24 @@ fn root<T: RealScalar>(y: T, degree: u32, rounding: RootRounding) -> T {
 ///   dividing `smlnum` by it would lower `rmin` and admit exactly the inputs
 ///   whose intermediates underflow. Scaling *up* into this end is exact (no
 ///   entry can underflow), so the lower end costs no precision.
-pub(crate) fn homogeneous_safe_range<T: RealScalar>(degree: u32, factor_log2: i32) -> (T, T) {
+/// - Deflation floor: a routine whose convergence test also deflates below an
+///   absolute threshold `2^g·safmin` (LAPACK `dbdsqr`'s `maxitr·n²·unfl`)
+///   raises the lower end to `2^g·smlnum`, so that threshold is at most
+///   `ε·‖A‖_max` and each such deflation stays inside the backward error.
+pub(crate) fn homogeneous_safe_range<T: RealScalar>(
+    degree: u32,
+    factor_log2: i32,
+    floor_log2: i32,
+) -> (T, T) {
     let smlnum = safe_min::<T>().div(machine_epsilon::<T>());
+    let root_end = root(smlnum, degree, RootRounding::NotBelow);
+    let floor_end = smlnum.scale_binary(floor_log2);
     (
-        root(smlnum, degree, RootRounding::NotBelow),
+        if floor_end > root_end {
+            floor_end
+        } else {
+            root_end
+        },
         root(
             overflow_threshold::<T>().scale_binary(-factor_log2),
             degree,
@@ -184,7 +198,7 @@ pub(crate) fn ceil_log2_count(n: usize) -> i32 {
 /// Kept as a test fixture for the derivation checks below.
 #[cfg(test)]
 pub(crate) fn safe_range<T: RealScalar>() -> (T, T) {
-    homogeneous_safe_range::<T>(2, 0)
+    homogeneous_safe_range::<T>(2, 0, 0)
 }
 
 /// `‖A‖_F` of `values` without overflow or underflow in the squares: the
@@ -252,12 +266,12 @@ mod tests {
             "{rmax}"
         );
         // The bound factor divides only the overflow side.
-        let (rmin4, rmax4) = homogeneous_safe_range::<F16>(2, 4);
+        let (rmin4, rmax4) = homogeneous_safe_range::<F16>(2, 4, 0);
         assert_eq!(f64::from(rmin4.to_f32()), rmin);
         assert!(f64::from(rmax4.to_f32()) * f64::from(rmax4.to_f32()) <= 65504.0 / 16.0);
         // A bound such as 128·n⁴ at n = 100 (≈ 2³³·⁶) exceeds F16's range as a
         // value but not as an exponent: the upper end is small and finite.
-        let (_, rmax_large) = homogeneous_safe_range::<F16>(4, 34);
+        let (_, rmax_large) = homogeneous_safe_range::<F16>(4, 34, 0);
         assert!(rmax_large.to_f32() > 0.0 && rmax_large.to_f32() < 1.0);
     }
 

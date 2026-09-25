@@ -9,6 +9,7 @@ pub mod eigenvalues;
 pub mod elementwise;
 pub mod format;
 pub mod full_piv_lu;
+pub mod graded_scan;
 pub mod hessenberg;
 pub mod layout;
 pub mod loss;
