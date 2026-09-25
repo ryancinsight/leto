@@ -59,8 +59,10 @@
 //! eigenvalue (perturbation `O(√(ε‖A‖))`) the computed value can differ from a full
 //! sweep — and from a backward-stable reference — by `O(√(ε‖A‖))`. This is within
 //! backward stability, not an error; the eigenvalue battery asserts the derived
-//! `8·√(ε‖A‖)` tolerance accordingly. The `ACCUMULATE_Q` (Schur) path keeps the
-//! full sweep because `T` and the Schur vectors are outputs.
+//! `8·√(ε‖A‖)` tolerance accordingly. The `ACCUMULATE_Q` (Schur) path applies
+//! each reflector where `dlahqr`'s `WANTT` form does — columns `k ..` to the
+//! right edge and rows `0 ..= min(k + 3, hi)` — because `T` and the Schur
+//! vectors are outputs.
 
 use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
@@ -83,25 +85,61 @@ pub(super) fn deflation_floor_log2(n: usize) -> i32 {
     crate::application::linalg::thresholds::ceil_log2_count(n)
 }
 
-/// The absolute deflation threshold of an order-`n` run,
-/// `2^⌈log₂ n⌉·safmin ≥ n·safmin`.
-///
-/// LAPACK `dlahqr` deflates `|h_{k,k−1}| ≤ smlnum` with
-/// `smlnum = safmin·(nh/ulp)`. That form assumes `ulp² ≫ safmin`, which
-/// fails in `F16` (`ε² = 2⁻²⁰ < safmin = 2⁻¹⁴`): there it is `≈ 0.19` for
-/// `n = 3`, deflating at unit scale. The floor keeps `dlahqr`'s purpose —
-/// a subdiagonal driven into the subnormals, where no relative test can
-/// only ever be met by an exact zero, still deflates — at `n·safmin`
-/// (LAPACK `dbdsqr`'s `unfl`-based form), and the matrix-tier gate
-/// (`schur/mod.rs`) keeps it below `ε·‖A‖_max`.
+/// The subnormal part of the deflation threshold of an order-`n` run,
+/// `2^⌈log₂ n⌉·safmin ≥ n·safmin`: a subdiagonal driven into the subnormals,
+/// where no relative test can be met short of an exact zero, still
+/// deflates. The matrix-tier gate (`schur/mod.rs`) raises its lower end so
+/// this stays below `ε·‖A‖_max`.
 pub(super) fn deflation_floor<T: RealScalar>(n: usize) -> T {
     crate::application::linalg::thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(n))
 }
 
+/// The deflation threshold of a run on the order-`n` Hessenberg `h`: the
+/// larger of [`deflation_floor`] and LAPACK `dlahqr`'s
+/// `SMLNUM = safmin·(n/ulp)` taken in units of the matrix,
+/// `2^e·min(2^⌈log₂ n⌉·safmin/ε, ε)` with `2^e ≤ ‖H‖_max/2^⌈log₂ n⌉`.
+///
+/// *Why in units of the matrix.* `dlahqr`'s `SMLNUM` is absolute, calibrated
+/// for entries of order one. A zero diagonal entry (every skew-symmetric
+/// iterate) makes the Ahues–Tisseur right side `ulp·bb·aa/s` zero, so such a
+/// subdiagonal deflates only at `SMLNUM`; on a matrix of scale `S` it must
+/// first fall to `SMLNUM`, but the bulge's first column divides it by `S`
+/// (`h₁₀/S` in [`first_column`]), which underflows once it passes
+/// `safmin·S` — for `S ≳ n/ulp` before it reaches `SMLNUM` — and the
+/// iteration freezes (skew-symmetric tridiagonals with entries near `10⁵⁸`
+/// stalled this way). In units of the matrix the test is the same for every
+/// power-of-two scaling, exactly.
+///
+/// *Why capped at `ε`.* `safmin/ε` exceeds `ε` in `F16` (`2⁻⁴` against
+/// `2⁻¹⁰`); the cap keeps every deflation at or below `ε·2^e`, and
+/// `2^e ≤ ‖A‖_max` (`|h_{ij}| ≤ ‖H‖₂ = ‖A‖₂ ≤ n·‖A‖_max`), so each costs at
+/// most `ε·‖A‖_max` of backward error, as `backward_error.rs` counts it.
+fn run_floor<T: RealScalar>(h: &[T], n: usize) -> T {
+    use crate::application::linalg::thresholds;
+    let absolute = deflation_floor::<T>(n);
+    let largest = h
+        .iter()
+        .fold(T::ZERO, |acc, &v| if v.abs() > acc { v.abs() } else { acc });
+    let Some(exponent) = largest.binary_exponent() else {
+        return absolute;
+    };
+    let eps = thresholds::machine_epsilon::<T>();
+    let smlnum = thresholds::safe_min::<T>()
+        .div(eps)
+        .scale_binary(deflation_floor_log2(n));
+    let relative = if smlnum < eps { smlnum } else { eps };
+    let relative = relative.scale_binary(exponent - thresholds::ceil_log2_count(n));
+    if relative > absolute {
+        relative
+    } else {
+        absolute
+    }
+}
+
 /// The kernel window of the stack reflector, computed once per run:
-/// `vᵀv ≤ 12m²`, degree 2 with bound `2⁴`.
+/// `‖x‖² ≤ 3m²`, degree 2 with bound `2²`.
 fn step_window<T: RealScalar>() -> KernelWindow<T> {
-    KernelWindow::new(2, 2, 4)
+    KernelWindow::new(2, 2, 2)
 }
 
 /// Per-run state a Francis step reuses: the left-apply accumulator
@@ -111,32 +149,38 @@ struct StepWorkspace<'a, T> {
     window: KernelWindow<T>,
 }
 
+/// `P = I − τ·v·vᵀ` with `v₀ = 1` (LAPACK `dlarfg`'s normalization):
+/// `|vᵢ| ≤ 1` and `τ ∈ [1, 2]`.
 struct StackReflector<T> {
     v: [T; 3],
     len: usize,
-    beta: T,
+    tau: T,
 }
 
-/// The reflector mapping the stack vector `x` (length 2 or 3) to `α·e₁`;
-/// returns `(reflector, α)`.
+/// The reflector mapping the stack vector `x` (length 2 or 3) to `α·e₁`, as
+/// LAPACK `dlarfg` forms it; returns `(reflector, α)`, or `None` when
+/// `x₁ = x₂ = 0` (`dlarfg`'s `τ = 0`: the identity, `α = x₀`).
 ///
-/// Scale-safe (LAPACK `dlarfg` via `dlapy2`/`dnrm2`): with `m = max|xᵢ|`,
-/// `‖x‖² ≤ 3m²` and `vᵀv ≤ 4‖x‖² ≤ 12m²` (degree 2, bound `2⁴`). They are
-/// formed unscaled while `m` keeps them normal and finite (`window`,
-/// [`step_window`]); otherwise `x` is first divided by the
-/// power of two bringing `m` into `[1, 2)`. The reflector `β·v·vᵀ` is
-/// invariant under `v ← 2⁻ᵏv`, `β ← 2²ᵏβ` (both exact), and `α` is
-/// multiplied back, so inside the window the result is bit-for-bit the
-/// unscaled one. The window's upper end also bounds the unscaled
-/// `‖v‖₂ ≤ 2‖x‖₂ ≤ 2√3·√(Ω/16) < √Ω` the applications multiply into `H` —
-/// the degree-2 matrix-tier gate in `schur/mod.rs` keeps `‖H‖_F ≤ √Ω`, so
-/// `vᵀ·H` stays finite.
+/// `α = −sign(x₀)·‖x‖₂`, `τ = (α − x₀)/α`, `vᵢ = xᵢ/(x₀ − α)`: `x₀ − α` adds
+/// magnitudes, so `|x₀ − α| ≥ ‖x‖₂ ≥ |xᵢ|` and every `|vᵢ| ≤ 1`. The
+/// applications therefore form only entry-scale products `vᵢ·h` and
+/// `τ·(vᵀh)` — degree 1 — so no component of `v` loses precision against
+/// the entries it multiplies (an unnormalized `v` of entry scale made `vᵀh`
+/// degree 2, which underflowed in its small components at the gate's lower
+/// end and stalled the iteration on skew-symmetric tridiagonals there).
+///
+/// Scale-safe (`dlapy2`/`dnrm2`): with `m = max|xᵢ|`, `‖x‖² ≤ 3m²` (degree 2,
+/// bound `2²`) is formed unscaled while `m` keeps it normal and finite
+/// (`window`, [`step_window`]); otherwise `x` is first divided by the power
+/// of two bringing `m` into `[1, 2)`. `τ` and `v` are invariant under that
+/// scaling, and `α` is multiplied back, so inside the window the result is
+/// bit-for-bit the unscaled one.
 fn stack_reflector<T: RealScalar>(
     x: &[T],
     window: KernelWindow<T>,
 ) -> Option<(StackReflector<T>, T)> {
     let len = x.len();
-    if len == 0 || len > 3 {
+    if !(2..=3).contains(&len) || x[1..].iter().all(|&xi| xi == T::ZERO) {
         return None;
     }
     let exponent = window.exponent(x);
@@ -149,30 +193,14 @@ fn stack_reflector<T: RealScalar>(
         norm_sq = norm_sq.add(xi.mul(xi));
     }
     let norm = norm_sq.sqrt();
-    if norm <= T::ZERO {
-        return None;
+    let alpha = if v[0] < T::ZERO { norm } else { norm.neg() }; // α = −sign(x₀)·‖x‖
+    let head = v[0].sub(alpha); // x₀ − α, magnitudes added
+    let tau = alpha.sub(v[0]).div(alpha);
+    v[0] = T::ONE;
+    for vi in &mut v[1..len] {
+        *vi = vi.div(head);
     }
-
-    let sign = if v[0] < T::ZERO {
-        T::ZERO.sub(T::ONE)
-    } else {
-        T::ONE
-    };
-    let alpha = T::ZERO.sub(sign.mul(norm)); // α = −sign·‖x‖
-    v[0] = v[0].sub(alpha); // v₀ = x₀ − α
-
-    let mut vnorm_sq = T::ZERO;
-    for &vi in &v[..len] {
-        vnorm_sq = vnorm_sq.add(vi.mul(vi));
-    }
-    if vnorm_sq <= T::ZERO {
-        return None;
-    }
-    let beta = T::ONE.add(T::ONE).div(vnorm_sq);
-    Some((
-        StackReflector { v, len, beta },
-        alpha.scale_binary(exponent),
-    ))
+    Some((StackReflector { v, len, tau }, alpha.scale_binary(exponent)))
 }
 
 #[inline]
@@ -329,14 +357,44 @@ fn shift_pair<T: RealScalar>(h11: T, h12: T, h21: T, h22: T) -> (T, T, T, T) {
     }
 }
 
+/// First column of `(H − μ₁I)(H − μ₂I)` at row `m`, as `dlahqr` forms it:
+/// divided by `S = |h_{mm} − μ₂| + |Im μ₂| + |h_{m+1,m}|` before any product,
+/// then normalized by `|v₁| + |v₂| + |v₃|` — every product is of ratios, so
+/// none over- or underflows for entries anywhere in the range. Only the
+/// direction enters the first reflector.
+fn first_column<T: RealScalar>(h: &[T], n: usize, m: usize, shifts: (T, T, T, T)) -> (T, T, T) {
+    let (rt1r, rt1i, rt2r, rt2i) = shifts;
+    let h00 = at(h, m, m, n);
+    let h01 = at(h, m, m + 1, n);
+    let h10 = at(h, m + 1, m, n);
+    let h11 = at(h, m + 1, m + 1, n);
+    let h21 = at(h, m + 2, m + 1, n);
+    let s = h00.sub(rt2r).abs().add(rt2i.abs()).add(h10.abs());
+    let h10s = h10.div(s);
+    let x = h10s
+        .mul(h01)
+        .add(h00.sub(rt1r).mul(h00.sub(rt2r).div(s)))
+        .sub(rt1i.mul(rt2i.div(s)));
+    let y = h10s.mul(h00.add(h11).sub(rt1r).sub(rt2r));
+    let z = h10s.mul(h21);
+    let norm1 = x.abs().add(y.abs()).add(z.abs());
+    if norm1 > T::ZERO {
+        (x.div(norm1), y.div(norm1), z.div(norm1))
+    } else {
+        (x, y, z)
+    }
+}
+
 /// One Francis double-shift step on the active block `[lo, hi]` (`hi − lo ≥ 2`),
 /// updating `h` (the Hessenberg matrix) and `z` (the accumulated similarity).
 ///
 /// The implicit shift forms the first column of `(H − μ₁I)(H − μ₂I)` from the
-/// shift pair `μ₁, μ₂` ([`shift_pair`], exceptional pairs by [`Shift`]), then
-/// chases the resulting bulge down the band with size-3 (and a final size-2)
-/// Householder reflectors — a single orthogonal similarity equal to one
-/// double-shifted QR step (the implicit-Q theorem).
+/// shift pair `μ₁, μ₂` ([`shift_pair`], exceptional pairs by [`Shift`]) at
+/// the row `m` `dlahqr` starts from (two consecutive small subdiagonals, else
+/// `lo`), then chases the resulting bulge down the band with size-3 (and a
+/// final size-2) Householder reflectors — a single orthogonal similarity
+/// equal to one double-shifted QR step on rows `m ..= hi` (the implicit-Q
+/// theorem), `h_{m,m−1}` scaled by `1 − τ` as `dlahqr` writes it.
 fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
     h: &mut [T],
     z: &mut [T],
@@ -376,33 +434,33 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
     };
     let (rt1r, rt1i, rt2r, rt2i) = shift_pair(h11, h12, h21, h22);
 
-    // First column of `(H − μ₁I)(H − μ₂I)` at the block top, as `dlahqr`
-    // forms it: divided by `S = |h00 − μ₂| + |Im μ₂| + |h10|` before any
-    // product, then normalized by `|v₁| + |v₂| + |v₃|` — every product is of
-    // ratios, so none over- or underflows for entries anywhere in the range.
-    // Only the direction enters the first reflector (its `α` is not written
-    // back).
-    let h00 = at(h, lo, lo, n);
-    let h01 = at(h, lo, lo + 1, n);
-    let h10 = at(h, lo + 1, lo, n);
-    let h11b = at(h, lo + 1, lo + 1, n);
-    let h21b = at(h, lo + 2, lo + 1, n);
-    let s = h00.sub(rt2r).abs().add(rt2i.abs()).add(h10.abs());
-    let h21s = h10.div(s);
-    let mut x = h21s
-        .mul(h01)
-        .add(h00.sub(rt1r).mul(h00.sub(rt2r).div(s)))
-        .sub(rt1i.mul(rt2i.div(s)));
-    let mut y = h21s.mul(h00.add(h11b).sub(rt1r).sub(rt2r));
-    let mut zz = h21s.mul(h21b);
-    let norm1 = x.abs().add(y.abs()).add(zz.abs());
-    if norm1 > T::ZERO {
-        x = x.div(norm1);
-        y = y.div(norm1);
-        zz = zz.div(norm1);
+    // `dlahqr` (loop 50): start the bulge at the lowest row `m` whose
+    // subdiagonal the start would leave negligible — two consecutive small
+    // subdiagonals, `|h_{m,m−1}|·(|v₂| + |v₃|) ≤ ulp·|v₁|·(|h_{m−1,m−1}| +
+    // |h_{m,m}| + |h_{m+1,m+1}|)` — else at `lo`. Starting above a
+    // subdiagonal too small for the deflation test but too large to vanish
+    // under the chase lets the bulge die there, and the rows below never
+    // receive the shifts (skew-symmetric tridiagonals at the gate's lower
+    // end stalled this way).
+    let ulp = crate::application::linalg::thresholds::machine_epsilon::<T>();
+    let mut m = hi - 2;
+    let (mut x, mut y, mut zz) = first_column(h, n, m, (rt1r, rt1i, rt2r, rt2i));
+    while m > lo {
+        let coupling = at(h, m, m - 1, n).abs().mul(y.abs().add(zz.abs()));
+        let local = ulp.mul(x.abs()).mul(
+            at(h, m - 1, m - 1, n)
+                .abs()
+                .add(at(h, m, m, n).abs())
+                .add(at(h, m + 1, m + 1, n).abs()),
+        );
+        if coupling <= local {
+            break;
+        }
+        m -= 1;
+        (x, y, zz) = first_column(h, n, m, (rt1r, rt1i, rt2r, rt2i));
     }
 
-    for k in lo..=(hi - 1) {
+    for k in m..=(hi - 1) {
         let len = if k < hi - 1 { 3 } else { 2 };
         let refl_opt = if len == 3 {
             let arr = [x, y, zz];
@@ -413,35 +471,42 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
         };
         if let Some((refl, alpha)) = refl_opt {
             let v_slice = &refl.v[..refl.len];
-            if ACCUMULATE_Q {
-                // Schur path: the full quasi-triangular `T` and the Schur vectors
-                // are outputs, so the apply spans the whole matrix.
-                apply_left(h, v_slice, refl.beta, k, n, lo, n - 1, scratch);
-                apply_right(h, v_slice, refl.beta, k, n, 0, hi);
-                apply_right(z, v_slice, refl.beta, k, n, 0, n - 1);
-            } else {
-                // Eigenvalues-only: the **within-block window** (LAPACK `dlahqr`
-                // WANTT=false). Only the diagonal blocks are read, so the apply is
-                // confined to `[k, hi]` (left) × `[lo, k+len]` (right): entries to
-                // the left of column `k` and below row `k+len` either are the
-                // annihilated bulge (set explicitly below) or are off every
-                // diagonal block and never feed back (`hi` only decreases; `lo` is
-                // monotone non-decreasing for fixed `hi` via exact-zero deflation).
-                // This is ≈ half the apply work of the `[lo, hi]²` confinement. It
-                // is backward-stable but reorders rounding, so on a near-defective
-                // eigenvalue it differs from a full sweep (and from the reference)
-                // by `O(√(ε‖A‖))` — within the eigenvalue battery's derived
-                // backward-error tolerance. Evidence tier: differential and
-                // empirical validation, not machine-checked proof.
-                if k > lo {
-                    h[k * n + (k - 1)] = alpha;
-                    h[(k + 1) * n + (k - 1)] = T::ZERO;
-                    if refl.len == 3 {
-                        h[(k + 2) * n + (k - 1)] = T::ZERO;
-                    }
+            // `dlahqr`: past the first reflector the bulge column `k − 1` is
+            // written as its known image `(α, 0, 0)ᵀ` rather than computed, and
+            // the reflector is applied from the left to columns `k ..` and from
+            // the right to rows `.. min(k + 3, hi)` — the entries outside are
+            // zero in the Hessenberg form, and applying to their rounding
+            // residue fed it back into the iteration (the Schur path stalled on
+            // skew-symmetric tridiagonals that the eigenvalues path solved).
+            if k > m {
+                h[k * n + (k - 1)] = alpha;
+                h[(k + 1) * n + (k - 1)] = T::ZERO;
+                if refl.len == 3 {
+                    h[(k + 2) * n + (k - 1)] = T::ZERO;
                 }
-                apply_left(h, v_slice, refl.beta, k, n, k, hi, scratch);
-                apply_right(h, v_slice, refl.beta, k, n, lo, (k + refl.len).min(hi));
+            } else if m > lo {
+                // `dlahqr`: the first reflector's image of column `m − 1`,
+                // `h_{m,m−1}·(1 − τ)`, its components along `v₁, v₂`
+                // negligible by the choice of `m`.
+                h[k * n + (k - 1)] = h[k * n + (k - 1)].mul(T::ONE.sub(refl.tau));
+            }
+            let last_row = (k + refl.len).min(hi);
+            if ACCUMULATE_Q {
+                // Schur path (`WANTT`, `WANTZ`): `T` and the Schur vectors are
+                // outputs, so the rows extend right to `n` and the columns up
+                // to row `0`, and `Z` takes every row.
+                apply_left(h, v_slice, refl.tau, k, n, k, n - 1, scratch);
+                apply_right(h, v_slice, refl.tau, k, n, 0, last_row);
+                apply_right(z, v_slice, refl.tau, k, n, 0, n - 1);
+            } else {
+                // Eigenvalues-only (`WANTT = false`): only the diagonal blocks
+                // are read, so the apply is confined to columns `[k, hi]` and
+                // rows `[lo, last_row]`: entries right of `hi` or above `lo` are
+                // off every diagonal block and never feed back (`hi` only
+                // decreases; `lo` is monotone non-decreasing for fixed `hi` via
+                // exact-zero deflation).
+                apply_left(h, v_slice, refl.tau, k, n, k, hi, scratch);
+                apply_right(h, v_slice, refl.tau, k, n, lo, last_row);
             }
         }
         if k + 1 < hi {
@@ -457,22 +522,29 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
 }
 
 /// LAPACK `dlahqr`'s small-subdiagonal test for `h_{k,k−1}`: negligible when `|h_{k,k−1}| ≤ floor`
-/// ([`deflation_floor`], in place of `dlahqr`'s `SMLNUM`), or when it passes
+/// ([`run_floor`], `dlahqr`'s `SMLNUM` in units of the matrix), or when it passes
 /// the ulp-relative pre-check `|h_{k,k−1}| ≤ ulp·tst` (`tst = |h_{k−1,k−1}| +
-/// |h_{k,k}|`) **and** the Ahues–Tisseur test (Ahues & Tisseur 1997, LAPACK
+/// |h_{k,k}|`, and when both are zero the neighbouring subdiagonals
+/// `|h_{k−1,k−2}| + |h_{k+1,k}|` as `dlahqr` takes them) **and** the
+/// Ahues–Tisseur test (Ahues & Tisseur 1997, LAPACK
 /// Working Note 122): with `ab = max(|h_{k,k−1}|, |h_{k−1,k}|)`,
 /// `ba = min(…)`, `aa = max(|h_{k,k}|, |h_{k−1,k−1} − h_{k,k}|)`,
 /// `bb = min(…)`, `s = aa + ab`,
 /// `ba·(ab/s) ≤ max(floor, ulp·(bb·(aa/s)))`. `ulp = ε` (`dlamch('P')`).
-/// `dlahqr`'s fallback to the neighbouring subdiagonals when `tst = 0` is not
-/// taken: there only the floor deflates, and the next step changes the
-/// block (no test input distinguishes the two).
 fn negligible_subdiagonal<T: RealScalar>(h: &[T], n: usize, k: usize, ulp: T, floor: T) -> bool {
     let sub = at(h, k, k - 1, n).abs();
     if sub <= floor {
         return true;
     }
-    let tst = at(h, k - 1, k - 1, n).abs().add(at(h, k, k, n).abs());
+    let mut tst = at(h, k - 1, k - 1, n).abs().add(at(h, k, k, n).abs());
+    if tst == T::ZERO {
+        if k >= 2 {
+            tst = tst.add(at(h, k - 1, k - 2, n).abs());
+        }
+        if k + 1 < n {
+            tst = tst.add(at(h, k + 1, k, n).abs());
+        }
+    }
     if sub > ulp.mul(tst) {
         return false;
     }
@@ -510,7 +582,7 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
         scratch_vec.resize(n, T::ZERO);
         &mut scratch_vec[..]
     };
-    let floor = deflation_floor::<T>(n);
+    let floor = run_floor(h, n);
     let ulp = crate::application::linalg::thresholds::machine_epsilon::<T>();
     let mut workspace = StepWorkspace {
         scratch,

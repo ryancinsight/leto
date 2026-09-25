@@ -479,3 +479,22 @@ fn the_ulp_precheck_keeps_a_subdiagonal_the_schur_form_needs() {
         + rounding;
     assert!(residual <= bound, "‖A − QTQᵀ‖ {residual:e} > {bound:e}");
 }
+
+/// `dlahqr`'s neighbour fallback: when both diagonal entries beside a
+/// subdiagonal are zero, `tst = |h_{k−1,k−1}| + |h_{k,k}| = 0` and the
+/// ulp-relative test is taken against the neighbouring subdiagonals instead.
+/// In `[[2, 1, 0], [1, 0, 0], [0, δ, 0]]`, `δ = 10⁻²⁰ ≤ ulp·|h₁₀|` with a zero
+/// superdiagonal above it (Ahues–Tisseur: `ba = 0`), so `δ` deflates at once
+/// and the third column, all zero in `A`, stays exactly zero in `T`. Without
+/// the fallback only the absolute floor applies, the iteration runs on the
+/// full 3×3, and `T` gains entries of order `δ` in that column.
+#[test]
+fn zero_diagonal_pair_deflates_against_its_neighbours() {
+    let a = mat(3, vec![2.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1e-20, 0.0]);
+    let t = schur(&a.view()).unwrap().t();
+    let t = t.storage().as_slice();
+    for i in 0..3 {
+        assert_eq!(t[i * 3 + 2], 0.0, "T[{i}][2]");
+    }
+    assert_eq!(t[2 * 3 + 1], 0.0, "T[2][1]");
+}

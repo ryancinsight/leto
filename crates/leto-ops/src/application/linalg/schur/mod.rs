@@ -56,17 +56,19 @@ use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 ///
 /// The kernels form every local product scale-safely (`francis.rs`'s shift,
 /// first column and `stack_reflector`, `standard_block.rs`'s `dlanv2`, the
-/// Hessenberg reflector). What remains is the
-/// reflector application `w = vᵀ·H[rows, cols]` (`francis::apply_left`,
-/// `apply_right`): `stack_reflector` leaves `v` unscaled up to its window's
-/// upper end, `‖v‖₂ ≤ √(12·Ω/16) < √Ω`, and every column of `H` has 2-norm at
-/// most `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max` (orthogonal similarity), so
-/// `|w| ≤ √Ω·2^r·‖A‖_max` — finite when `2^(2r)·‖A‖_max² ≤ Ω`: a degree-2
-/// product of an unscaled reflector (itself up to a square of entries) with
-/// an entry. The degree-1 sums (the Hessenberg reduction's `vᵀ·A` with
-/// `‖v‖₂ ≤ 4√n`, `householder::reflect_in_place`; the deflation test's
-/// `|hᵢᵢ| + |hᵢ₊₁ᵢ₊₁|`) are at most `4√n·√Ω` inside this range, finite for
-/// every order `n ≤ Ω/16` a format can index.
+/// Hessenberg reflector), and `stack_reflector`'s `v` is normalized as
+/// `dlarfg`'s (`|vᵢ| ≤ 1`, `τ ≤ 2`), so the reflector applications
+/// (`francis::apply_left`, `apply_right`) are sums of at most three
+/// entry-scale terms: `|vᵀ·H[rows, j]| ≤ √3·‖A‖₂ ≤ √3·2^r·‖A‖_max`
+/// (orthogonal similarity). The degree-1 sums (the Hessenberg reduction's
+/// `vᵀ·A` with `‖v‖₂ ≤ 4√n`, `householder::reflect_in_place`; the deflation
+/// test's `|hᵢᵢ| + |hᵢ₊₁ᵢ₊₁|`) are at most `4√n·2^r·‖A‖_max`.
+///
+/// The range stays degree 2, the form of LAPACK `dgees`/`dgeev`, which
+/// scale `‖A‖_max` into `[√safmin/ε, ε/√safmin]` before `dlahqr`; it covers
+/// the degree-1 sums (`(Ω·2^−2r)^½ ≤ Ω/(4√n·2^r)` for every order
+/// `n ≤ Ω/16`), and its lower end `√smlnum` leaves the converging
+/// subdiagonals `√smlnum/safmin` of headroom above the subnormals.
 ///
 /// Deflation floor: `francis::run` also deflates a subdiagonal at or below
 /// [`francis::deflation_floor`]`(n) = 2^⌈log₂ n⌉·safmin`, so the gate's lower
