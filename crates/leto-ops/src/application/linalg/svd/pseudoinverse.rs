@@ -3,7 +3,7 @@
 use super::svd_decompose;
 use crate::application::linalg::thresholds::rank_pivot_ratio;
 use crate::domain::real::RealScalar;
-use leto::{Array2, ArrayView2, Result, Storage};
+use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
 /// Relative rank cutoff: singular values below `1e-12 · σ_max` are treated as
 /// noise and their directions dropped from `A⁺`. Relative rather than absolute
@@ -39,7 +39,13 @@ fn rank_cutoff_ratio<T: RealScalar>() -> T {
 /// so does not square the condition number.
 ///
 /// # Errors
-/// [`leto::LetoError`] on empty or non-finite input.
+/// [`leto::LetoError`] on empty or non-finite input, and
+/// [`LetoError::Overflow`] when a retained singular value's reciprocal is not
+/// finite in `T` — `σ` above the rank cutoff but still small enough that
+/// `1/σ` exceeds `T::MAX_VALUE` (or `σ` itself, pathologically, is
+/// non-finite). Silently returning `±∞`/`NaN` there would be a wrong `Ok`
+/// (the pseudoinverse identities in the derivation below assume every
+/// retained `σᵢ⁻¹` is a real number).
 pub fn pinv<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     let [rows, cols] = matrix.shape();
     let svd = svd_decompose(matrix)?;
@@ -65,7 +71,13 @@ pub fn pinv<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array2<T>> {
     for (i, inv_sig_i) in inv_sigma.iter_mut().enumerate().take(k) {
         let sigma = svd.singular_values[i];
         *inv_sig_i = if sigma > cutoff {
-            T::ONE.div(sigma)
+            let reciprocal = T::ONE.div(sigma);
+            if !reciprocal.is_finite() {
+                return Err(LetoError::Overflow {
+                    reason: "pseudoinverse: a retained singular value's reciprocal exceeds the scalar range",
+                });
+            }
+            reciprocal
         } else {
             T::ZERO
         };
