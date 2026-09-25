@@ -1,3 +1,4 @@
+use crate::application::linalg::scaling;
 use crate::application::linalg::thresholds::{machine_epsilon, scaled_frobenius};
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
@@ -121,9 +122,20 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
+    let exponent = scaling::balancing_exponent(a.iter().copied()).unwrap_or(0);
+    scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut target = NoEigenvectors;
 
     diagonalize(&mut a, n, tolerance, &mut target)?;
+    let mut diagonal: Vec<T> = (0..n).map(|i| a[i * n + i]).collect();
+    scaling::restore(
+        &mut diagonal,
+        exponent,
+        "Jacobi eigensolver: an eigenvalue exceeds the scalar range",
+    )?;
+    for (i, value) in diagonal.into_iter().enumerate() {
+        a[i * n + i] = value;
+    }
     Ok(sort_diagonal(&a, n))
 }
 
@@ -167,9 +179,20 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
+    let exponent = scaling::balancing_exponent(a.iter().copied()).unwrap_or(0);
+    scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
     diagonalize(&mut a, n, tolerance, &mut target)?;
+    let mut diagonal: Vec<T> = (0..n).map(|i| a[i * n + i]).collect();
+    scaling::restore(
+        &mut diagonal,
+        exponent,
+        "Jacobi eigensolver: an eigenvalue exceeds the scalar range",
+    )?;
+    for (i, value) in diagonal.into_iter().enumerate() {
+        a[i * n + i] = value;
+    }
 
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&lhs, &rhs| {
@@ -415,8 +438,24 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{diagonalize_within, NoEigenvectors};
-    use leto::LetoError;
+    use super::{diagonalize_within, symmetric_eigen_jacobi, NoEigenvectors};
+    use leto::{Array2, LetoError};
+
+    #[test]
+    fn jacobi_typed_overflow_replaces_a_wrong_ok_near_max() {
+        // M = 0.75·MAX: [[M, M], [M, M]] has true eigenvalues {0, 2M}. Since
+        // M > MAX/2, `2M` itself is not representable in f64 — the correct
+        // outcome is a typed `Overflow`, never a finite answer. Before
+        // balancing (finding LETO-DENSE-SCALE-RANGE-2026-09-24, item J) the
+        // unscaled rotation overflowed internally and returned the wrong
+        // `Ok([M, M])` instead (neither eigenvalue is `M`).
+        let m = 0.75 * f64::MAX;
+        let a = Array2::from_shape_vec([2, 2], vec![m, m, m, m]).expect("2x2");
+        assert!(matches!(
+            symmetric_eigen_jacobi(&a.view()),
+            Err(LetoError::Overflow { .. })
+        ));
+    }
 
     #[test]
     fn exhausted_rotation_budget_is_a_typed_convergence_error() {
