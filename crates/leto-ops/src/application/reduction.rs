@@ -5,9 +5,7 @@ use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
 #[cfg(feature = "parallel")]
-// Reductions benefit from parallelism at lower element counts than unary ops
-// because each output element requires a full axis scan (O(N/out_size) reads).
-const PARALLEL_THRESHOLD: usize = 32768;
+use crate::infrastructure::parallel::PARALLEL_MIN_REDUCTION_OUTPUTS;
 
 mod sealed {
     pub trait Sealed {}
@@ -318,6 +316,30 @@ where
     acc
 }
 
+#[inline(always)]
+fn reduce_nonempty_axis_values<Op, T, F>(
+    axis_len: usize,
+    contiguous: Option<&[T]>,
+    mut value_at: F,
+) -> T
+where
+    Op: AxisReduction<T>,
+    T: Scalar,
+    F: FnMut(usize) -> T,
+{
+    if let Some(slice) = contiguous {
+        if let Some(acc) = Op::reduce_slice(slice) {
+            return acc;
+        }
+    }
+
+    let mut acc = Op::initial(value_at(0));
+    for axis_idx in 1..axis_len {
+        acc = Op::fold(acc, value_at(axis_idx));
+    }
+    acc
+}
+
 /// Apply a keep-dim axis reduction into caller-owned output storage.
 pub fn reduce_axis_into<Op, T, const N: usize>(
     input: &ArrayView<'_, T, N>,
@@ -402,7 +424,7 @@ where
     {
         // Output injectivity is established by `validate_mutable_output`, so
         // parallel workers' logical rows map to disjoint physical elements.
-        if out_size >= PARALLEL_THRESHOLD {
+        if out_size >= PARALLEL_MIN_REDUCTION_OUTPUTS {
             parallel_reduce_axis_into::<Op, T, N>(AxisReductionContext {
                 out_size,
                 out_shape,
@@ -418,6 +440,7 @@ where
     }
 
     let is_axis_contiguous = input_layout.strides()[axis] == 1;
+    let axis_stride = input_layout.strides()[axis];
 
     for flat_idx in 0..out_size {
         let out_idx = index_from_flat(flat_idx, &out_shape);
@@ -431,27 +454,18 @@ where
         input_idx[axis] = 0;
         let first_off = input_layout.offset_of(input_idx)?;
 
-        let acc = if is_axis_contiguous {
-            if let Some(slice_res) = Op::reduce_slice(&input_data[first_off..first_off + axis_len])
-            {
-                slice_res
+        let acc = reduce_nonempty_axis_values::<Op, T, _>(
+            axis_len,
+            if is_axis_contiguous {
+                Some(&input_data[first_off..first_off + axis_len])
             } else {
-                let mut a = Op::initial(input_data[first_off]);
-                for axis_idx in 1..axis_len {
-                    let input_off = (first_off as isize + axis_idx as isize) as usize;
-                    a = Op::fold(a, input_data[input_off]);
-                }
-                a
-            }
-        } else {
-            let mut a = Op::initial(input_data[first_off]);
-            let axis_stride = input_layout.strides()[axis];
-            for axis_idx in 1..axis_len {
+                None
+            },
+            |axis_idx| {
                 let input_off = (first_off as isize + axis_idx as isize * axis_stride) as usize;
-                a = Op::fold(a, input_data[input_off]);
-            }
-            a
-        };
+                input_data[input_off]
+            },
+        );
 
         output_data[out_off] = Op::finalize(acc, axis_len);
     }
@@ -485,6 +499,7 @@ where
 {
     let input_ptr = ctx.input_data.as_ptr() as usize;
     let output_ptr = ctx.output_data.as_mut_ptr() as usize;
+    let axis_stride = ctx.input_layout.strides()[ctx.axis];
     // One unit is one output element: it reads the whole reduced axis and
     // writes once.
     let unit_bytes = ctx
@@ -496,7 +511,7 @@ where
         ctx.out_size,
         unit_bytes,
         move |first, count| {
-            let is_axis_contiguous = ctx.input_layout.strides()[ctx.axis] == 1;
+            let is_axis_contiguous = axis_stride == 1;
             for flat_idx in first..first + count {
                 let out_idx = index_from_flat(flat_idx, &ctx.out_shape);
                 let out_off = ctx
@@ -518,36 +533,25 @@ where
                     .offset_of(input_idx)
                     .expect("validated input layout must map every logical index");
 
-                let acc = if is_axis_contiguous {
-                    // SAFETY: input slice bounds are validated.
-                    let slice = unsafe {
-                        std::slice::from_raw_parts(
-                            (input_ptr as *const T).add(first_off),
-                            ctx.axis_len,
-                        )
-                    };
-                    if let Some(slice_res) = Op::reduce_slice(slice) {
-                        slice_res
+                let acc = reduce_nonempty_axis_values::<Op, T, _>(
+                    ctx.axis_len,
+                    if is_axis_contiguous {
+                        // SAFETY: input slice bounds are validated.
+                        Some(unsafe {
+                            std::slice::from_raw_parts(
+                                (input_ptr as *const T).add(first_off),
+                                ctx.axis_len,
+                            )
+                        })
                     } else {
-                        let mut a = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
-                        for axis_idx in 1..ctx.axis_len {
-                            let input_off = (first_off as isize + axis_idx as isize) as usize;
-                            let value = unsafe { *(input_ptr as *const T).add(input_off) };
-                            a = Op::fold(a, value);
-                        }
-                        a
-                    }
-                } else {
-                    let mut a = unsafe { Op::initial(*(input_ptr as *const T).add(first_off)) };
-                    let axis_stride = ctx.input_layout.strides()[ctx.axis];
-                    for axis_idx in 1..ctx.axis_len {
+                        None
+                    },
+                    |axis_idx| unsafe {
                         let input_off =
                             (first_off as isize + axis_idx as isize * axis_stride) as usize;
-                        let value = unsafe { *(input_ptr as *const T).add(input_off) };
-                        a = Op::fold(a, value);
-                    }
-                    a
-                };
+                        *(input_ptr as *const T).add(input_off)
+                    },
+                );
 
                 // SAFETY: each worker writes a distinct logical output element.
                 unsafe {
