@@ -2,19 +2,29 @@
 
 <a id="LETO-DENSE-SCALE-RANGE-2026-09-24"></a>
 
-## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — review
+## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — todo
 - priority: correctness
 
 - Evidence (probe at `a2e75bf`): f64 `singular_values`/`svd_decompose` fail to converge below `2⁻²⁵⁸` and above `2²⁵⁴` and return a wrong `Ok` near the edges (σ₁ 1.425 for 4.88 at `2²⁵⁴`); `schur`/`eigenvalues` fail likewise; `col_piv_qr` returns rank 0 outside about `2^±512` (1e160 included); f32 `RealSchur::eigenvalues` returned `{1, 3, 3}` for `{1, 2, 4}` at `2⁻⁸⁷` (2×2-block quadratic underflow).
-- Outcome: shared `linalg::scaling` (even power of two, largest entry in `[1, 4)`, exact; `restore` returns `Overflow`) applied to the SVD, Schur, general eigenvalue, pivoted-QR and symmetric-QL entry points and to each 2×2 Schur block.
-- Acceptance: `tests/ops/scale_range.rs` sweeps every binade of f64, f32, F16 and Bf16 against derived Weyl / Bauer–Fike / residual bounds; the sweeps fail without the scaling; results bitwise identical to `a2e75bf` on 600 matrices from 1e-3 to 1e3.
+- Outcome: revised per independent review to the LAPACK `dsyev`/`dsyev.f`-style safe range (ADR 0033): scale only when `‖A‖_max` falls outside `[rmin, rmax]`, else factor unscaled; `schur`/`eigenvalues`/the SVD family gate on the narrower `product_safe_range` (`LETO-FRANCIS-QUARTIC-SCALE-2026-09-24`). `pinv` reports `Overflow` for a non-finite reciprocal; Jacobi balances too (finding J).
+- Acceptance: `tests/ops/scale_range.rs` sweeps every binade of f64, f32, F16 and Bf16 against derived Weyl / Bauer–Fike / residual bounds; in-range inputs are bitwise identical to the unscaled computation (`tests/ops/schur.rs`, `tests/ops/symmetric_qr/scale.rs`); PR #237.
 
 <a id="LETO-F16-FRANCIS-2026-09-24"></a>
 
 ## LETO-F16-FRANCIS-2026-09-24 — F16 Francis QR stagnates on nonsymmetric input [patch] — todo
+- priority: correctness
 
-- Evidence: `schur`/`eigenvalues` of `[[4,1,0.5],[1,3,1],[0.25,1,2]]` in F16 return "Schur QR iteration failed to converge" at every scale, unit included; f32, f64 and Bf16 converge. The scale sweep accepts this typed error for F16 only.
+- Evidence: `schur`/`eigenvalues` of `[[4,1,0.5],[1,3,1],[0.25,1,2]]` in F16 return "Schur QR iteration failed to converge" at every scale, unit included; f32, f64 and Bf16 converge. The scale sweep accepts this typed error for F16 only. Confirmed still present after the safe-range redesign (`tests/ops/schur.rs::schur_f16_scale_regression_matrix_is_the_recorded_francis_stagnation`), so it is F16's 11-bit precision, not a scale artifact.
 - Acceptance: F16 converges on the sweep matrices, or a derived reason it cannot, and the sweep exception is removed.
+
+<a id="LETO-FRANCIS-QUARTIC-SCALE-2026-09-24"></a>
+
+## LETO-FRANCIS-QUARTIC-SCALE-2026-09-24 — Francis/Golub-Kahan shift formulas are not scale-invariant within the LAPACK safe range [patch] — todo
+- priority: correctness
+
+- Evidence: probing `schur`/`singular_values` of a general (non-symmetric) 3×3 matrix across every f32 binade found `LetoError::StorageError` ("failed to converge") specifically for norms inside the plain LAPACK safe range `(rmin, rmax)` but outside the narrower `(√rmin, √rmax)` (e.g. f32 exponents -40..-50), while every exponent inside `(√rmin, √rmax)`, and every exponent scaled because it fell outside `(rmin, rmax)`, converged. See ADR 0033 and `thresholds::product_safe_range`.
+- Outcome (interim mitigation, this item covers the underlying rewrite): `schur`, `eigenvalues`, and the SVD family gate their balancing decision on the narrower `product_safe_range` instead of `safe_range`, which the exhaustive sweep in `tests/ops/scale_range.rs` and `tests/ops/schur.rs` confirms closes the observed failure band. The shift/discriminant formulas themselves remain not proven scale-invariant throughout the wider range.
+- Acceptance: derive and implement scale-invariant Francis double-shift and Golub-Kahan shift formulas (or a rigorous bound proving `product_safe_range`'s margin is sufficient for every shipped scalar and matrix order), then widen the balancing gate back to `safe_range` and remove this item.
 
 <a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
 
