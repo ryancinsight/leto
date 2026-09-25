@@ -55,76 +55,51 @@ pub(crate) fn safe_min<T: RealScalar>() -> T {
     }
 }
 
-/// The safe-range bounds `(rmin, rmax)` LAPACK `dsyev`/`dsteqr` use to decide
-/// whether a symmetric eigensolver's input needs scaling before it is
-/// factored: `smlnum = safmin/ε`, `bignum = 1/smlnum`, `rmin = √smlnum`,
-/// `rmax = √bignum` (LAPACK `dlamch` + `dsyev.f`'s `ISCALE` block). Because
-/// `bignum = ε/safmin`, `rmin·rmax = 1` exactly: the safe interval is
-/// symmetric in the binary exponent around `1`, so scaling a norm outside it
-/// back to `[1, 4)` (an existing power-of-two target, always inside
-/// `[rmin, rmax]` for every scalar type carried here — as narrow as
-/// `[0.25, 4]` for `F16`) always lands it safely inside.
+/// The generalized LAPACK safe range for a routine whose largest relied-upon
+/// intermediate is homogeneous of degree `degree` in the input entries and
+/// bounded above by `dimension_factor · ‖A‖_max^degree` (a derived bound —
+/// every call site cites its own derivation): the range of `‖A‖_max` keeping
+/// that intermediate between `safmin/ε` (below which relative precision
+/// degrades to gradual underflow) and `ε/safmin` (above which it risks
+/// overflow).
 ///
-/// A norm already in `[rmin, rmax]` needs no scaling: the algorithms' internal
-/// sums of squares and shift ratios stay representable without it, and
-/// leaving it alone is what keeps in-range inputs bitwise identical to the
-/// unscaled computation.
-pub(crate) fn safe_range<T: RealScalar>() -> (T, T) {
+/// [`safe_range`]'s `rmin = √smlnum, rmax = √bignum` is the `degree = 2`,
+/// `dimension_factor = 1` case (`dsyev.f`'s `ISCALE` block: a single entry
+/// product, no extra dimension factor). This generalizes it: an intermediate
+/// bounded by `c·A_max^d` needs `smlnum ≤ c·A_max^d ≤ bignum`, i.e.
+/// `A_max ∈ [(smlnum/c)^(1/d), (bignum/c)^(1/d)]`.
+///
+/// `degree` must be a power of two (`1`, `2`, or `4` — every routine here
+/// needs one of those), computed by iterated `sqrt` so every step stays
+/// exact for values that are themselves exact (as `smlnum`/`bignum`/`c` are
+/// for the integer or power-of-two `dimension_factor`s used here).
+pub(crate) fn homogeneous_safe_range<T: RealScalar>(degree: u32, dimension_factor: T) -> (T, T) {
+    debug_assert!(
+        degree == 1 || degree == 2 || degree == 4,
+        "homogeneous_safe_range: degree must be 1, 2, or 4"
+    );
     let smlnum = safe_min::<T>().div(machine_epsilon::<T>());
     let bignum = T::ONE.div(smlnum);
-    (smlnum.sqrt(), bignum.sqrt())
+    let mut rmin = smlnum.div(dimension_factor);
+    let mut rmax = bignum.div(dimension_factor);
+    let mut remaining = degree;
+    while remaining > 1 {
+        rmin = rmin.sqrt();
+        rmax = rmax.sqrt();
+        remaining /= 2;
+    }
+    (rmin, rmax)
 }
 
-/// The safe range for algorithms whose shift/discriminant formulas square
-/// the entries **beyond** the single squaring `(rmin, rmax)` already covers
-/// (Francis double-shift QR and Golub–Kahan bidiagonal QR both form a
-/// discriminant `tr² − 4·det`, `det` itself already one entry-product deep,
-/// so a quantity of degree 4 in the original matrix entries is evaluated,
-/// against degree 2 for the symmetric tridiagonal QL `(rmin, rmax)` is
-/// derived for): `(√rmin, √rmax)`. Requiring `norm` inside this narrower
-/// interval keeps `norm²` inside `(rmin, rmax)`, which is what the degree-4
-/// path needs to stay clear of `smlnum`/`bignum` the same way the degree-2
-/// path does directly.
-///
-/// Evidence: probing `schur`/`eigenvalues`/`singular_values` of the general
-/// (non-symmetric) `[[4,1,0.5],[1,3,1],[0.25,1,2]]` matrix across every f32
-/// binade from `2⁰` to `2⁻¹²⁰` found `LetoError::StorageError`
-/// ("failed to converge") only for `2⁻⁴⁰` through `2⁻⁵⁰` — inside
-/// `(rmin, rmax) ≈ (2⁻⁵¹·⁵, 2⁵¹·⁵)` but outside `(√rmin, √rmax) ≈ (2⁻²⁵·⁷⁵, 2²⁵·⁷⁵)`
-/// — while every exponent inside the narrower interval, and every exponent
-/// scaled because it falls outside the wider one, converged. Filed as
-/// `LETO-FRANCIS-QUARTIC-SCALE-2026-09-24` pending a scale-invariant rewrite
-/// of the shift formulas; until then, [`schur`](crate::schur),
-/// [`eigenvalues`](crate::eigenvalues) and the SVD balance against this
-/// narrower range rather than [`safe_range`].
-pub(crate) fn product_safe_range<T: RealScalar>() -> (T, T) {
-    let (rmin, rmax) = safe_range::<T>();
-    (rmin.sqrt(), rmax.sqrt())
-}
-
-/// Whether `norm` lies in [`product_safe_range`] — see its documentation.
-pub(crate) fn in_product_safe_range<T: RealScalar>(norm: T) -> bool {
-    let (rmin, rmax) = product_safe_range::<T>();
-    norm > rmin && norm < rmax
-}
-
-/// Whether `norm` (a nonnegative, finite matrix norm) already lies in the
-/// LAPACK safe range `(rmin, rmax)` and needs no balancing.
-///
-/// The bounds are open, not closed: `dsyev.f`'s own `ANRM.LT.RMIN` /
-/// `ANRM.GT.RMAX` tests scale only strictly outside `[rmin, rmax]`, but a
-/// dense matrix (unlike the single scalar the bound is derived for) can hold
-/// entries well below its norm — a `norm` sitting exactly on `rmin` leaves no
-/// margin for those smaller entries' own products and sums of squares, which
-/// is exactly the boundary the exhaustive per-exponent sweep in
-/// `tests/ops/scale_range.rs` exercises. Excluding the endpoints costs
-/// nothing (an interior norm is unaffected) and removes that razor's-edge
-/// case: at `norm = rmin` or `norm = rmax` the matrix is balanced to
-/// `[1, 4)` instead, which is always still inside `[rmin, rmax]` with room to
-/// spare (see the module documentation).
-pub(crate) fn in_safe_range<T: RealScalar>(norm: T) -> bool {
-    let (rmin, rmax) = safe_range::<T>();
-    norm > rmin && norm < rmax
+/// [`homogeneous_safe_range`] at `degree = 2`, `dimension_factor = 1` —
+/// LAPACK `dsyev`/`dsteqr`'s own range, `rmin = √smlnum`, `rmax = √bignum`
+/// (`smlnum = safmin/ε`, `bignum = 1/smlnum`). Kept as a test fixture for the
+/// symmetry/derivation checks below; production call sites derive their own
+/// `(degree, dimension_factor)` from their actual formulas instead of
+/// assuming this reference case applies.
+#[cfg(test)]
+pub(crate) fn safe_range<T: RealScalar>() -> (T, T) {
+    homogeneous_safe_range::<T>(2, T::ONE)
 }
 
 /// `‖A‖_F` of `values` without overflow or underflow in the squares: the
