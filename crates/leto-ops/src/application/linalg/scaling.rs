@@ -58,22 +58,69 @@ pub(crate) fn largest_magnitude<T: RealScalar>(values: impl IntoIterator<Item = 
     }
 }
 
-/// `⌈log₂(‖A‖_F / ‖A‖_max)⌉` for the entries `values` whose largest magnitude
-/// is `largest`: the power-of-two bound on the ratio that lets a gate state
-/// `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max` tightly (a diagonal-dominated matrix has
-/// `r = 0`, where the dimension bound `√(mn)` would charge up to `log₂ n`).
-/// Falls back to the dimension bound `⌈⌈log₂ len⌉/2⌉` when the ratio's sum of
-/// squares itself leaves the range of `T` (a narrow format at large `len`).
+/// `⌈log₂(‖A‖_F / ‖A‖_max)⌉` for the entries `values` whose largest
+/// magnitude is `largest`: the power-of-two bound on the ratio that lets a
+/// gate state `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max` tightly (a diagonal-dominated
+/// matrix has `r = 0`, where the dimension bound `√(mn)` would charge up to
+/// `log₂ n`).
+///
+/// The sum of squared ratios is formed pairwise ([`pairwise_squares`]), so
+/// each term passes through at most `ℓ = ⌈log₂ len⌉ + 2` roundings and the
+/// computed `ŝ` satisfies `ŝ ≥ s·(1 − γ_ℓ) − len·η` (Higham, *Accuracy and
+/// Stability of Numerical Algorithms*, 2nd ed., §4.2; `η = safmin·ε` bounds
+/// the absolute loss of a term that underflows), with `s ≥ 1` (the largest
+/// term is exactly `1`). With `c` the power of two at least twice the larger
+/// of `2^⌈log₂(4ℓ + 4)⌉·u` and `2^⌈log₂(2·len)⌉·η`, `c ≥ 2γ_ℓ + 2·len·η`, and
+/// `s ≤ ŝ/(1 − c)`: a computed sum strictly inside `(2^k·(1 − c), 2^k)` may
+/// hide a true one above `2^k` and is charged `k + 1`. A computed sum
+/// exactly on `2^k` is taken as exact — the diagonal case, `ŝ = 1`, whose
+/// off-diagonal squares underflow, is the one where rounding can land there
+/// from above, and then by less than `c·2^k`. Recursive summation instead
+/// stagnates in the narrow formats (in `F16`, `2048 + 1 = 2048`: `128²` unit
+/// entries summed to `2048`, charging `r = 6` for a ratio of `2⁷`). Where
+/// `c ≥ ½`, or the sum leaves the range, the dimension bound
+/// `⌈⌈log₂ len⌉/2⌉` is used.
 pub(crate) fn norm_ratio_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
-    let sum = values.iter().fold(T::ZERO, |acc, &value| {
-        let ratio = value.div(largest);
-        acc.add(ratio.mul(ratio))
-    });
-    let ratio = sum.sqrt();
-    if ratio.is_finite() && ratio >= T::ONE {
-        thresholds::ceil_log2(ratio)
-    } else {
-        (thresholds::ceil_log2_count(values.len()) + 1) / 2
+    let log2_len = thresholds::ceil_log2_count(values.len());
+    let dimension_bound = (log2_len + 1) / 2;
+    let roundings = usize::try_from(log2_len + 2).expect("invariant: a bit count is non-negative");
+    let log2_eps = thresholds::ceil_log2(thresholds::machine_epsilon::<T>());
+    let rounding_log2 = log2_eps - 1 + thresholds::ceil_log2_count(4 * roundings + 4);
+    let underflow_log2 = thresholds::ceil_log2(thresholds::safe_min::<T>())
+        + log2_eps
+        + thresholds::ceil_log2_count(2 * values.len());
+    let slack = T::ONE.scale_binary(rounding_log2.max(underflow_log2) + 1);
+    if slack.scale_binary(1) >= T::ONE {
+        return dimension_bound;
+    }
+    let sum = pairwise_squares(values, largest);
+    if !sum.is_finite() || sum < T::ONE {
+        return dimension_bound;
+    }
+    // `sum ≤ 2^k`; `1 − slack` is exact (a power of two at least `ε`, below
+    // one half), so the band test is exact.
+    let mut k = thresholds::ceil_log2(sum);
+    let power = T::ONE.scale_binary(k);
+    if sum < power && sum > power.mul(T::ONE.sub(slack)) {
+        k += 1;
+    }
+    ((k + 1) / 2).min(dimension_bound)
+}
+
+/// `Σ (vᵢ/largest)²` by pairwise summation: halves recursively, each half
+/// summed the same way, so every term passes through at most
+/// `⌈log₂ len⌉` additions besides its division and square.
+fn pairwise_squares<T: RealScalar>(values: &[T], largest: T) -> T {
+    match values {
+        [] => T::ZERO,
+        [value] => {
+            let ratio = value.div(largest);
+            ratio.mul(ratio)
+        }
+        _ => {
+            let (left, right) = values.split_at(values.len() / 2);
+            pairwise_squares(left, largest).add(pairwise_squares(right, largest))
+        }
     }
 }
 
@@ -420,6 +467,20 @@ mod tests {
         assert_eq!(norm_ratio_log2(&[1.0_f64; 16], 1.0), 2);
         // All-ones 3×3: 3, rounded up to 2².
         assert_eq!(norm_ratio_log2(&[1.0_f64; 9], 1.0), 2);
+        // 128² unit entries in F16: ‖A‖_F/‖A‖_max = 2⁷. A recursive sum
+        // stagnates at 2048 (2048 + 1 rounds to 2048) and charged r = 6.
+        let one = eunomia::F16::from_f64(1.0);
+        assert_eq!(norm_ratio_log2(&vec![one; 128 * 128], one), 7);
+        // A computed sum just below a power of two may hide a true one above
+        // it: 64 entries, one 1 and fifteen (1 − 2⁻⁶), sum 1 + 15·0.96875 =
+        // 15.53 inside the F16 band (16·(1 − 2⁻⁴), 16), are charged
+        // ⌈log₂ √32⌉ = 3 rather than ⌈log₂ √15.53⌉ = 2.
+        let near = eunomia::F16::from_f64(1.0 - 2.0_f64.powi(-6));
+        let zero = eunomia::F16::from_f64(0.0);
+        let mut band = vec![zero; 64];
+        band[0] = one;
+        band[1..16].fill(near);
+        assert_eq!(norm_ratio_log2(&band, one), 3);
     }
 
     #[test]
