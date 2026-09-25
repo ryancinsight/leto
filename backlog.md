@@ -3,6 +3,7 @@
 <a id="LETO-DENSE-SCALE-RANGE-2026-09-24"></a>
 
 ## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — review
+- priority: correctness
 
 - Evidence (probe at `a2e75bf`): f64 `singular_values`/`svd_decompose` fail to converge below `2⁻²⁵⁸` and above `2²⁵⁴` and return a wrong `Ok` near the edges (σ₁ 1.425 for 4.88 at `2²⁵⁴`); `schur`/`eigenvalues` fail likewise; `col_piv_qr` returns rank 0 outside about `2^±512` (1e160 included); f32 `RealSchur::eigenvalues` returned `{1, 3, 3}` for `{1, 2, 4}` at `2⁻⁸⁷` (2×2-block quadratic underflow).
 - Outcome: shared `linalg::scaling` (even power of two, largest entry in `[1, 4)`, exact; `restore` returns `Overflow`) applied to the SVD, Schur, general eigenvalue, pivoted-QR and symmetric-QL entry points and to each 2×2 Schur block.
@@ -18,6 +19,7 @@
 <a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
 
 ## LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23 — Scale-aware Jacobi tolerance and a typed cap [minor] — review
+- priority: correctness
 
 - Defects: the absolute `1e-12` tolerance stops early on small-magnitude matrices (`[[2e-13,1e-13],[1e-13,2e-13]]` returned `{2e-13, 2e-13}`), and exhausting the `32·n²` rotation budget returned `Ok`.
 - Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `(n + 2)·ε·‖A‖_F`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
@@ -202,8 +204,9 @@
 - **Outcome:** Advance Leto's workspace Hermes edge to PR #155 so consumers
   resolve one first-party SIMD and memory-provider source graph.
 - **Acceptance:** Standalone lock resolves Hermes `5a399ee`, Mnemosyne
-  `da5c6be`, and Eunomia `fdbf122`; workspace check, Clippy, nextest,
-  doctests, rustdoc, and diff checks pass; no adapter or compatibility layer.
+  `mnemosyne#123` (proposed, not merged), and Eunomia `fdbf122`; workspace
+  check, Clippy, nextest, doctests, rustdoc, and diff checks pass; no adapter
+  or compatibility layer.
 - **Follow-up source edge:** Moirai PR #256 merged at `70d201a`; this increment
   removes its temporary revision pin and regenerates `Cargo.lock`. Hermes,
   Mnemosyne, and Eunomia remain pinned until their provider increments merge.
