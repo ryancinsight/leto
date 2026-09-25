@@ -35,7 +35,7 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use super::format::{epsilon, Format};
+use super::format::epsilon;
 use eunomia::{Bf16, F16};
 use leto::{Array2, LetoError, SliceArg, Storage};
 use leto_ops::{
@@ -43,9 +43,11 @@ use leto_ops::{
     Xorshift64,
 };
 
+mod scale;
+
 /// Round `values` into `T`, returning the `T` matrix and the exact `f64`
 /// image of what `T` holds.
-fn round_into<T: RealScalar>(values: &[f64], n: usize) -> (Array2<T>, Vec<f64>) {
+pub(super) fn round_into<T: RealScalar>(values: &[f64], n: usize) -> (Array2<T>, Vec<f64>) {
     let narrow: Vec<T> = values.iter().map(|&v| T::from_f64(v)).collect();
     let image = narrow.iter().map(|v| v.to_f64()).collect();
     (Array2::from_shape_vec([n, n], narrow).unwrap(), image)
@@ -68,7 +70,7 @@ fn random_symmetric(n: usize, seed: u64) -> Vec<f64> {
 /// `Q·diag(spectrum)·Qᵀ` with `Q` the Householder reflector of a seeded
 /// vector: an exact orthogonal similarity in real arithmetic, so the spectrum
 /// is known.
-fn with_spectrum(spectrum: &[f64], seed: u64) -> Vec<f64> {
+pub(super) fn with_spectrum(spectrum: &[f64], seed: u64) -> Vec<f64> {
     let n = spectrum.len();
     let mut rng = Xorshift64::new(seed);
     let v: Vec<f64> = (0..n).map(|_| rng.next_unit_f64() - 0.5).collect();
@@ -116,7 +118,7 @@ fn frobenius(values: &[f64]) -> f64 {
 }
 
 /// `n²·ε(T)·‖A‖_F`, the derived backward-error bound.
-fn backward_bound<T: RealScalar>(values: &[f64], n: usize) -> f64 {
+pub(super) fn backward_bound<T: RealScalar>(values: &[f64], n: usize) -> f64 {
     (n * n) as f64 * epsilon::<T>() * frobenius(values)
 }
 
@@ -161,7 +163,7 @@ fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) -> Vec<f64> {
 
 /// Every computed eigenvalue matches `spectrum` (ascending) within the
 /// backward bound plus the rounding of the `f64` matrix into `T`.
-fn assert_spectrum<T: RealScalar>(values: &[f64], spectrum: &[f64]) {
+pub(super) fn assert_spectrum<T: RealScalar>(values: &[f64], spectrum: &[f64]) {
     let n = spectrum.len();
     let computed = assert_backward_stable::<T>(values, n);
     let bound = backward_bound::<T>(values, n) + epsilon::<T>() / 2.0 * frobenius(values);
@@ -196,87 +198,6 @@ fn check_clustered_spectrum<T: RealScalar>() {
     assert_spectrum::<T>(&with_spectrum(&spectrum, 19), &spectrum);
 }
 
-fn check_dynamic_range<T: RealScalar>() {
-    // Eigenvalues across twelve decades: the bound is normwise, so the small
-    // ones are resolved to n²·ε·‖A‖_F absolutely, not relatively.
-    let spectrum = [1e-12, 1e-9, 1e-6, 1e-3, 1e-1, 1.0];
-    assert_spectrum::<T>(&with_spectrum(&spectrum, 23), &spectrum);
-}
-
-/// `s·[[2,1,1],[1,2,1],[1,1,2]]` (eigenvalues `s·{1, 1, 4}`) at every
-/// power-of-two scale `T` represents: a normal-range scale must decompose
-/// correctly; a scale whose entries or eigenvalues leave the normal range
-/// must decompose correctly or fail with a typed error, never a wrong `Ok`.
-fn check_scale_sweep<T: Format>() {
-    let base = [2.0, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0];
-    let n = 3;
-    // Relative bound: the backward bound of the unscaled matrix over ‖A‖_F
-    // scales with s exactly; entries 2s and s are exact in every format.
-    let relative = backward_bound::<T>(&base, n);
-    // From seven binades into the subnormals (Bf16 has seven below its
-    // smallest normal, the fewest of the four) to the largest scale whose
-    // entries 2s stay finite; 4s then overflows at the top, which must be a
-    // typed error.
-    let (low, high) = (T::MIN_EXPONENT - 7, T::MAX_EXPONENT);
-    for exponent in low..high {
-        let scale = T::ONE.scale_binary(exponent);
-        let values: Vec<T> = base.iter().map(|&v| T::from_f64(v).mul(scale)).collect();
-        let matrix = Array2::from_shape_vec([n, n], values).unwrap();
-        // Normal range: 2s at most the largest value's exponent less the
-        // headroom for λ = 4s (two binades), s at least the smallest normal.
-        let normal = exponent >= T::MIN_EXPONENT && exponent + 2 <= T::MAX_EXPONENT;
-        match symmetric_eigen_qr(&matrix.view()) {
-            Ok(eigen) => {
-                let s = scale.to_f64();
-                for (value, expected) in eigen.eigenvalues.iter().zip([1.0, 1.0, 4.0]) {
-                    let error = (value.to_f64() / s - expected).abs();
-                    // The entries are powers of two and exact even when
-                    // subnormal; scaling is exact, so the only extra error
-                    // is rounding each computed eigenvalue back onto the
-                    // subnormal grid, whose spacing is 2^MIN_EXPONENT·ε: half
-                    // of it, relative to s = 2^exponent.
-                    let lost = if exponent < T::MIN_EXPONENT {
-                        0.5 * 2.0_f64.powi(T::MIN_EXPONENT - exponent) * epsilon::<T>()
-                    } else {
-                        0.0
-                    };
-                    assert!(
-                        error <= relative + lost,
-                        "2^{exponent}: {:e} vs {expected}·s",
-                        value.to_f64()
-                    );
-                }
-            }
-            Err(error) => {
-                assert!(!normal, "2^{exponent}: normal-range scale failed: {error}");
-                assert!(
-                    matches!(
-                        error,
-                        LetoError::Overflow { .. } | LetoError::ConvergenceError { .. }
-                    ),
-                    "2^{exponent}: untyped failure {error:?}"
-                );
-            }
-        }
-    }
-}
-
-fn check_non_finite_input<T: RealScalar>() {
-    for bad in [f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
-        let values: Vec<T> = [1.0, 0.0, bad, 1.0]
-            .iter()
-            .map(|&v| T::from_f64(v))
-            .collect();
-        let matrix = Array2::from_shape_vec([2, 2], values).unwrap();
-        let mut workspace = SymmetricEigenWorkspace::new();
-        match workspace.decompose(&matrix.view()) {
-            Err(LetoError::InvalidInput(reason)) => assert!(reason.contains("(1, 0)"), "{reason}"),
-            other => panic!("{bad}: expected InvalidInput, got {other:?}"),
-        }
-        assert_eq!(workspace.order(), 0);
-    }
-}
-
 #[test]
 fn symmetric_eigen_qr_is_backward_stable_for_every_scalar() {
     // n = 6 keeps n²·ε(T)·‖A‖_F informative for Bf16 (36·7.8e-3 ≈ 0.28).
@@ -288,124 +209,12 @@ fn symmetric_eigen_qr_is_backward_stable_for_every_scalar() {
     check_random_matrices::<f32>(60);
 }
 
-/// Finding `LETO-DENSE-SCALE-RANGE-2026-09-24`/A: a diagonal matrix whose
-/// norm (its largest entry) sits far outside the LAPACK safe range, so the
-/// fallback bring-to-`[1,4)` scale still applies, and can still lose the far
-/// smaller entry to underflow (`f64 diag(1e300, 1e-300)` scales by roughly
-/// `2⁻⁹⁹⁶`, sending `1e-300 · 2⁻⁹⁹⁶` to `0`). The module documentation states
-/// this loss is bounded by the factorization's own backward error, never
-/// exact — this test is the falsifiable form of that claim: the result must
-/// land within the derived `n²·ε·‖A‖_F` bound, which a normwise bound
-/// against a `1e300`-scale norm satisfies trivially for a `1e-300`-scale
-/// discrepancy, rather than the wrong, unbounded `[0, 1e300]` a defect
-/// elsewhere in the pipeline (a NaN, an unrelated overflow) could also
-/// produce.
-fn check_far_out_of_range_entry_loss_stays_within_bound<T: RealScalar>(large: f64, small: f64) {
-    let values = [large, 0.0, 0.0, small];
-    let (matrix, image) = round_into::<T>(&values, 2);
-    let eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
-    let mut expected = [image[0], image[3]];
-    expected.sort_by(f64::total_cmp);
-    let mut computed: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
-    computed.sort_by(f64::total_cmp);
-    let bound = backward_bound::<T>(&image, 2);
-    for (value, expected) in computed.iter().zip(&expected) {
-        assert!(
-            (value - expected).abs() <= bound,
-            "large={large} small={small}: {value} vs {expected}, bound {bound:e}"
-        );
-    }
-}
-
-#[test]
-fn symmetric_eigen_qr_far_out_of_range_entry_loss_stays_within_the_backward_bound() {
-    check_far_out_of_range_entry_loss_stays_within_bound::<f64>(1e300, 1e-300);
-    check_far_out_of_range_entry_loss_stays_within_bound::<f32>(1e38, 1e-38);
-    // F16: `32768 = 2¹⁵` exceeds F16's `rmax = 4`, so this also exercises the
-    // fallback scale (the reported `diag(32768, 1.0009765625) → 1.0`).
-    check_far_out_of_range_entry_loss_stays_within_bound::<F16>(32768.0, 1.0009765625);
-}
-
-/// Finding A's other half: an input whose norm the safe-range gate classifies
-/// as needing **no** balancing is factored on the caller's exact values, so
-/// its eigenvalues match a same-input Jacobi decomposition (which never
-/// balances) far more tightly than the normwise backward bound alone would
-/// guarantee — both algorithms see the identical, unscaled entries.
-fn check_in_range_norm_matches_unscaled_jacobi<T: RealScalar>() {
-    // diag(3, 1e-6): norm 3 is deep inside every shipped format's safe range
-    // (even F16's narrowest, `[0.25, 4]`); 1e-6 is representable at that
-    // scale in every format without underflow.
-    let values = [3.0_f64, 0.0, 0.0, 1e-6];
-    let (matrix, image) = round_into::<T>(&values, 2);
-    let qr_eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
-    let jacobi_eigen =
-        symmetric_eigen_jacobi_with_tolerance(&matrix.view(), machine_epsilon_of::<T>()).unwrap();
-    let mut qr: Vec<f64> = qr_eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
-    let mut jacobi: Vec<f64> = jacobi_eigen
-        .eigenvalues
-        .iter()
-        .map(|v| v.to_f64())
-        .collect();
-    qr.sort_by(f64::total_cmp);
-    jacobi.sort_by(f64::total_cmp);
-    let mut expected = [image[0], image[3]];
-    expected.sort_by(f64::total_cmp);
-    // Both are exact for a diagonal input (no rotation changes an
-    // already-diagonal matrix), so all three agree bit for bit.
-    assert_eq!(qr, expected);
-    assert_eq!(jacobi, expected);
-}
-
-#[test]
-fn symmetric_eigen_qr_in_range_norm_matches_unscaled_jacobi() {
-    check_in_range_norm_matches_unscaled_jacobi::<f64>();
-    check_in_range_norm_matches_unscaled_jacobi::<f32>();
-    check_in_range_norm_matches_unscaled_jacobi::<F16>();
-    check_in_range_norm_matches_unscaled_jacobi::<Bf16>();
-}
-
-/// `T`'s machine epsilon via the halving probe (mirrors
-/// `thresholds::machine_epsilon`, re-derived here since that function is
-/// crate-private).
-fn machine_epsilon_of<T: RealScalar>() -> T {
-    let mut eps = T::ONE;
-    let half = T::ONE.div(T::from_usize(2));
-    while T::ONE.add(eps.mul(half)) > T::ONE {
-        eps = eps.mul(half);
-    }
-    eps
-}
-
 #[test]
 fn symmetric_eigen_qr_resolves_clusters_for_every_scalar() {
     check_clustered_spectrum::<f64>();
     check_clustered_spectrum::<f32>();
     check_clustered_spectrum::<F16>();
     check_clustered_spectrum::<Bf16>();
-}
-
-#[test]
-fn symmetric_eigen_qr_spans_a_wide_dynamic_range_for_every_scalar() {
-    check_dynamic_range::<f64>();
-    check_dynamic_range::<f32>();
-    check_dynamic_range::<F16>();
-    check_dynamic_range::<Bf16>();
-}
-
-#[test]
-fn symmetric_eigen_qr_is_correct_or_typed_across_each_exponent_range() {
-    check_scale_sweep::<f64>();
-    check_scale_sweep::<f32>();
-    check_scale_sweep::<F16>();
-    check_scale_sweep::<Bf16>();
-}
-
-#[test]
-fn symmetric_eigen_qr_rejects_non_finite_input_for_every_scalar() {
-    check_non_finite_input::<f64>();
-    check_non_finite_input::<f32>();
-    check_non_finite_input::<F16>();
-    check_non_finite_input::<Bf16>();
 }
 
 /// [`symmetric_eigen_qr_matches_closed_forms`]'s body, instantiated over
