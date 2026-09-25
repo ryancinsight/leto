@@ -100,7 +100,7 @@ fn check_non_finite_input<T: RealScalar>() {
 /// `2⁻⁹⁹⁶`, sending `1e-300 · 2⁻⁹⁹⁶` to `0`). The module documentation states
 /// this loss is bounded by the factorization's own backward error, never
 /// exact — this test is the falsifiable form of that claim: the result must
-/// land within the derived `n²·ε·‖A‖_F` bound, which a normwise bound
+/// land within the `n²·ε·‖A‖_F` envelope, which a normwise bound
 /// against a `1e300`-scale norm satisfies trivially for a `1e-300`-scale
 /// discrepancy, rather than the wrong, unbounded `[0, 1e300]` a defect
 /// elsewhere in the pipeline (a NaN, an unrelated overflow) could also

@@ -3,7 +3,7 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use super::format::Format;
+use super::format::{epsilon, Format};
 use eunomia::{Bf16, F16};
 use leto::LetoError;
 use leto::{Array2, SliceArg, Storage};
@@ -418,4 +418,48 @@ fn symmetric_jacobi_factors_a_diagonal_exactly_in_every_format() {
     check_diagonal_is_exact::<f32>(&[(1e38, 1e-38)]);
     check_diagonal_is_exact::<Bf16>(&[(1e38, 1e-38)]);
     check_diagonal_is_exact::<F16>(&[(32768.0, 1.0009765625)]);
+}
+
+/// `M·(J₄ − 2I)` (`J₄` the all-ones 4×4) has eigenvalues `{−2M, −2M, −2M,
+/// 2M}` and `‖A‖_F = 4M = 2²·‖A‖_max`, so its Jacobi gate bound is
+/// `2^(1+2)`. At `M = 0.3·Ω` every entry is `≤ Ω/2` and the eigenvalues
+/// `±0.6·Ω` are representable, but the rotations' `a_qq − a_pp` between the
+/// emerging `+2M` and `−2M` reaches `4M = 1.2·Ω`: only the Frobenius-ratio
+/// term `r = 2` of the bound moves the input down before it overflows
+/// (without it the solver returned `−M` four times as a wrong `Ok`). Weyl
+/// bounds each eigenvalue within `n²·ε·‖A‖_F` (the backward-error envelope
+/// of `scale_range.rs`).
+fn check_near_overflow_uses_the_norm_ratio<T: Format>() {
+    let largest = T::ONE.scale_binary(T::MAX_EXPONENT).to_f64() * (2.0 - epsilon::<T>());
+    let m = T::from_f64(largest * 0.3);
+    let mut values = vec![m; 16];
+    for i in 0..4 {
+        values[i * 5] = m.neg();
+    }
+    let matrix = Array2::from_shape_vec([4, 4], values).unwrap();
+    let two_m = 2.0 * m.to_f64();
+    let bound = 16.0 * epsilon::<T>() * 2.0 * two_m;
+    let expected = [-two_m, -two_m, -two_m, two_m];
+    let values = symmetric_eigenvalues_jacobi(&matrix.view())
+        .unwrap_or_else(|error| panic!("eigenvalues: {error}"));
+    let full = symmetric_eigen_jacobi(&matrix.view())
+        .unwrap_or_else(|error| panic!("decomposition: {error}"))
+        .eigenvalues;
+    for computed in [values, full] {
+        for (value, expected) in computed.iter().zip(expected) {
+            let value = value.to_f64();
+            assert!(
+                (value - expected).abs() <= bound,
+                "{value:e} vs {expected:e}, bound {bound:e}"
+            );
+        }
+    }
+}
+
+#[test]
+fn symmetric_jacobi_near_overflow_scales_by_the_norm_ratio() {
+    check_near_overflow_uses_the_norm_ratio::<f64>();
+    check_near_overflow_uses_the_norm_ratio::<f32>();
+    check_near_overflow_uses_the_norm_ratio::<F16>();
+    check_near_overflow_uses_the_norm_ratio::<Bf16>();
 }

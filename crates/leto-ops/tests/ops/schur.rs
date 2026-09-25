@@ -208,7 +208,7 @@ fn schur_rejects_non_square() {
 /// `|λ̂ − λ| ≤ κ·(δ + n²·ε(T)·‖Â‖_F) + ρ + ε(T)·|λ|`: `κ ≥ κ₂(V)` from the
 /// matrix's own left and right eigenvectors in `f64`, computed independently
 /// of `schur` (`spectral_condition`); `δ = ‖Â − A‖_F` the rounding of the
-/// input into `T`; `n²·ε(T)·‖Â‖_F` the backward error derived in
+/// input into `T`; `n²·ε(T)·‖Â‖_F` the backward-error envelope of
 /// `scale_range.rs`; `ρ = κ·n²·ε₆₄·‖A‖_F` the `f64` reference's own error;
 /// and `ε(T)·|λ|` the rounding of each eigenvalue onto `T`'s grid.
 #[test]
@@ -243,7 +243,7 @@ fn schur_scale_regression_matrix_converges_in_every_format() {
         *slot = z.re;
     }
     eigenvalues.sort_by(f64::total_cmp);
-    let kappa = bauer_fike_factor(&exact, &eigenvalues);
+    let kappa = bauer_fike_factor(&exact, &eigenvalues.map(|re| (re, 0.0)));
     let reference_error = kappa * 9.0 * f64::EPSILON * frobenius(&exact);
 
     fn check<T: RealScalar>(exact: &[f64; 9], eigenvalues: &[f64; 3], kappa: f64, rho: f64) {
@@ -279,13 +279,16 @@ fn schur_scale_regression_matrix_converges_in_every_format() {
     check::<Bf16>(&exact, &eigenvalues, kappa, reference_error);
 }
 
-/// Small seeded sweep: entries in `[-4, 4]` lie inside every format's
-/// Francis gate (`schur`'s degree-2 range, upper end `√Ω/2^r` with
-/// `2^r ≥ ‖A‖_F/‖A‖_max`, at least `256/4` in F16) and inside every kernel
-/// window, so `schur` factors the caller's values unscaled. Differentially
-/// checked against the `f64` computation on the same values.
+/// Small seeded sweep of random nonsymmetric 3×3 matrices, entries in
+/// `[-4, 4]`, differentially checked against the `f64` computation on the
+/// same values. By Bauer–Fike each computed spectrum is within
+/// `κ·η·‖Â‖_F` of the exact spectrum of `Â`, `κ ≥ κ₂(V)` computed from
+/// `Â`'s own left and right eigenvectors in `f64` (`spectral_condition`,
+/// complex eigenvalues included) and `η = n²·ε` the backward-error envelope
+/// of `scale_range.rs`; the two computations are therefore within
+/// `κ·9·(ε(T) + ε₆₄)·‖Â‖_F` of each other.
 #[test]
-fn schur_in_range_inputs_match_the_unscaled_f64_reference() {
+fn schur_matches_the_f64_reference_within_the_bauer_fike_bound() {
     fn check<T: RealScalar>() {
         let n = 3;
         for seed in [1_u64, 2, 3, 4, 5] {
@@ -309,10 +312,15 @@ fn schur_in_range_inputs_match_the_unscaled_f64_reference() {
                 .iter()
                 .map(|z| (z.re, z.im))
                 .collect();
-            computed.sort_by(|a, b| a.0.total_cmp(&b.0));
-            expected.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let order =
+                |a: &(f64, f64), b: &(f64, f64)| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1));
+            computed.sort_by(order);
+            expected.sort_by(order);
             let frobenius: f64 = image.iter().map(|v| v * v).sum::<f64>().sqrt();
-            let bound = 9.0 * epsilon::<T>() * frobenius + 9.0 * f64::EPSILON * frobenius;
+            let exact: [f64; 9] = image.clone().try_into().unwrap();
+            let spectrum: [(f64, f64); 3] = expected.clone().try_into().unwrap();
+            let kappa = bauer_fike_factor(&exact, &spectrum);
+            let bound = kappa * 9.0 * (epsilon::<T>() + f64::EPSILON) * frobenius;
             for ((re, im), (eref, iref)) in computed.iter().zip(&expected) {
                 assert!((re - eref).abs() <= bound, "seed {seed}: {re} vs {eref}");
                 assert!((im - iref).abs() <= bound, "seed {seed}: {im} vs {iref}");

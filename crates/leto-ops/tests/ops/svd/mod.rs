@@ -137,12 +137,24 @@ fn svd_accepts_strided_full_rank_view() {
     assert_close(values[1], 2.0, 1.0e-12);
 }
 
-#[test]
-fn svd_is_generic_over_f32() {
-    let matrix = Array2::from_shape_vec([2, 2], vec![2.0f32, 0.0, 0.0, 1.0]).unwrap();
+/// A diagonal needs no reflection (each reflector's tail is zero, `τ = 0`)
+/// and no rotation (every superdiagonal is already zero), so both entry points
+/// return its magnitudes exactly, in every format.
+fn check_diagonal_singular_values_are_exact<T: leto_ops::RealScalar>() {
+    let two = T::from_f64(2.0);
+    let matrix = Array2::from_shape_vec([2, 2], vec![two, T::ZERO, T::ZERO, T::ONE]).unwrap();
     let values = singular_values(&matrix.view()).unwrap();
-    assert!((values[0] - 2.0).abs() <= 1.0e-5);
-    assert!((values[1] - 1.0).abs() <= 1.0e-5);
+    assert_eq!([values[0].to_f64(), values[1].to_f64()], [2.0, 1.0]);
+    let full = svd_decompose(&matrix.view()).unwrap().singular_values;
+    assert_eq!([full[0].to_f64(), full[1].to_f64()], [2.0, 1.0]);
+}
+
+#[test]
+fn diagonal_singular_values_are_exact_in_every_format() {
+    check_diagonal_singular_values_are_exact::<f64>();
+    check_diagonal_singular_values_are_exact::<f32>();
+    check_diagonal_singular_values_are_exact::<eunomia::F16>();
+    check_diagonal_singular_values_are_exact::<eunomia::Bf16>();
 }
 
 #[test]

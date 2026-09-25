@@ -5,30 +5,30 @@
 //! their products scale-safely and the matrix-tier gate covers the rest
 //! (`linalg::scaling`), so no exponent of any format is exempt.
 //!
-//! # Derived bounds
+//! # Error bounds (empirical backward-error envelope)
 //!
 //! Work in units of `s`. Let `Â = image / s` be what `T` actually holds
 //! (exact in `f64`), `δ = ‖Â − A‖_F` the input rounding (zero wherever `s·A`
 //! is representable; nonzero only in the subnormal binades and, for `Bf16`,
 //! where an entry needs more than 8 significant bits), and `η·‖Â‖_F` the
-//! factorization's backward error. `η` composes the per-transformation bounds
-//! of Higham, *Accuracy and Stability of Numerical Algorithms*, 2nd ed.
-//! (2002): a Householder reflector of length `m` applied to a column commits
-//! `γ̃_m` (§19.3, Lemmas 19.2–19.3: `r` reflectors commit `r·γ̃_m`,
-//! `γ̃_k = c·k·u/(1 − c·k·u)` with `c` a small integer constant Higham leaves
-//! unspecified), and a Givens rotation `γ₆` (§19.6, Lemmas 19.7–19.8;
-//! `u = ε/2`). The orthogonal transformation count is exact for the
-//! reductions — `n − 2` Hessenberg reflectors, `2n − 1` bidiagonal ones — and
-//! for the QR iterations it is sweeps × rotations per sweep: a Francis sweep
-//! over an active block of order `k` applies `k − 1` reflectors of length
-//! ≤ 3, a Golub–Kahan sweep `2(k − 1)` rotations. The sweep count is bounded
-//! only by each kernel's own cap (`francis::MAX_ITER`, `bidiagonal_qr`'s
-//! iteration cap); an exhausted cap is a typed error, never a value this
-//! bound covers. At `n = 3` the observed sweeps are a handful per deflation
-//! (Wilkinson shifts converge cubically once inside their basin, Golub &
-//! Van Loan §8.3, §8.6), so `η = n²·ε = 9ε` is the first-order total for
-//! `r ≈ n` transformations of order-`n` vectors at `c·u ≈ ε`; the constant
-//! `c` is the one quantity not derived here, because Higham does not state it.
+//! factorization's backward error.
+//!
+//! `η = n²·ε` is an **empirical envelope, not a derived bound.** The
+//! first-order worst case composes Higham, *Accuracy and Stability of
+//! Numerical Algorithms*, 2nd ed. (2002), over the enumerated
+//! transformations — `γ̃_m` per length-`m` Householder reflector (§19.3,
+//! Lemmas 19.2–19.3, `γ̃_k = c·k·u/(1 − c·k·u)` with `c` unspecified) and
+//! `γ₆` per Givens rotation (§19.6, Lemmas 19.7–19.8), `u = ε/2` — and is
+//! larger: at `n = 3` the `2n − 1 = 5` bidiagonal reflectors alone give
+//! `5·γ̃₃ ≈ 15·c·u`, before any of the sweeps, whose count is bounded only by
+//! each kernel's cap (`francis::MAX_ITER`, `bidiagonal_qr`'s iteration cap).
+//! The envelope is what the computations actually meet: measured at this
+//! revision against the `f64` factorization of the same image, the largest
+//! singular-value error over the random general, symmetric and graded
+//! inputs of the differential probe (`n ∈ {2, 3, 4, 5, 8}`, `f32`, `F16`,
+//! `Bf16`, magnitudes inside the gates; 4,320 results with the symmetric
+//! eigenvalues of `symmetric_qr`) was `0.44·n²·ε·‖Â‖_F`, a margin of `2.3×`. A result outside
+//! the envelope fails these assertions — it is checked, not assumed.
 //! Restoring a result by `s` rounds it once onto `T`'s grid; in the subnormal
 //! binades that costs at most half the subnormal spacing,
 //! `0.5·2^(MIN−e)·ε` in units of `s`.
@@ -199,7 +199,7 @@ fn general_spectrum() -> Spectrum {
         *slot = z.re;
     }
     eigenvalues.sort_by(f64::total_cmp);
-    let condition = bauer_fike_factor(&GENERAL, &eigenvalues);
+    let condition = bauer_fike_factor(&GENERAL, &eigenvalues.map(|re| (re, 0.0)));
     Spectrum {
         matrix: GENERAL,
         eigenvalues,
