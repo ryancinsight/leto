@@ -3,6 +3,8 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
+use super::format::Format;
+use eunomia::{Bf16, F16};
 use leto::LetoError;
 use leto::{Array2, SliceArg, Storage};
 use leto_ops::{symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi};
@@ -362,4 +364,58 @@ fn symmetric_eigen_jacobi_resolves_an_accepted_asymmetry_by_the_upper_triangle()
         resolved.eigenvectors.storage().as_slice(),
         from_upper.eigenvectors.storage().as_slice()
     );
+}
+
+/// Jacobi factors a diagonal input exactly: its gate's upper end is the
+/// overflow threshold over `2^(1+r)` with `r = 0` for a diagonal
+/// (`‖A‖_F = ‖A‖_max` to rounding), so no power-of-two move can underflow the
+/// small entry, and a zero off-diagonal takes no rotation. Checked for both
+/// entry points on the reported pairs and on 294 diagonals per format: seven
+/// large binades up to one below the largest, six small ones from the
+/// subnormal range up, seven significands each.
+fn check_diagonal_is_exact<T: Format>(pairs: &[(f64, f64)]) {
+    let mut cases: Vec<(f64, f64)> = pairs.to_vec();
+    let small_exponents = [
+        T::MIN_EXPONENT - T::PRECISION + 3,
+        T::MIN_EXPONENT - T::PRECISION / 2,
+        T::MIN_EXPONENT - 1,
+        T::MIN_EXPONENT,
+        T::MIN_EXPONENT + 1,
+        T::MIN_EXPONENT + 5,
+    ];
+    for big_exponent in (T::MAX_EXPONENT - 7)..T::MAX_EXPONENT {
+        for &small_exponent in &small_exponents {
+            for k in 1..8 {
+                let significand = 1.0 + f64::from(k) / 8.0;
+                cases.push((
+                    significand * 2.0_f64.powi(big_exponent),
+                    significand * 2.0_f64.powi(small_exponent),
+                ));
+            }
+        }
+    }
+    for (big, small) in cases {
+        let (big, small) = (T::from_f64(big), T::from_f64(small));
+        let matrix = Array2::from_shape_vec([2, 2], vec![big, T::ZERO, T::ZERO, small]).unwrap();
+        let expected = [small.to_f64(), big.to_f64()];
+        let values = symmetric_eigenvalues_jacobi(&matrix.view()).unwrap();
+        let full = symmetric_eigen_jacobi(&matrix.view()).unwrap();
+        for computed in [values, full.eigenvalues] {
+            assert_eq!(
+                [computed[0].to_f64(), computed[1].to_f64()],
+                expected,
+                "diag({}, {})",
+                expected[1],
+                expected[0]
+            );
+        }
+    }
+}
+
+#[test]
+fn symmetric_jacobi_factors_a_diagonal_exactly_in_every_format() {
+    check_diagonal_is_exact::<f64>(&[(1e300, 1e-300)]);
+    check_diagonal_is_exact::<f32>(&[(1e38, 1e-38)]);
+    check_diagonal_is_exact::<Bf16>(&[(1e38, 1e-38)]);
+    check_diagonal_is_exact::<F16>(&[(32768.0, 1.0009765625)]);
 }

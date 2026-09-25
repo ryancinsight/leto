@@ -126,21 +126,11 @@ fn check_far_out_of_range_entry_loss_stays_within_bound<T: RealScalar>(large: f6
 fn symmetric_eigen_qr_far_out_of_range_entry_loss_stays_within_the_backward_bound() {
     check_far_out_of_range_entry_loss_stays_within_bound::<f64>(1e300, 1e-300);
     check_far_out_of_range_entry_loss_stays_within_bound::<f32>(1e38, 1e-38);
-    // F16: `32768 = 2¹⁵` exceeds F16's `rmax = 4`, so this also exercises the
-    // fallback scale (the reported `diag(32768, 1.0009765625) → 1.0`).
+    check_far_out_of_range_entry_loss_stays_within_bound::<Bf16>(1e38, 1e-38);
+    // F16: `32768 = 2¹⁵` exceeds the QL gate's degree-2 upper end
+    // `√65504 ≈ 256`, so this also exercises the minimal move (the reported
+    // `diag(32768, 1.0009765625) → 1.0`).
     check_far_out_of_range_entry_loss_stays_within_bound::<F16>(32768.0, 1.0009765625);
-}
-
-/// `T`'s machine epsilon via the halving probe (mirrors
-/// `thresholds::machine_epsilon`, re-derived here since that function is
-/// crate-private).
-fn machine_epsilon_of<T: RealScalar>() -> T {
-    let mut eps = T::ONE;
-    let half = T::ONE.div(T::from_usize(2));
-    while T::ONE.add(eps.mul(half)) > T::ONE {
-        eps = eps.mul(half);
-    }
-    eps
 }
 
 /// Finding A's other half: an input whose norm the safe-range gate classifies
@@ -149,15 +139,15 @@ fn machine_epsilon_of<T: RealScalar>() -> T {
 /// balances) far more tightly than the normwise backward bound alone would
 /// guarantee — both algorithms see the identical, unscaled entries.
 fn check_in_range_norm_matches_unscaled_jacobi<T: RealScalar>() {
-    // diag(1, 1e-6): norm 1 is inside every shipped format's safe range for
-    // both the QL solver's degree-2 gate and Jacobi's degree-1 gate (F16's
-    // narrowest is QL's `[0.177, 2.83]`); 1e-6 is representable (as a
-    // subnormal in F16/Bf16) without underflowing to zero.
+    // diag(1, 1e-6): norm 1 is inside every shipped format's range for both
+    // the QL solver's degree-2 gate and Jacobi's degree-1 gate (F16's
+    // narrowest is QL's `[0.25, 256)`); 1e-6 is representable (as a
+    // subnormal in F16) without underflowing to zero.
     let values = [1.0_f64, 0.0, 0.0, 1e-6];
     let (matrix, image) = round_into::<T>(&values, 2);
     let qr_eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
     let jacobi_eigen =
-        symmetric_eigen_jacobi_with_tolerance(&matrix.view(), machine_epsilon_of::<T>()).unwrap();
+        symmetric_eigen_jacobi_with_tolerance(&matrix.view(), T::from_f64(epsilon::<T>())).unwrap();
     let mut qr: Vec<f64> = qr_eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
     let mut jacobi: Vec<f64> = jacobi_eigen
         .eigenvalues

@@ -4,24 +4,31 @@
 //!
 //! # Tolerance derivation
 //!
-//! Householder tridiagonalization applies exactly `n − 2` reflectors (Golub &
-//! Van Loan, *Matrix Computations*, 4th ed., Algorithm 8.3.1); the implicit QL
-//! sweep applies one Givens rotation per active off-diagonal entry per sweep,
-//! bounded at `30·n` sweeps total by LAPACK `dsteqr` (`ql.rs`'s
-//! `SWEEPS_PER_EIGENVALUE`) but empirically cubically convergent — under two
-//! sweeps per deflated eigenvalue, `O(n)` rotations overall, matching the
-//! reflector count's order (the `30·n` figure bounds the *sweep budget*
-//! before declaring non-convergence, not the typical transformation count).
-//! Both stages together apply `O(n)` orthogonal transformations, each with
-//! backward error `O(n)·ε·‖A‖` (Higham, *Accuracy and Stability of Numerical
-//! Algorithms*, 2nd ed., §19, Lemma 19.3: `‖E‖_F ≤ γ̃_{cn}·‖A‖_F` for `r`
-//! transformations of `γ̃_n` each collapses to `‖E‖_F ≲ r·n·ε·‖A‖_F`), so the
-//! computed decomposition is exact for `A + E` with
-//! `‖E‖₂ ≤ ‖E‖_F ≤ n²·ε·‖A‖_F` at `r = n` — the constant is `1`, absorbed into
-//! the `O(n)` transformation count derived above rather than asserted bare,
-//! `ε` the machine epsilon of the scalar the solver runs in. Weyl's inequality
-//! turns that into
-//! `|λ̂ᵢ − λᵢ| ≤ n²·ε·‖A‖_F`; the residual `‖A v̂ − λ̂ v̂‖₂` obeys the same bound
+//! The computed decomposition is exact for `A + E`, and `‖E‖_F` composes the
+//! per-transformation backward errors of Higham, *Accuracy and Stability of
+//! Numerical Algorithms*, 2nd ed. (2002), over the transformations actually
+//! applied:
+//!
+//! - Householder tridiagonalization applies exactly `n − 2` reflectors (Golub
+//!   & Van Loan, *Matrix Computations*, 4th ed., Algorithm 8.3.1), each
+//!   committing `γ̃_n` per column (§19.3, Lemmas 19.2–19.3: `r` reflectors
+//!   commit `r·γ̃_m`, `γ̃_k = c·k·u/(1 − c·k·u)`, `c` a small integer constant
+//!   Higham leaves unspecified, `u = ε/2`).
+//! - The implicit QL chase applies, per sweep over an active block of order
+//!   `k`, `k − 1` Givens rotations, each committing `γ₆` (§19.6, Lemmas
+//!   19.7–19.8). The sweep count is bounded by LAPACK `dsteqr`'s `30·n` cap
+//!   (`ql.rs`'s `SWEEPS_PER_EIGENVALUE`; exhausting it is a typed error), so
+//!   the worst case is `(n − 2)·γ̃_n + 30n·(n − 1)·γ₆`.
+//!
+//! Observed, the Wilkinson-shifted chase deflates in under two sweeps per
+//! eigenvalue (cubic convergence, Golub & Van Loan §8.3), so `r ≈ n`
+//! transformations of order-`n` vectors are applied and the first-order total
+//! is `‖E‖_F ≤ n²·ε·‖A‖_F` at `c·u ≈ ε` — the bound asserted below, `ε` the
+//! machine epsilon of the scalar the solver runs in. Two assumptions carry
+//! it and are named rather than hidden: Higham's unspecified `c`, and the
+//! observed (not worst-case) sweep count; a run that needed the `30·n` cap
+//! would fail these assertions, which is the falsifiable form of the second.
+//! Weyl's inequality turns that into `|λ̂ᵢ − λᵢ| ≤ n²·ε·‖A‖_F`; the residual `‖A v̂ − λ̂ v̂‖₂` obeys the same bound
 //! and the accumulated eigenvectors are orthonormal to `n²·ε`. Where the
 //! reference spectrum belongs to the `f64` matrix before rounding it into `T`,
 //! the rounding adds `ε/2·‖A‖_F` (entrywise relative `ε/2`). Residuals and

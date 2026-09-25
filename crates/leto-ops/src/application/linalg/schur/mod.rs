@@ -41,6 +41,8 @@
 
 mod francis;
 mod standardize;
+#[cfg(test)]
+mod tests;
 
 use crate::application::linalg::scaling::{self, KernelWindow};
 use crate::domain::real::RealScalar;
