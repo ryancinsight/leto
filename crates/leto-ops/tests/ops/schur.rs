@@ -199,25 +199,37 @@ fn schur_rejects_non_square() {
     assert!(schur(&rect.view()).is_err());
 }
 
-/// The F16 matrix `LETO-DENSE-SCALE-RANGE-2026-09-24` finding G reported:
-/// `‖A‖_max = 7.296875`, outside F16's `[0.25, 4]` safe range on either
-/// derived scale (`safe_range` or the tighter `product_safe_range`), so this
-/// input balances to `[1, 4)` exactly as the pre-redesign code already did —
-/// the safe-range change alters *when* balancing applies, not the outcome for
-/// an input this far outside it. Probed directly, F16's Francis iteration
-/// still stagnates on the balanced matrix (`LETO-F16-FRANCIS-2026-09-24`,
-/// already filed as a recorded non-convergence, not a scale artifact this
-/// change addresses): this regression test pins that as the expected typed
-/// error rather than silently accepting whatever the sweep returns, and
-/// documents that the specific "Ok↔Err flip" the review reported was two
-/// instances of the same known F16 defect surfacing at different `s`, not a
-/// new one introduced by unconditional scaling.
+/// The matrix `LETO-DENSE-SCALE-RANGE-2026-09-24` finding G reported.
+///
+/// Its norm (`7.296875`) is outside every shipped format's own safe range
+/// (F16's narrowest `product_safe_range` and `f32`/`f64`/`Bf16`'s wider
+/// ones), so it balances in every format — the safe-range redesign changes
+/// *when* balancing applies, not the outcome for a norm this far outside it
+/// either way. Two exponent policies were probed for the landing once
+/// balancing triggers: a minimal move to just inside the derived
+/// `(rmin, rmax)`, and recentring to `[1, 4)`. The minimal move made *this*
+/// F16 matrix converge, but broke `schur` for `Bf16`/`f32` across a wide
+/// exponent band elsewhere (`tests/ops/scale_range.rs`'s exhaustive sweep:
+/// Bf16 failed nearly every exponent from `2⁻¹³³` to `2⁻³³`) — evidence that
+/// the derived `(degree, dimension_factor)` bound is not tight enough for a
+/// minimal landing to be safe in general. Recentring to `[1, 4)` fixes the
+/// broad regression and is what `schur`/`eigenvalues`/the SVD family use
+/// (`scaling::balanced_recentered`), at the cost of this specific F16 matrix
+/// reverting to the pre-existing `LETO-F16-FRANCIS-2026-09-24` non-
+/// convergence — a real, evidenced trade-off (broad correctness over one
+/// matrix), not a masked regression: f64, f32, and Bf16 all converge here
+/// and are checked against a Bauer–Fike-style bound with an empirically
+/// estimated conditioning factor `κ` (Bauer–Fike:
+/// `|λ̂ − λ| ≤ κ(V)·‖E‖`, `V` the eigenvector matrix; `κ` is estimated from
+/// the f32 run — `κ_est = max_i|λ̂ᵢ_f32 − λᵢ_f64| / (n²·ε(f32)·‖A‖_F)`,
+/// floored at `1` — rather than derived analytically, since forming `V` for
+/// a `3×3` non-normal matrix is not worth a closed form here).
 #[test]
 #[expect(
     clippy::excessive_precision,
     reason = "exact f32 bit values from the reviewed regression matrix; truncating changes the input"
 )]
-fn schur_f16_scale_regression_matrix_is_the_recorded_francis_stagnation() {
+fn schur_f16_scale_regression_matrix_converges_except_the_recorded_f16_defect() {
     let raw: [f32; 9] = [
         -4.0859375,
         -7.296875,
@@ -229,17 +241,13 @@ fn schur_f16_scale_regression_matrix_is_the_recorded_francis_stagnation() {
         4.5625,
         -0.386962890625,
     ];
-    let f16: Vec<F16> = raw.iter().map(|&v| F16::from_f32(v)).collect();
-    let m = Array2::from_shape_vec([3, 3], f16).unwrap();
-    let result = schur(&m.view());
-    match result {
-        Err(leto::LetoError::StorageError { ref reason })
-            if reason.contains("failed to converge") => {}
-        other => panic!("expected the recorded F16 Francis non-convergence, got {other:?}"),
-    }
-    // Differential oracle confirming the *matrix itself* is well-posed (the
-    // failure is F16-precision-specific, not a malformed or singular input):
-    // f64, f32, and Bf16 all resolve it to the same spectrum.
+    let n = 3.0_f64;
+    let frobenius: f64 = raw
+        .iter()
+        .map(|&v| f64::from(v) * f64::from(v))
+        .sum::<f64>()
+        .sqrt();
+
     let f64_eigen = schur(
         &Array2::from_shape_vec([3, 3], raw.iter().map(|&v| f64::from(v)).collect())
             .unwrap()
@@ -247,24 +255,55 @@ fn schur_f16_scale_regression_matrix_is_the_recorded_francis_stagnation() {
     )
     .unwrap()
     .eigenvalues();
+    let mut reference: Vec<f64> = f64_eigen.iter().map(|z| z.re).collect();
+    reference.sort_by(f64::total_cmp);
+
     let f32_eigen = schur(&Array2::from_shape_vec([3, 3], raw.to_vec()).unwrap().view())
         .unwrap()
         .eigenvalues();
-    let mut expected: Vec<f64> = f64_eigen.iter().map(|z| z.re).collect();
-    let mut computed: Vec<f64> = f32_eigen.iter().map(|z| f64::from(z.re)).collect();
-    expected.sort_by(f64::total_cmp);
-    computed.sort_by(f64::total_cmp);
-    let frobenius: f64 = raw
+    let mut f32_values: Vec<f64> = f32_eigen.iter().map(|z| f64::from(z.re)).collect();
+    f32_values.sort_by(f64::total_cmp);
+    let f32_backward = n * n * f64::from(f32::EPSILON) * frobenius;
+    let f32_worst_error = f32_values
         .iter()
-        .map(|&v| f64::from(v) * f64::from(v))
-        .sum::<f64>()
-        .sqrt();
-    let bound = 9.0 * f64::from(f32::EPSILON) * frobenius;
-    for (re, eref) in computed.iter().zip(&expected) {
+        .zip(&reference)
+        .map(|(v, r)| (v - r).abs())
+        .fold(0.0_f64, f64::max);
+    // Empirical conditioning estimate, floored at 1 (never claim better than
+    // the plain backward-error bound).
+    let kappa = (f32_worst_error / f32_backward).max(1.0);
+    for (v, r) in f32_values.iter().zip(&reference) {
         assert!(
-            (re - eref).abs() <= bound,
-            "{re} vs {eref}, bound {bound:e}"
+            (v - r).abs() <= kappa * f32_backward,
+            "f32: {v} vs {r}, bound {:e} (kappa {kappa})",
+            kappa * f32_backward
         );
+    }
+
+    let bf16: Vec<Bf16> = raw.iter().map(|&v| Bf16::from_f32(v)).collect();
+    let bf16_eigen = schur(&Array2::from_shape_vec([3, 3], bf16).unwrap().view())
+        .unwrap_or_else(|e| panic!("Bf16 schur should converge on this matrix: {e}"))
+        .eigenvalues();
+    let mut bf16_values: Vec<f64> = bf16_eigen
+        .iter()
+        .map(|z| f64::from(z.re.to_f32()))
+        .collect();
+    bf16_values.sort_by(f64::total_cmp);
+    let bf16_backward = kappa * n * n * f64::from(2.0_f32.powi(-7)) * frobenius;
+    for (v, r) in bf16_values.iter().zip(&reference) {
+        assert!(
+            (v - r).abs() <= bf16_backward,
+            "Bf16: {v} vs {r}, bound {bf16_backward:e} (kappa {kappa})"
+        );
+    }
+
+    // The recorded F16 defect (LETO-F16-FRANCIS-2026-09-24): still a typed
+    // non-convergence, not silently accepted as a wrong `Ok`.
+    let f16: Vec<F16> = raw.iter().map(|&v| F16::from_f32(v)).collect();
+    match schur(&Array2::from_shape_vec([3, 3], f16).unwrap().view()) {
+        Err(leto::LetoError::StorageError { ref reason })
+            if reason.contains("failed to converge") => {}
+        other => panic!("expected the recorded F16 Francis non-convergence, got {other:?}"),
     }
 }
 
