@@ -8,10 +8,26 @@
 //! Work in units of `s`. Let `Â = image / s` be what `T` actually holds
 //! (exact in `f64`), `δ = ‖Â − A‖_F` the input rounding (zero wherever `s·A`
 //! is representable; nonzero only in the subnormal binades), and `n²·ε(T)·‖Â‖_F`
-//! the factorization's backward error (Higham 2002, Lemma 19.3: `O(n)`
-//! orthogonal transformations of `γ̃_n` each). Restoring a result by `s` rounds
-//! it once onto `T`'s grid; in the subnormal binades that costs at most half
-//! the subnormal spacing, `0.5·2^(MIN−e)·ε` in units of `s`.
+//! the factorization's backward error. This is not a direct reading of Higham
+//! 2002 Lemma 19.3, which bounds a *fixed* sequence of `r` orthogonal
+//! transformations by `γ̃_{cr}·‖A‖_F` — Francis double-shift QR (`schur`,
+//! `eigenvalues`) and Golub–Kahan bidiagonal QR (the SVD family) are
+//! *iterative*, applying an a priori unbounded number of Givens rotations
+//! until deflation. The bound instead follows the same reasoning as the
+//! symmetric tridiagonal QL's derivation (`tests/ops/symmetric_qr.rs`): each
+//! algorithm's own sweep budget is `O(n)` sweeps (`schur::francis::MAX_ITER`,
+//! `bidiagonal_qr`'s iteration cap; both LAPACK-derived safety bounds, not the
+//! typical count), each sweep applying `O(n)` rotations in the worst case but
+//! empirically far fewer as blocks deflate — Wilkinson-shift QR converges
+//! cubically once within a shift's basin (Golub & Van Loan §8.3, §8.6),
+//! giving `O(n)` total rotations in practice, matching the `r = n` Lemma 19.3
+//! is applied at. A sweep that instead exhausts its budget returns a typed
+//! `StorageError`/`ConvergenceError`, never a value this bound is asked to
+//! cover — the empirical-count assumption is falsifiable by exactly the
+//! failure this sweep test treats as acceptable (`francis_may_fail`).
+//! Restoring a result by `s` rounds it once onto `T`'s grid; in the subnormal
+//! binades that costs at most half the subnormal spacing,
+//! `0.5·2^(MIN−e)·ε` in units of `s`.
 //!
 //! - Singular values (Weyl): `|σ̂ − σ| ≤ δ + n²ε‖Â‖_F + 0.5·2^(MIN−e)·ε`.
 //! - Eigenvalues of `A = S·diag(1, 2, 4)·S⁻¹` (Bauer–Fike):
@@ -139,11 +155,20 @@ fn sorted_unit<T: Format>(values: &[leto::Complex<T>], exponent: i32) -> Vec<(f6
     parts
 }
 
-/// A recorded failure: F16's Francis iteration stagnates on nonsymmetric input
-/// at every scale (`LETO-F16-FRANCIS-2026-09-24`), so a typed
-/// non-convergence is accepted there and nowhere else.
-fn francis_may_fail<T: Format>() -> bool {
-    T::PRECISION == 11
+/// A recorded failure: F16's Francis iteration stagnates on the nonsymmetric
+/// `SIMILAR` input at every scale, unit included — confirmed still present
+/// after the safe-range redesign (probed directly: `eigenvalues`/`schur` of
+/// `SIMILAR` at `2⁻²⁴`, comfortably inside F16's own safe range, still
+/// returns "Schur QR iteration failed to converge"), so it is F16's 11-bit
+/// precision degrading the double-shift formula, not a scale artifact this
+/// change addresses (`LETO-F16-FRANCIS-2026-09-24`). `StorageError` also
+/// carries non-finite-input failures (`schur`/`svd` reject NaN/∞ the same
+/// way), so the match additionally checks the reason string names
+/// non-convergence specifically — accepting only the recorded failure mode,
+/// never masking a genuine non-finite-input regression this sweep would
+/// otherwise catch.
+fn francis_may_fail<T: Format>(reason: &str) -> bool {
+    T::PRECISION == 11 && reason.contains("failed to converge")
 }
 
 fn check_eigenvalues<T: Format>() {
@@ -167,7 +192,7 @@ fn check_eigenvalues<T: Format>() {
                         );
                     }
                 }
-                Err(LetoError::StorageError { .. }) if francis_may_fail::<T>() => {}
+                Err(LetoError::StorageError { ref reason }) if francis_may_fail::<T>(reason) => {}
                 Err(error) => panic!("2^{exponent}: {error}"),
             }
         }
