@@ -31,9 +31,16 @@
 //! within each operation (`γ` absorbs the products by Lemma 3.3) and exact
 //! in their composition.
 //!
-//! These are worst-case bounds at the iteration caps, so they are loose
-//! (and, for 8- and 11-bit formats at the caps, can exceed `1`); the
-//! measured errors are reported separately and never asserted.
+//! These are *a-priori* worst-case bounds at the iteration caps. A relative
+//! backward error of `1` admits every output of the right norm, so a bound
+//! at or above `1` says nothing: callers assert one only through
+//! [`informative`]. At the caps it is vacuous for the iterative routines
+//! (SVD, Francis, QL) in `F16` and `Bf16` — one length-3 reflector alone
+//! costs `γ₅₃ ≈ 0.026` in `F16`, `0.21` in `Bf16` — for pivoted QR in
+//! `Bf16`, and in `f32` for Francis at `n = 8` (`η ≈ 1.03`) and the Schur
+//! residual ([`schur_factors`]) from `n = 5`. Those cases are covered by the *a-posteriori*
+//! certificates of `a_posteriori.rs`, which bound the returned values by the
+//! residuals of the returned factors, measured.
 
 /// Higham's `γ_k = k·u/(1 − k·u)`, `u = ε/2`; `+∞` once `k·u ≥ 1`.
 pub fn gamma(k: f64, eps: f64) -> f64 {
@@ -43,6 +50,12 @@ pub fn gamma(k: f64, eps: f64) -> f64 {
     } else {
         ku / (1.0 - ku)
     }
+}
+
+/// `Some(η)` when the a-priori bound `η` is informative (`η < 1`), `None`
+/// when it is vacuous and must not be asserted.
+pub fn informative(eta: f64) -> Option<f64> {
+    (eta < 1.0).then_some(eta)
 }
 
 /// `(1 + η)^count − 1`: `count` applications of a relative bound `η`.
@@ -312,4 +325,45 @@ pub fn francis_vectors(n: usize, eps: f64) -> f64 {
         ),
         repeat(rotation(30, eps), (nf / 2.0).floor()),
     ])
+}
+
+/// The residual of the returned Schur factors, `‖Â − Q̂·T̂·Q̂ᵀ‖_F ≤
+/// η_R·‖Â‖_F`, and their orthogonality, `‖Q̂ᵀQ̂ − I‖_F ≤ η_O`, a priori.
+///
+/// *Derivation.* `Â + E = Q̃·T̂·Q̃ᵀ` with `‖E‖_F ≤ η‖Â‖_F` ([`francis`]) and
+/// `Q̂ = Q̃ + D`, `‖D‖_F ≤ d = √n·η_Q` ([`francis_vectors`], per row). Then
+/// `Q̂ᵀQ̂ − I = Q̃ᵀD + DᵀQ̃ + DᵀD` gives `η_O = 2d + d²`, and
+/// `Â − Q̂T̂Q̂ᵀ = −E − (DT̂Q̃ᵀ + Q̃T̂Dᵀ + DT̂Dᵀ)` with
+/// `‖T̂‖_F ≤ (1 + η)‖Â‖_F` gives `η_R = η + (2d + d²)(1 + η)`.
+pub fn schur_factors(n: usize, eps: f64) -> (f64, f64) {
+    let eta = francis(n, eps);
+    let d = (n as f64).sqrt() * francis_vectors(n, eps);
+    let orthogonality = 2.0 * d + d * d;
+    (eta + orthogonality * (1.0 + eta), orthogonality)
+}
+
+/// Per-row error of the accumulated singular vectors `Û` (or `V̂`) against the
+/// exactly orthogonal factors of [`svd`]: the bidiagonalization's reflectors
+/// (at most `k` per side, length `≤ M`) and every QR rotation (`givens`,
+/// `θ₅`), counted for both sides at [`svd`]'s totals.
+pub fn svd_vectors(rows: usize, cols: usize, eps: f64) -> f64 {
+    let (big, small) = (rows.max(cols), rows.min(cols));
+    let k = small as f64;
+    let rotations = (SVD_ITERATION_CAP as f64) * 2.0 * (k - 1.0) + (k - 1.0) * (k - 1.0);
+    compose(&[
+        repeat(householder(big, eps), k),
+        repeat(rotation(5, eps), rotations),
+    ])
+}
+
+/// The residual of the returned SVD factors, `‖Â − Û·Σ̂·V̂ᵀ‖_F ≤ η_R·‖Â‖_F`,
+/// and the orthogonality of each, `‖Ûᵀ Û − I‖_F ≤ η_O` (likewise `V̂`), a
+/// priori. As [`schur_factors`], with `‖D_U‖_F, ‖D_V‖_F ≤ d = √M·η_U`
+/// ([`svd_vectors`]): `ÛΣ̂V̂ᵀ − ŨΣ̂Ṽᵀ = D_UΣ̂Ṽᵀ + ŨΣ̂D_Vᵀ + D_UΣ̂D_Vᵀ`, so
+/// `η_R = η + (2d + d²)(1 + η)` and `η_O = 2d + d²`.
+pub fn svd_factors(rows: usize, cols: usize, eps: f64) -> (f64, f64) {
+    let eta = svd(rows, cols, eps);
+    let d = (rows.max(cols) as f64).sqrt() * svd_vectors(rows, cols, eps);
+    let orthogonality = 2.0 * d + d * d;
+    (eta + orthogonality * (1.0 + eta), orthogonality)
 }

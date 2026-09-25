@@ -5,9 +5,9 @@
 //! near the 500-line target; shares that module's helpers.
 
 use super::super::format::{epsilon, Format};
-use super::{assert_spectrum, backward_bound, round_into, with_spectrum};
+use super::{assert_spectrum, backward_bound, certified, round_into, with_spectrum};
 use eunomia::{Bf16, F16};
-use leto::{Array2, LetoError};
+use leto::{Array2, LetoError, Storage};
 use leto_ops::{
     symmetric_eigen_jacobi_with_tolerance, symmetric_eigen_qr, RealScalar, SymmetricEigenWorkspace,
 };
@@ -26,9 +26,10 @@ fn check_dynamic_range<T: RealScalar>() {
 fn check_scale_sweep<T: Format>() {
     let base = [2.0, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0];
     let n = 3;
-    // Relative bound: the backward bound of the unscaled matrix over ‖A‖_F
-    // scales with s exactly; entries 2s and s are exact in every format.
-    let relative = backward_bound::<T>(&base, n);
+    // Relative bounds, in units of s: the a-posteriori radius of the returned
+    // pairs on `base` (the entries 2s and s are exact in every format), and
+    // the a-priori backward bound of the unscaled matrix where informative.
+    let a_priori = backward_bound::<T>(&base, n);
     // From seven binades into the subnormals (Bf16 has seven below its
     // smallest normal, the fewest of the four) to the largest scale whose
     // entries 2s stay finite; 4s then overflows at the top, which must be a
@@ -44,6 +45,21 @@ fn check_scale_sweep<T: Format>() {
         match symmetric_eigen_qr(&matrix.view()) {
             Ok(eigen) => {
                 let s = scale.to_f64();
+                let unit = leto_ops::SymmetricEigenDecomposition {
+                    eigenvalues: eigen.eigenvalues.iter().map(|v| v.to_f64() / s).collect(),
+                    eigenvectors: Array2::from_shape_vec(
+                        [n, n],
+                        eigen
+                            .eigenvectors
+                            .storage()
+                            .as_slice()
+                            .iter()
+                            .map(|v| v.to_f64())
+                            .collect(),
+                    )
+                    .unwrap(),
+                };
+                let radius = certified(&base, &unit);
                 for (value, expected) in eigen.eigenvalues.iter().zip([1.0, 1.0, 4.0]) {
                     let error = (value.to_f64() / s - expected).abs();
                     // The entries are powers of two and exact even when
@@ -56,11 +72,13 @@ fn check_scale_sweep<T: Format>() {
                     } else {
                         0.0
                     };
-                    assert!(
-                        error <= relative + lost,
-                        "2^{exponent}: {:e} vs {expected}·s",
-                        value.to_f64()
-                    );
+                    for relative in [Some(radius), a_priori].into_iter().flatten() {
+                        assert!(
+                            error <= relative + lost,
+                            "2^{exponent}: {:e} vs {expected}·s",
+                            value.to_f64()
+                        );
+                    }
                 }
             }
             Err(error) => {
@@ -113,12 +131,19 @@ fn check_far_out_of_range_entry_loss_stays_within_bound<T: RealScalar>(large: f6
     expected.sort_by(f64::total_cmp);
     let mut computed: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
     computed.sort_by(f64::total_cmp);
-    let bound = backward_bound::<T>(&image, 2);
-    for (value, expected) in computed.iter().zip(&expected) {
-        assert!(
-            (value - expected).abs() <= bound,
-            "large={large} small={small}: {value} vs {expected}, bound {bound:e}"
-        );
+    for bound in [
+        Some(certified(&image, &eigen)),
+        backward_bound::<T>(&image, 2),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        for (value, expected) in computed.iter().zip(&expected) {
+            assert!(
+                (value - expected).abs() <= bound,
+                "large={large} small={small}: {value} vs {expected}, bound {bound:e}"
+            );
+        }
     }
 }
 

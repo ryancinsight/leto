@@ -21,23 +21,28 @@
 //!
 //! Where the reference spectrum belongs to the `f64` matrix before rounding
 //! it into `T`, the rounding adds `ε/2·‖A‖_F` (entrywise relative `ε/2`).
-//! The Jacobi reference is certified a posteriori from its own eigenbasis
-//! ([`symmetric_certificate`](super::backward_error::symmetric_certificate)).
-//! The bounds are worst cases at the cap; the errors actually measured are
-//! far smaller and are not asserted.
+//!
+//! These a-priori bounds are worst cases at the cap and are asserted only
+//! where informative (`η < 1`, [`informative`](super::backward_error::informative));
+//! they are vacuous for `F16` and `Bf16`. Every format's eigenvalues are also
+//! checked a posteriori: the returned eigenpairs certify, through the
+//! measured residual and orthogonality
+//! ([`symmetric_certificate`](super::backward_error::symmetric_certificate)),
+//! that each `λ̂ᵢ` is within a computed radius of `λᵢ(Â)`; the Jacobi
+//! reference is certified the same way.
 
 #![expect(
     clippy::unwrap_used,
     reason = "test scope: failed precondition = test failure"
 )]
 
-use super::backward_error::{gamma, ql, ql_vectors, symmetric_certificate};
+use super::backward_error::{gamma, informative, ql, ql_vectors, symmetric_certificate};
 use super::format::epsilon;
 use eunomia::{Bf16, F16};
 use leto::{Array2, LetoError, SliceArg, Storage};
 use leto_ops::{
-    symmetric_eigen_jacobi_with_tolerance, symmetric_eigen_qr, RealScalar, SymmetricEigenWorkspace,
-    Xorshift64,
+    symmetric_eigen_jacobi_with_tolerance, symmetric_eigen_qr, RealScalar,
+    SymmetricEigenDecomposition, SymmetricEigenWorkspace, Xorshift64,
 };
 
 mod scale;
@@ -114,64 +119,107 @@ fn frobenius(values: &[f64]) -> f64 {
             .sqrt()
 }
 
-/// `η·‖A‖_F`, the derived eigenvalue bound (module documentation).
-pub(super) fn backward_bound<T: RealScalar>(values: &[f64], n: usize) -> f64 {
-    ql(n, epsilon::<T>()) * frobenius(values)
+/// `η·‖A‖_F`, the derived a-priori eigenvalue bound (module
+/// documentation), where informative.
+pub(super) fn backward_bound<T: RealScalar>(values: &[f64], n: usize) -> Option<f64> {
+    informative(ql(n, epsilon::<T>())).map(|eta| eta * frobenius(values))
 }
 
-/// Decompose `values` in `T` and assert every eigenpair's residual and the
-/// eigenvectors' orthonormality against the derived bounds; returns the
-/// eigenvalues as `f64`.
-fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) -> Vec<f64> {
+/// The a-posteriori radius of a returned decomposition of the order-`n`
+/// matrix whose image is `image`: every eigenvalue within it of the matching
+/// (ascending) eigenvalue of `image` ([`symmetric_certificate`] on the
+/// returned eigenvectors).
+pub(super) fn certified<T: RealScalar>(
+    image: &[f64],
+    eigen: &SymmetricEigenDecomposition<T>,
+) -> f64 {
+    let n = eigen.eigenvalues.len();
+    let values: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
+    let basis: Vec<f64> = eigen
+        .eigenvectors
+        .storage()
+        .as_slice()
+        .iter()
+        .map(|v| v.to_f64())
+        .collect();
+    symmetric_certificate(image, &values, &basis, n)
+}
+
+/// Decompose `values` in `T`; assert every eigenpair's residual and the
+/// eigenvectors' orthonormality against the derived bounds where they are
+/// informative; return the eigenvalues as `f64` with their a-posteriori
+/// radius: each within it of the matching (ascending) eigenvalue of the
+/// image `Â` ([`symmetric_certificate`], measured on the returned pairs).
+fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) -> (Vec<f64>, f64) {
     let (matrix, image) = round_into::<T>(values, n);
     let mut workspace = SymmetricEigenWorkspace::new();
     workspace.decompose(&matrix.view()).unwrap();
     let eps = epsilon::<T>();
     let (eta, eta_q) = (ql(n, eps), ql_vectors(n, eps));
-    let bound = (eta + 2.0 * eta_q * (1.0 + eta) + 2.0 * gamma(n as f64 + 2.0, f64::EPSILON))
-        * frobenius(&image);
     let vectors: Vec<Vec<f64>> = workspace
         .eigenvectors()
         .map(|v| v.iter().map(|x| x.to_f64()).collect())
         .collect();
     let lambdas: Vec<f64> = workspace.eigenvalues().iter().map(|x| x.to_f64()).collect();
     assert_eq!(vectors.len(), n);
-    for (&lambda, v) in lambdas.iter().zip(&vectors) {
-        let residual = (0..n)
-            .map(|i| {
-                let av: f64 = (0..n).map(|j| image[i * n + j] * v[j]).sum();
-                (av - lambda * v[i]).powi(2)
-            })
-            .sum::<f64>()
-            .sqrt();
-        assert!(residual <= bound, "residual {residual:e} exceeds {bound:e}");
-    }
-    let orthogonality = 2.0 * eta_q + eta_q * eta_q + gamma(n as f64, f64::EPSILON);
-    for (a, u) in vectors.iter().enumerate() {
-        for (b, w) in vectors.iter().enumerate() {
-            let dot: f64 = u.iter().zip(w).map(|(x, y)| x * y).sum();
-            let expected = if a == b { 1.0 } else { 0.0 };
-            assert!(
-                (dot - expected).abs() <= orthogonality,
-                "v{a}·v{b} = {dot}, expected {expected}"
-            );
+    assert!(lambdas.windows(2).all(|pair| pair[0] <= pair[1]));
+    let mut basis = vec![0.0; n * n];
+    for (j, v) in vectors.iter().enumerate() {
+        for (i, x) in v.iter().enumerate() {
+            basis[i * n + j] = *x;
         }
     }
-    assert!(lambdas.windows(2).all(|pair| pair[0] <= pair[1]));
-    lambdas
+    let radius = symmetric_certificate(&image, &lambdas, &basis, n);
+    if let Some(eta) = informative(eta + 2.0 * eta_q * (1.0 + eta)) {
+        let bound = (eta + 2.0 * gamma(n as f64 + 2.0, f64::EPSILON)) * frobenius(&image);
+        for (&lambda, v) in lambdas.iter().zip(&vectors) {
+            let residual = (0..n)
+                .map(|i| {
+                    let av: f64 = (0..n).map(|j| image[i * n + j] * v[j]).sum();
+                    (av - lambda * v[i]).powi(2)
+                })
+                .sum::<f64>()
+                .sqrt();
+            assert!(residual <= bound, "residual {residual:e} exceeds {bound:e}");
+        }
+    }
+    if let Some(eta_o) = informative(2.0 * eta_q + eta_q * eta_q) {
+        let orthogonality = eta_o + gamma(n as f64, f64::EPSILON);
+        for (a, u) in vectors.iter().enumerate() {
+            for (b, w) in vectors.iter().enumerate() {
+                let dot: f64 = u.iter().zip(w).map(|(x, y)| x * y).sum();
+                let expected = if a == b { 1.0 } else { 0.0 };
+                assert!(
+                    (dot - expected).abs() <= orthogonality,
+                    "v{a}·v{b} = {dot}, expected {expected}"
+                );
+            }
+        }
+    }
+    (lambdas, radius)
 }
 
-/// Every computed eigenvalue matches `spectrum` (ascending) within the
-/// backward bound plus the rounding of the `f64` matrix into `T`.
+/// Every computed eigenvalue matches `spectrum` (ascending) within its
+/// a-posteriori radius, and within the a-priori backward bound where that is
+/// informative, plus the rounding of the `f64` matrix into `T`.
 pub(super) fn assert_spectrum<T: RealScalar>(values: &[f64], spectrum: &[f64]) {
     let n = spectrum.len();
-    let computed = assert_backward_stable::<T>(values, n);
-    let bound = backward_bound::<T>(values, n) + epsilon::<T>() / 2.0 * frobenius(values);
+    let (computed, radius) = assert_backward_stable::<T>(values, n);
+    let rounding = epsilon::<T>() / 2.0 * frobenius(values);
+    let a_priori = informative(ql(n, epsilon::<T>())).map(|eta| eta * frobenius(values));
     for (value, expected) in computed.iter().zip(spectrum) {
         assert!(
-            (value - expected).abs() <= bound,
-            "{value} vs {expected}, bound {bound:e}"
+            (value - expected).abs() <= radius + rounding,
+            "{value} vs {expected}, certified {:e}",
+            radius + rounding
         );
+        if let Some(bound) = a_priori {
+            assert!(
+                (value - expected).abs() <= bound + rounding,
+                "{value} vs {expected}, bound {:e}",
+                bound + rounding
+            );
+        }
     }
 }
 
@@ -228,12 +276,18 @@ fn check_matches_closed_forms<T: RealScalar>() {
     let eigen = symmetric_eigen_qr(&pair.view()).unwrap();
     // The derived eigenvalue bound for n = 2 (module documentation), on the
     // exact image `T` holds.
-    let bound = backward_bound::<T>(&image, 2);
+    // The a-posteriori radius, and the a-priori bound where informative.
+    let bounds = [
+        Some(certified(&image, &eigen)),
+        backward_bound::<T>(&image, 2),
+    ];
     // Each eigenvector is within η_Q of the exact one, ±(1, 1)/√2 here.
     let orthogonality = ql_vectors(2, epsilon::<T>());
     let values: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
-    assert!((values[0] - 1.0).abs() <= bound, "{}", values[0]);
-    assert!((values[1] - 3.0).abs() <= bound, "{}", values[1]);
+    for bound in bounds.into_iter().flatten() {
+        assert!((values[0] - 1.0).abs() <= bound, "{}", values[0]);
+        assert!((values[1] - 3.0).abs() <= bound, "{}", values[1]);
+    }
     // Eigenvectors as columns: column 1 is ±(1, 1)/√2.
     let columns: Vec<f64> = eigen
         .eigenvectors
@@ -279,13 +333,12 @@ fn symmetric_eigen_qr_agrees_with_jacobi_within_backward_error() {
     let tolerance = 1.0e-12;
     for (n, seed) in [(3, 7_u64), (17, 11), (60, 13)] {
         let values = random_symmetric(n, seed);
-        let computed = assert_backward_stable::<f64>(&values, n);
+        let (computed, radius) = assert_backward_stable::<f64>(&values, n);
         let matrix = Array2::from_shape_vec([n, n], values.clone()).unwrap();
         let reference = symmetric_eigen_jacobi_with_tolerance(&matrix.view(), tolerance).unwrap();
         // The Jacobi reference is certified from its own eigenbasis.
         let basis = reference.eigenvectors.storage().as_slice();
-        let bound = backward_bound::<f64>(&values, n)
-            + symmetric_certificate(&values, &reference.eigenvalues, basis, n);
+        let bound = radius + symmetric_certificate(&values, &reference.eigenvalues, basis, n);
         for (qr, jacobi) in computed.iter().zip(&reference.eigenvalues) {
             assert!(
                 (qr - jacobi).abs() <= bound,
@@ -300,8 +353,7 @@ fn check_resolves_rank_deficient_gram_matrices<T: RealScalar>() {
     // geometry of a noise-free MP-PCA window.
     let (rank, n) = (10, 60);
     let gram = random_gram(rank, n, 29);
-    let computed = assert_backward_stable::<T>(&gram, n);
-    let bound = backward_bound::<T>(&gram, n);
+    let (computed, bound) = assert_backward_stable::<T>(&gram, n);
     for &value in &computed[..n - rank] {
         assert!(
             value.abs() <= bound,
@@ -379,12 +431,18 @@ fn check_reads_only_the_lower_triangle_of_strided_views<T: RealScalar>() {
         ])
         .unwrap();
     let eigen = symmetric_eigen_qr(&view).unwrap();
-    // n²·ε(T)·‖A‖_F (`backward_bound`), n = 2, on the read [[4,1],[1,4]] block.
+    // On the read [[4,1],[1,4]] block: the a-posteriori radius, and the
+    // a-priori bound where informative.
     let block = [4.0_f64, 1.0, 1.0, 4.0];
-    let bound = backward_bound::<T>(&block, 2);
+    let bounds = [
+        Some(certified(&block, &eigen)),
+        backward_bound::<T>(&block, 2),
+    ];
     let values: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
-    assert!((values[0] - 3.0).abs() <= bound, "{}", values[0]);
-    assert!((values[1] - 5.0).abs() <= bound, "{}", values[1]);
+    for bound in bounds.into_iter().flatten() {
+        assert!((values[0] - 3.0).abs() <= bound, "{}", values[0]);
+        assert!((values[1] - 5.0).abs() <= bound, "{}", values[1]);
+    }
 }
 
 #[test]

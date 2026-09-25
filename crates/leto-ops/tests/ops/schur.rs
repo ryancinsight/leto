@@ -5,12 +5,29 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use super::backward_error;
+use super::a_posteriori::{self, BlockEigenvalue};
+use super::backward_error::{self, informative};
 use super::format::epsilon;
 use super::spectral_condition::bauer_fike_factor;
 use eunomia::{Bf16, F16};
 use leto::{Array2, Storage};
 use leto_ops::{schur, MatrixDecompose, RealScalar, Xorshift64};
+
+/// The eigenvalues of the returned `T̂` (`f64`, with their evaluation
+/// error) and the a-posteriori radius `‖E‖₂` of `schur`'s factors of the
+/// image `a` (`a_posteriori.rs`): each is an eigenvalue of `a − E`.
+fn certified_blocks<T: RealScalar>(
+    a: &[f64],
+    decomposition: &leto_ops::RealSchur<T>,
+) -> (Vec<BlockEigenvalue>, f64) {
+    let n = decomposition.q().shape()[0];
+    let as_f64 =
+        |m: Array2<T>| -> Vec<f64> { m.storage().as_slice().iter().map(|v| v.to_f64()).collect() };
+    let (q, t) = (as_f64(decomposition.q()), as_f64(decomposition.t()));
+    let residual = a_posteriori::residual(a, &q, &t, &q, n, n, n);
+    let radius = a_posteriori::schur_certificate(residual, a_posteriori::gram_defect(&q, n, n), &t);
+    (a_posteriori::quasi_triangular_eigenvalues(&t, n), radius)
+}
 
 fn mat(n: usize, data: Vec<f64>) -> Array2<f64> {
     Array2::from_shape_vec([n, n], data).unwrap()
@@ -205,13 +222,16 @@ fn schur_rejects_non_square() {
 /// The matrix `LETO-DENSE-SCALE-RANGE-2026-09-24` finding G reported (exact
 /// in F16; `Bf16` rounds it). It stalled the unscaled Francis step in F16
 /// before the kernels formed their products scale-safely; it now converges
-/// in every format, checked against the Bauer–Fike bound
-/// `|λ̂ − λ| ≤ κ·(δ + η·‖Â‖_F) + ρ + ε(T)·|λ|`: `κ ≥ κ₂(V)` from the
+/// in every format, checked against Bauer–Fike: `κ ≥ κ₂(V)` from the
 /// matrix's own left and right eigenvectors in `f64`, computed independently
 /// of `schur` (`spectral_condition`); `δ = ‖Â − A‖_F` the rounding of the
-/// input into `T`; `η·‖Â‖_F` the derived Francis backward error
-/// (`backward_error::francis`); `ρ = κ·η(ε₆₄)·‖A‖_F` the `f64` reference's own error;
-/// and `ε(T)·|λ|` the rounding of each eigenvalue onto `T`'s grid.
+/// input into `T`; `ρ = κ·η(ε₆₄)·‖A‖_F` the `f64` reference's own error.
+/// A posteriori, every format: each eigenvalue of the returned `T̂` is one of
+/// `A + (Â − A) − E`, `‖E‖₂` certified from the returned factors
+/// ([`certified_blocks`]), so within `κ·(δ + ‖E‖₂) + ρ` of the spectrum. A
+/// priori where informative (`f64`, `f32`): the returned eigenvalues within
+/// `κ·(δ + η·‖Â‖_F) + ρ + ε(T)·|λ|`, `η` the derived Francis backward error
+/// (`backward_error::francis`).
 #[test]
 #[expect(
     clippy::excessive_precision,
@@ -260,6 +280,23 @@ fn schur_scale_regression_matrix_converges_in_every_format() {
         let norm = image.iter().map(|v| v * v).sum::<f64>().sqrt();
         let result = schur(&Array2::from_shape_vec([3, 3], narrowed).unwrap().view())
             .unwrap_or_else(|error| panic!("schur must converge: {error}"));
+        // A posteriori: each eigenvalue of T̂ is one of A + (Â − A) − E.
+        let (blocks, radius) = certified_blocks(&image, &result);
+        for BlockEigenvalue { re, im, error } in blocks {
+            let nearest = eigenvalues
+                .iter()
+                .map(|e| (re - e).hypot(im))
+                .fold(f64::INFINITY, f64::min);
+            let certified = kappa * (delta + radius) + rho + error;
+            assert!(
+                nearest <= certified,
+                "λ(T̂) {re}+{im}i is {nearest:e} from the spectrum, certified {certified:e}"
+            );
+        }
+        // A priori, where informative.
+        let Some(eta) = informative(backward_error::francis(3, eps)) else {
+            return;
+        };
         let mut computed: Vec<(f64, f64)> = result
             .eigenvalues()
             .iter()
@@ -267,9 +304,7 @@ fn schur_scale_regression_matrix_converges_in_every_format() {
             .collect();
         computed.sort_by(|a, b| a.0.total_cmp(&b.0));
         for ((re, im), expected) in computed.into_iter().zip(eigenvalues) {
-            let bound = kappa * (delta + backward_error::francis(3, eps) * norm)
-                + rho
-                + eps * expected.abs();
+            let bound = kappa * (delta + eta * norm) + rho + eps * expected.abs();
             assert!(
                 (re - expected).abs() <= bound && im.abs() <= bound,
                 "{re}+{im}i vs {expected}, bound {bound:e} (κ {kappa})"
@@ -284,12 +319,14 @@ fn schur_scale_regression_matrix_converges_in_every_format() {
 
 /// Small seeded sweep of random nonsymmetric 3×3 matrices, entries in
 /// `[-4, 4]`, differentially checked against the `f64` computation on the
-/// same values. By Bauer–Fike each computed spectrum is within
-/// `κ·η·‖Â‖_F` of the exact spectrum of `Â`, `κ ≥ κ₂(V)` computed from
-/// `Â`'s own left and right eigenvectors in `f64` (`spectral_condition`,
-/// complex eigenvalues included) and `η` the derived Francis backward error
-/// (`backward_error::francis`); the two computations are therefore within
-/// `κ·(η(ε(T)) + η(ε₆₄))·‖Â‖_F` of each other.
+/// same values, `κ ≥ κ₂(V)` computed from `Â`'s own left and right
+/// eigenvectors in `f64` (`spectral_condition`, complex eigenvalues
+/// included), the `f64` reference within `κ·η(ε₆₄)·‖Â‖_F` of the spectrum
+/// of `Â` (`backward_error::francis`, informative in `f64`). A posteriori,
+/// every format: each eigenvalue of the returned `T̂` within `κ·‖E‖₂` of that
+/// spectrum, `‖E‖₂` certified from the returned factors
+/// ([`certified_blocks`]). A priori where informative: the two computations
+/// within `κ·(η(ε(T)) + η(ε₆₄))·‖Â‖_F` of each other.
 #[test]
 fn schur_matches_the_f64_reference_within_the_bauer_fike_bound() {
     fn check<T: RealScalar>() {
@@ -323,10 +360,27 @@ fn schur_matches_the_f64_reference_within_the_bauer_fike_bound() {
             let exact: [f64; 9] = image.clone().try_into().unwrap();
             let spectrum: [(f64, f64); 3] = expected.clone().try_into().unwrap();
             let kappa = bauer_fike_factor(&exact, &spectrum);
-            let bound = kappa
-                * (backward_error::francis(n, epsilon::<T>())
-                    + backward_error::francis(n, f64::EPSILON))
-                * frobenius;
+            let reference_error = kappa * backward_error::francis(n, f64::EPSILON) * frobenius;
+            // A posteriori: each eigenvalue of T̂ within κ·‖E‖₂ of the
+            // spectrum of the image, the reference within its own a-priori
+            // error of that spectrum.
+            let (blocks, radius) = certified_blocks(&image, &result);
+            for BlockEigenvalue { re, im, error } in blocks {
+                let nearest = expected
+                    .iter()
+                    .map(|(r, i)| (re - r).hypot(im - i))
+                    .fold(f64::INFINITY, f64::min);
+                let certified = kappa * radius + reference_error + error;
+                assert!(
+                    nearest <= certified,
+                    "seed {seed}: λ(T̂) {re}+{im}i is {nearest:e} from the reference, certified {certified:e}"
+                );
+            }
+            // A priori, where informative.
+            let Some(eta) = informative(backward_error::francis(n, epsilon::<T>())) else {
+                continue;
+            };
+            let bound = kappa * eta * frobenius + reference_error;
             for ((re, im), (eref, iref)) in computed.iter().zip(&expected) {
                 assert!((re - eref).abs() <= bound, "seed {seed}: {re} vs {eref}");
                 assert!((im - iref).abs() <= bound, "seed {seed}: {im} vs {iref}");

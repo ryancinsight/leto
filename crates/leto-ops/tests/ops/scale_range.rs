@@ -17,9 +17,13 @@
 //! [`col_piv_qr`](super::backward_error::col_piv_qr)) from Higham's `γ`
 //! bounds over the enumerated transformations at the code's iteration caps.
 //! These are worst cases at the caps — for `f64` about `10⁻¹⁰` relative,
-//! loose to vacuous for the 8- and 11-bit formats — and the errors actually
-//! measured are far below them; the measured values are reported, never
-//! asserted.
+//! vacuous (`η ≥ 1`) for `F16` and `Bf16` — and are asserted only where
+//! informative ([`informative`](super::backward_error::informative)). Every
+//! format is also checked a posteriori on the factors `svd_decompose` and
+//! `schur` return (`a_posteriori.rs`): with `R` the residual measured in
+//! `f64` and `δ_U, δ_V, δ_Q` the measured orthogonality defects, the Weyl
+//! radius `‖R‖_F + (δ_U + δ_V + δ_Uδ_V)‖Σ̂‖₂` and the Bauer–Fike radius
+//! `κ·(δ + ‖R‖_F + δ_Q(2 + δ_Q)‖T̂‖_F)` replace `η‖Â‖_F` below.
 //! Restoring a result by `s` rounds it once onto `T`'s grid; in the subnormal
 //! binades that costs at most half the subnormal spacing,
 //! `0.5·2^(MIN−e)·ε` in units of `s`.
@@ -40,7 +44,8 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use super::backward_error;
+use super::a_posteriori::{self, BlockEigenvalue};
+use super::backward_error::{self, informative};
 use super::format::{epsilon, Format};
 use super::spectral_condition::bauer_fike_factor;
 use eunomia::{Bf16, F16};
@@ -131,14 +136,46 @@ fn check_singular_values<T: Format>() {
     let (reference, reference_error) = general_singular_values();
     for exponent in exponents::<T>() {
         let sample = sample::<T>(&GENERAL, exponent);
-        let bound = sample.input_error
-            + backward_error::svd(N, N, sample.epsilon) * sample.norm
-            + reference_error
-            + sample.grid;
         let values = singular_values(&sample.matrix.view())
             .unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
         let full = svd_decompose(&sample.matrix.view())
             .unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        // A posteriori, on the returned factors (Σ̂ in units of s).
+        let sigmas: Vec<f64> = full
+            .singular_values
+            .iter()
+            .map(|v| scale(v.to_f64(), -exponent))
+            .collect();
+        let as_f64 = |m: &Array2<T>| -> Vec<f64> {
+            m.storage().as_slice().iter().map(|v| v.to_f64()).collect()
+        };
+        let (u, v) = (
+            as_f64(&full.left_singular_vectors),
+            as_f64(&full.right_singular_vectors),
+        );
+        let mut diagonal = vec![0.0; N * N];
+        for (i, sigma) in sigmas.iter().enumerate() {
+            diagonal[i * N + i] = *sigma;
+        }
+        let residual = a_posteriori::residual(&sample.unit, &u, &diagonal, &v, N, N, N);
+        let radius = a_posteriori::svd_certificate(
+            residual,
+            a_posteriori::gram_defect(&u, N, N),
+            a_posteriori::gram_defect(&v, N, N),
+            &sigmas,
+        );
+        let certified = sample.input_error + radius + reference_error;
+        for (sigma, expected) in sigmas.iter().zip(&reference) {
+            assert!(
+                (sigma - expected).abs() <= certified,
+                "2^{exponent}: σ {sigma} vs {expected}, certified {certified:e}"
+            );
+        }
+        // A priori, both entry points, where informative.
+        let Some(eta) = informative(backward_error::svd(N, N, sample.epsilon)) else {
+            continue;
+        };
+        let bound = sample.input_error + eta * sample.norm + reference_error + sample.grid;
         for sigmas in [values, full.singular_values] {
             for (sigma, expected) in sigmas.iter().zip(&reference) {
                 let sigma = scale(sigma.to_f64(), -exponent);
@@ -214,16 +251,51 @@ fn general_spectrum() -> Spectrum {
 fn check_eigenvalues<T: Format>(spectrum: &Spectrum) {
     for exponent in exponents::<T>() {
         let sample = sample::<T>(&spectrum.matrix, exponent);
-        let backward = backward_error::francis(N, sample.epsilon) * sample.norm;
-        let bound = spectrum.condition * (sample.input_error + backward)
+        let decomposition =
+            schur(&sample.matrix.view()).unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        let spectrum_only = eigenvalues(&sample.matrix.view())
+            .unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        // A posteriori: every eigenvalue of T̂ is one of Â − E = A + (Â − A) − E,
+        // within κ·(δ + ‖E‖₂) of the spectrum of A (Bauer–Fike on A).
+        let q: Vec<f64> = decomposition
+            .q()
+            .storage()
+            .as_slice()
+            .iter()
+            .map(|v| v.to_f64())
+            .collect();
+        let t: Vec<f64> = decomposition
+            .t()
+            .storage()
+            .as_slice()
+            .iter()
+            .map(|v| scale(v.to_f64(), -exponent))
+            .collect();
+        let defect = a_posteriori::gram_defect(&q, N, N);
+        let residual = a_posteriori::residual(&sample.unit, &q, &t, &q, N, N, N);
+        let radius = a_posteriori::schur_certificate(residual, defect, &t);
+        for BlockEigenvalue { re, im, error } in a_posteriori::quasi_triangular_eigenvalues(&t, N) {
+            let nearest = spectrum
+                .eigenvalues
+                .iter()
+                .map(|e| (re - e).hypot(im))
+                .fold(f64::INFINITY, f64::min);
+            let certified = spectrum.condition * (sample.input_error + radius)
+                + spectrum.reference_error
+                + error;
+            assert!(
+                nearest <= certified,
+                "2^{exponent}: λ(T̂) {re}+{im}i is {nearest:e} from the spectrum, certified {certified:e}"
+            );
+        }
+        // A priori, both entry points, where informative.
+        let Some(eta) = informative(backward_error::francis(N, sample.epsilon)) else {
+            continue;
+        };
+        let bound = spectrum.condition * (sample.input_error + eta * sample.norm)
             + spectrum.reference_error
             + sample.grid;
-        let results = [
-            eigenvalues(&sample.matrix.view()),
-            schur(&sample.matrix.view()).map(|decomposition| decomposition.eigenvalues()),
-        ];
-        for result in results {
-            let values = result.unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        for values in [spectrum_only, decomposition.eigenvalues()] {
             for ((re, im), expected) in sorted_unit(&values, exponent)
                 .into_iter()
                 .zip(spectrum.eigenvalues)
@@ -263,9 +335,12 @@ fn check_pivoted_qr<T: Format>() {
                     (backward_error::gamma(N as f64 + 1.0, f64::EPSILON) * magnitude).powi(2);
             }
         }
-        let bound = backward_error::col_piv_qr(N, N, sample.epsilon) * sample.norm
-            + N as f64 * sample.grid
-            + rounding.sqrt();
+        // A priori only (pivoted QR returns no certificate of its own), where
+        // informative: every format but Bf16.
+        let Some(eta) = informative(backward_error::col_piv_qr(N, N, sample.epsilon)) else {
+            continue;
+        };
+        let bound = eta * sample.norm + N as f64 * sample.grid + rounding.sqrt();
         assert!(
             residual.sqrt() <= bound,
             "2^{exponent}: ‖ÂP − QR‖ {} > {bound:e}",

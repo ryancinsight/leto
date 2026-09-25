@@ -1,3 +1,4 @@
+pub mod a_posteriori;
 pub mod attention;
 pub mod backward_error;
 pub mod bidiagonal;
