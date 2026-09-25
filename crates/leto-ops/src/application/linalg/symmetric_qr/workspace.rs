@@ -25,11 +25,14 @@ use leto::{Array2, ArrayView2, LetoError, Result};
 /// let a = Array2::from_shape_vec([2, 2], vec![2.0_f64, 1.0, 1.0, 2.0])?;
 /// let mut workspace = SymmetricEigenWorkspace::new();
 /// workspace.decompose(&a.view())?;
-/// assert!((workspace.eigenvalues()[0] - 1.0).abs() < 1e-15);
-/// assert!((workspace.eigenvalues()[1] - 3.0).abs() < 1e-15);
+/// // Derived backward-error bound n²·ε·‖A‖_F (see the module documentation),
+/// // n = 2, ‖A‖_F = √10.
+/// let bound = 4.0 * f64::EPSILON * 10.0_f64.sqrt();
+/// assert!((workspace.eigenvalues()[0] - 1.0).abs() <= bound);
+/// assert!((workspace.eigenvalues()[1] - 3.0).abs() <= bound);
 /// // A·v = λ·v for the top eigenpair.
 /// let top = workspace.eigenvectors().next_back().expect("two eigenvectors");
-/// assert!((2.0 * top[0] + top[1] - 3.0 * top[0]).abs() < 1e-15);
+/// assert!((2.0 * top[0] + top[1] - 3.0 * top[0]).abs() <= bound);
 /// # Ok::<(), leto::LetoError>(())
 /// ```
 #[derive(Debug, Clone)]
@@ -100,10 +103,16 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
     /// layout — contiguous, strided, transposed — is copied into
     /// workspace-owned storage, so reuse at one order allocates nothing.
     ///
-    /// The matrix is scaled by the power of two that brings its largest
-    /// entry into `[1, 4)` (an even power) before the reduction and the eigenvalues are scaled
-    /// back after it; both scalings are exact (see the
-    /// [module documentation](super) for the range argument).
+    /// When the matrix norm lies outside the LAPACK safe range, it is scaled
+    /// by the power of two that brings its largest entry into `[1, 4)` (an
+    /// even power) before the reduction, and the eigenvalues are scaled back
+    /// after it; a norm already in the safe range is factored unscaled. Power
+    /// of two scaling is exact only while every scaled entry stays
+    /// representable — an entry far below the largest can underflow under a
+    /// scale chosen for the largest one — so the result is within the
+    /// algorithm's backward-error bound, not exact entrywise (see the
+    /// [module documentation](super) for the range argument and the
+    /// exactness caveat).
     ///
     /// # Errors
     ///
@@ -216,8 +225,10 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
 /// // Path-graph Laplacian: eigenvalues 0, 1, 3.
 /// let a = Array2::from_shape_vec([3, 3], vec![1.0_f64, -1.0, 0.0, -1.0, 2.0, -1.0, 0.0, -1.0, 1.0])?;
 /// let eigen = symmetric_eigen_qr(&a.view())?;
+/// // Derived backward-error bound n²·ε·‖A‖_F, n = 3, ‖A‖_F = √9 = 3.
+/// let bound = 9.0 * f64::EPSILON * 3.0;
 /// for (value, expected) in eigen.eigenvalues.iter().zip([0.0, 1.0, 3.0]) {
-///     assert!((value - expected).abs() < 1e-14);
+///     assert!((value - expected).abs() <= bound);
 /// }
 /// # Ok::<(), leto::LetoError>(())
 /// ```
@@ -265,6 +276,24 @@ mod tests {
         };
         assert_eq!(max_iters, 0);
         assert_eq!(tol, f64::EPSILON / 2.0);
+        // A = I + J (J the all-ones 3×3 matrix) has eigenvalues {1, 1, 4}.
+        // One Householder step (x = A[0, 1..] = (1, 1), α = −‖x‖ = −√2)
+        // reduces it to the tridiagonal diag(2, 3, 1), off-diagonal (√2, 0),
+        // whose 2×2 leading block [[2, √2], [√2, 3]] carries eigenvalues
+        // {1, 4} and decouples from the isolated entry 1 (verified: trace
+        // 2+3+1 = 6 = tr(A), det 2·3−2 = 4 = det(A)). At budget = 0 the first
+        // sweep attempt (l = 0) reports before any rotation, so `residual` is
+        // exactly `|e₀|/t` with the pre-sweep norm estimate
+        // `t = max(|dᵢ|+|eᵢ|) = 2+√2` (from d₀=2, e₀=√2 — the (d₁,e₁) and
+        // (d₂,e₂) pairs give 3 and 1, both smaller). Mirroring the algorithm's
+        // exact operation order (`d.abs().add(e.abs())`, then
+        // `off_diagonal[l].abs().div(norm_estimate)`) reproduces its residual
+        // bit for bit rather than an algebraically-equal but differently
+        // rounded expression.
+        let off_diagonal_0 = 2.0_f64.sqrt();
+        let norm_estimate = 2.0_f64.abs() + off_diagonal_0.abs();
+        let expected_residual = off_diagonal_0.abs() / norm_estimate;
+        assert_eq!(residual, expected_residual);
         assert!(residual > tol && residual <= 1.0, "{residual}");
         assert_eq!(workspace.order(), 0);
         assert!(workspace.eigenvalues().is_empty());

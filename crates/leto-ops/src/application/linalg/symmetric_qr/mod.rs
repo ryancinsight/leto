@@ -37,12 +37,21 @@
 //! The unscaled reduction forms `Σxᵢ²` and `vᵀv`; for entries near the square
 //! root of the largest (or smallest) finite value these overflow (underflow)
 //! and the result is garbage, not an error — `F16` overflows `3·200²` at
-//! `‖A‖ = 200`. So the matrix is first balanced by the shared exact
-//! power-of-two scaling of the dense factorizations
-//! (`linalg::scaling`: even `k`, largest entry in `[1, 4)`);
-//! eigenvectors are unchanged and the eigenvalues are multiplied back by `2ᵏ`
-//! at the end (the EISPACK `tred2` row scaling and the LAPACK `dsyev` norm
-//! scaling serve the same purpose). After scaling every quantity the algorithm
+//! `‖A‖ = 200`. So the matrix norm is first compared against the LAPACK
+//! `dsyev`-style safe range `[rmin, rmax]` (`linalg::scaling`,
+//! `linalg::thresholds::safe_range`); only when it falls outside is the
+//! matrix balanced, by the even power of two bringing its largest entry into
+//! `[1, 4)` (always inside `[rmin, rmax]`). A norm already in range is
+//! factored completely unscaled, bit-for-bit identical to a hypothetical
+//! unconditionally-scaled path only when its largest entry already lay in
+//! `[1, 4)` — otherwise the two differ, which is the point: scaling by a
+//! power of two is exact only while every scaled entry stays representable,
+//! and an entry far below the largest one can underflow under a scale chosen
+//! for the largest (see `linalg::scaling`'s module documentation), so the
+//! unscaled path is preferred whenever it is safe. Eigenvectors are unchanged
+//! by either path and the eigenvalues are multiplied back by `2ᵏ` when
+//! scaling was applied (the EISPACK `tred2` row scaling and the LAPACK
+//! `dsyev` norm scaling serve the same purpose). After scaling every quantity the algorithm
 //! forms is bounded by a small multiple of `n`: `|aᵢⱼ| < 4`, `Σxᵢ² < 16n`,
 //! `vᵀv ≤ 4‖x‖² < 64n`, and every entry of every reduced matrix and every
 //! `dᵢ, eᵢ` is at most `‖A‖₂ < 4n` (orthogonal similarity preserves the 2-norm)
