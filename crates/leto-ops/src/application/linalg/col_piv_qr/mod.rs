@@ -150,7 +150,13 @@ pub fn col_piv_qr<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<ColPivQrD
     // Balance by an exact power of two: `Q`, the permutation and the rank are
     // scale-invariant (the rank threshold is relative to the largest column
     // norm); `R` scales.
-    let f = match scaling::balanced(matrix) {
+    //
+    // Degree/dimension factor: pivot selection compares `tail_norm_sq`
+    // (`decompose.rs`), a raw `Σrᵢ²` over up to `max(m, n)` rows of the
+    // current-scale `R` — degree 2, bounded by `max(m, n)·‖A‖_max²`.
+    let [rows, cols] = matrix.shape();
+    let dimension_factor = T::from_usize(rows.max(cols).max(1));
+    let f = match scaling::balanced(matrix, 2, dimension_factor) {
         Some((scaled, exponent)) => {
             let mut f = decompose::factor(&scaled.view())?;
             scaling::restore(&mut f.r, exponent, "R entry exceeds the scalar range")?;

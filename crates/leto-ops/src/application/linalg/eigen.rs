@@ -122,7 +122,12 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
-    let exponent = scaling::balancing_exponent(a.iter().copied()).unwrap_or(0);
+    // Degree 1, dimension factor n: Jacobi's rotation update is a convex
+    // combination (c^2+s^2=1) of entries already at ||A||_max scale, and
+    // diagonal entries stay within the Gershgorin bound n*||A||_max (eigen.rs
+    // rotate(), the app'/aqq' updates).
+    let dimension_factor = T::from_usize(n.max(1));
+    let exponent = scaling::balancing_exponent(a.iter().copied(), 1, dimension_factor).unwrap_or(0);
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut target = NoEigenvectors;
 
@@ -179,7 +184,12 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
-    let exponent = scaling::balancing_exponent(a.iter().copied()).unwrap_or(0);
+    // Degree 1, dimension factor n: Jacobi's rotation update is a convex
+    // combination (c^2+s^2=1) of entries already at ||A||_max scale, and
+    // diagonal entries stay within the Gershgorin bound n*||A||_max (eigen.rs
+    // rotate(), the app'/aqq' updates).
+    let dimension_factor = T::from_usize(n.max(1));
+    let exponent = scaling::balancing_exponent(a.iter().copied(), 1, dimension_factor).unwrap_or(0);
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
@@ -438,7 +448,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{diagonalize_within, symmetric_eigen_jacobi, NoEigenvectors};
+    use super::{
+        diagonalize_within, symmetric_eigen_jacobi, symmetric_eigenvalues_jacobi, NoEigenvectors,
+    };
     use leto::{Array2, LetoError};
 
     #[test]
@@ -453,6 +465,13 @@ mod tests {
         let a = Array2::from_shape_vec([2, 2], vec![m, m, m, m]).expect("2x2");
         assert!(matches!(
             symmetric_eigen_jacobi(&a.view()),
+            Err(LetoError::Overflow { .. })
+        ));
+        // The eigenvalues-only path (`symmetric_eigenvalues_jacobi`) scales
+        // independently of the full-decomposition path: this kills the
+        // mutant that drops its own balancing call.
+        assert!(matches!(
+            symmetric_eigenvalues_jacobi(&a.view()),
             Err(LetoError::Overflow { .. })
         ));
     }

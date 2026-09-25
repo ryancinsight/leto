@@ -143,7 +143,26 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
         }
         let n = rows;
         self.load_lower_triangle(matrix, n)?;
-        let exponent = scaling::balancing_exponent(self.reduced.iter().copied()).unwrap_or(0);
+        // Degree 2, dimension factor n. The Householder reflector
+        // (`householder::reflect_in_place`) normalizes its own vector
+        // internally, so tridiagonalization's rank-2 update (`reduce.rs`)
+        // stays at `‖A‖_max` scale (degree 1) by itself. The QL sweep
+        // (`ql.rs`) is not: its Wilkinson-shift ratio
+        // `p = (d_{l+1} − dₗ)/(2·eₗ)` is a genuine ratio of two `‖A‖_max`-scale
+        // quantities (degree 0 mathematically), but `eₗ` underflows to exact
+        // `0` before the numerator does at extreme scale (probed: f64 at
+        // `2⁵³⁷` produces `p = ∞`, then `eₗ.mul(p.add(r))` computes `0·∞ = NaN`
+        // — `diagonal[l+1] = off_diagonal[l].mul(p.add(r))`). Gating on the
+        // plain `degree = 2` range (the same one `dsyev`/`dsteqr` use)
+        // keeps `‖A‖_max` far enough from `safmin`/`bignum` that no
+        // intermediate — including this ratio's denominator — reaches exact
+        // `0` or `∞` before deflation. `dimension_factor = n`: the
+        // Gershgorin/Frobenius bound shared with Jacobi (eigenvalues stay
+        // within `n·‖A‖_max`).
+        let dimension_factor = T::from_usize(n.max(1));
+        let exponent =
+            scaling::balancing_exponent(self.reduced.iter().copied(), 2, dimension_factor)
+                .unwrap_or(0);
         scaling::scale_by_power_of_two(&mut self.reduced, -exponent);
         self.values.resize(n, T::ZERO);
         self.off_diagonal.resize(n, T::ZERO);
