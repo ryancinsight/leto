@@ -36,6 +36,21 @@ use leto::{Array2, ArrayView2, Result, Storage};
 /// converges in `O(n)` sweeps).
 const MAX_ITER: usize = 4000;
 
+/// Degree and dimension factor for the Wilkinson shift's discriminant
+/// (`wilkinson_shift`, `t11`/`t22`/`t12` and `delta.mul(delta).add(t12.mul(t12))`
+/// above): bidiagonalization is an orthogonal transform, so every bidiagonal
+/// entry is bounded by `‖A‖_2 ≤ ‖A‖_F ≤ M·‖A‖_max`, `M = max(rows, cols)`.
+/// `t11 = dq1² + eq2²` and `t22` are each `≤ 2M²·‖A‖_max²`; `t12 = dq1·eq1`
+/// is `≤ M²·‖A‖_max²`; `delta = (t11 − t22)/2` is `≤ 2M²·‖A‖_max²`. The
+/// discriminant `delta² + t12²` is therefore `≤ 5M⁴·‖A‖_max⁴` — degree 4;
+/// rounded up to `8M⁴` for margin.
+fn wilkinson_dimension_factor<T: RealScalar>(rows: usize, cols: usize) -> T {
+    let m = T::from_usize(rows.max(cols).max(1));
+    let m2 = m.mul(m);
+    let m4 = m2.mul(m2);
+    T::from_usize(8).mul(m4)
+}
+
 /// Singular values of a finite matrix, sorted descending, via bidiagonal QR.
 ///
 /// # Errors
@@ -43,7 +58,9 @@ const MAX_ITER: usize = 4000;
 /// non-convergence.
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     validate_input(matrix)?;
-    if let Some((scaled, exponent)) = scaling::balanced_for_products(matrix) {
+    let [rows, cols] = matrix.shape();
+    let dimension_factor = wilkinson_dimension_factor::<T>(rows, cols);
+    if let Some((scaled, exponent)) = scaling::balanced_recentered(matrix, 4, dimension_factor) {
         let mut sigmas = singular_values_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut sigmas,
@@ -527,7 +544,9 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
 /// non-convergence.
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     validate_input(matrix)?;
-    if let Some((scaled, exponent)) = scaling::balanced_for_products(matrix) {
+    let [rows, cols] = matrix.shape();
+    let dimension_factor = wilkinson_dimension_factor::<T>(rows, cols);
+    if let Some((scaled, exponent)) = scaling::balanced_recentered(matrix, 4, dimension_factor) {
         let mut decomposition = svd_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut decomposition.singular_values,

@@ -47,6 +47,24 @@ use crate::domain::real::RealScalar;
 use leto::Complex;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
+/// Degree and dimension factor for the Francis double-shift reflector
+/// (`schur::francis::stack_reflector`, fed by the `x`/`y`/`zz` formed at
+/// `francis.rs`'s double-shift step): an orthogonal similarity preserves the
+/// 2-norm, so every Hessenberg entry is bounded by `‖A‖_2 ≤ ‖A‖_F ≤ n·‖A‖_max`.
+/// `x = h00·h00 + h01·h10 − s·h00 + t` sums four such degree-2 terms
+/// (`s`, the local trace, is itself `≤ 2n·‖A‖_max`; `t`, the local
+/// determinant, `≤ 2n²·‖A‖_max²`), giving `|x| ≤ 6n²·‖A‖_max²`; `y`, `zz` are
+/// bounded the same way. The reflector then forms `x² + y² + zz²`
+/// (`stack_reflector`'s `norm_sq`) — a **second** squaring, so the relied-upon
+/// intermediate is degree 4 in the original entries, bounded by
+/// `3·(6n²)²·‖A‖_max⁴ = 108n⁴·‖A‖_max⁴`; rounded up to `128n⁴` for margin.
+fn francis_dimension_factor<T: RealScalar>(n: usize) -> T {
+    let n = T::from_usize(n.max(1));
+    let n2 = n.mul(n);
+    let n4 = n2.mul(n2);
+    T::from_usize(128).mul(n4)
+}
+
 /// Real Schur decomposition `A = Q T Qᵀ`.
 #[derive(Debug, Clone)]
 pub struct RealSchur<T> {
@@ -78,7 +96,7 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
     }
 
     // Balance by an exact power of two; `Q` is scale-invariant, `T` scales.
-    let balanced = scaling::balanced_for_products(matrix);
+    let balanced = scaling::balanced_recentered(matrix, 4, francis_dimension_factor::<T>(n));
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -131,7 +149,7 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     // invariance means the Schur vectors are never needed), saving the O(n³) Q
     // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
     // Balance by an exact power of two; eigenvalues scale with the matrix.
-    let balanced = scaling::balanced_for_products(matrix);
+    let balanced = scaling::balanced_recentered(matrix, 4, francis_dimension_factor::<T>(n));
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -179,7 +197,11 @@ pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
                 t[(i + 1) * n + i],
                 t[(i + 1) * n + i + 1],
             ];
-            let exponent = scaling::balancing_exponent_for_products(block).unwrap_or(0);
+            // Degree 2, dimension factor 12: `tr = a+d`, `det = ad-bc` are
+            // each degree-2 bounded by `2*block_max^2`; the discriminant
+            // `tr^2 - 4*det` sums those, giving `|disc| <= 4*block_max^2 +
+            // 8*block_max^2 = 12*block_max^2` (a fixed 2x2, no n-dependence).
+            let exponent = scaling::balancing_exponent(block, 2, T::from_usize(12)).unwrap_or(0);
             scaling::scale_by_power_of_two(&mut block, -exponent);
             let [a, b, c, d] = block;
             let restore = |x: T| x.scale_binary(exponent);
