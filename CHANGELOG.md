@@ -141,16 +141,31 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 ### Fixed
 
 - [patch] `singular_values`, `svd_decompose`, `schur`, `eigenvalues`,
-  `col_piv_qr` (and `pinv` through the SVD) balance their input by an exact
-  even power of two before factoring and restore the scale-carrying results
-  after, so every binade of every supported format factors correctly: f64
-  SVD and Schur failed to converge beyond `2^±256` and returned wrong
-  singular values near that edge, and `col_piv_qr` of an f64 matrix returned
-  rank 0 below `2⁻⁵¹²` and above `2⁵¹²` (a column-norm square that overflows
-  or underflows). `RealSchur::eigenvalues` balances each 2×2 block
-  before its quadratic, which underflowed (f32 at `2⁻⁸⁶` returned `{3, 3}` for
-  `{2, 4}`). An unrepresentable restored result is `LetoError::Overflow`.
-  Results for inputs already in range are bitwise unchanged.
+  `col_piv_qr`, `symmetric_eigen_jacobi` (and `pinv` through the SVD) compare
+  their input's norm against the LAPACK `xSYEV`/`xGEEV`-style safe range
+  `[rmin, rmax]` (`rmin = √(safmin/ε)`, `rmax = 1/rmin`) before factoring:
+  **inside** the range the input is factored completely unscaled; only
+  **outside** it is the input balanced by the even power of two bringing its
+  largest entry into `[1, 4)`, and the scale-carrying results restored after.
+  This is not exact entrywise — scaling by a power of two can still underflow
+  an entry far below the matrix's largest one (as LAPACK's own scaling can) —
+  but it is bounded by the factorization's own backward error, and inputs
+  already inside the safe range are bitwise identical to the unscaled
+  computation, which an earlier unconditional bring-to-`[1,4)` scaling was
+  not (it could turn a working `Ok` into a spurious non-convergence `Err` on
+  moderately-scaled inputs, most visibly in `F16`). Every binade of every
+  supported format factors correctly: f64 SVD and Schur failed to converge
+  beyond `2^±256` and returned wrong singular values near that edge, and
+  `col_piv_qr` of an f64 matrix returned rank 0 below `2⁻⁵¹²` and above
+  `2⁵¹²` (a column-norm square that overflows or underflows).
+  `RealSchur::eigenvalues` balances each 2×2 block before its quadratic,
+  which underflowed (f32 at `2⁻⁸⁶` returned `{3, 3}` for `{2, 4}`); `schur`
+  and `eigenvalues` gate on a narrower, derived safe range than the
+  symmetric solvers (`product_safe_range`), since their Francis double-shift
+  formula squares an already-squared quantity. `pinv` additionally reports
+  `LetoError::Overflow` when a retained singular value's reciprocal is not
+  finite, rather than returning `±∞`/`NaN` as a wrong `Ok`. An unrepresentable
+  restored result is likewise `LetoError::Overflow`.
 - [patch] Jacobi (`symmetric_eigen_jacobi`) mirrors the upper triangle onto
   the lower after the symmetry check, so an accepted rounding-level
   asymmetry is resolved by the upper triangle; `symmetric_eigen_qr` resolves
