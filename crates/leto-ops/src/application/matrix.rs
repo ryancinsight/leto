@@ -1,6 +1,8 @@
 use crate::application::index::validate_mutable_output;
 use crate::domain::scalar::Scalar;
 use crate::infrastructure::cache::MatmulTilePolicy;
+#[cfg(feature = "parallel")]
+use crate::infrastructure::parallel::{PARALLEL_MIN_MATMUL_MACS, PARALLEL_MIN_MATMUL_ROWS};
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result};
 
 /// Nonzero density of `lhs` at or below which [`matmul_auto`] routes to the
@@ -166,7 +168,45 @@ fn copy_back_to_out<T: Scalar>(
 #[cfg(feature = "parallel")]
 #[inline]
 fn is_parallel_beneficial(layout: MatmulLayout) -> bool {
-    layout.rows * layout.cols * layout.shared >= 262_144 && layout.rows >= 64
+    layout.rows * layout.cols * layout.shared >= PARALLEL_MIN_MATMUL_MACS
+        && layout.rows >= PARALLEL_MIN_MATMUL_ROWS
+}
+
+/// Raw base pointers and offsets for one matmul's three operands.
+///
+/// Bundles the six fields `dot_matmul_row`/`outer_matmul_row` and their
+/// callers all thread through, so a row kernel's argument count reflects its
+/// own indices and dimensions rather than the operand plumbing every matmul
+/// variant repeats identically.
+#[derive(Clone, Copy)]
+struct MatmulPtrs<T> {
+    lhs: *const T,
+    rhs: *const T,
+    out: *mut T,
+    lhs_offset: usize,
+    rhs_offset: usize,
+    out_offset: usize,
+}
+
+#[inline(always)]
+unsafe fn dot_matmul_row<T: Scalar>(
+    ptrs: MatmulPtrs<T>,
+    i: usize,
+    k: usize,
+    n: usize,
+    accumulate: bool,
+) {
+    let lhs_row = core::slice::from_raw_parts(ptrs.lhs.add(ptrs.lhs_offset + i * k), k);
+    for j in 0..n {
+        let rhs_col = core::slice::from_raw_parts(ptrs.rhs.add(ptrs.rhs_offset + j * k), k);
+        let val = T::dot_slice(lhs_row, rhs_col);
+        let out_addr = ptrs.out.add(ptrs.out_offset + i * n + j);
+        if accumulate {
+            *out_addr = (*out_addr).add(val);
+        } else {
+            *out_addr = val;
+        }
+    }
 }
 
 fn serial_dot_matmul<T: Scalar>(
@@ -183,18 +223,20 @@ fn serial_dot_matmul<T: Scalar>(
     let lhs_data = lhs.data();
     let rhs_data = rhs.data();
     let out_data = out.data_mut();
+    let ptrs = MatmulPtrs {
+        lhs: lhs_data.as_ptr(),
+        rhs: rhs_data.as_ptr(),
+        out: out_data.as_mut_ptr(),
+        lhs_offset,
+        rhs_offset,
+        out_offset,
+    };
 
     for i in 0..m {
-        let lhs_row = &lhs_data[lhs_offset + i * k..lhs_offset + i * k + k];
-        for j in 0..n {
-            let rhs_col = &rhs_data[rhs_offset + j * k..rhs_offset + j * k + k];
-            let val = T::dot_slice(lhs_row, rhs_col);
-            let out_idx = out_offset + i * n + j;
-            if accumulate {
-                out_data[out_idx] = out_data[out_idx].add(val);
-            } else {
-                out_data[out_idx] = val;
-            }
+        // SAFETY: `route_matmul` selects this kernel only for dense row/column
+        // layouts; the validated shapes make every row and output address valid.
+        unsafe {
+            dot_matmul_row(ptrs, i, k, n, accumulate);
         }
     }
 }
@@ -228,27 +270,35 @@ fn parallel_dot_matmul<T: Scalar>(
     // Dispatch in row blocks to amortise per-task scheduling overhead.
     let n_blocks = m.div_ceil(PARALLEL_ROW_BLOCK);
     moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(n_blocks, move |block| {
-        let lhs_ptr = lhs_ptr as *const T;
-        let rhs_ptr = rhs_ptr as *const T;
-        let out_ptr = out_ptr as *mut T;
+        let ptrs = MatmulPtrs {
+            lhs: lhs_ptr as *const T,
+            rhs: rhs_ptr as *const T,
+            out: out_ptr as *mut T,
+            lhs_offset,
+            rhs_offset,
+            out_offset,
+        };
         let i_start = block * PARALLEL_ROW_BLOCK;
         let i_end = (i_start + PARALLEL_ROW_BLOCK).min(m);
         for i in i_start..i_end {
             unsafe {
-                let lhs_row = core::slice::from_raw_parts(lhs_ptr.add(lhs_offset + i * k), k);
-                for j in 0..n {
-                    let rhs_col = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + j * k), k);
-                    let val = T::dot_slice(lhs_row, rhs_col);
-                    let out_addr = out_ptr.add(out_offset + i * n + j);
-                    if accumulate {
-                        *out_addr = (*out_addr).add(val);
-                    } else {
-                        *out_addr = val;
-                    }
-                }
+                dot_matmul_row(ptrs, i, k, n, accumulate);
             }
         }
     });
+}
+
+#[inline(always)]
+unsafe fn outer_matmul_row<T: Scalar>(ptrs: MatmulPtrs<T>, i: usize, m: usize, k: usize, n: usize) {
+    let out_row = core::slice::from_raw_parts_mut(ptrs.out.add(ptrs.out_offset + i * n), n);
+    for kk in 0..k {
+        let alpha = *ptrs.lhs.add(ptrs.lhs_offset + kk * m + i);
+        if alpha == T::ZERO {
+            continue;
+        }
+        let rhs_row = core::slice::from_raw_parts(ptrs.rhs.add(ptrs.rhs_offset + kk * n), n);
+        T::axpy_slice(alpha, rhs_row, out_row);
+    }
 }
 
 fn serial_outer_matmul<T: Scalar>(
@@ -273,19 +323,20 @@ fn serial_outer_matmul<T: Scalar>(
     let lhs_data = lhs.data();
     let rhs_data = rhs.data();
     let out_data = out.data_mut();
+    let ptrs = MatmulPtrs {
+        lhs: lhs_data.as_ptr(),
+        rhs: rhs_data.as_ptr(),
+        out: out_data.as_mut_ptr(),
+        lhs_offset,
+        rhs_offset,
+        out_offset,
+    };
 
     for i in 0..m {
+        // SAFETY: `route_matmul` selects this kernel only for dense row/column
+        // layouts; the validated shapes make every row and output address valid.
         unsafe {
-            let out_ptr = out_data.as_mut_ptr().add(out_offset + i * n);
-            let out_row = core::slice::from_raw_parts_mut(out_ptr, n);
-            for kk in 0..k {
-                let alpha = *lhs_data.get_unchecked(lhs_offset + kk * m + i);
-                if alpha == T::ZERO {
-                    continue;
-                }
-                let rhs_row = &rhs_data[rhs_offset + kk * n..rhs_offset + kk * n + n];
-                T::axpy_slice(alpha, rhs_row, out_row);
-            }
+            outer_matmul_row(ptrs, i, m, k, n);
         }
     }
 }
@@ -316,22 +367,19 @@ fn parallel_outer_matmul<T: Scalar>(
 
     let n_blocks = m.div_ceil(PARALLEL_ROW_BLOCK);
     moirai::for_each_index_with::<moirai::AdaptiveWithThreshold<16>, _>(n_blocks, move |block| {
-        let lhs_ptr = lhs_ptr as *const T;
-        let rhs_ptr = rhs_ptr as *const T;
-        let out_ptr = out_ptr as *mut T;
+        let ptrs = MatmulPtrs {
+            lhs: lhs_ptr as *const T,
+            rhs: rhs_ptr as *const T,
+            out: out_ptr as *mut T,
+            lhs_offset,
+            rhs_offset,
+            out_offset,
+        };
         let i_start = block * PARALLEL_ROW_BLOCK;
         let i_end = (i_start + PARALLEL_ROW_BLOCK).min(m);
         for i in i_start..i_end {
             unsafe {
-                let out_row = core::slice::from_raw_parts_mut(out_ptr.add(out_offset + i * n), n);
-                for kk in 0..k {
-                    let alpha = *lhs_ptr.add(lhs_offset + kk * m + i);
-                    if alpha == T::ZERO {
-                        continue;
-                    }
-                    let rhs_row = core::slice::from_raw_parts(rhs_ptr.add(rhs_offset + kk * n), n);
-                    T::axpy_slice(alpha, rhs_row, out_row);
-                }
+                outer_matmul_row(ptrs, i, m, k, n);
             }
         }
     });

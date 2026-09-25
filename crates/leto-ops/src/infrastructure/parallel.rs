@@ -16,6 +16,91 @@ use leto::{TaskPartitionMut, TaskPartitionsMut};
 #[cfg(feature = "parallel")]
 pub(crate) const PARALLEL_MIN_BYTES: usize = 1024 * 1024;
 
+/// Element count past which a compute-bound elementwise op parallelizes.
+///
+/// An element count is the correct unit here precisely because the op is
+/// compute-bound: its cost scales with the number of elements, not with the
+/// working-set bytes, so the gate must not scale by scalar width. Measured on a
+/// 36 MiB-L3 AVX2 host, in-place `sin` over `f64` at exactly this length runs
+/// 0.186 ns/elem parallel against 1.210 ns/elem sequential — parallelism already
+/// pays 6.5x at the gate, so it opens no later than it should.
+///
+/// Formerly the private `PARALLEL_THRESHOLD` of `application::unary`.
+#[cfg(feature = "parallel")]
+pub(crate) const PARALLEL_MIN_ELEMENTS: usize = 65536;
+
+/// Element count past which an axis reduction over `out_size` outputs — each
+/// scanning `axis_len` inputs — parallelizes.
+///
+/// Reductions benefit from parallelism at lower element counts than elementwise
+/// maps because each output element requires a full axis scan (O(N/out_size)
+/// reads). Formerly the private `PARALLEL_THRESHOLD` of `application::reduction`.
+#[cfg(feature = "parallel")]
+pub(crate) const PARALLEL_MIN_REDUCTION_OUTPUTS: usize = 32768;
+
+/// Multiply-accumulate count past which a dense matmul parallelizes.
+/// Formerly the literal in `application::matrix`.
+#[cfg(feature = "parallel")]
+pub(crate) const PARALLEL_MIN_MATMUL_MACS: usize = 262_144;
+
+/// Minimum row count a dense matmul must reach before it parallelizes.
+/// Formerly the literal in `application::matrix`.
+#[cfg(feature = "parallel")]
+pub(crate) const PARALLEL_MIN_MATMUL_ROWS: usize = 64;
+
+/// Shared dense-slice task dispatch for unit-task wrappers.
+#[cfg(feature = "parallel")]
+#[inline]
+fn dispatch_unit_task_mut_with<P, T, F>(
+    output: &mut [T],
+    unit_len: usize,
+    element_bytes: usize,
+    run: F,
+) where
+    P: moirai::ExecutionPolicy,
+    T: Send,
+    F: Fn(usize, &mut [T]) + Send + Sync,
+{
+    moirai::for_each_unit_task_mut_with::<P, _, _, _, _>(
+        output,
+        unit_len,
+        unit_len.saturating_mul(element_bytes),
+        || (),
+        |(), first_unit, values| run(first_unit, values),
+    );
+}
+
+/// Whether a bandwidth-bound elementwise op over `len` elements of `T` with
+/// `operands` operands (reads plus writes) should run in parallel.
+///
+/// A binary map reads two operands and writes one, so its working set is
+/// `operands · len · size_of::<T>()`. The op is memory-bandwidth-bound, and one
+/// core nearly saturates that bandwidth while the data is resident in the shared
+/// last-level cache; parallelism pays only once the working set spills past the
+/// LLC, where additional cores add DRAM bandwidth. Below that, thread-dispatch
+/// overhead is pure loss.
+///
+/// Replaces a fixed 65536-element gate (`256 KB` L2 / `4 B` f32) that ignored
+/// both element size and arithmetic intensity, parallelizing bandwidth-bound
+/// ops far too eagerly — a 64k `f64` `add` (1.5 MB working set) ran ~3x slower
+/// parallel than serial. See gap_audit `2026-07-19 Parallel Threshold`.
+#[cfg(feature = "parallel")]
+#[inline]
+pub(crate) fn parallelize_bandwidth_bound<T>(len: usize, operands: usize) -> bool {
+    let working_set = len
+        .saturating_mul(operands)
+        .saturating_mul(core::mem::size_of::<T>());
+    working_set > crate::infrastructure::cache::cached_cache_geometry().l3_bytes()
+}
+
+/// Whether a compute-bound elementwise op over `len` elements should run in
+/// parallel (see [`PARALLEL_MIN_ELEMENTS`]).
+#[cfg(feature = "parallel")]
+#[inline]
+pub(crate) fn parallelize_compute_bound(len: usize) -> bool {
+    len >= PARALLEL_MIN_ELEMENTS
+}
+
 /// Runs `run(first_index, values)` over consecutive runs of a dense output,
 /// each about one moirai unit task of work at `element_bytes` per element.
 ///
@@ -187,12 +272,11 @@ pub(crate) fn for_each_plane_mut<T, F>(
         return;
     }
     #[cfg(feature = "parallel")]
-    moirai::for_each_unit_task_mut_with::<moirai::WorkBytes<PARALLEL_MIN_BYTES>, _, _, _, _>(
+    dispatch_unit_task_mut_with::<moirai::WorkBytes<PARALLEL_MIN_BYTES>, _, _>(
         output,
         plane_len,
-        plane_len.saturating_mul(element_bytes),
-        || (),
-        |(), first_plane, planes| {
+        element_bytes,
+        |first_plane, planes| {
             for (offset, values) in planes.chunks_exact_mut(plane_len).enumerate() {
                 plane(first_plane + offset, values);
             }
