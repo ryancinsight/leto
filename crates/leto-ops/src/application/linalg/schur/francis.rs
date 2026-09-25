@@ -29,9 +29,10 @@
 //! # Corollary (convergence and deflation)
 //! With Wilkinson-type shifts (eigenvalues of the trailing 2×2 block) the bottom
 //! subdiagonal entry converges quadratically to zero; the iteration zeroes it
-//! (precision-exact deflation test), splitting off a 1×1 (real eigenvalue) or 2×2
-//! (conjugate pair) block, and recurses on the leading submatrix. Exceptional
-//! ad-hoc shifts every few stalls break the rare non-convergent cycles.
+//! (LAPACK `dlahqr`'s small-subdiagonal test with the Ahues–Tisseur
+//! refinement), splitting off a 1×1 (real eigenvalue) or 2×2 (conjugate pair)
+//! block, and recurses on the leading submatrix. `dlahqr`'s exceptional
+//! shifts every ten stalled iterations break the rare non-convergent cycles.
 //!
 //! # Theorem (eigenvalues-only within-block apply window — LAPACK `dlahqr`)
 //! For the spectrum it suffices to apply each bulge-chasing reflector `Pₖ` only on
@@ -65,8 +66,9 @@ use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};
 
-/// Iteration cap before declaring non-convergence (Wilkinson + exceptional
-/// shifts converge in `O(n)` steps; this is a safety bound).
+/// Iteration cap per deflation before declaring non-convergence (Wilkinson +
+/// exceptional shifts converge in `O(n)` steps; this is a safety bound, and
+/// the backward-error bounds of the test suite are taken at it).
 const MAX_ITER: usize = 2000;
 
 /// Minimum left-apply column span at which the vectorized row-oriented sweep
@@ -88,7 +90,7 @@ pub(super) fn deflation_floor_log2(n: usize) -> i32 {
 /// `smlnum = safmin·(nh/ulp)`. That form assumes `ulp² ≫ safmin`, which
 /// fails in `F16` (`ε² = 2⁻²⁰ < safmin = 2⁻¹⁴`): there it is `≈ 0.19` for
 /// `n = 3`, deflating at unit scale. The floor keeps `dlahqr`'s purpose —
-/// a subdiagonal driven into the subnormals, where the ulp-relative test can
+/// a subdiagonal driven into the subnormals, where no relative test can
 /// only ever be met by an exact zero, still deflates — at `n·safmin`
 /// (LAPACK `dbdsqr`'s `unfl`-based form), and the matrix-tier gate
 /// (`schur/mod.rs`) keeps it below `ε·‖A‖_max`.
@@ -96,9 +98,8 @@ pub(super) fn deflation_floor<T: RealScalar>(n: usize) -> T {
     crate::application::linalg::thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(n))
 }
 
-/// The kernel window of a Francis step, computed once per run: the first
-/// column's `x, y, zz ≤ 9m²` and the stack reflector's `vᵀv ≤ 12m²` are both
-/// degree 2 with bound `2⁴`.
+/// The kernel window of the stack reflector, computed once per run:
+/// `vᵀv ≤ 12m²`, degree 2 with bound `2⁴`.
 fn step_window<T: RealScalar>() -> KernelWindow<T> {
     KernelWindow::new(2, 2, 4)
 }
@@ -269,60 +270,137 @@ fn apply_right<T: RealScalar>(
     }
 }
 
+/// Which shift pair a Francis step uses — LAPACK `dlahqr`'s choice by the
+/// iteration count since the last deflation (`KDEFL`, `KEXSH = 10`).
+#[derive(Clone, Copy)]
+enum Shift {
+    /// The eigenvalues of the trailing 2×2 block.
+    Wilkinson,
+    /// Exceptional, from the top of the active block (`KDEFL ≡ 10 mod 20`).
+    ExceptionalTop,
+    /// Exceptional, from the bottom of the active block (`KDEFL ≡ 0 mod 20`).
+    ExceptionalBottom,
+}
+
+impl Shift {
+    /// `dlahqr`: every `2·KEXSH` iterations an exceptional shift from the
+    /// bottom, every other `KEXSH` one from the top.
+    fn for_iteration(iteration: usize) -> Self {
+        const KEXSH: usize = 10;
+        if iteration.is_multiple_of(2 * KEXSH) {
+            Self::ExceptionalBottom
+        } else if iteration.is_multiple_of(KEXSH) {
+            Self::ExceptionalTop
+        } else {
+            Self::Wilkinson
+        }
+    }
+}
+
+/// `dlahqr`'s shift pair `(rt1r, rt1i, rt2r, rt2i)` from the 2×2
+/// `[[h11, h12], [h21, h22]]`, computed on the block divided by
+/// `s = |h11| + |h12| + |h21| + |h22|` (so no product over- or underflows).
+/// A complex pair is returned as is; two real shifts are replaced by the one
+/// nearer `h22`, used twice.
+fn shift_pair<T: RealScalar>(h11: T, h12: T, h21: T, h22: T) -> (T, T, T, T) {
+    let s = h11.abs().add(h12.abs()).add(h21.abs()).add(h22.abs());
+    if s == T::ZERO {
+        return (T::ZERO, T::ZERO, T::ZERO, T::ZERO);
+    }
+    let (h11, h12, h21, h22) = (h11.div(s), h12.div(s), h21.div(s), h22.div(s));
+    let half = T::from_f64(0.5);
+    let tr = h11.add(h22).mul(half);
+    let det = h11.sub(tr).mul(h22.sub(tr)).sub(h12.mul(h21));
+    let rtdisc = det.abs().sqrt();
+    if det >= T::ZERO {
+        let re = tr.mul(s);
+        let im = rtdisc.mul(s);
+        (re, im, re, im.neg())
+    } else {
+        let rt1r = tr.add(rtdisc);
+        let rt2r = tr.sub(rtdisc);
+        let nearer = if rt1r.sub(h22).abs() <= rt2r.sub(h22).abs() {
+            rt1r
+        } else {
+            rt2r
+        };
+        let re = nearer.mul(s);
+        (re, T::ZERO, re, T::ZERO)
+    }
+}
+
 /// One Francis double-shift step on the active block `[lo, hi]` (`hi − lo ≥ 2`),
 /// updating `h` (the Hessenberg matrix) and `z` (the accumulated similarity).
 ///
 /// The implicit shift forms the first column of `(H − μ₁I)(H − μ₂I)` from the
-/// trailing-2×2 shift pair `μ₁, μ₂` (or an exceptional ad-hoc pair when the
-/// iteration stalls), then chases the resulting bulge down the band with size-3
-/// (and a final size-2) Householder reflectors — a single orthogonal similarity
-/// equal to one double-shifted QR step (the implicit-Q theorem).
+/// shift pair `μ₁, μ₂` ([`shift_pair`], exceptional pairs by [`Shift`]), then
+/// chases the resulting bulge down the band with size-3 (and a final size-2)
+/// Householder reflectors — a single orthogonal similarity equal to one
+/// double-shifted QR step (the implicit-Q theorem).
 fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
     h: &mut [T],
     z: &mut [T],
     lo: usize,
     hi: usize,
     n: usize,
-    exceptional: bool,
+    shift: Shift,
     workspace: &mut StepWorkspace<'_, T>,
 ) {
     let window = workspace.window;
     let scratch = &mut *workspace.scratch;
-    // First column of `H² − sH + tI` at the block top, from the shift sum
-    // `s = μ₁ + μ₂` and product `t = μ₁μ₂`, formed scale-safely as LAPACK
-    // `dlahqr` normalizes it (by `S = |H21| + |H22 − RT2R| + |RT1I|`). With
-    // `m` the largest of the entries read, `|s| ≤ 3m`, `|t| ≤ 4m²`
-    // (exceptional: `s = 1.5·σ`, `t = σ²`, `σ ≤ 2m`), so `|x| ≤ 9m²`,
-    // `|y| ≤ 5m²`, `|zz| ≤ m²` — degree 2, bound `2⁴`. Unscaled while `m`
-    // keeps them normal and finite; otherwise the entries are divided by the
-    // power of two bringing `m` into `[1, 2)`, exactly. Only the direction of
-    // `(x, y, zz)` enters the first reflector (its `α` is not written back),
-    // so the rescaled column yields the same step.
-    let local = [
-        at(h, lo, lo, n),
-        at(h, lo, lo + 1, n),
-        at(h, lo + 1, lo, n),
-        at(h, lo + 1, lo + 1, n),
-        at(h, lo + 2, lo + 1, n),
-        at(h, hi - 1, hi - 1, n),
-        at(h, hi, hi, n),
-        at(h, hi - 1, hi, n),
-        at(h, hi, hi - 1, n),
-        at(h, hi - 1, hi - 2, n),
-    ];
-    let exponent = window.exponent(&local);
-    let [h00, h01, h10, h11, h21, a, d, b, c, below] = local.map(|v| v.scale_binary(-exponent));
-    let (s, t) = if exceptional {
-        // Ad-hoc Wilkinson shift to break cycles.
-        let scale = c.abs().add(below.abs());
-        let three_halves = T::from_f64(1.5);
-        (three_halves.mul(scale), scale.mul(scale))
-    } else {
-        (a.add(d), a.mul(d).sub(b.mul(c)))
+    // LAPACK `dlahqr` (3.10): exceptional shifts use `DAT1 = 3/4`,
+    // `DAT2 = −0.4375` around a diagonal entry.
+    let dat1 = T::from_f64(0.75);
+    let dat2 = T::from_f64(-0.4375);
+    let (h11, h12, h21, h22) = match shift {
+        Shift::ExceptionalBottom => {
+            let s = at(h, hi, hi - 1, n)
+                .abs()
+                .add(at(h, hi - 1, hi - 2, n).abs());
+            let h11 = dat1.mul(s).add(at(h, hi, hi, n));
+            (h11, dat2.mul(s), s, h11)
+        }
+        Shift::ExceptionalTop => {
+            let s = at(h, lo + 1, lo, n)
+                .abs()
+                .add(at(h, lo + 2, lo + 1, n).abs());
+            let h11 = dat1.mul(s).add(at(h, lo, lo, n));
+            (h11, dat2.mul(s), s, h11)
+        }
+        Shift::Wilkinson => (
+            at(h, hi - 1, hi - 1, n),
+            at(h, hi - 1, hi, n),
+            at(h, hi, hi - 1, n),
+            at(h, hi, hi, n),
+        ),
     };
-    let mut x = h00.mul(h00).add(h01.mul(h10)).sub(s.mul(h00)).add(t);
-    let mut y = h10.mul(h00.add(h11).sub(s));
-    let mut zz = h10.mul(h21);
+    let (rt1r, rt1i, rt2r, rt2i) = shift_pair(h11, h12, h21, h22);
+
+    // First column of `(H − μ₁I)(H − μ₂I)` at the block top, as `dlahqr`
+    // forms it: divided by `S = |h00 − μ₂| + |Im μ₂| + |h10|` before any
+    // product, then normalized by `|v₁| + |v₂| + |v₃|` — every product is of
+    // ratios, so none over- or underflows for entries anywhere in the range.
+    // Only the direction enters the first reflector (its `α` is not written
+    // back).
+    let h00 = at(h, lo, lo, n);
+    let h01 = at(h, lo, lo + 1, n);
+    let h10 = at(h, lo + 1, lo, n);
+    let h11b = at(h, lo + 1, lo + 1, n);
+    let h21b = at(h, lo + 2, lo + 1, n);
+    let s = h00.sub(rt2r).abs().add(rt2i.abs()).add(h10.abs());
+    let h21s = h10.div(s);
+    let mut x = h21s
+        .mul(h01)
+        .add(h00.sub(rt1r).mul(h00.sub(rt2r).div(s)))
+        .sub(rt1i.mul(rt2i.div(s)));
+    let mut y = h21s.mul(h00.add(h11b).sub(rt1r).sub(rt2r));
+    let mut zz = h21s.mul(h21b);
+    let norm1 = x.abs().add(y.abs()).add(zz.abs());
+    if norm1 > T::ZERO {
+        x = x.div(norm1);
+        y = y.div(norm1);
+        zz = zz.div(norm1);
+    }
 
     for k in lo..=(hi - 1) {
         let len = if k < hi - 1 { 3 } else { 2 };
@@ -378,6 +456,36 @@ fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
     }
 }
 
+/// LAPACK `dlahqr`'s small-subdiagonal test for `h_{k,k−1}`: negligible when `|h_{k,k−1}| ≤ floor`
+/// ([`deflation_floor`], in place of `dlahqr`'s `SMLNUM`), or when it passes
+/// the ulp-relative pre-check `|h_{k,k−1}| ≤ ulp·tst` (`tst = |h_{k−1,k−1}| +
+/// |h_{k,k}|`) **and** the Ahues–Tisseur test (Ahues & Tisseur 1997, LAPACK
+/// Working Note 122): with `ab = max(|h_{k,k−1}|, |h_{k−1,k}|)`,
+/// `ba = min(…)`, `aa = max(|h_{k,k}|, |h_{k−1,k−1} − h_{k,k}|)`,
+/// `bb = min(…)`, `s = aa + ab`,
+/// `ba·(ab/s) ≤ max(floor, ulp·(bb·(aa/s)))`. `ulp = ε` (`dlamch('P')`).
+/// `dlahqr`'s fallback to the neighbouring subdiagonals when `tst = 0` is not
+/// taken: there only the floor deflates, and the next step changes the
+/// block (no test input distinguishes the two).
+fn negligible_subdiagonal<T: RealScalar>(h: &[T], n: usize, k: usize, ulp: T, floor: T) -> bool {
+    let sub = at(h, k, k - 1, n).abs();
+    if sub <= floor {
+        return true;
+    }
+    let tst = at(h, k - 1, k - 1, n).abs().add(at(h, k, k, n).abs());
+    if sub > ulp.mul(tst) {
+        return false;
+    }
+    let sup = at(h, k - 1, k, n).abs();
+    let (ab, ba) = if sub > sup { (sub, sup) } else { (sup, sub) };
+    let hkk = at(h, k, k, n).abs();
+    let gap = at(h, k - 1, k - 1, n).sub(at(h, k, k, n)).abs();
+    let (aa, bb) = if hkk > gap { (hkk, gap) } else { (gap, hkk) };
+    let s = aa.add(ab);
+    let relative = ulp.mul(bb.mul(aa.div(s)));
+    ba.mul(ab.div(s)) <= if floor > relative { floor } else { relative }
+}
+
 /// Drive the Francis iteration to convergence: `h` becomes real
 /// quasi-upper-triangular (real Schur form `T`) and `z` accumulates the
 /// orthogonal similarity so that `H₀ = z T zᵀ`.
@@ -412,21 +520,10 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     let mut iter = 0usize;
     loop {
         // Bottom-most unreduced block: scan up while the subdiagonal is
-        // non-negligible — LAPACK `dlahqr`'s small-subdiagonal test,
-        // `|h_{k,k−1}| ≤ max(ulp·tst, floor)` with `tst = |h_{k−1,k−1}| +
-        // |h_{k,k}|` and `ulp = ε` (`dlamch('P')`); `dlahqr`'s fallback to the
-        // neighbouring subdiagonals when `tst = 0` is not taken — there only
-        // the absolute `floor` deflates, and the iteration continues otherwise. The precision-exact `tst + |sub| == tst` it
-        // replaces demanded `|sub| ≲ ε·tst/2`, which an 8-bit `Bf16` step
-        // cannot always reach: its updates round away and the block cycles
-        // with period two (probed: a 4×4 graded matrix at `2⁻⁶⁰`). Deflating
-        // at `ε·tst` perturbs `H` by at most `ε·‖H‖`, inside the backward
-        // error.
+        // non-negligible ([`negligible_subdiagonal`]).
         let mut lo = hi;
         while lo > 0 {
-            let sub = at(h, lo, lo - 1, n).abs();
-            let d = at(h, lo - 1, lo - 1, n).abs().add(at(h, lo, lo, n).abs());
-            if sub <= ulp.mul(d) || sub <= floor {
+            if negligible_subdiagonal(h, n, lo, ulp, floor) {
                 h[lo * n + (lo - 1)] = T::ZERO;
                 break;
             }
@@ -458,7 +555,15 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
                 reason: "Schur QR iteration failed to converge".to_string(),
             });
         }
-        francis_step::<T, ACCUMULATE_Q>(h, z, lo, hi, n, iter.is_multiple_of(10), &mut workspace);
+        francis_step::<T, ACCUMULATE_Q>(
+            h,
+            z,
+            lo,
+            hi,
+            n,
+            Shift::for_iteration(iter),
+            &mut workspace,
+        );
     }
     Ok(())
 }

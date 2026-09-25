@@ -62,23 +62,82 @@ fn svd_bound<T: RealScalar>(rows: usize, cols: usize) -> impl FnOnce(&[T], T) ->
     }
 }
 
-/// LAPACK `dbdsqr`'s bound on its iterations per singular value, `MAXITR`.
-const DBDSQR_MAXITR: usize = 6;
-
-/// `⌈log₂(MAXITR·k²)⌉`, the exponent of [`deflation_floor`] over `safmin`.
+/// `⌈log₂ k⌉`, the exponent of [`deflation_floor`] over `safmin`.
 fn deflation_floor_log2(k: usize) -> i32 {
-    thresholds::ceil_log2_count(DBDSQR_MAXITR.saturating_mul(k).saturating_mul(k))
+    thresholds::ceil_log2_count(k)
 }
 
-/// The absolute deflation threshold of an order-`k` bidiagonal: LAPACK
-/// `dbdsqr`'s `maxitr·n²·unfl` (`unfl = safmin`), rounded up to a power of
-/// two. `dbdsqr` takes `thresh = max(tol·σ_min-estimate, maxitr·n²·unfl)`: the
-/// relative split is kept here in its precision-exact form (an `eᵢ` below the
-/// rounding of its neighbouring diagonals), and this absolute floor deflates
-/// an `eᵢ` driven into the subnormals, where the relative test can only be
-/// met by an exact zero and the sweep otherwise stalls.
+/// The absolute deflation floor of an order-`k` bidiagonal,
+/// `2^⌈log₂ k⌉·safmin ≥ k·safmin`, in place of LAPACK `dbdsqr`'s
+/// `maxitr·n²·unfl` (`maxitr = 6`). That constant assumes `n²·unfl ≪ ulp`,
+/// which fails in `F16` (`6·24²·2⁻¹⁴ ≈ 0.2` at `k = 24`: it would split
+/// superdiagonals of unit-scale matrices). The floor keeps its purpose — an
+/// `eᵢ` driven into the subnormals, where no relative test can be met short
+/// of an exact zero, still deflates — and the gate keeps it below
+/// `ε·‖A‖_max`.
 fn deflation_floor<T: RealScalar>(k: usize) -> T {
     thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(k))
+}
+
+/// LAPACK `dbdsqr`'s relative-accuracy deflation (`TOL ≥ 0`): `tol =
+/// tolmul·ε`, `tolmul = max(10, min(100, ε^(−1/8)))`, and the split threshold
+/// `thresh = max(tol·σ̃_min, floor)`, `σ̃_min` its lower estimate of the
+/// smallest singular value over `√k` (the `SMINOA` recurrence).
+#[derive(Clone, Copy)]
+struct Deflation<T> {
+    tol: T,
+    thresh: T,
+}
+
+impl<T: RealScalar> Deflation<T> {
+    fn new(d: &[T], e: &[T], k: usize) -> Self {
+        let eps = thresholds::machine_epsilon::<T>();
+        let eighth_root = T::ONE.div(eps).sqrt().sqrt().sqrt();
+        let (ten, hundred) = (T::from_usize(10), T::from_usize(100));
+        let capped = if eighth_root < hundred {
+            eighth_root
+        } else {
+            hundred
+        };
+        let tolmul = if capped > ten { capped } else { ten };
+        let tol = tolmul.mul(eps);
+        let mut sminoa = d[0].abs();
+        let mut mu = sminoa;
+        for i in 1..k {
+            if sminoa == T::ZERO {
+                break;
+            }
+            mu = d[i].abs().mul(mu.div(mu.add(e[i - 1].abs())));
+            if mu < sminoa {
+                sminoa = mu;
+            }
+        }
+        let sminoa = sminoa.div(T::from_usize(k).sqrt());
+        let relative = tol.mul(sminoa);
+        let floor = deflation_floor::<T>(k);
+        Self {
+            tol,
+            thresh: if relative > floor { relative } else { floor },
+        }
+    }
+
+    /// `dbdsqr`'s forward convergence test on the block `[p, q]`: the bottom
+    /// `|e_{q−1}| ≤ tol·|d_q|`, then the recurrence `μ ← |d_{i+1}|·μ/(μ + |eᵢ|)`
+    /// from `μ = |d_p|`, splitting at the first `|eᵢ| ≤ tol·μ`. Returns the
+    /// index of the superdiagonal it zeroes, if any.
+    fn forward_split(self, d: &[T], e: &[T], p: usize, q: usize) -> Option<usize> {
+        if e[q - 1].abs() <= self.tol.mul(d[q].abs()) {
+            return Some(q - 1);
+        }
+        let mut mu = d[p].abs();
+        for i in p..q {
+            if e[i].abs() <= self.tol.mul(mu) {
+                return Some(i);
+            }
+            mu = d[i + 1].abs().mul(mu.div(mu.add(e[i].abs())));
+        }
+        None
+    }
 }
 
 /// Singular values of a finite matrix, sorted descending, via bidiagonal QR.
@@ -89,7 +148,7 @@ fn deflation_floor<T: RealScalar>(k: usize) -> T {
 pub fn singular_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols)) {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols))? {
         let mut sigmas = singular_values_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut sigmas,
@@ -403,38 +462,34 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
         return Ok(());
     }
     let windows = SweepWindows::new();
-    let floor = deflation_floor::<T>(k);
+    let deflation = Deflation::new(d, e, k);
     let mut q = k - 1;
     let mut iter = 0usize;
     loop {
-        // Peel converged singular values off the bottom, deflating the bottom
-        // superdiagonal in passing (precision-exact `s + |e| == s`). Only the
-        // active region near the bottom is touched — already-converged blocks
-        // above are not re-scanned each iteration (matches LAPACK/leto
-        // `delimit_subproblem`; the prior `0..q` rescan was `O(q)` per step).
-        while q > 0 {
-            let scale = d[q - 1].abs().add(d[q].abs());
-            if scale.add(e[q - 1].abs()) == scale || e[q - 1].abs() <= floor {
-                e[q - 1] = T::ZERO;
-            }
-            if e[q - 1] != T::ZERO {
-                break;
-            }
+        // Peel converged singular values off the bottom. Only the active
+        // region near the bottom is touched — already-converged blocks above
+        // are not re-scanned each iteration (LAPACK/leto `delimit_subproblem`).
+        while q > 0 && e[q - 1] == T::ZERO {
             q -= 1;
         }
         if q == 0 {
             return Ok(());
         }
-        // Top of the bottom-most unreduced block: scan up until a negligible
-        // superdiagonal splits it (deflate that entry as the block boundary).
+        // Top of the bottom-most unreduced block: scan up, splitting at the
+        // first `|e| ≤ thresh` (`dbdsqr`'s scan); a split at the bottom itself
+        // leaves `p = q`, which the bottom test below then peels.
         let mut p = q;
         while p > 0 {
-            let scale = d[p - 1].abs().add(d[p].abs());
-            if scale.add(e[p - 1].abs()) == scale || e[p - 1].abs() <= floor {
+            if e[p - 1].abs() <= deflation.thresh {
                 e[p - 1] = T::ZERO;
                 break;
             }
             p -= 1;
+        }
+        // `dbdsqr`'s relative convergence tests inside the block.
+        if let Some(i) = deflation.forward_split(d, e, p, q) {
+            e[i] = T::ZERO;
+            continue;
         }
 
         iter += 1;
@@ -619,7 +674,7 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
 pub fn svd_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<SvdDecomposition<T>> {
     validate_input(matrix)?;
     let [rows, cols] = matrix.shape();
-    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols)) {
+    if let Some((scaled, exponent)) = scaling::balanced(matrix, 1, svd_bound(rows, cols))? {
         let mut decomposition = svd_of_balanced(&scaled.view())?;
         scaling::restore(
             &mut decomposition.singular_values,

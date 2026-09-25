@@ -156,7 +156,7 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
         // range.
         let exponent = scaling::gate_exponent(&self.reduced, 2, |values, largest| {
             GateBound::factor(2 * scaling::norm_ratio_log2(values, largest))
-        })
+        })?
         .unwrap_or(0);
         scaling::scale_by_power_of_two(&mut self.reduced, -exponent);
         self.values.resize(n, T::ZERO);

@@ -71,6 +71,7 @@ fn gate_keeps_the_deflation_floor_below_epsilon_times_the_norm() {
     let mut values = vec![F16::from_f64(0.0); n * n];
     values[0] = largest;
     let exponent = scaling::gate_exponent(&values, 2, super::francis_bound(n))
+        .expect("the range is non-empty")
         .expect("0.3 is below the floor end");
     let moved = largest.scale_binary(-exponent);
     let floor = francis::deflation_floor::<F16>(n);

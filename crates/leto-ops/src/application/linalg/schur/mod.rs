@@ -40,11 +40,12 @@
 //! spectra.
 
 mod francis;
+mod standard_block;
 mod standardize;
 #[cfg(test)]
 mod tests;
 
-use crate::application::linalg::scaling::{self, GateBound, KernelWindow};
+use crate::application::linalg::scaling::{self, GateBound};
 use crate::domain::real::RealScalar;
 use leto::Complex;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
@@ -53,9 +54,9 @@ use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 /// degree 2, bound `2^(2r)`, `r = ⌈log₂(‖A‖_F/‖A‖_max)⌉`
 /// ([`scaling::norm_ratio_log2`]).
 ///
-/// The kernels form every local product scale-safely (`francis.rs`'s first
-/// column and `stack_reflector`, `standardize.rs`, the 2×2 eigenvalue
-/// quadratic below, the Hessenberg reflector). What remains is the
+/// The kernels form every local product scale-safely (`francis.rs`'s shift,
+/// first column and `stack_reflector`, `standard_block.rs`'s `dlanv2`, the
+/// Hessenberg reflector). What remains is the
 /// reflector application `w = vᵀ·H[rows, cols]` (`francis::apply_left`,
 /// `apply_right`): `stack_reflector` leaves `v` unscaled up to its window's
 /// upper end, `‖v‖₂ ≤ √(12·Ω/16) < √Ω`, and every column of `H` has 2-norm at
@@ -108,7 +109,7 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
     }
 
     // Balance by an exact power of two; `Q` is scale-invariant, `T` scales.
-    let balanced = scaling::balanced(matrix, 2, francis_bound(n));
+    let balanced = scaling::balanced(matrix, 2, francis_bound(n))?;
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -161,7 +162,7 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     // invariance means the Schur vectors are never needed), saving the O(n³) Q
     // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
     // Balance by an exact power of two; eigenvalues scale with the matrix.
-    let balanced = scaling::balanced(matrix, 2, francis_bound(n));
+    let balanced = scaling::balanced(matrix, 2, francis_bound(n))?;
     let (view, exponent) = match &balanced {
         Some((scaled, exponent)) => (scaled.view(), *exponent),
         None => (*matrix, 0),
@@ -184,55 +185,33 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
 }
 
 /// Read the eigenvalues off a real quasi-upper-triangular matrix `t` (`n × n`):
-/// each 1×1 block is a real eigenvalue, each 2×2 block (nonzero subdiagonal) a
-/// conjugate pair from its quadratic. Shared by [`RealSchur::eigenvalues`] and
-/// [`real_eigenvalues`] (SSOT).
+/// each 1×1 block is a real eigenvalue, each 2×2 block (nonzero subdiagonal)
+/// yields its pair through LAPACK `dlanv2`
+/// ([`standard_block`]). Shared by
+/// [`RealSchur::eigenvalues`] and [`real_eigenvalues`] (SSOT).
 ///
-/// The quadratic squares the block's trace, which underflows or overflows for
-/// entries near the ends of the range — a block at `2⁻⁸⁶` in `f32` squares to
-/// `2⁻¹⁷²`, below the smallest subnormal, and returned `{3, 3}` for `{2, 4}`.
-/// Each block is therefore formed scale-safely (the kernel tier of
-/// `linalg::scaling`, as LAPACK `dlanv2` guards the same quadratic): unscaled
-/// while its largest entry keeps the discriminant normal and finite, and
-/// otherwise divided by the power of two bringing that entry into `[1, 2)`,
-/// its eigenvalues multiplied back after — both exactly.
+/// The characteristic quadratic `(tr ± √(tr² − 4·det))/2` cancels to rounding
+/// level on a double eigenvalue (`O(√ε)` errors) and over- or underflows for
+/// entries near the ends of the range (`f32` at `2⁻⁸⁶` returned `{3, 3}` for
+/// `{2, 4}`); `dlanv2` avoids both.
 pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
     t: &[T],
     n: usize,
 ) -> Vec<Complex<T>> {
-    // `tr² ≤ 4m²` and `4·|det| ≤ 8m²` (`m` a block's largest entry), so
-    // `|disc| ≤ 12m² < 2⁴m²`: degree 2, bound `2⁴`.
-    let window = KernelWindow::new(2, 2, 4);
     let mut eigs = Vec::with_capacity(n);
     let mut i = 0usize;
     while i < n {
         let is_block = i + 1 < n && t[(i + 1) * n + i] != T::ZERO;
         if is_block {
-            let mut block = [
+            let (re1, im1, re2, im2) = standard_block::standardize_block(
                 t[i * n + i],
                 t[i * n + i + 1],
                 t[(i + 1) * n + i],
                 t[(i + 1) * n + i + 1],
-            ];
-            let exponent = window.exponent(&block);
-            scaling::scale_by_power_of_two(&mut block, -exponent);
-            let [a, b, c, d] = block;
-            let restore = |x: T| x.scale_binary(exponent);
-            let tr = a.add(d);
-            let det = a.mul(d).sub(b.mul(c));
-            let half = T::from_f64(0.5);
-            let four = T::from_f64(4.0);
-            let disc = tr.mul(tr).sub(four.mul(det));
-            if disc < T::ZERO {
-                let re = restore(tr.mul(half));
-                let im = restore(disc.neg().sqrt().mul(half));
-                eigs.push(Complex::new(re, im));
-                eigs.push(Complex::new(re, im.neg()));
-            } else {
-                let root = disc.sqrt();
-                eigs.push(Complex::new(restore(tr.add(root).mul(half)), T::ZERO));
-                eigs.push(Complex::new(restore(tr.sub(root).mul(half)), T::ZERO));
-            }
+            )
+            .eigenvalues();
+            eigs.push(Complex::new(re1, im1));
+            eigs.push(Complex::new(re2, im2));
             i += 2;
         } else {
             eigs.push(Complex::new(t[i * n + i], T::ZERO));

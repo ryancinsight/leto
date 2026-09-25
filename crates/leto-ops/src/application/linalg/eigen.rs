@@ -122,7 +122,7 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
-    let exponent = jacobi_gate_exponent(&a);
+    let exponent = jacobi_gate_exponent(&a)?;
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut target = NoEigenvectors;
 
@@ -179,7 +179,7 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
     mirror_upper_triangle(&mut a, n);
-    let exponent = jacobi_gate_exponent(&a);
+    let exponent = jacobi_gate_exponent(&a)?;
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
@@ -257,11 +257,11 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
 /// `diag(1e300, 1e-300)` or `f32` `diag(1e38, 1e-38)` has `r = 0` and is
 /// factored unscaled, exactly. The lower end (`smlnum`) only ever scales up,
 /// which is exact.
-fn jacobi_gate_exponent<T: RealScalar>(a: &[T]) -> i32 {
-    scaling::gate_exponent(a, 1, |values, largest| {
+fn jacobi_gate_exponent<T: RealScalar>(a: &[T]) -> Result<i32> {
+    Ok(scaling::gate_exponent(a, 1, |values, largest| {
         GateBound::factor(1 + scaling::norm_ratio_log2(values, largest))
-    })
-    .unwrap_or(0)
+    })?
+    .unwrap_or(0))
 }
 
 /// Copy the strictly upper triangle onto the lower, so an accepted but

@@ -159,7 +159,7 @@ pub fn col_piv_qr<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<ColPivQrD
     let rows = matrix.shape()[0];
     let f = match scaling::balanced(matrix, 2, |_, _| {
         GateBound::factor(thresholds::ceil_log2_count(rows))
-    }) {
+    })? {
         Some((scaled, exponent)) => {
             let mut f = decompose::factor(&scaled.view())?;
             scaling::restore(&mut f.r, exponent, "R entry exceeds the scalar range")?;

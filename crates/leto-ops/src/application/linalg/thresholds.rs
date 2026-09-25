@@ -122,29 +122,40 @@ fn root<T: RealScalar>(y: T, degree: u32, rounding: RootRounding) -> T {
 ///   whose intermediates underflow. Scaling *up* into this end is exact (no
 ///   entry can underflow), so the lower end costs no precision.
 /// - Deflation floor: a routine whose convergence test also deflates below an
-///   absolute threshold `2^g·safmin` (LAPACK `dbdsqr`'s `maxitr·n²·unfl`)
-///   raises the lower end to `2^g·smlnum`, so that threshold is at most
-///   `ε·‖A‖_max` and each such deflation stays inside the backward error.
+///   absolute threshold `2^g·safmin` raises the lower end toward `2^g·smlnum`,
+///   so that threshold is at most `ε·‖A‖_max` and each such deflation stays
+///   inside the backward error. Where that would pass the upper end (a narrow
+///   format at a large order — `F16` has only `Ω/smlnum ≈ 2²⁰` of headroom),
+///   the lower end stops at the upper end: overflow is the hard constraint,
+///   and the floor then costs at most `2^g·safmin` per deflation.
+///
+/// `None` when even the unraised range is empty, `smlnum^(1/d) > (Ω·2^−f)^(1/d)`:
+/// the bound factor `2^f` itself exceeds `Ω/smlnum`, so no power-of-two
+/// scaling keeps both ends — the order is past what the format can factor
+/// with these intermediates.
 pub(crate) fn homogeneous_safe_range<T: RealScalar>(
     degree: u32,
     factor_log2: i32,
     floor_log2: i32,
-) -> (T, T) {
+) -> Option<(T, T)> {
     let smlnum = safe_min::<T>().div(machine_epsilon::<T>());
     let root_end = root(smlnum, degree, RootRounding::NotBelow);
+    let upper = root(
+        overflow_threshold::<T>().scale_binary(-factor_log2),
+        degree,
+        RootRounding::NotAbove,
+    );
+    if root_end > upper {
+        return None;
+    }
     let floor_end = smlnum.scale_binary(floor_log2);
-    (
-        if floor_end > root_end {
-            floor_end
-        } else {
-            root_end
-        },
-        root(
-            overflow_threshold::<T>().scale_binary(-factor_log2),
-            degree,
-            RootRounding::NotAbove,
-        ),
-    )
+    let floor_end = if floor_end < upper { floor_end } else { upper };
+    let lower = if floor_end > root_end {
+        floor_end
+    } else {
+        root_end
+    };
+    Some((lower, upper))
 }
 
 /// The window of a kernel-local magnitude `m` inside which a kernel forms its
@@ -198,7 +209,7 @@ pub(crate) fn ceil_log2_count(n: usize) -> i32 {
 /// Kept as a test fixture for the derivation checks below.
 #[cfg(test)]
 pub(crate) fn safe_range<T: RealScalar>() -> (T, T) {
-    homogeneous_safe_range::<T>(2, 0, 0)
+    homogeneous_safe_range::<T>(2, 0, 0).expect("invariant: degree 2, no bound factor")
 }
 
 /// `‖A‖_F` of `values` without overflow or underflow in the squares: the
@@ -266,13 +277,19 @@ mod tests {
             "{rmax}"
         );
         // The bound factor divides only the overflow side.
-        let (rmin4, rmax4) = homogeneous_safe_range::<F16>(2, 4, 0);
+        let (rmin4, rmax4) = homogeneous_safe_range::<F16>(2, 4, 0).expect("non-empty");
         assert_eq!(f64::from(rmin4.to_f32()), rmin);
         assert!(f64::from(rmax4.to_f32()) * f64::from(rmax4.to_f32()) <= 65504.0 / 16.0);
         // A bound such as 128·n⁴ at n = 100 (≈ 2³³·⁶) exceeds F16's range as a
         // value but not as an exponent: the upper end is small and finite.
-        let (_, rmax_large) = homogeneous_safe_range::<F16>(4, 34, 0);
-        assert!(rmax_large.to_f32() > 0.0 && rmax_large.to_f32() < 1.0);
+        // …and a factor of 2²⁰, past `Ω/smlnum = 65504·2⁴`, empties the range:
+        // reported, never a lower end above the upper one.
+        assert!(homogeneous_safe_range::<F16>(1, 20, 0).is_none());
+        let (lower, upper) = homogeneous_safe_range::<F16>(1, 19, 0).expect("non-empty");
+        assert!(lower <= upper);
+        // A deflation floor past the upper end stops at it.
+        let (lower, upper) = homogeneous_safe_range::<F16>(1, 12, 30).expect("non-empty");
+        assert_eq!(lower.to_f32(), upper.to_f32());
     }
 
     #[test]
