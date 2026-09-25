@@ -26,6 +26,15 @@
 - Outcome (interim mitigation, this item covers the underlying rewrite): `schur`, `eigenvalues`, and the SVD family gate their balancing decision on the narrower `product_safe_range` instead of `safe_range`, which the exhaustive sweep in `tests/ops/scale_range.rs` and `tests/ops/schur.rs` confirms closes the observed failure band. The shift/discriminant formulas themselves remain not proven scale-invariant throughout the wider range.
 - Acceptance: derive and implement scale-invariant Francis double-shift and Golub-Kahan shift formulas (or a rigorous bound proving `product_safe_range`'s margin is sufficient for every shipped scalar and matrix order), then widen the balancing gate back to `safe_range` and remove this item.
 
+<a id="LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25"></a>
+
+## LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25 — `MatrixDecompose::symmetric_eigen` still runs classical Jacobi [minor] — todo
+- priority: performance
+
+- Evidence: `symmetric_eigen_qr` landed in #233 (CHANGELOG [Unreleased]) for ritk's 60×60 MP-PCA Gram matrices, which cost 6.2 ms each under Jacobi's pivot scans, but `MatrixDecompose::symmetric_eigen` in `leto-ops/src/application/linalg/matrix.rs` still calls `symmetric_eigen_jacobi`.
+- Outcome: route `MatrixDecompose::symmetric_eigen` through the QL solver, keeping Jacobi as the high-relative-accuracy option.
+- Acceptance: existing `symmetric_eigen` tests pass unchanged within their tolerances; a 60×60 benchmark shows the QL cost.
+
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
