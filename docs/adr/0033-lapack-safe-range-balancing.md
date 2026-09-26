@@ -150,7 +150,9 @@ routine converges within the certificates and the informative bounds;
 `schur.rs` pins the gate edge and the deflation decisions; `eigen.rs`
 Jacobi exact on 295 diagonals per format. In-range results are not
 bit-identical to the pre-change tree; `pinv` reports `Overflow` for a
-non-finite reciprocal.
+non-finite reciprocal. Cost: `dbdsqr`'s split tolerance `tolmul·ε ≈ 90ε`
+raises the f64 `svd_decompose` residual on ordinary inputs to up to
+`90ε‖A‖_F` (review measurement), against `≤ 10ε‖A‖_F` before (since 9054d80).
 
 ## Driving evidence
 

@@ -126,10 +126,6 @@ impl<T: RealScalar> Deflation<T> {
         }
     }
 
-    /// `dbdsqr`'s forward convergence test on the block `[p, q]`: the bottom
-    /// `|e_{q−1}| ≤ tol·|d_q|`, then the recurrence `μ ← |d_{i+1}|·μ/(μ + |eᵢ|)`
-    /// from `μ = |d_p|`, splitting at the first `|eᵢ| ≤ tol·μ`. Returns the
-    /// index of the superdiagonal it zeroes, if any.
     /// `dbdsqr`'s first zero-shift test: `n·tol·(σ̃_min/σ_max) ≤ max(ε, tol/100)`
     /// — shifting would ruin the relative accuracy of the block's smallest
     /// singular value — with `σ̃_min` the forward recurrence's minimum over
@@ -160,6 +156,10 @@ impl<T: RealScalar> Deflation<T> {
         T::from_usize(k).mul(self.tol).mul(smallest.div(largest)) <= bound
     }
 
+    /// `dbdsqr`'s forward convergence test on the block `[p, q]`: the bottom
+    /// `|e_{q−1}| ≤ tol·|d_q|`, then the recurrence `μ ← |d_{i+1}|·μ/(μ + |eᵢ|)`
+    /// from `μ = |d_p|`, splitting at the first `|eᵢ| ≤ tol·μ`. Returns the
+    /// index of the superdiagonal it zeroes, if any.
     fn forward_split(self, d: &[T], e: &[T], p: usize, q: usize) -> Option<usize> {
         if e[q - 1].abs() <= self.tol.mul(d[q].abs()) {
             return Some(q - 1);
@@ -1010,5 +1010,24 @@ mod tests {
             windows.rotation,
         );
         assert_eq!((d, e), (d0, e0));
+    }
+
+    /// `dbdsqr`'s first zero-shift test scales with the order: `k = 3`,
+    /// `d = (1, 1, x)`, `e = 0` gives `σ̃_min/σ_max = x` and `tol ≈ 90.5ε` in
+    /// `f64`, so the test fires for `x ≤ 1/(3·90.5) ≈ 1/272`. At `x = 1/150`
+    /// it must not fire (without the order factor it would, `90.5/150 < 1`);
+    /// at `x = 1/400` it must.
+    #[test]
+    fn zero_shift_test_scales_with_the_order() {
+        use super::Deflation;
+        for (x, fires) in [(1.0 / 150.0, false), (1.0 / 400.0, true)] {
+            let (d, e) = (vec![1.0f64, 1.0, x], vec![0.0, 0.0, 0.0]);
+            let deflation = Deflation::new(&d, &e, 3);
+            assert_eq!(
+                deflation.shift_ruins_accuracy(&d, &e, 0, 2, 3),
+                fires,
+                "x = {x}"
+            );
+        }
     }
 }

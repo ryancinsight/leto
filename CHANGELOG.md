@@ -183,7 +183,10 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   at `2⁻⁸⁶` returned `{3, 3}` for `{2, 4}`). `pinv` reports
   `LetoError::Overflow` when a retained singular value's reciprocal is not
   finite, and an unrepresentable restored result is likewise
-  `LetoError::Overflow`, rather than `±∞`/`NaN` as a wrong `Ok`.
+  `LetoError::Overflow`, rather than `±∞`/`NaN` as a wrong `Ok`. Cost:
+  `dbdsqr`'s split tolerance (`tolmul·ε ≈ 90ε` in f64) raises the
+  `svd_decompose` residual on ordinary f64 inputs to up to `90ε·‖A‖_F`, from
+  `≤ 10ε·‖A‖_F`.
 - [patch] Jacobi (`symmetric_eigen_jacobi`) mirrors the upper triangle onto
   the lower after the symmetry check, so an accepted rounding-level
   asymmetry is resolved by the upper triangle; `symmetric_eigen_qr` resolves

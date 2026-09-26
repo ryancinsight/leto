@@ -5,10 +5,13 @@ use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
 
 /// LAPACK `dbdsqr`'s zero-shift QR sweep (Demmel & Kahan, loop 120, chasing
-/// top to bottom): one implicit QR step on `BᵀB` with shift `0`, which keeps
-/// every singular value to high relative accuracy and converges where a
-/// shift near a tiny singular value would only flip signs (`F16`
-/// skew-symmetric tridiagonals cycled with period 2 on the shifted step).
+/// top to bottom only): one implicit QR step on `BᵀB` with shift `0`, which
+/// converges where a shift near a tiny singular value would only flip signs
+/// (`F16` skew-symmetric tridiagonals cycled with period 2 on the shifted
+/// step). Without `dbdsqr`'s chase-direction choice (bottom to top when the
+/// bottom of the block is heavier) the tiny singular values of a
+/// bottom-heavy block are resolved only to the normwise backward error, not
+/// to high relative accuracy (`LETO-BIDIAGONAL-CHASE-DIRECTION-2026-09-25`).
 /// Right rotations update `V`, left rotations `U`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn zero_shift_sweep<T: RealScalar, const VEC: bool>(
