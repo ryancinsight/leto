@@ -3,9 +3,8 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use eunomia::RealField;
 use leto::{Array2, SliceArg, Storage};
-use leto_ops::{pinv, singular_values, svd_decompose, MatrixProduct, RealScalar};
+use leto_ops::{pinv, singular_values, svd_decompose, MatrixProduct};
 
 fn assert_close(lhs: f64, rhs: f64, epsilon: f64) {
     assert!(
@@ -138,12 +137,24 @@ fn svd_accepts_strided_full_rank_view() {
     assert_close(values[1], 2.0, 1.0e-12);
 }
 
-#[test]
-fn svd_is_generic_over_f32() {
-    let matrix = Array2::from_shape_vec([2, 2], vec![2.0f32, 0.0, 0.0, 1.0]).unwrap();
+/// A diagonal needs no reflection (each reflector's tail is zero, `τ = 0`)
+/// and no rotation (every superdiagonal is already zero), so both entry points
+/// return its magnitudes exactly, in every format.
+fn check_diagonal_singular_values_are_exact<T: leto_ops::RealScalar>() {
+    let two = T::from_f64(2.0);
+    let matrix = Array2::from_shape_vec([2, 2], vec![two, T::ZERO, T::ZERO, T::ONE]).unwrap();
     let values = singular_values(&matrix.view()).unwrap();
-    assert!((values[0] - 2.0).abs() <= 1.0e-5);
-    assert!((values[1] - 1.0).abs() <= 1.0e-5);
+    assert_eq!([values[0].to_f64(), values[1].to_f64()], [2.0, 1.0]);
+    let full = svd_decompose(&matrix.view()).unwrap().singular_values;
+    assert_eq!([full[0].to_f64(), full[1].to_f64()], [2.0, 1.0]);
+}
+
+#[test]
+fn diagonal_singular_values_are_exact_in_every_format() {
+    check_diagonal_singular_values_are_exact::<f64>();
+    check_diagonal_singular_values_are_exact::<f32>();
+    check_diagonal_singular_values_are_exact::<eunomia::F16>();
+    check_diagonal_singular_values_are_exact::<eunomia::Bf16>();
 }
 
 #[test]
@@ -366,215 +377,105 @@ fn svd_decompose_reconstructs_and_matches() {
     }
 }
 
-// ── Exactly rank-deficient input, at every precision ────────────────────────
-//
-// Rank deficiency has two structurally different forms, and only one of them is
-// covered by testing a *near*-deficient matrix. When the deficiency is exact, the
-// Householder bidiagonalization can produce an **exact zero on the diagonal** of
-// `B`; a shifted QR step cannot deflate that (the implicit `BᵀB` is singular, the
-// Wilkinson shift takes its nonzero eigenvalue, and the sweep reaches a fixed
-// point at `d = 0`, `e ≠ 0` that the deflation test never accepts). It needs the
-// zero-diagonal chase instead.
-//
-// Whether the zero comes out exact depends on the rounding of the
-// bidiagonalization, so it depends on the precision: `[[1,2],[2,4],[3,6]]` gives
-// an exact `d[1] = 0` at `f32` and a `8.9e-8` residue at `f64`. Testing rank
-// deficiency at `f64` and genericity only on full-rank input therefore leaves the
-// case uncovered — which is how a non-convergence error reached the GPU
-// consumers. These cases run every shape at **both** precisions.
+mod rank_deficiency;
 
-/// Backward-error bound for a Golub–Reinsch SVD of an `m × n` matrix:
-/// `A + E = Û Σ̂ V̂ᵀ` with `‖E‖₂ ≤ p·ε·‖A‖₂` and `‖ÛᵀÛ − I‖₂ ≤ p·ε`, `p` modest in
-/// the dimensions (Golub & Van Loan, *Matrix Computations* 4th ed., §8.6.3: the
-/// factorization is a product of Householder reflectors and plane rotations, each
-/// contributing `O(ε)`, with `O(max(m,n))` of them touching any one entry).
-/// `p = 8·max(m, n)` throughout. Weyl's theorem carries `‖E‖₂` to each
-/// `|σ̂ᵢ − σᵢ|`, including the `σᵢ` whose exact value is `0` — so the same bound
-/// is what a rank-deficient direction must satisfy.
-///
-/// Returns `(absolute, relative)`: the `‖A‖₂ ≈ σ₁`-scaled bound for singular
-/// values and reconstruction, and the bare relative bound for orthonormality.
-fn error_bounds<T: RealScalar + RealField>(rows: usize, cols: usize, norm: f64) -> (f64, f64) {
-    #[allow(clippy::cast_precision_loss)]
-    let relative = 8.0 * rows.max(cols) as f64 * <T as RealField>::EPSILON.to_f64();
-    (relative * norm, relative)
-}
-
-/// Decompose `entries` (`rows × cols`, exactly representable in binary) at
-/// precision `T` and assert full value semantics against the analytic `expected`
-/// spectrum: singular values, reconstruction `A = U Σ Vᵀ`, and orthonormal
-/// columns of both `U` and `V`.
-///
-/// Orthonormality is asserted on **both** factors and at deficient rank
-/// specifically: the deleted one-sided Jacobi path returned a non-orthonormal `U`
-/// exactly here (`‖UᵀU − I‖ = 1.0` on a null-space column), and that was a
-/// load-bearing reason for keeping this path. Nothing may regress it.
-fn assert_rank_deficient_svd<T: RealScalar + RealField>(
-    rows: usize,
-    cols: usize,
-    entries: &[f64],
-    expected: &[f64],
-) {
-    let values: Vec<T> = entries.iter().map(|&x| T::from_f64(x)).collect();
-    let matrix = Array2::from_shape_vec([rows, cols], values).unwrap();
-    let svd = svd_decompose(&matrix.view()).unwrap();
-    let rank = rows.min(cols);
-    let (absolute, relative) = error_bounds::<T>(rows, cols, expected[0]);
-
-    assert_eq!(svd.singular_values.len(), rank);
-    assert_eq!(expected.len(), rank);
-    let sigma: Vec<f64> = svd.singular_values.iter().map(|x| x.to_f64()).collect();
-    for window in sigma.windows(2) {
+/// Bf16 skew-symmetric tridiagonals near `safmin` (superdiagonals from a
+/// seeded search). The first two fail to converge when the SVD gate uses the
+/// degree-1 lower end `smlnum` — the small singular values then sit a few
+/// binades above `safmin` — and the third when the shift's lower window is
+/// degree 2; the gate's degree-2 range and the
+/// degree-4 shift window keep all three. Each result is certified against the
+/// `f64` singular values of the same entries (`a_posteriori.rs`, Weyl).
+#[test]
+fn bf16_skew_tridiagonals_near_safmin_converge() {
+    use super::a_posteriori;
+    use super::backward_error;
+    use eunomia::Bf16;
+    let cases: [&[f64]; 3] = [
+        &[
+            -4.738_711_601_752_347e-38,
+            6.244_813_738_743_402e-39,
+            3.801_989_540_940_836e-38,
+            1.864_260_572_007_221_6e-38,
+            1.416_470_692_740_856_4e-36,
+        ],
+        &[
+            -9.146_815_417_335_925e-38,
+            1.900_994_770_470_418e-38,
+            2.926_980_933_547_496e-36,
+            -3.808_601_696_664_211_5e-36,
+            -2.938_735_877_055_718_8e-37,
+            7.438_675_188_797_288e-39,
+            -2.846_900_380_897_727_6e-39,
+        ],
+        &[
+            5.260_337_219_929_737e-37,
+            3.379_546_258_614_076_6e-37,
+            1.763_241_526_233_431_3e-38,
+            -3.338_403_956_335_296_5e-36,
+            -3.818_005_651_470_79e-35,
+            8.228_460_455_756_013e-36,
+            7.310_105_494_176_1e-38,
+        ],
+    ];
+    for sup in cases {
+        let n = sup.len() + 1;
+        let mut image = vec![0.0_f64; n * n];
+        for (i, s) in sup.iter().enumerate() {
+            image[i * n + i + 1] = *s;
+            image[(i + 1) * n + i] = -s;
+        }
+        let values: Vec<Bf16> = image.iter().map(|&v| Bf16::from_f64(v)).collect();
         assert!(
-            window[0] >= window[1],
-            "σ must be descending, got {sigma:?}"
+            values
+                .iter()
+                .zip(&image)
+                .all(|(v, x)| f64::from(v.to_f32()) == *x),
+            "entries are exact in Bf16"
         );
-    }
-    for (got, want) in sigma.iter().zip(expected) {
-        assert!(
-            (got - want).abs() <= absolute,
-            "{rows}x{cols}: σ {got} vs {want}, bound {absolute:e}"
+        let matrix = Array2::from_shape_vec([n, n], values).unwrap();
+        singular_values(&matrix.view()).unwrap();
+        let full = svd_decompose(&matrix.view()).unwrap();
+        let as_f64 = |m: &Array2<Bf16>| -> Vec<f64> {
+            m.storage()
+                .as_slice()
+                .iter()
+                .map(|v| f64::from(v.to_f32()))
+                .collect()
+        };
+        let sigmas: Vec<f64> = full
+            .singular_values
+            .iter()
+            .map(|v| f64::from(v.to_f32()))
+            .collect();
+        let (u, v) = (
+            as_f64(&full.left_singular_vectors),
+            as_f64(&full.right_singular_vectors),
         );
-    }
-
-    let u = svd.left_singular_vectors.storage().as_slice();
-    let v = svd.right_singular_vectors.storage().as_slice();
-    for row in 0..rows {
-        for col in 0..cols {
-            let value: f64 = (0..rank)
-                .map(|i| u[row * rank + i].to_f64() * sigma[i] * v[col * rank + i].to_f64())
-                .sum();
-            let target = entries[row * cols + col];
+        let mut diagonal = vec![0.0; n * n];
+        for (i, s) in sigmas.iter().enumerate() {
+            diagonal[i * n + i] = *s;
+        }
+        let residual = a_posteriori::residual(&image, &u, &diagonal, &v, n, n, n);
+        let radius = a_posteriori::svd_certificate(
+            residual,
+            a_posteriori::gram_defect(&u, n, n),
+            a_posteriori::gram_defect(&v, n, n),
+            &sigmas,
+        );
+        let reference = singular_values(
+            &Array2::from_shape_vec([n, n], image.clone())
+                .unwrap()
+                .view(),
+        )
+        .unwrap();
+        let norm = image.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let bound = radius + backward_error::svd(n, n, f64::EPSILON) * norm;
+        for (s, r) in sigmas.iter().zip(&reference) {
             assert!(
-                (value - target).abs() <= absolute,
-                "{rows}x{cols}: A[{row}][{col}] reconstructs as {value} not {target}"
+                (s - r).abs() <= bound,
+                "n = {n}: σ {s:e} vs {r:e}, certified {bound:e}"
             );
         }
-    }
-
-    for (name, factor, height) in [("U", u, rows), ("V", v, cols)] {
-        for a in 0..rank {
-            for b in 0..rank {
-                let dot: f64 = (0..height)
-                    .map(|r| factor[r * rank + a].to_f64() * factor[r * rank + b].to_f64())
-                    .sum();
-                let target = f64::from(u8::from(a == b));
-                assert!(
-                    (dot - target).abs() <= relative,
-                    "{rows}x{cols}: {name}ᵀ{name}[{a}][{b}] = {dot} not {target}"
-                );
-            }
-        }
-    }
-}
-
-/// Exactly rank-1 tall input — the downstream reproducer.
-///
-/// `A = [1,2,3]ᵀ [1,2]`: column 2 is exactly twice column 1, so the rank is 1 and
-/// `σ = (‖[1,2,3]‖·‖[1,2]‖, 0) = (√70, 0)`. At `f32` its bidiagonal factor is
-/// `d = [−3.7416573, 0]`, `e = [7.4833145]` — the exact zero diagonal.
-#[test]
-fn svd_decompose_reveals_exact_rank_deficiency_tall() {
-    let entries = [1.0, 2.0, 2.0, 4.0, 3.0, 6.0];
-    let expected = [70.0f64.sqrt(), 0.0];
-    assert_rank_deficient_svd::<f32>(3, 2, &entries, &expected);
-    assert_rank_deficient_svd::<f64>(3, 2, &entries, &expected);
-}
-
-/// Exactly rank-1 wide input: the transpose of the tall reproducer, which takes
-/// the `m < n` branch (SVD of `Aᵀ` with `U` and `V` swapped), so the zero lands in
-/// the other factor.
-#[test]
-fn svd_decompose_reveals_exact_rank_deficiency_wide() {
-    let entries = [1.0, 2.0, 3.0, 2.0, 4.0, 6.0];
-    let expected = [70.0f64.sqrt(), 0.0];
-    assert_rank_deficient_svd::<f32>(2, 3, &entries, &expected);
-    assert_rank_deficient_svd::<f64>(2, 3, &entries, &expected);
-}
-
-/// Exactly rank-2 square input, built as a sum of two orthogonal outer products
-/// so the spectrum is analytic: `A = u₁v₁ᵀ + u₂v₂ᵀ` with `u₁ ⊥ u₂`, `v₁ ⊥ v₂`
-/// gives `σ = (‖u₂‖‖v₂‖, ‖u₁‖‖v₁‖, 0) = (2√6, √6, 0)` for
-/// `u₁ = (1,1,1), v₁ = (1,0,−1), u₂ = (1,0,−1), v₂ = (2,2,2)`.
-#[test]
-fn svd_decompose_reveals_exact_rank_deficiency_square() {
-    let entries = [3.0, 2.0, 1.0, 1.0, 0.0, -1.0, -1.0, -2.0, -3.0];
-    let expected = [2.0 * 6.0f64.sqrt(), 6.0f64.sqrt(), 0.0];
-    assert_rank_deficient_svd::<f32>(3, 3, &entries, &expected);
-    assert_rank_deficient_svd::<f64>(3, 3, &entries, &expected);
-}
-
-/// Rank 2 of 4: **two** deficient directions, so the iteration must chase more
-/// than one zero out of the same matrix, and the trailing block is entirely zero.
-/// `u₁ = (1,1,1,1), v₁ = (1,0,1,0), u₂ = (1,−1,1,−1), v₂ = (0,2,0,2)` (mutually
-/// orthogonal) give `σ = (4√2, 2√2, 0, 0)`.
-#[test]
-fn svd_decompose_reveals_rank_two_of_four() {
-    let entries = [
-        1.0, 2.0, 1.0, 2.0, //
-        1.0, -2.0, 1.0, -2.0, //
-        1.0, 2.0, 1.0, 2.0, //
-        1.0, -2.0, 1.0, -2.0,
-    ];
-    let expected = [4.0 * 2.0f64.sqrt(), 2.0 * 2.0f64.sqrt(), 0.0, 0.0];
-    assert_rank_deficient_svd::<f32>(4, 4, &entries, &expected);
-    assert_rank_deficient_svd::<f64>(4, 4, &entries, &expected);
-}
-
-/// Rank 2 of 3 in a non-square tall shape (`4 × 3`) and its wide transpose, so
-/// the deficient case is exercised where `m ≠ n` on both branches.
-/// `u₁ = (1,1,1,1), v₁ = (1,0,1)` and `u₂ = (1,−1,1,−1), v₂ = (0,2,0)` give
-/// `σ = (4, 2√2, 0)`.
-#[test]
-fn svd_decompose_reveals_rank_deficiency_in_rectangular_shapes() {
-    let tall = [1.0, 2.0, 1.0, 1.0, -2.0, 1.0, 1.0, 2.0, 1.0, 1.0, -2.0, 1.0];
-    let wide = [1.0, 1.0, 1.0, 1.0, 2.0, -2.0, 2.0, -2.0, 1.0, 1.0, 1.0, 1.0];
-    let expected = [4.0, 2.0 * 2.0f64.sqrt(), 0.0];
-    assert_rank_deficient_svd::<f32>(4, 3, &tall, &expected);
-    assert_rank_deficient_svd::<f64>(4, 3, &tall, &expected);
-    assert_rank_deficient_svd::<f32>(3, 4, &wide, &expected);
-    assert_rank_deficient_svd::<f64>(3, 4, &wide, &expected);
-}
-
-/// The values-only path (`bidiagonal_diag_colmajor` + non-accumulating iteration)
-/// and the full SVD must agree on exactly rank-deficient input at both
-/// precisions. They reach the zero diagonal by different roundings — the
-/// reproducer's `d[1]` is `8.9e-8` on the values-only path and exactly `0` on the
-/// accumulating one — so agreement here is a genuine differential check on the
-/// chase rather than a restatement of one path.
-#[test]
-fn singular_values_agree_with_full_svd_at_exact_rank_deficiency() {
-    fn compare<T: RealScalar + RealField>(rows: usize, cols: usize, entries: &[f64], norm: f64) {
-        let values: Vec<T> = entries.iter().map(|&x| T::from_f64(x)).collect();
-        let a = Array2::from_shape_vec([rows, cols], values).unwrap();
-        let full = svd_decompose(&a.view()).unwrap().singular_values;
-        let only = singular_values(&a.view()).unwrap();
-        let (absolute, _) = error_bounds::<T>(rows, cols, norm);
-        assert_eq!(full.len(), only.len());
-        for (l, r) in full.iter().zip(only.iter()) {
-            assert!(
-                (l.to_f64() - r.to_f64()).abs() <= absolute,
-                "{rows}x{cols}: {} vs {}",
-                l.to_f64(),
-                r.to_f64()
-            );
-        }
-    }
-
-    let cases: [(usize, usize, Vec<f64>, f64); 3] = [
-        (3, 2, vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0], 70.0f64.sqrt()),
-        (2, 3, vec![1.0, 2.0, 3.0, 2.0, 4.0, 6.0], 70.0f64.sqrt()),
-        (
-            4,
-            4,
-            vec![
-                1.0, 2.0, 1.0, 2.0, 1.0, -2.0, 1.0, -2.0, 1.0, 2.0, 1.0, 2.0, 1.0, -2.0, 1.0, -2.0,
-            ],
-            4.0 * 2.0f64.sqrt(),
-        ),
-    ];
-    for (rows, cols, entries, norm) in cases {
-        compare::<f32>(rows, cols, &entries, norm);
-        compare::<f64>(rows, cols, &entries, norm);
     }
 }

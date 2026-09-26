@@ -47,6 +47,8 @@ pub mod properties;
 pub mod qr;
 /// Compact-WY block Householder reflectors (BLAS-3 reflector aggregation).
 pub(crate) mod reflector_block;
+/// Exact power-of-two balancing of factorization inputs.
+pub(crate) mod scaling;
 /// Real Schur decomposition `A = Q T Qᵀ` via Francis double-shift QR.
 pub mod schur;
 /// Thin SVD and singular values for finite matrices.

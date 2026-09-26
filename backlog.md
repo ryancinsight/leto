@@ -1,22 +1,37 @@
 # Leto Work Backlog
 
-<a id="LETO-DENSE-SCALE-RANGE-2026-09-24"></a>
+<a id="LETO-BIDIAGONAL-CHASE-DIRECTION-2026-09-25"></a>
 
-## LETO-DENSE-SCALE-RANGE-2026-09-24 — SVD, Schur and column-pivoted QR fail at extreme scales [patch] — todo
+## LETO-BIDIAGONAL-CHASE-DIRECTION-2026-09-25 — Bidiagonal QR lacks `dbdsqr`'s chase-direction choice [patch] — todo
 - priority: correctness
+- needs: none
+- scope: `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr.rs`, `crates/leto-ops/src/application/linalg/svd/zero_shift.rs`, `crates/leto-ops/tests/ops/svd/`
+- Evidence: the sweeps (shifted and zero-shift) always chase top to bottom with the forward convergence tests; `dbdsqr` chases bottom to top when `|d_q| > |d_p|`, with the matching backward tests. On bottom-heavy f32 bidiagonals (smallest singular value `≈ 6·10⁻¹⁵` of the largest) the smallest is returned as `0` in 28 of 600 (PR #237 review of 6e397c8; base failed all 28); the result is within the normwise bound only.
+- Outcome: implement `dbdsqr`'s direction choice (`IDIR`), both sweep directions and the backward convergence tests, so tiny singular values of graded bidiagonals keep high relative accuracy.
+- Acceptance: on those 600 bidiagonals every singular value is within `c·k·ε` relative of the `f64` reference, `c` derived from Demmel & Kahan's relative error bound for the zero-shift sweep.
+- Next step: port `dbdsqr`'s `IDIR` selection and loops 130–160 (bottom-to-top chase) against the LAPACK source.
 
-- Evidence: the #233/#234 review probes. `svd_decompose` and `schur` return non-convergence at extreme magnitudes, and `col_piv_qr` of an f64 matrix scaled by 1e160 returns `Ok` with rank 0.
-- Cause to confirm: unscaled sums of squares; `householder::reflect_in_place` is now scaled, so re-probe first.
-- Acceptance: a per-format exponent sweep for each solver (correct result or typed error, never a wrong `Ok`), as in `tests/ops/symmetric_qr.rs`.
+<a id="LETO-BF16-SKEW-FRANCIS-STALL-2026-09-25"></a>
 
-<a id="LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23"></a>
-
-## LETO-JACOBI-RELATIVE-TOLERANCE-2026-09-23 — Scale-aware Jacobi tolerance and a typed cap [minor] — review
+## LETO-BF16-SKEW-FRANCIS-STALL-2026-09-25 — Francis stalls on one graded Bf16 skew-symmetric tridiagonal [patch] — todo
 - priority: correctness
+- needs: none
+- scope: `crates/leto-ops/src/application/linalg/schur/francis.rs`, `crates/leto-ops/tests/ops/schur.rs`
+- Evidence: a seeded sweep of 46,440 Bf16 skew-symmetric tridiagonals (orders 3–8, magnitudes log-uniform over `[10⁻⁴, 1]`, every exponent) found one (and a finer sweep, every exponent, 2 of 30,960) where `schur`/`eigenvalues` exhaust `MAX_ITER`: order 8, superdiagonal `(2.05e-21, −1.50e-22, 3.18e-23, −5.56e-24, 5.48e-24, 2.40e-24, −3.18e-23)`, failing at every scale the gate maps to one landing (present at 3dbea45 as well). A subdiagonal `≈ 1.6·10⁻⁶·‖H‖` sits at the rounding-noise level of the zero diagonal (`tst ≈ 10⁻⁵·‖H‖`), so neither the `ulp·tst` pre-check nor Ahues–Tisseur deflates it and the bulge dies there.
+- Outcome: the order-8 case converges, and the scan's skew families add Bf16 orders with that dynamic range.
+- Acceptance: the case returns `Ok` with the a-posteriori certificate holding; no regression in the skew probes.
+- Next step: trace the iterate against `dlahqr`'s arithmetic emulated in Bf16 before choosing a deflation change.
 
-- Defects: the absolute `1e-12` tolerance stops early on small-magnitude matrices (`[[2e-13,1e-13],[1e-13,2e-13]]` returned `{2e-13, 2e-13}`), and exhausting the `32·n²` rotation budget returned `Ok`.
-- Outcome: pair criterion `|a_pq| ≤ ε·max(√(|a_pp a_qq|), ε·‖A‖_F)` (scale-aware, relative accuracy), symmetry accepted within `(n + 2)·ε·‖A‖_F`, `ConvergenceError` on the budget, `InvalidInput` for invalid input.
-- Acceptance: the regression matrix, a scale sweep `s ∈ [1e-300, 1e300]` at `32·n²·ε` relative, the budget error with its residual, existing Jacobi tests.
+<a id="LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25"></a>
+
+## LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25 — No derived oracle bounds F16/Bf16 factor accuracy [patch] — todo
+- priority: verification
+- needs: none
+- scope: `crates/leto-ops/tests/ops/backward_error.rs`, `crates/leto-ops/tests/ops/a_posteriori.rs`, `crates/leto-ops/tests/ops/graded_scan.rs`, `crates/leto-ops/tests/ops/scale_range.rs`
+- Evidence: PR #237's deterministic γ bounds are vacuous for the iterative routines in F16/Bf16 (one length-3 reflector costs γ₅₃ ≈ 0.027/0.26); the a-posteriori certificates bind values to factors but assert nothing about the factors' residual or orthogonality in those formats (ADR 0033, Tests).
+- Outcome: assert F16/Bf16 factor accuracy against a derived probabilistic bound: Higham & Mary, "A new approach to probabilistic rounding error analysis", SIAM J. Sci. Comput. 41(5), A2815–A2835 (2019) — `γ̃_n(λ) = exp(λ√n·u + n·u²/(1 − u)) − 1` with probability ≥ `1 − 2exp(−λ²(1 − u)²/2)` per product (Theorem 2.4, eqs. 2.1, 2.3). The theorem and equation numbers are verified against the preprint (MIMS EPrint 2018.33) only; the journal volume and pages are from citing literature. Its Model 2.1 (independent mean-zero rounding errors) is an assumption about round-to-nearest, to be stated with the failure probability chosen. Alternative oracle: the deterministic bound at an instrumented transformation count.
+- Acceptance: tests assert F16 and Bf16 residual and orthogonality below that bound across the scan families.
+- Next step: derive the per-entry rounding count of the Francis and Golub–Kahan paths so `γ̃` replaces `γ` term by term.
 
 <a id="LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25"></a>
 

@@ -1,6 +1,7 @@
 //! Implicit-shift QL iteration on a symmetric tridiagonal matrix
 //! (`tql2`, Bowdler, Martin, Reinsch & Wilkinson 1968).
 
+use crate::application::linalg::scaling::hypot;
 use crate::application::linalg::thresholds::machine_epsilon;
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};
@@ -15,19 +16,6 @@ const SWEEPS_PER_EIGENVALUE: usize = 30;
 /// The sweep budget for an order-`n` tridiagonal: `30·n`.
 pub(super) fn sweep_budget(n: usize) -> usize {
     SWEEPS_PER_EIGENVALUE.saturating_mul(n)
-}
-
-/// `√(x² + y²)` without the overflow or underflow of squaring the larger
-/// operand.
-#[inline]
-fn hypot<T: RealScalar>(x: T, y: T) -> T {
-    let (x, y) = (x.abs(), y.abs());
-    let (large, small) = if x >= y { (x, y) } else { (y, x) };
-    if large == T::ZERO {
-        return T::ZERO;
-    }
-    let ratio = small.div(large);
-    large.mul(T::ONE.add(ratio.mul(ratio)).sqrt())
 }
 
 /// `scale + |value| == scale`: `value` is below the rounding of `scale`.

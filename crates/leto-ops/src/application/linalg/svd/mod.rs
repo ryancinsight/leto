@@ -29,6 +29,7 @@ use leto::{ArrayView2, LetoError, Result};
 pub mod bidiagonal_qr;
 /// Moore-Penrose pseudoinverse.
 pub mod pseudoinverse;
+mod triangular_pair;
 
 pub use bidiagonal_qr::{singular_values, svd_decompose};
 pub use pseudoinverse::pinv;

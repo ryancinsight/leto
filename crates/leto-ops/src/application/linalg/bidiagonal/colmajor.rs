@@ -20,26 +20,39 @@
 //! (`axpy_rows`) over the trailing segment block, likewise batched. Only the
 //! small `O(m)`/`O(n)` reflector gathers touch strided memory.
 
+use crate::application::linalg::scaling::KernelWindow;
+use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::ArrayView2;
 
 /// In-place Householder (`dlarfg`): `x[0] ← β`, `x[1..] ← v` (implicit `v[0]=1`);
 /// returns `(τ, β)`.
-fn larfg<T: RealScalar>(x: &mut [T]) -> (T, T) {
+///
+/// Scale-safe: `α² + ‖x[1..]‖² ≤ len·m²` (`m = max|xᵢ|`, degree 2, bound
+/// `2^⌈log₂ len⌉`) is formed unscaled while `m` keeps it normal and finite
+/// (`window`, built by [`reduce_values`] for the longest reflector `len ≤ m`),
+/// and otherwise from `x` divided by the
+/// power of two bringing `m` into `[1, 2)` — LAPACK `dlarfg` forms the same
+/// norm through `dnrm2`/`dlapy2`, whose accumulation is likewise scaled. `τ`
+/// and `v = x/(α − β)` are scale-invariant and `β` is multiplied back, all
+/// exactly, so inside the window the result is bit-for-bit the unscaled one.
+fn larfg<T: RealScalar>(x: &mut [T], window: KernelWindow<T>) -> (T, T) {
     let n = x.len();
     if n == 0 {
         return (T::ZERO, T::ZERO);
     }
-    let alpha = x[0];
     if n == 1 {
-        return (T::ZERO, alpha);
+        return (T::ZERO, x[0]);
     }
+    let exponent = window.exponent(x);
+    let alpha = x[0].scale_binary(-exponent);
     let mut xnorm_sq = T::ZERO;
     for &xi in &x[1..] {
+        let xi = xi.scale_binary(-exponent);
         xnorm_sq = xnorm_sq.add(xi.mul(xi));
     }
     if xnorm_sq == T::ZERO {
-        return (T::ZERO, alpha);
+        return (T::ZERO, x[0]);
     }
     let beta = {
         let b = alpha.mul(alpha).add(xnorm_sq).sqrt();
@@ -52,8 +65,9 @@ fn larfg<T: RealScalar>(x: &mut [T]) -> (T, T) {
     let tau = beta.sub(alpha).div(beta);
     let scal = T::ONE.div(alpha.sub(beta));
     for xi in &mut x[1..] {
-        *xi = xi.mul(scal);
+        *xi = xi.scale_binary(-exponent).mul(scal);
     }
+    let beta = beta.scale_binary(exponent);
     x[0] = beta;
     (tau, beta)
 }
@@ -79,6 +93,7 @@ pub(super) fn reduce_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> (Vec<T
         }
     }
 
+    let window = KernelWindow::new(2, 2, thresholds::ceil_log2_count(m));
     let mut d = vec![T::ZERO; n];
     let mut e = vec![T::ZERO; n];
     let mut vbuf = vec![T::ZERO; m]; // contiguous copy of the active left reflector
@@ -91,7 +106,7 @@ pub(super) fn reduce_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> (Vec<T
         let vlen = m - k;
         let (tau_q, beta_d) = {
             let col = &mut cm[k * m + k..k * m + m];
-            larfg(col)
+            larfg(col, window)
         };
         d[k] = beta_d;
         // v with implicit unit head: copy into vbuf[..vlen], vbuf[0] = 1.
@@ -142,7 +157,7 @@ pub(super) fn reduce_values<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> (Vec<T
             for (idx, j) in ((k + 1)..n).enumerate() {
                 w[idx] = cm[j * m + k];
             }
-            let (tau_p, beta_e) = larfg(&mut w[..rlen]);
+            let (tau_p, beta_e) = larfg(&mut w[..rlen], window);
             e[k] = beta_e;
             w[0] = T::ONE; // implicit unit head
             if tau_p != T::ZERO {

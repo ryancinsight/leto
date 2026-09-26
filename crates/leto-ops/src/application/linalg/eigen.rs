@@ -1,7 +1,13 @@
+use crate::application::linalg::scaling::{self, GateBound};
 use crate::application::linalg::thresholds::{machine_epsilon, scaled_frobenius};
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use leto::{Array2, ArrayView2, LetoError, Result};
+use rotation::{diagonalize, EigenvectorWorkspace, NoEigenvectors};
+
+mod rotation;
+#[cfg(test)]
+mod tests;
 
 /// Eigenpairs of a real symmetric matrix.
 ///
@@ -32,8 +38,12 @@ pub struct SymmetricEigenDecomposition<T> {
 /// stops at `ε·‖A‖`, so well-scaled matrices are not charged the `ε²`
 /// normwise cost.
 ///
-/// What the criterion guarantees depends on definiteness. For a positive
-/// definite `A = D·H·D` (`D` the square root of the diagonal), Jacobi stopped
+/// What the criterion guarantees depends on definiteness and is stated for
+/// the exactly symmetric matrix the solver works on — the input's upper
+/// triangle mirrored (see [`symmetric_eigen_jacobi_with_tolerance`]); an
+/// accepted asymmetry is a perturbation of that matrix, bounded by the
+/// symmetry check. For a positive definite `A = D·H·D` (`D` the square root of
+/// the diagonal), Jacobi stopped
 /// this way computes every eigenvalue to relative error `O(n·ε·κ(H))` — high
 /// *relative* accuracy even for eigenvalues far below `ε·‖A‖` (Demmel &
 /// Veselić 1992, "Jacobi's method is more accurate than QR", *SIAM J. Matrix
@@ -116,9 +126,21 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     let n = rows;
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
+    mirror_upper_triangle(&mut a, n);
+    let exponent = jacobi_gate_exponent(&a)?;
+    scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut target = NoEigenvectors;
 
     diagonalize(&mut a, n, tolerance, &mut target)?;
+    let mut diagonal: Vec<T> = (0..n).map(|i| a[i * n + i]).collect();
+    scaling::restore(
+        &mut diagonal,
+        exponent,
+        "Jacobi eigensolver: an eigenvalue exceeds the scalar range",
+    )?;
+    for (i, value) in diagonal.into_iter().enumerate() {
+        a[i * n + i] = value;
+    }
     Ok(sort_diagonal(&a, n))
 }
 
@@ -133,7 +155,11 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
 /// accuracy; otherwise to the normwise `O(n²)·ε·‖A‖_F` of the QR algorithm
 /// (see the default tolerance's derivation). Symmetry acceptance is
 /// independent of the tolerance: `|aᵢⱼ − aⱼᵢ| ≤ (n + 2)·ε·‖A‖_F`, the rounding
-/// a matrix assembled symmetric in exact arithmetic can carry.
+/// a matrix assembled symmetric in exact arithmetic can carry. Only the upper
+/// triangle (diagonal included) is then used: it is mirrored onto the lower
+/// before the first rotation, so an accepted asymmetric input is resolved by
+/// its upper triangle. ([`symmetric_eigen_qr`](crate::symmetric_eigen_qr)
+/// resolves by the lower triangle instead, the LAPACK `uplo = 'L'` convention.)
 ///
 /// # Errors
 ///
@@ -157,9 +183,21 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let n = rows;
     let mut a = copy_row_major(matrix);
     validate_symmetric_input(&a, n, tolerance)?;
+    mirror_upper_triangle(&mut a, n);
+    let exponent = jacobi_gate_exponent(&a)?;
+    scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
     diagonalize(&mut a, n, tolerance, &mut target)?;
+    let mut diagonal: Vec<T> = (0..n).map(|i| a[i * n + i]).collect();
+    scaling::restore(
+        &mut diagonal,
+        exponent,
+        "Jacobi eigensolver: an eigenvalue exceeds the scalar range",
+    )?;
+    for (i, value) in diagonal.into_iter().enumerate() {
+        a[i * n + i] = value;
+    }
 
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&lhs, &rhs| {
@@ -210,6 +248,39 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
     Ok(())
 }
 
+/// The matrix-tier gate for Jacobi (degree 1, bound `2^(1+r)`), `0` when the
+/// input is factored unscaled.
+///
+/// Every entry of every iterate of a symmetric `A` is at most
+/// `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max` (orthogonal similarity; `r` from
+/// [`scaling::norm_ratio_log2`]). The largest intermediates of `rotate` are
+/// `2·a_pq` and `a_qq − a_pp` (the `atan2` arguments) and the partial sum
+/// `c²·a_pp − 2sc·a_pq` of the diagonal update, each at most `2‖A‖₂`
+/// (`c² + s² = 1`, `|2sc| ≤ 1`); the row updates `c·a_kp − s·a_kq` are at most
+/// `√2·‖A‖₂`. So the gate's upper end is the overflow threshold divided by
+/// `2^(1+r)` — no `ε/safmin` margin: a diagonal input such as
+/// `diag(1e300, 1e-300)` or `f32` `diag(1e38, 1e-38)` has `r = 0` and is
+/// factored unscaled, exactly. The lower end (`smlnum`) only ever scales up,
+/// which is exact.
+fn jacobi_gate_exponent<T: RealScalar>(a: &[T]) -> Result<i32> {
+    Ok(scaling::gate_exponent(a, 1, |values, largest| {
+        GateBound::factor(1 + scaling::norm_ratio_log2(values, largest))
+    })?
+    .unwrap_or(0))
+}
+
+/// Copy the strictly upper triangle onto the lower, so an accepted but
+/// asymmetric input is resolved by its upper triangle alone. The rotations
+/// read whole rows and columns; without this they would mix both triangles of
+/// the first pairs they touch.
+fn mirror_upper_triangle<T: Scalar>(a: &mut [T], n: usize) {
+    for row in 0..n {
+        for col in (row + 1)..n {
+            a[col * n + row] = a[row * n + col];
+        }
+    }
+}
+
 fn copy_row_major<T: Scalar>(matrix: &ArrayView2<'_, T>) -> Vec<T> {
     // One bulk row-major copy instead of per-element bounds-checked gets.
     if let Some(slice) = matrix.as_slice() {
@@ -237,187 +308,4 @@ fn sort_diagonal<T: RealScalar>(a: &[T], n: usize) -> Vec<T> {
             .expect("invariant: finite symmetric input yields finite diagonal")
     });
     eigenvalues
-}
-
-/// The largest off-diagonal entry not yet negligible against its pair's
-/// diagonal: `|a_pq| > τ·max(√|a_pp|·√|a_qq|, τ·‖A‖_F)`, as
-/// `(p, q, |a_pq|)`. `roots` is scratch for the `n` diagonal square roots.
-fn largest_unconverged<T: RealScalar>(
-    a: &[T],
-    n: usize,
-    tolerance: T,
-    floor: T,
-    roots: &mut [T],
-) -> Option<(usize, usize, T)> {
-    for (index, root) in roots.iter_mut().enumerate() {
-        *root = a[index * n + index].abs().sqrt();
-    }
-    let mut best = None;
-    let mut best_abs = T::ZERO;
-    for row in 0..n {
-        for col in (row + 1)..n {
-            let value = a[row * n + col].abs();
-            if value <= best_abs {
-                continue;
-            }
-            let coupling = roots[row].mul(roots[col]);
-            let scale = if coupling > floor { coupling } else { floor };
-            if value > tolerance.mul(scale) {
-                best_abs = value;
-                best = Some((row, col, value));
-            }
-        }
-    }
-    best
-}
-
-trait RotationTarget<T: RealScalar> {
-    fn rotate_columns(&mut self, n: usize, p: usize, q: usize, c: T, s: T);
-}
-
-struct NoEigenvectors;
-
-impl<T: RealScalar> RotationTarget<T> for NoEigenvectors {
-    #[inline]
-    fn rotate_columns(&mut self, _n: usize, _p: usize, _q: usize, _c: T, _s: T) {}
-}
-
-struct EigenvectorWorkspace<'a, T> {
-    values: &'a mut [T],
-}
-
-impl<T: RealScalar> RotationTarget<T> for EigenvectorWorkspace<'_, T> {
-    #[inline]
-    fn rotate_columns(&mut self, n: usize, p: usize, q: usize, c: T, s: T) {
-        for row in 0..n {
-            let vkp = self.values[row * n + p];
-            let vkq = self.values[row * n + q];
-            self.values[row * n + p] = c.mul(vkp).sub(s.mul(vkq));
-            self.values[row * n + q] = s.mul(vkp).add(c.mul(vkq));
-        }
-    }
-}
-
-/// Rotation budget: `32·n²`, about sixteen cyclic sweeps' worth; classical
-/// Jacobi converges quadratically once the off-diagonal is small, in a few
-/// sweeps of `n²/2` rotations.
-fn rotation_budget(n: usize) -> usize {
-    n.saturating_mul(n).saturating_mul(32).max(1)
-}
-
-fn diagonalize<T, R>(a: &mut [T], n: usize, tolerance: T, target: &mut R) -> Result<()>
-where
-    T: RealScalar,
-    R: RotationTarget<T>,
-{
-    diagonalize_within(a, n, tolerance, rotation_budget(n), target)
-}
-
-/// [`diagonalize`] with an explicit rotation budget.
-fn diagonalize_within<T, R>(
-    a: &mut [T],
-    n: usize,
-    tolerance: T,
-    max_rotations: usize,
-    target: &mut R,
-) -> Result<()>
-where
-    T: RealScalar,
-    R: RotationTarget<T>,
-{
-    let norm = scaled_frobenius(a);
-    let floor = tolerance.mul(norm);
-    let mut roots = vec![T::ZERO; n];
-
-    for _ in 0..max_rotations {
-        let Some((p, q, _)) = largest_unconverged(a, n, tolerance, floor, &mut roots) else {
-            return Ok(());
-        };
-        rotate(a, target, n, p, q);
-    }
-    match largest_unconverged(a, n, tolerance, floor, &mut roots) {
-        Some((_, _, max_abs)) => Err(LetoError::ConvergenceError {
-            max_iters: max_rotations,
-            residual: max_abs.div(norm).to_f64(),
-            tol: tolerance.to_f64(),
-        }),
-        None => Ok(()),
-    }
-}
-
-fn rotate<T, R>(a: &mut [T], target: &mut R, n: usize, p: usize, q: usize)
-where
-    T: RealScalar,
-    R: RotationTarget<T>,
-{
-    let app = a[p * n + p];
-    let aqq = a[q * n + q];
-    let apq = a[p * n + q];
-    if apq == T::ZERO {
-        return;
-    }
-
-    let two = T::from_usize(2);
-    let half = T::ONE.div(two);
-    // theta = 0.5 * atan2(2*apq, aqq - app)
-    let theta = half.mul(two.mul(apq).atan2(aqq.sub(app)));
-    let c = theta.cos();
-    let s = theta.sin();
-
-    for k in 0..n {
-        if k != p && k != q {
-            let akp = a[k * n + p];
-            let akq = a[k * n + q];
-            // new_kp = c*akp - s*akq ; new_kq = s*akp + c*akq
-            let new_kp = c.mul(akp).sub(s.mul(akq));
-            let new_kq = s.mul(akp).add(c.mul(akq));
-            a[k * n + p] = new_kp;
-            a[p * n + k] = new_kp;
-            a[k * n + q] = new_kq;
-            a[q * n + k] = new_kq;
-        }
-    }
-
-    let c2 = c.mul(c);
-    let s2 = s.mul(s);
-    let sc = s.mul(c);
-    // app' = c2*app - 2*sc*apq + s2*aqq
-    a[p * n + p] = c2.mul(app).sub(two.mul(sc).mul(apq)).add(s2.mul(aqq));
-    // aqq' = s2*app + 2*sc*apq + c2*aqq
-    a[q * n + q] = s2.mul(app).add(two.mul(sc).mul(apq)).add(c2.mul(aqq));
-    a[p * n + q] = T::ZERO;
-    a[q * n + p] = T::ZERO;
-
-    target.rotate_columns(n, p, q, c, s);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{diagonalize_within, NoEigenvectors};
-    use leto::LetoError;
-
-    #[test]
-    fn exhausted_rotation_budget_is_a_typed_convergence_error() {
-        // [[2,1,1],[1,2,1],[1,1,2]]: the first rotation (pivot (0,1), equal
-        // diagonals, θ = π/4) zeroes a₀₁ and a₀₂ = (1 − 1)/√2 but leaves
-        // a₁₂ = (1 + 1)/√2 = √2, so one rotation stops at residual √2/‖A‖_F
-        // = √2/√18 = 1/3 (a few roundings, 8ε relative).
-        let mut a = [2.0_f64, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0];
-        let result = diagonalize_within(&mut a, 3, 1e-12, 1, &mut NoEigenvectors);
-        let Err(LetoError::ConvergenceError {
-            max_iters,
-            residual,
-            tol,
-        }) = result
-        else {
-            panic!("expected ConvergenceError, got {result:?}");
-        };
-        assert_eq!(max_iters, 1);
-        assert_eq!(tol, 1e-12);
-        let expected = 1.0 / 3.0;
-        assert!(
-            (residual / expected - 1.0).abs() <= 8.0 * f64::EPSILON,
-            "{residual}"
-        );
-    }
 }

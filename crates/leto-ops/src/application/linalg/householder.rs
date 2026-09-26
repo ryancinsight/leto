@@ -22,10 +22,18 @@ pub(crate) struct Reflector<T> {
 
 /// Build the reflector mapping `x` to `α·e₁`; returns `(reflector, α)`.
 ///
-/// `None` when `x` is already negligible (no reflection needed). The sign of
+/// `None` when `x` is already a multiple of `e₁` — its tail is zero, LAPACK
+/// `dlarfg`'s `τ = 0` — so no reflection is needed and the caller skips the
+/// `O(n²)` application of what would otherwise be a sign flip `I − 2e₁e₁ᵀ`
+/// (a diagonal input paid that for every column and row). The sign of
 /// `α = −sign(x₀)·‖x‖` is chosen so `v₀ = x₀ − α` adds in magnitude rather than
 /// cancels — the numerically stable convention.
 pub(crate) fn reflector<T: RealScalar>(x: &[T]) -> Option<(Reflector<T>, T)> {
+    if x.get(1..)
+        .is_some_and(|tail| tail.iter().all(|&xi| xi == T::ZERO))
+    {
+        return None;
+    }
     let mut v = x.to_vec();
     let (beta, alpha) = reflect_in_place(&mut v)?;
     Some((Reflector { v, beta }, alpha))
@@ -35,8 +43,13 @@ pub(crate) fn reflector<T: RealScalar>(x: &[T]) -> Option<(Reflector<T>, T)> {
 /// returns `(β, α)` with `β = 2/(vᵀv)`.
 ///
 /// The arithmetic of [`reflector`] without its allocation, for reductions that
-/// store `v` in the matrix they are reducing. `None` when `x` is empty or zero;
-/// `x` is then left unchanged.
+/// store `v` in the matrix they are reducing. The `None` conditions differ:
+/// [`reflector`] returns `None` whenever the tail of `x` is zero, while this
+/// returns `None` only when `x` is empty or zero (`x` then left unchanged) and
+/// otherwise builds the reflector, a sign flip `I − 2e₁e₁ᵀ` included, for a
+/// nonzero `x` on `e₁`. The symmetric tridiagonal reduction
+/// (`symmetric_qr/reduce.rs`) depends on this: it records `off_diagonal = 0`
+/// on `None`, which is exact only because `None` means `x = 0`.
 ///
 /// `x` is first scaled by `2⁻ᵏ`, `k` the binary exponent of `max|xᵢ|`, so its
 /// largest entry lies in `[1, 2)` (the per-row scaling of EISPACK `tred2`).
@@ -162,5 +175,20 @@ pub(crate) fn apply_right<T: RealScalar>(
         let dot = T::dot_slice(&m[start..start + len], v);
         let scale = beta.mul(dot);
         T::axpy_slice(T::ZERO.sub(scale), v, &mut m[start..start + len]); // row −= scale·v
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reflector;
+
+    /// A vector already on `e₁` needs no reflection (`dlarfg`'s `τ = 0`); one
+    /// with a nonzero tail gets one mapping it to `α·e₁`, `|α| = ‖x‖`.
+    #[test]
+    fn reflector_skips_a_vector_already_on_e1() {
+        assert!(reflector(&[3.0_f64, 0.0, 0.0]).is_none());
+        assert!(reflector(&[3.0_f64]).is_none());
+        let (_, alpha) = reflector(&[3.0_f64, 4.0]).expect("nonzero tail");
+        assert_eq!(alpha.abs(), 5.0);
     }
 }

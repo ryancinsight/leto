@@ -1,7 +1,8 @@
 //! Canonicalize the real Schur form: split every 2×2 diagonal block that has
-//! **real** eigenvalues into two 1×1 blocks, leaving 2×2 blocks only for genuine
-//! complex-conjugate pairs.
+//! **real** eigenvalues into two 1×1 blocks, and bring each genuine
+//! complex-conjugate block to `dlanv2`'s standard form.
 
+use super::standard_block::standardize_block;
 use crate::domain::real::RealScalar;
 
 #[inline]
@@ -9,18 +10,22 @@ fn at<T: Copy>(h: &[T], i: usize, j: usize, n: usize) -> T {
     h[i * n + j]
 }
 
-/// Apply the rotation similarity `G = [[c, −s], [s, c]]` on indices `(p, p+1)`:
-/// `T ← Gᵀ T G`, `Z ← Z G`.
+/// Apply the rotation similarity `G = [[c, −s], [s, c]]` on indices `(p, p+1)`
+/// outside the 2×2 block, as `dlahqr` does after `dlanv2` (its `DROT` calls):
+/// rows `(p, p+1)` right of the block, columns `(p, p+1)` above it, and all of
+/// `Z ← Z G`. The block itself is written from `dlanv2`'s standardized entries,
+/// and the entries left of and below it — zero in the Schur form, rounding
+/// residue in the computed one — are not mixed into the block's subdiagonal.
 fn apply_rotation<T: RealScalar>(h: &mut [T], z: &mut [T], p: usize, c: T, s: T, n: usize) {
-    // Left: Gᵀ T over rows (p, p+1), all columns.
-    for j in 0..n {
+    // Left: Gᵀ T over rows (p, p+1), the columns right of the block.
+    for j in (p + 2)..n {
         let t0 = at(h, p, j, n);
         let t1 = at(h, p + 1, j, n);
         h[p * n + j] = c.mul(t0).add(s.mul(t1));
         h[(p + 1) * n + j] = s.neg().mul(t0).add(c.mul(t1));
     }
-    // Right: T G over columns (p, p+1), all rows.
-    for i in 0..n {
+    // Right: T G over columns (p, p+1), the rows above the block.
+    for i in 0..p {
         let t0 = at(h, i, p, n);
         let t1 = at(h, i, p + 1, n);
         h[i * n + p] = c.mul(t0).add(s.mul(t1));
@@ -35,13 +40,13 @@ fn apply_rotation<T: RealScalar>(h: &mut [T], z: &mut [T], p: usize, c: T, s: T,
     }
 }
 
-/// Scan the (quasi-triangular) `h`, splitting each real-eigenvalue 2×2 block.
-///
-/// For a block `[[a,b],[c,d]]` the discriminant of the characteristic
-/// polynomial is `(a−d)² + 4bc`. When it is `≥ 0` the eigenvalues are real; the
-/// rotation whose first column is the (unit) eigenvector `u` (so `T u = λ u`)
-/// triangularizes the block, since `Gᵀ T G e₁ = λ e₁`. Complex blocks
-/// (`disc < 0`) are left intact.
+/// Standardize every 2×2 diagonal block of the quasi-triangular `h` by
+/// LAPACK `dlanv2` ([`standard_block`](super::standard_block)), as `dlahqr`
+/// does when a 2×2 block deflates: the block's rotation `(cs, sn)` is applied
+/// as the similarity `Gᵀ·H·G` to all of `h` and accumulated into `z`
+/// (`dlahqr`'s `DROT` calls), and the block itself is replaced by `dlanv2`'s
+/// standardized entries — upper triangular for real eigenvalues, equal
+/// diagonals with `b·c < 0` for a complex pair.
 pub(super) fn standardize<T: RealScalar>(h: &mut [T], z: &mut [T], n: usize) {
     let mut p = 0usize;
     while p + 1 < n {
@@ -49,38 +54,17 @@ pub(super) fn standardize<T: RealScalar>(h: &mut [T], z: &mut [T], n: usize) {
             p += 1;
             continue;
         }
-        let a = at(h, p, p, n);
-        let b = at(h, p, p + 1, n);
-        let c = at(h, p + 1, p, n);
-        let d = at(h, p + 1, p + 1, n);
-        let diff = a.sub(d);
-        let four = T::from_f64(4.0);
-        let disc = diff.mul(diff).add(four.mul(b).mul(c));
-        if disc < T::ZERO {
-            // Complex conjugate pair: leave the 2×2 block as a Schur block.
-            p += 2;
-            continue;
-        }
-
-        // Real eigenvalues: triangularize. λ uses the cancellation-avoiding sign.
-        let sign = if diff < T::ZERO { T::ONE.neg() } else { T::ONE };
-        let half = T::from_f64(0.5);
-        let lambda = a.add(d).add(sign.mul(disc.sqrt())).mul(half);
-
-        // Eigenvector u = (b, λ − a) or (λ − d, c); pick the larger-magnitude
-        // generator for stability.
-        let (ex, ey) = if b.abs() >= (lambda.sub(d)).abs() {
-            (b, lambda.sub(a))
-        } else {
-            (lambda.sub(d), c)
-        };
-        let norm = ex.mul(ex).add(ey.mul(ey)).sqrt();
-        if norm > T::ZERO {
-            let cs = ex.div(norm);
-            let sn = ey.div(norm);
-            apply_rotation(h, z, p, cs, sn, n);
-            h[(p + 1) * n + p] = T::ZERO; // exact triangular zero
-        }
+        let block = standardize_block(
+            at(h, p, p, n),
+            at(h, p, p + 1, n),
+            at(h, p + 1, p, n),
+            at(h, p + 1, p + 1, n),
+        );
+        apply_rotation(h, z, p, block.cs, block.sn, n);
+        h[p * n + p] = block.a;
+        h[p * n + p + 1] = block.b;
+        h[(p + 1) * n + p] = block.c;
+        h[(p + 1) * n + p + 1] = block.d;
         p += 2;
     }
 }

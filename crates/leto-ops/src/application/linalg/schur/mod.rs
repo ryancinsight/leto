@@ -40,11 +40,48 @@
 //! spectra.
 
 mod francis;
+mod standard_block;
 mod standardize;
+#[cfg(test)]
+mod tests;
 
+use crate::application::linalg::scaling::{self, GateBound};
+use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::Complex;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
+
+/// The matrix-tier gate for the Francis family (`schur`, `eigenvalues`):
+/// degree 2, bound `2^(2r)`, `r = ⌈log₂(‖A‖_F/‖A‖_max)⌉`
+/// ([`scaling::norm_ratio_log2`]).
+///
+/// The kernels form every local product scale-safely (`francis.rs`'s shift,
+/// first column and `stack_reflector`, `standard_block.rs`'s `dlanv2`, the
+/// Hessenberg reflector), and `stack_reflector`'s `v` is normalized as
+/// `dlarfg`'s (`|vᵢ| ≤ 1`, `τ ≤ 2`), so the reflector applications
+/// (`francis::bulge::apply_left`, `apply_right`) are sums of at most three
+/// entry-scale terms: `|vᵀ·H[rows, j]| ≤ √3·‖A‖₂ ≤ √3·2^r·‖A‖_max`
+/// (orthogonal similarity). The degree-1 sums (the Hessenberg reduction's
+/// `vᵀ·A` with `‖v‖₂ ≤ 4√n`, `householder::reflect_in_place`; the deflation
+/// test's `|hᵢᵢ| + |hᵢ₊₁ᵢ₊₁|`) are at most `4√n·2^r·‖A‖_max`.
+///
+/// The range stays degree 2, the form of LAPACK `dgees`/`dgeev`, which
+/// scale `‖A‖_max` into `[√safmin/ε, ε/√safmin]` before `dlahqr`; it covers
+/// the degree-1 sums (`(Ω·2^−2r)^½ ≤ Ω/(4√n·2^r)` for every order
+/// `n ≤ Ω/16`), and its lower end `√smlnum` leaves the converging
+/// subdiagonals `√smlnum/safmin` of headroom above the subnormals.
+///
+/// Deflation floor: `francis::run` also deflates subdiagonals at or below
+/// [`francis::deflation_floor`]` = safmin`, at most `n` of them, so the gate's
+/// lower end is raised until `√n·safmin ≤ ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
+/// ([`thresholds::deflation_count_log2`], [`scaling::norm_ratio_floor_log2`]).
+fn francis_bound<T: RealScalar>(n: usize) -> impl FnOnce(&[T], T) -> GateBound {
+    move |values, largest| GateBound {
+        factor_log2: 2 * scaling::norm_ratio_log2(values, largest),
+        floor_log2: thresholds::deflation_count_log2(n)
+            - scaling::norm_ratio_floor_log2(values, largest),
+    }
+}
 
 /// Real Schur decomposition `A = Q T Qᵀ`.
 #[derive(Debug, Clone)]
@@ -76,13 +113,25 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
         });
     }
 
+    // Balance by an exact power of two; `Q` is scale-invariant, `T` scales.
+    let balanced = scaling::balanced(matrix, 2, francis_bound(n))?;
+    let (view, exponent) = match &balanced {
+        Some((scaled, exponent)) => (scaled.view(), *exponent),
+        None => (*matrix, 0),
+    };
+
     // Reduce to Hessenberg (validates finiteness; reused — SSOT). `H = Qᴴᵀ A Qᴴ`.
-    let hess = crate::hessenberg(matrix)?;
+    let hess = crate::hessenberg(&view)?;
     let mut t: Vec<T> = hess.h().storage().as_slice().to_vec();
     let mut q: Vec<T> = hess.q().storage().as_slice().to_vec();
 
     francis::run::<T, true>(&mut t, &mut q, n)?;
     standardize::standardize(&mut t, &mut q, n);
+    scaling::restore(
+        &mut t,
+        exponent,
+        "Schur form entry exceeds the scalar range",
+    )?;
 
     Ok(RealSchur { q, t, n })
 }
@@ -117,19 +166,39 @@ pub(crate) fn real_eigenvalues<T: RealScalar>(
     // Eigenvalues-only: reduce to Hessenberg without accumulating Q (similarity
     // invariance means the Schur vectors are never needed), saving the O(n³) Q
     // update. Mirrors the `ACCUMULATE_Q = false` Francis stage below.
-    let (mut h, hn) = crate::application::linalg::hessenberg::hessenberg_values(matrix)?;
+    // Balance by an exact power of two; eigenvalues scale with the matrix.
+    let balanced = scaling::balanced(matrix, 2, francis_bound(n))?;
+    let (view, exponent) = match &balanced {
+        Some((scaled, exponent)) => (scaled.view(), *exponent),
+        None => (*matrix, 0),
+    };
+    let (mut h, hn) = crate::application::linalg::hessenberg::hessenberg_values(&view)?;
     debug_assert_eq!(hn, n);
     // No Schur vectors: pass an empty accumulator; the const-generic guarantees
     // it is never touched.
     let mut unused: [T; 0] = [];
     francis::run::<T, false>(&mut h, &mut unused, n)?;
-    Ok(eigenvalues_from_quasi_triangular(&h, n))
+    let mut eigenvalues = eigenvalues_from_quasi_triangular(&h, n);
+    if exponent != 0 {
+        let mut parts: Vec<T> = eigenvalues.iter().flat_map(|z| [z.re, z.im]).collect();
+        scaling::restore(&mut parts, exponent, "eigenvalue exceeds the scalar range")?;
+        for (z, pair) in eigenvalues.iter_mut().zip(parts.chunks_exact(2)) {
+            *z = Complex::new(pair[0], pair[1]);
+        }
+    }
+    Ok(eigenvalues)
 }
 
 /// Read the eigenvalues off a real quasi-upper-triangular matrix `t` (`n × n`):
-/// each 1×1 block is a real eigenvalue, each 2×2 block (nonzero subdiagonal) a
-/// conjugate pair from its quadratic. Shared by [`RealSchur::eigenvalues`] and
-/// [`real_eigenvalues`] (SSOT).
+/// each 1×1 block is a real eigenvalue, each 2×2 block (nonzero subdiagonal)
+/// yields its pair through LAPACK `dlanv2`
+/// ([`standard_block`]). Shared by
+/// [`RealSchur::eigenvalues`] and [`real_eigenvalues`] (SSOT).
+///
+/// The characteristic quadratic `(tr ± √(tr² − 4·det))/2` cancels to rounding
+/// level on a double eigenvalue (`O(√ε)` errors) and over- or underflows for
+/// entries near the ends of the range (`f32` at `2⁻⁸⁶` returned `{3, 3}` for
+/// `{2, 4}`); `dlanv2` avoids both.
 pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
     t: &[T],
     n: usize,
@@ -139,25 +208,15 @@ pub(crate) fn eigenvalues_from_quasi_triangular<T: RealScalar>(
     while i < n {
         let is_block = i + 1 < n && t[(i + 1) * n + i] != T::ZERO;
         if is_block {
-            let a = t[i * n + i];
-            let b = t[i * n + i + 1];
-            let c = t[(i + 1) * n + i];
-            let d = t[(i + 1) * n + i + 1];
-            let tr = a.add(d);
-            let det = a.mul(d).sub(b.mul(c));
-            let half = T::from_f64(0.5);
-            let four = T::from_f64(4.0);
-            let disc = tr.mul(tr).sub(four.mul(det));
-            if disc < T::ZERO {
-                let re = tr.mul(half);
-                let im = disc.neg().sqrt().mul(half);
-                eigs.push(Complex::new(re, im));
-                eigs.push(Complex::new(re, im.neg()));
-            } else {
-                let root = disc.sqrt();
-                eigs.push(Complex::new(tr.add(root).mul(half), T::ZERO));
-                eigs.push(Complex::new(tr.sub(root).mul(half), T::ZERO));
-            }
+            let (re1, im1, re2, im2) = standard_block::standardize_block(
+                t[i * n + i],
+                t[i * n + i + 1],
+                t[(i + 1) * n + i],
+                t[(i + 1) * n + i + 1],
+            )
+            .eigenvalues();
+            eigs.push(Complex::new(re1, im1));
+            eigs.push(Complex::new(re2, im2));
             i += 2;
         } else {
             eigs.push(Complex::new(t[i * n + i], T::ZERO));

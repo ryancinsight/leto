@@ -34,25 +34,24 @@
 //!
 //! # Range
 //!
-//! The unscaled reduction forms `Σxᵢ²` and `vᵀv`; for entries near the square
-//! root of the largest (or smallest) finite value these overflow (underflow)
-//! and the result is garbage, not an error — `F16` overflows `3·200²` at
-//! `‖A‖ = 200`. So the matrix is first multiplied by `2⁻ᵏ`, `k` the binary
-//! exponent of `max|aᵢⱼ|`, bringing the largest entry into `[1, 2)`; power-of-two
-//! scaling is exact, eigenvectors are unchanged, and the eigenvalues are
-//! multiplied back by `2ᵏ` at the end (the EISPACK `tred2` row scaling and the
-//! LAPACK `dsyev` norm scaling serve the same purpose). After scaling every
-//! quantity the algorithm forms is bounded by a small multiple of `n`:
-//! `|aᵢⱼ| < 2`, `Σxᵢ² < 4n`, `vᵀv ≤ 4‖x‖² < 16n`, and every entry of every
-//! reduced matrix and every `dᵢ, eᵢ` is at most `‖A‖₂ < 2n` (orthogonal
-//! similarity preserves the 2-norm) — far inside the range of every supported
-//! format for any `n` it can index (`F16`: `16n < 65504` up to `n ≈ 4000`). The
-//! QL shift ratio `p = (d_{l+1} − dₗ)/(2eₗ)` is unbounded as `eₗ → 0`, and is
-//! consumed only through the scaled `hypot`. Squares that underflow come from
-//! entries below `√(min positive)` relative to a largest entry of 1, which is
-//! below `ε` for every supported format (`√` of the smallest subnormal: `F16`
-//! 2.4e-4 against `ε = 9.8e-4`), so dropping them stays inside the
-//! backward-error bound.
+//! The reduction's reflectors (`householder::reflect_in_place`) normalize
+//! their vector to `[1, 2)` before forming `Σxᵢ²` and `vᵀv`, so the reduction
+//! and the QL rotations (through the scaled `hypot`) stay degree 1 in the
+//! entries. One product does not: the chase's closing correction multiplies
+//! two off-diagonals, `e_{l+1}·eₗ ≤ ‖A‖₂²` (`ql.rs`), which overflowed at
+//! `f64` `2⁵³⁷` (`0·∞ = NaN`) and underflows symmetrically. The matrix-tier
+//! gate (`linalg::scaling`) therefore bounds `‖A‖_max` to the degree-2 range
+//! with bound `2^(2r)`, `2^r ≥ ‖A‖_F/‖A‖_max` (derived in `workspace.rs`); an
+//! input inside it is factored completely unscaled, and one outside it is
+//! moved by the minimal power of two into it, eigenvalues multiplied back
+//! (the LAPACK `dsyev` norm scaling, with the overflow threshold rather than
+//! `ε/safmin` as the upper end). Eigenvectors are unchanged by either path.
+//! Scaling down is exact only while every entry stays representable — an
+//! entry far below the largest can underflow (`linalg::scaling`'s
+//! exactness note) — so the result is within the backward-error bound, not
+//! exact entrywise. The QL shift ratio `p = (d_{l+1} − dₗ)/(2eₗ)` is bounded
+//! by `4/ε` through the fixed norm estimate and consumed only through the
+//! scaled `hypot`.
 //!
 //! Every operation runs in the precision of `T`.
 

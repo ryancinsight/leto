@@ -140,6 +140,59 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [patch] `singular_values`, `svd_decompose`, `pinv`, `schur`, `eigenvalues`,
+  `col_piv_qr`, `symmetric_eigen_jacobi`/`symmetric_eigenvalues_jacobi` and
+  `symmetric_eigen_qr` return neither a wrong `Ok` nor a non-convergence on
+  what the tests cover, in `f64`, `f32`, `F16` and `Bf16`: fixed 3×3 matrices
+  at every binary exponent from the smallest subnormal to three below the
+  largest (all of these routines), and seeded graded, clustered,
+  rank-deficient and skew-symmetric matrices of order 2 to 8 at every normal
+  exponent (the SVD entry points and `schur`/`eigenvalues`). Values are
+  checked a posteriori in every format — the residual and orthogonality of
+  the returned factors, measured, certify each eigenvalue (Bauer–Fike) and
+  singular value (Weyl) — and against backward-error bounds derived from the
+  enumerated operations where those are below `1` (`f64`; `f32` except the
+  Schur residual from order 5 and Francis at order 8; not the iterative
+  routines in `F16` or `Bf16`). `schur` and `eigenvalues`
+  follow LAPACK `dlahqr` (shifts, exceptional shifts, the bulge start at two
+  consecutive small subdiagonals, `dlarfg`'s normalized reflector,
+  Ahues–Tisseur deflation with the zero-diagonal neighbour fallback, the
+  absolute threshold `SMLNUM` taken in units of the matrix and capped at `ε`)
+  and `dlanv2` (2×2 blocks), which removes the F16/Bf16 stalls on
+  nonsymmetric input, the `f64` stalls on skew-symmetric tridiagonals, the
+  `O(√ε)` error on double eigenvalues, and a wrong `Ok` near `2⁻⁴⁸⁵` in `f64`
+  (`1.0163` for `1.002` on a clustered 8×8); the bidiagonal QR follows
+  `dbdsqr`'s relative-accuracy deflation, zero-shift sweep and `dlasv2` 2×2
+  blocks. Local
+  products (Givens and reflector norms, the Golub–Kahan shift) are formed
+  scale-safely (`dlartg`, `dlarfg`), and both iterations deflate below an
+  absolute underflow floor. The remaining whole-matrix intermediates are
+  guarded by a per-routine gate (ADR 0033): an input inside it is factored
+  unscaled, one outside it is moved by the minimal power of two and its
+  results scaled back, and an order too large for the format's exponent
+  range — including one where no scaling keeps the joint underflow floor
+  `√k·safmin` below `ε·‖A‖_F` (in `F16` only past order `2¹⁴`) — is
+  `LetoError::Overflow`.
+  The SVD gate uses `dgesvd`'s degree-2 range. The gate's upper end is the
+  overflow threshold, so Jacobi returns `diag(1e300, 1e-300)` and `f32`
+  `diag(1e38, 1e-38)` exactly. Results for in-range inputs are not
+  bit-identical to earlier releases. Originally: f64 SVD and Schur failed to
+  converge beyond `2^±256` and returned wrong singular values near that edge,
+  `col_piv_qr` of an f64 matrix returned rank 0 below `2⁻⁵¹²` and above
+  `2⁵¹²`, and `RealSchur::eigenvalues`'s 2×2 block quadratic underflowed (f32
+  at `2⁻⁸⁶` returned `{3, 3}` for `{2, 4}`). `pinv` reports
+  `LetoError::Overflow` when a retained singular value's reciprocal is not
+  finite, and an unrepresentable restored result is likewise
+  `LetoError::Overflow`, rather than `±∞`/`NaN` as a wrong `Ok`. Cost:
+  `dbdsqr`'s split tolerance (`tolmul·ε ≈ 90ε` in f64) raises the
+  `svd_decompose` residual on ordinary f64 inputs to up to `90ε·‖A‖_F`, from
+  `≤ 10ε·‖A‖_F`.
+- [patch] Jacobi (`symmetric_eigen_jacobi`) mirrors the upper triangle onto
+  the lower after the symmetry check, so an accepted rounding-level
+  asymmetry is resolved by the upper triangle; `symmetric_eigen_qr` resolves
+  by the lower. The relative-accuracy statement is for the resulting exactly
+  symmetric matrix.
+
 - [minor] Symmetric Jacobi (`symmetric_eigen_jacobi` and its variants): the
   absolute `1e-12` tolerance is replaced by the scale-aware pair criterion
   `|a_pq| ≤ τ·max(√(|a_pp|·|a_qq|), τ·‖A‖_F)` (default `τ = ε` of the scalar

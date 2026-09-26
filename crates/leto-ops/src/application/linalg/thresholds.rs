@@ -31,6 +31,227 @@ pub(crate) fn machine_epsilon<T: RealScalar>() -> T {
     epsilon
 }
 
+/// Smallest positive **normalized** value of `T` — LAPACK `SAFMIN`/Fortran
+/// `TINY` (`dlamch('S')`): the point below which relative precision degrades
+/// to gradual underflow.
+///
+/// Found by halving from `1` while the candidate one step further down still
+/// resolves a full relative `ε` step (`x + x·ε ≠ x`): a normal `x` has ULP
+/// spacing `x·ε`, so the probe succeeds throughout the normal range and fails
+/// the instant `x·ε` itself underflows to `0` in the subnormal range, which
+/// happens exactly at the smallest subnormal — one format-independent
+/// criterion computed entirely through `T`'s own arithmetic (no per-format
+/// exponent-width constant). `O(p)` for a `p`-bit exponent range.
+pub(crate) fn safe_min<T: RealScalar>() -> T {
+    let eps = machine_epsilon::<T>();
+    let two = T::from_usize(2);
+    let mut candidate = T::ONE;
+    loop {
+        let halved = candidate.div(two);
+        if halved == T::ZERO || halved.add(halved.mul(eps)) == halved {
+            return candidate;
+        }
+        candidate = halved;
+    }
+}
+
+/// The largest finite value of `T`, `Ω = (2 − ε)·2^emax` (LAPACK
+/// `dlamch('O')`), found by doubling from `1` to the largest finite power of
+/// two — computed through `T`'s own arithmetic like [`safe_min`]. (The scalar
+/// contract's `MAX_VALUE` is the reduction identity `+∞`, not this.)
+pub(crate) fn overflow_threshold<T: RealScalar>() -> T {
+    let two = T::from_usize(2);
+    let mut power = T::ONE;
+    loop {
+        let next = power.mul(two);
+        if !next.is_finite() {
+            return power.mul(two.sub(machine_epsilon::<T>()));
+        }
+        power = next;
+    }
+}
+
+/// Which side of the exact root [`root`] may land on.
+#[derive(Clone, Copy)]
+enum RootRounding {
+    /// `root^degree ≤ y`: an upper bound that must not be exceeded.
+    NotAbove,
+    /// `root^degree ≥ y`: a lower bound that must not be undercut.
+    NotBelow,
+}
+
+/// `y^(1/degree)` for `degree ∈ {1, 2, 4}` by iterated `sqrt`, moved one
+/// relative `ε` to the requested side when `degree > 1`: each correctly
+/// rounded `sqrt` errs by at most half an ulp, so one `ε` step covers the
+/// (at most two) roundings.
+fn root<T: RealScalar>(y: T, degree: u32, rounding: RootRounding) -> T {
+    debug_assert!(
+        degree == 1 || degree == 2 || degree == 4,
+        "root: degree must be 1, 2, or 4"
+    );
+    let mut value = y;
+    let mut remaining = degree;
+    while remaining > 1 {
+        value = value.sqrt();
+        remaining /= 2;
+    }
+    if degree == 1 {
+        return value;
+    }
+    let step = value.mul(machine_epsilon::<T>());
+    match rounding {
+        RootRounding::NotAbove => value.sub(step),
+        RootRounding::NotBelow => value.add(step),
+    }
+}
+
+/// The range of `‖A‖_max` inside which a routine factors `A` unscaled
+/// (the matrix-level gate): its largest relied-upon intermediate is
+/// homogeneous of degree `degree` in the entries and bounded by
+/// `2^factor_log2 · ‖A‖_max^degree` (each call site derives its own bound).
+///
+/// - Upper end: the intermediate stays finite, `2^f·‖A‖_max^d ≤ Ω` (`Ω` the
+///   overflow threshold), i.e. `‖A‖_max ≤ (Ω·2^−f)^(1/d)`. The bound factor is
+///   applied by exponent arithmetic (`scale_binary`), never formed in `T`, so
+///   a factor such as `n⁴` cannot overflow the narrow formats.
+/// - Lower end: an intermediate of magnitude `‖A‖_max^d` keeps its
+///   `ε`-relative rounding normal, `‖A‖_max^d ≥ smlnum = safmin/ε` (LAPACK
+///   `dsyev`/`dgeev` `SMLNUM`), i.e. `‖A‖_max ≥ smlnum^(1/d)`. The upper-bound
+///   factor plays no part here: it bounds the intermediate from above, and
+///   dividing `smlnum` by it would lower `rmin` and admit exactly the inputs
+///   whose intermediates underflow. Scaling *up* into this end is exact (no
+///   entry can underflow), so the lower end costs no precision.
+/// - Deflation floor: a routine whose convergence test also zeroes an entry
+///   at or below an absolute threshold `floor` perturbs the matrix by at
+///   most that threshold per deflation. For that to cost no more than a
+///   relative `ε` — the property the backward-error analyses rely on, "a
+///   deflated entry below the floor contributes at most `ε·‖A‖_F` backward
+///   error" — the threshold must satisfy `floor ≤ ε·‖A‖_F`. The caller passes
+///   `2^g = floor/(safmin·2^l)` with `2^l ≤ ‖A‖_F/‖A‖_max`
+///   (`scaling::norm_ratio_floor_log2`), so `‖A‖_max ≥ 2^g·smlnum` gives
+///   `floor ≤ ε·2^l·‖A‖_max ≤ ε·‖A‖_F`: the lower end is raised there.
+///
+/// # Errors
+///
+/// - [`EmptyRange::Intermediates`] when even the unraised range is empty,
+///   `smlnum^(1/d) > (Ω·2^−f)^(1/d)`: the bound factor `2^f` itself exceeds
+///   `Ω/smlnum`, so no power-of-two scaling keeps both ends.
+/// - [`EmptyRange::DeflationFloor`] when the raised lower end passes the
+///   upper end, `2^g·smlnum > (Ω·2^−f)^(1/d)`: every admissible scaling
+///   leaves the floor above `ε·2^l·‖A‖_max` (a narrow format at a very large
+///   order — `F16` has only `Ω/smlnum ≈ 2²⁰` of headroom, so a degree-1 gate
+///   empties at `f + g ≥ 20`). Clamping the lower end to the upper one would
+///   return results whose deflations each cost more than that, outside the
+///   backward error every caller documents.
+pub(crate) fn homogeneous_safe_range<T: RealScalar>(
+    degree: u32,
+    factor_log2: i32,
+    floor_log2: i32,
+) -> Result<(T, T), EmptyRange> {
+    let smlnum = safe_min::<T>().div(machine_epsilon::<T>());
+    let root_end = root(smlnum, degree, RootRounding::NotBelow);
+    let upper = root(
+        overflow_threshold::<T>().scale_binary(-factor_log2),
+        degree,
+        RootRounding::NotAbove,
+    );
+    if root_end > upper {
+        return Err(EmptyRange::Intermediates);
+    }
+    let floor_end = smlnum.scale_binary(floor_log2);
+    if floor_end > upper {
+        return Err(EmptyRange::DeflationFloor);
+    }
+    let lower = if floor_end > root_end {
+        floor_end
+    } else {
+        root_end
+    };
+    Ok((lower, upper))
+}
+
+/// Why [`homogeneous_safe_range`] admits no scaling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EmptyRange {
+    /// The bound factor exceeds `Ω/smlnum`: the intermediates cannot be kept
+    /// finite.
+    Intermediates,
+    /// No scaling keeps the absolute deflation floor at or below
+    /// `ε·2^l·‖A‖_max ≤ ε·‖A‖_F`.
+    DeflationFloor,
+}
+
+/// The window of a kernel-local magnitude `m` inside which a kernel forms its
+/// products unscaled (the LAPACK `dlartg`/`dnrm2` "medium" range, `rtmin =
+/// √safmin`, `rtmax = √(safmax/2)` for a two-term sum of squares): the
+/// smallest relied-upon product, of degree `lower_degree`, stays normal,
+/// `m^dₗ ≥ safmin`; the largest, of degree `upper_degree` and bounded by
+/// `2^factor_log2·m^dᵤ`, stays finite. Outside it the kernel rescales its
+/// local operands by a power of two (exact) before forming them.
+pub(crate) fn kernel_window<T: RealScalar>(
+    lower_degree: u32,
+    upper_degree: u32,
+    factor_log2: i32,
+) -> (T, T) {
+    (
+        root(safe_min::<T>(), lower_degree, RootRounding::NotBelow),
+        root(
+            overflow_threshold::<T>().scale_binary(-factor_log2),
+            upper_degree,
+            RootRounding::NotAbove,
+        ),
+    )
+}
+
+/// `⌈log₂ x⌉` for a finite `x ≥ 1`: the exponent of the smallest power of two
+/// not below `x`, found from `x`'s binary exponent (exponent arithmetic, no
+/// product that could overflow).
+pub(crate) fn ceil_log2<T: RealScalar>(x: T) -> i32 {
+    let exponent = x.binary_exponent().unwrap_or(0);
+    if T::ONE.scale_binary(exponent) == x {
+        exponent
+    } else {
+        exponent + 1
+    }
+}
+
+/// The gate exponent of a deflation floor of `safmin` over at most `k`
+/// deflations, before the norm-ratio credit: `⌈⌈log₂ k⌉/2⌉ ≥ log₂ √k`.
+///
+/// *Derivation.* An absolute deflation floor exists only to stop a sweep on
+/// entries that can no longer be resolved, the subnormals below `safmin`;
+/// `safmin` is therefore the floor. A run zeroes at most `k` distinct
+/// entries at or below it, a perturbation of Frobenius norm at most
+/// `√k·safmin`, which the backward-error premise holds to `ε·‖A‖_F`:
+/// `√k·safmin ≤ ε·‖A‖_F`, i.e. `‖A‖_max ≥ 2^(⌈⌈log₂ k⌉/2⌉ − l)·smlnum` with
+/// `2^l ≤ ‖A‖_F/‖A‖_max` (`scaling::norm_ratio_floor_log2`). LAPACK
+/// `dbdsqr` instead floors at `MAXITR·(N·(N·UNFL))` — its iteration cap
+/// times `unfl` — an absolute target that presumes unit scale and
+/// `n²·unfl ≪ ulp`, false in `F16` (`0.21` at `n = 24`).
+pub(crate) fn deflation_count_log2(k: usize) -> i32 {
+    (ceil_log2_count(k) + 1) / 2
+}
+
+/// `⌈log₂ n⌉` for a count `n ≥ 1`, in integer arithmetic.
+pub(crate) fn ceil_log2_count(n: usize) -> i32 {
+    let n = n.max(1);
+    let floor = usize::BITS - 1 - n.leading_zeros();
+    let floor = i32::try_from(floor).expect("invariant: a bit index fits in i32");
+    if n.is_power_of_two() {
+        floor
+    } else {
+        floor + 1
+    }
+}
+
+/// [`homogeneous_safe_range`] at `degree = 2`, `factor_log2 = 0` — the
+/// LAPACK `dsyev` lower end `√smlnum` with an overflow-threshold upper end.
+/// Kept as a test fixture for the derivation checks below.
+#[cfg(test)]
+pub(crate) fn safe_range<T: RealScalar>() -> (T, T) {
+    homogeneous_safe_range::<T>(2, 0, 0).expect("invariant: degree 2, no bound factor")
+}
+
 /// `‖A‖_F` of `values` without overflow or underflow in the squares: the
 /// entries are divided by their largest magnitude before squaring.
 pub(crate) fn scaled_frobenius<T: RealScalar>(values: &[T]) -> T {
@@ -54,7 +275,10 @@ pub(crate) fn scaled_frobenius<T: RealScalar>(values: &[T]) -> T {
 
 #[cfg(test)]
 mod tests {
-    use super::{machine_epsilon, rank_pivot_ratio, scaled_frobenius};
+    use super::{
+        ceil_log2, ceil_log2_count, homogeneous_safe_range, kernel_window, machine_epsilon,
+        rank_pivot_ratio, safe_min, safe_range, scaled_frobenius, EmptyRange,
+    };
     use eunomia::{Bf16, F16};
 
     #[test]
@@ -63,6 +287,81 @@ mod tests {
         assert_eq!(machine_epsilon::<f32>(), f32::EPSILON);
         assert_eq!(machine_epsilon::<F16>().to_f32(), 2.0_f32.powi(-10));
         assert_eq!(machine_epsilon::<Bf16>().to_f32(), 2.0_f32.powi(-7));
+    }
+
+    #[test]
+    fn safe_min_matches_each_format_smallest_normal() {
+        assert_eq!(safe_min::<f64>(), f64::MIN_POSITIVE);
+        assert_eq!(safe_min::<f32>(), f32::MIN_POSITIVE);
+        assert_eq!(safe_min::<F16>().to_f32(), F16::MIN_POSITIVE.to_f32());
+        assert_eq!(safe_min::<Bf16>().to_f32(), Bf16::MIN_POSITIVE.to_f32());
+    }
+
+    #[test]
+    fn safe_range_ends_bound_the_intermediate_on_the_safe_side() {
+        // Degree 2, bound 2⁰: rmin² ≥ smlnum = safmin/ε and rmax² ≤ Ω, each
+        // within two roundings of equality (the roots are stepped one ε
+        // toward the safe side).
+        let (rmin, rmax) = safe_range::<f64>();
+        let smlnum = f64::MIN_POSITIVE / f64::EPSILON;
+        assert!(rmin * rmin >= smlnum && rmin * rmin <= smlnum * (1.0 + 4.0 * f64::EPSILON));
+        assert!(rmax * rmax <= f64::MAX && rmax * rmax >= f64::MAX * (1.0 - 4.0 * f64::EPSILON));
+        // F16: rmin = √(2⁻¹⁴/2⁻¹⁰) = 0.25 (stepped up one ε), rmax just below
+        // √65504 ≈ 255.94.
+        let (rmin, rmax) = safe_range::<F16>();
+        let (rmin, rmax) = (f64::from(rmin.to_f32()), f64::from(rmax.to_f32()));
+        let eps = f64::from(2.0_f32.powi(-10));
+        assert!((0.25..=0.25 * (1.0 + 2.0 * eps)).contains(&rmin), "{rmin}");
+        assert!(
+            rmax * rmax <= 65504.0 && rmax >= 255.94 * (1.0 - 2.0 * eps),
+            "{rmax}"
+        );
+        // The bound factor divides only the overflow side.
+        let (rmin4, rmax4) = homogeneous_safe_range::<F16>(2, 4, 0).expect("non-empty");
+        assert_eq!(f64::from(rmin4.to_f32()), rmin);
+        assert!(f64::from(rmax4.to_f32()) * f64::from(rmax4.to_f32()) <= 65504.0 / 16.0);
+        // A bound such as 128·n⁴ at n = 100 (≈ 2³³·⁶) exceeds F16's range as a
+        // value but not as an exponent: the upper end is small and finite.
+        // …and a factor of 2²⁰, past `Ω/smlnum = 65504·2⁴`, empties the range:
+        // reported, never a lower end above the upper one.
+        assert_eq!(
+            homogeneous_safe_range::<F16>(1, 20, 0),
+            Err(EmptyRange::Intermediates)
+        );
+        let (lower, upper) = homogeneous_safe_range::<F16>(1, 19, 0).expect("non-empty");
+        assert!(lower <= upper);
+        // A floor exponent g (the caller's 2^g·smlnum lower end) fits exactly while
+        // 2^g·smlnum ≤ Ω·2^−f, i.e. f + g < 20 in F16 (Ω = 65504 < 2¹⁶,
+        // smlnum = 2⁻⁴; the upper end rounds down, so f + g = 20 is empty).
+        let (lower, upper) = homogeneous_safe_range::<F16>(1, 12, 7).expect("non-empty");
+        assert_eq!(lower.to_f32(), 2.0_f32.powi(3));
+        assert!(lower <= upper);
+        assert_eq!(
+            homogeneous_safe_range::<F16>(1, 12, 8),
+            Err(EmptyRange::DeflationFloor)
+        );
+    }
+
+    #[test]
+    fn kernel_window_matches_the_dlartg_thresholds() {
+        // dlartg: rtmin = √safmin, rtmax = √(safmax/2) (Ω here).
+        let (low, high) = kernel_window::<f64>(2, 2, 1);
+        assert!(
+            low >= 2.0_f64.powi(-511) && low <= 2.0_f64.powi(-511) * (1.0 + 2.0 * f64::EPSILON)
+        );
+        assert!(high * high * 2.0 <= f64::MAX);
+        assert!(high >= (f64::MAX / 2.0).sqrt() * (1.0 - 2.0 * f64::EPSILON));
+    }
+
+    #[test]
+    fn ceil_log2_rounds_up_to_the_next_power_of_two() {
+        assert_eq!(ceil_log2(1.0_f64), 0);
+        assert_eq!(ceil_log2(4.0_f64), 2);
+        assert_eq!(ceil_log2(4.5_f64), 3);
+        assert_eq!(ceil_log2_count(1), 0);
+        assert_eq!(ceil_log2_count(3), 2);
+        assert_eq!(ceil_log2_count(4), 2);
+        assert_eq!(ceil_log2_count(5), 3);
     }
 
     #[test]

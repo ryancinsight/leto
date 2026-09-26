@@ -24,6 +24,8 @@
 
 mod decompose;
 
+use crate::application::linalg::scaling::{self, GateBound};
+use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result};
 
@@ -146,7 +148,25 @@ impl<T: RealScalar> ColPivQrDecomposition<T> {
 /// # Errors
 /// [`LetoError::StorageError`] for a non-finite entry.
 pub fn col_piv_qr<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<ColPivQrDecomposition<T>> {
-    let f = decompose::factor(matrix)?;
+    // Balance by an exact power of two: `Q`, the permutation and the rank are
+    // scale-invariant (the rank threshold is relative to the largest column
+    // norm); `R` scales.
+    //
+    // Matrix-tier gate, degree 2, bound `2^⌈log₂ rows⌉`: pivot selection
+    // compares `tail_norm_sq` (`decompose.rs`), a raw `Σrᵢ²` over the `rows`
+    // entries of a trailing column, whose 2-norm the reflectors preserve —
+    // so `Σrᵢ² ≤ rows·‖A‖_max²`.
+    let rows = matrix.shape()[0];
+    let f = match scaling::balanced(matrix, 2, |_, _| {
+        GateBound::factor(thresholds::ceil_log2_count(rows))
+    })? {
+        Some((scaled, exponent)) => {
+            let mut f = decompose::factor(&scaled.view())?;
+            scaling::restore(&mut f.r, exponent, "R entry exceeds the scalar range")?;
+            f
+        }
+        None => decompose::factor(matrix)?,
+    };
     Ok(ColPivQrDecomposition {
         q: f.q,
         r: f.r,

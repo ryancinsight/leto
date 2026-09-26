@@ -1,6 +1,7 @@
 //! Public entry points: the reusable workspace and the owning decomposition.
 
 use super::{ql, reduce};
+use crate::application::linalg::scaling::{self, GateBound};
 use crate::application::linalg::SymmetricEigenDecomposition;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, LetoError, Result};
@@ -24,11 +25,14 @@ use leto::{Array2, ArrayView2, LetoError, Result};
 /// let a = Array2::from_shape_vec([2, 2], vec![2.0_f64, 1.0, 1.0, 2.0])?;
 /// let mut workspace = SymmetricEigenWorkspace::new();
 /// workspace.decompose(&a.view())?;
-/// assert!((workspace.eigenvalues()[0] - 1.0).abs() < 1e-15);
-/// assert!((workspace.eigenvalues()[1] - 3.0).abs() < 1e-15);
+/// // Backward-error envelope n²·ε·‖A‖_F (empirical; see the test suite),
+/// // n = 2, ‖A‖_F = √10.
+/// let bound = 4.0 * f64::EPSILON * 10.0_f64.sqrt();
+/// assert!((workspace.eigenvalues()[0] - 1.0).abs() <= bound);
+/// assert!((workspace.eigenvalues()[1] - 3.0).abs() <= bound);
 /// // A·v = λ·v for the top eigenpair.
 /// let top = workspace.eigenvectors().next_back().expect("two eigenvectors");
-/// assert!((2.0 * top[0] + top[1] - 3.0 * top[0]).abs() < 1e-15);
+/// assert!((2.0 * top[0] + top[1] - 3.0 * top[0]).abs() <= bound);
 /// # Ok::<(), leto::LetoError>(())
 /// ```
 #[derive(Debug, Clone)]
@@ -92,14 +96,21 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
     /// result.
     ///
     /// Only the lower triangle (diagonal included) is read; the strictly upper
-    /// triangle is taken to mirror it, the LAPACK `uplo = 'L'` convention. Any
+    /// triangle is taken to mirror it, the LAPACK `uplo = 'L'` convention, so an
+    /// asymmetric input is resolved by its lower triangle and no symmetry check
+    /// applies. ([`symmetric_eigen_jacobi`](crate::symmetric_eigen_jacobi)
+    /// reads the upper triangle, after checking the two agree to rounding.) Any
     /// layout — contiguous, strided, transposed — is copied into
     /// workspace-owned storage, so reuse at one order allocates nothing.
     ///
-    /// The matrix is scaled by the power of two that brings its largest
-    /// entry into `[1, 2)` before the reduction and the eigenvalues are scaled
-    /// back after it; both scalings are exact (see the
-    /// [module documentation](super) for the range argument).
+    /// When the matrix norm lies outside the solver's gate range (see the
+    /// [module documentation](super)), it is first moved by the minimal power
+    /// of two into that range and the eigenvalues are scaled back after; a
+    /// norm already in range is factored unscaled. Power-of-two scaling is
+    /// exact only while every scaled entry stays representable — an entry far
+    /// below the largest can underflow under a scale chosen for the largest
+    /// one — so the result is within the algorithm's backward-error bound, not
+    /// exact entrywise.
     ///
     /// # Errors
     ///
@@ -129,12 +140,25 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
             });
         }
         let n = rows;
-        let exponent = self.load_lower_triangle(matrix, n)?;
-        if let Some(exponent) = exponent {
-            for value in &mut self.reduced {
-                *value = value.scale_binary(-exponent);
-            }
-        }
+        self.load_lower_triangle(matrix, n)?;
+        // Matrix-tier gate, degree 2, bound `2^(2r)` (`r` from
+        // `scaling::norm_ratio_log2`). The reduction (`reduce.rs`) applies
+        // `householder::reflect_in_place` reflectors, normalized to `[1, 2)`,
+        // so it stays degree 1. The QL chase (`ql.rs`) is also degree 1 but
+        // for one product: the closing correction
+        // `p = −s·s₂·c₃·e_{l+1}·eₗ / d_{l+1}` multiplies two off-diagonals
+        // before dividing, and each is at most `‖A‖₂ ≤ ‖A‖_F ≤ 2^r·‖A‖_max`
+        // (orthogonal similarity), so `|e_{l+1}·eₗ| ≤ 2^(2r)·‖A‖_max²`.
+        // Unguarded it overflows first (probed: `f64` at `2⁵³⁷` gave
+        // `∞`, then `0·∞ = NaN`). The shift ratio `p = (d_{l+1} − dₗ)/(2eₗ)` is
+        // degree 0, bounded by `4/ε` through the fixed norm estimate (`ql.rs`),
+        // and every other intermediate is at most `3‖A‖₂ ≤ 3·√Ω` inside this
+        // range.
+        let exponent = scaling::gate_exponent(&self.reduced, 2, |values, largest| {
+            GateBound::factor(2 * scaling::norm_ratio_log2(values, largest))
+        })?
+        .unwrap_or(0);
+        scaling::scale_by_power_of_two(&mut self.reduced, -exponent);
         self.values.resize(n, T::ZERO);
         self.off_diagonal.resize(n, T::ZERO);
         self.reflector_scales.resize(n, T::ZERO);
@@ -160,31 +184,24 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
             n,
             budget,
         )?;
-        if let Some(exponent) = exponent {
-            for value in &mut self.values {
-                *value = value.scale_binary(exponent);
-            }
-            if self.values.iter().any(|value| !value.is_finite()) {
-                return Err(LetoError::Overflow {
-                    reason: "symmetric eigensolver: an eigenvalue exceeds the scalar range",
-                });
-            }
-        }
+        scaling::restore(
+            &mut self.values,
+            exponent,
+            "symmetric eigensolver: an eigenvalue exceeds the scalar range",
+        )?;
         self.order = n;
         Ok(())
     }
 
     /// Copy `matrix` into the working buffer as a full symmetric matrix built
-    /// from its lower triangle, rejecting non-finite entries; returns the
-    /// binary exponent of the largest magnitude (`None` for a zero matrix).
-    fn load_lower_triangle(&mut self, matrix: &ArrayView2<'_, T>, n: usize) -> Result<Option<i32>> {
+    /// from its lower triangle, rejecting non-finite entries.
+    fn load_lower_triangle(&mut self, matrix: &ArrayView2<'_, T>, n: usize) -> Result<()> {
         self.reduced.clear();
         if let Some(slice) = matrix.as_slice() {
             self.reduced.extend_from_slice(slice);
         } else {
             self.reduced.extend(matrix.iter().copied());
         }
-        let mut largest = T::ZERO;
         for i in 0..n {
             for j in 0..=i {
                 let value = self.reduced[i * n + j];
@@ -193,13 +210,10 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
                         "symmetric eigensolver input has a non-finite entry at ({i}, {j})"
                     )));
                 }
-                if value.abs() > largest {
-                    largest = value.abs();
-                }
                 self.reduced[j * n + i] = value;
             }
         }
-        Ok(largest.binary_exponent())
+        Ok(())
     }
 }
 
@@ -225,8 +239,10 @@ impl<T: RealScalar> SymmetricEigenWorkspace<T> {
 /// // Path-graph Laplacian: eigenvalues 0, 1, 3.
 /// let a = Array2::from_shape_vec([3, 3], vec![1.0_f64, -1.0, 0.0, -1.0, 2.0, -1.0, 0.0, -1.0, 1.0])?;
 /// let eigen = symmetric_eigen_qr(&a.view())?;
+/// // Backward-error envelope n²·ε·‖A‖_F (empirical), n = 3, ‖A‖_F = √9 = 3.
+/// let bound = 9.0 * f64::EPSILON * 3.0;
 /// for (value, expected) in eigen.eigenvalues.iter().zip([0.0, 1.0, 3.0]) {
-///     assert!((value - expected).abs() < 1e-14);
+///     assert!((value - expected).abs() <= bound);
 /// }
 /// # Ok::<(), leto::LetoError>(())
 /// ```
@@ -274,6 +290,24 @@ mod tests {
         };
         assert_eq!(max_iters, 0);
         assert_eq!(tol, f64::EPSILON / 2.0);
+        // A = I + J (J the all-ones 3×3 matrix) has eigenvalues {1, 1, 4}.
+        // One Householder step (x = A[0, 1..] = (1, 1), α = −‖x‖ = −√2)
+        // reduces it to the tridiagonal diag(2, 3, 1), off-diagonal (√2, 0),
+        // whose 2×2 leading block [[2, √2], [√2, 3]] carries eigenvalues
+        // {1, 4} and decouples from the isolated entry 1 (verified: trace
+        // 2+3+1 = 6 = tr(A), det 2·3−2 = 4 = det(A)). At budget = 0 the first
+        // sweep attempt (l = 0) reports before any rotation, so `residual` is
+        // exactly `|e₀|/t` with the pre-sweep norm estimate
+        // `t = max(|dᵢ|+|eᵢ|) = 2+√2` (from d₀=2, e₀=√2 — the (d₁,e₁) and
+        // (d₂,e₂) pairs give 3 and 1, both smaller). Mirroring the algorithm's
+        // exact operation order (`d.abs().add(e.abs())`, then
+        // `off_diagonal[l].abs().div(norm_estimate)`) reproduces its residual
+        // bit for bit rather than an algebraically-equal but differently
+        // rounded expression.
+        let off_diagonal_0 = 2.0_f64.sqrt();
+        let norm_estimate = 2.0_f64.abs() + off_diagonal_0.abs();
+        let expected_residual = off_diagonal_0.abs() / norm_estimate;
+        assert_eq!(residual, expected_residual);
         assert!(residual > tol && residual <= 1.0, "{residual}");
         assert_eq!(workspace.order(), 0);
         assert!(workspace.eigenvalues().is_empty());
