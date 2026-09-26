@@ -67,7 +67,7 @@ fn safmn2<T: RealScalar>() -> T {
 }
 
 /// LAPACK `dlanv2` on the block `[[a, b], [c, d]]`.
-#[allow(
+#[expect(
     clippy::many_single_char_names,
     reason = "the names are dlanv2's own a, b, c, d, p, z"
 )]

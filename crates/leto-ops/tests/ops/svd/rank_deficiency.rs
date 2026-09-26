@@ -40,8 +40,8 @@ use leto_ops::{pinv, singular_values, svd_decompose, RealScalar};
 /// Returns `(absolute, relative)`: the `‖A‖₂ ≈ σ₁`-scaled bound for singular
 /// values and reconstruction, and the bare relative bound for orthonormality.
 fn error_bounds<T: RealScalar + RealField>(rows: usize, cols: usize, norm: f64) -> (f64, f64) {
-    #[allow(clippy::cast_precision_loss)]
-    let relative = 8.0 * rows.max(cols) as f64 * <T as RealField>::EPSILON.to_f64();
+    let order = u32::try_from(rows.max(cols)).expect("invariant: test dimensions fit in u32");
+    let relative = 8.0 * f64::from(order) * <T as RealField>::EPSILON.to_f64();
     (relative * norm, relative)
 }
 
