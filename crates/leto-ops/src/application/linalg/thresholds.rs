@@ -215,6 +215,23 @@ pub(crate) fn ceil_log2<T: RealScalar>(x: T) -> i32 {
     }
 }
 
+/// The gate exponent of a deflation floor of `safmin` over at most `k`
+/// deflations, before the norm-ratio credit: `⌈⌈log₂ k⌉/2⌉ ≥ log₂ √k`.
+///
+/// *Derivation.* An absolute deflation floor exists only to stop a sweep on
+/// entries that can no longer be resolved, the subnormals below `safmin`;
+/// `safmin` is therefore the floor. A run zeroes at most `k` distinct
+/// entries at or below it, a perturbation of Frobenius norm at most
+/// `√k·safmin`, which the backward-error premise holds to `ε·‖A‖_F`:
+/// `√k·safmin ≤ ε·‖A‖_F`, i.e. `‖A‖_max ≥ 2^(⌈⌈log₂ k⌉/2⌉ − l)·smlnum` with
+/// `2^l ≤ ‖A‖_F/‖A‖_max` (`scaling::norm_ratio_floor_log2`). LAPACK
+/// `dbdsqr` instead floors at `MAXITR·(N·(N·UNFL))` — its iteration cap
+/// times `unfl` — an absolute target that presumes unit scale and
+/// `n²·unfl ≪ ulp`, false in `F16` (`0.21` at `n = 24`).
+pub(crate) fn deflation_count_log2(k: usize) -> i32 {
+    (ceil_log2_count(k) + 1) / 2
+}
+
 /// `⌈log₂ n⌉` for a count `n ≥ 1`, in integer arithmetic.
 pub(crate) fn ceil_log2_count(n: usize) -> i32 {
     let n = n.max(1);
@@ -313,7 +330,7 @@ mod tests {
         );
         let (lower, upper) = homogeneous_safe_range::<F16>(1, 19, 0).expect("non-empty");
         assert!(lower <= upper);
-        // A deflation floor 2^g·safmin fits below ε·‖A‖_max exactly while
+        // A floor exponent g (the caller's 2^g·smlnum lower end) fits exactly while
         // 2^g·smlnum ≤ Ω·2^−f, i.e. f + g < 20 in F16 (Ω = 65504 < 2¹⁶,
         // smlnum = 2⁻⁴; the upper end rounds down, so f + g = 20 is empty).
         let (lower, upper) = homogeneous_safe_range::<F16>(1, 12, 7).expect("non-empty");

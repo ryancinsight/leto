@@ -46,6 +46,7 @@ mod standardize;
 mod tests;
 
 use crate::application::linalg::scaling::{self, GateBound};
+use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::Complex;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
@@ -70,14 +71,14 @@ use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 /// `n ≤ Ω/16`), and its lower end `√smlnum` leaves the converging
 /// subdiagonals `√smlnum/safmin` of headroom above the subnormals.
 ///
-/// Deflation floor: `francis::run` also deflates a subdiagonal at or below
-/// [`francis::deflation_floor`]`(n) = 2^⌈log₂ n⌉·safmin`, so the gate's lower
-/// end is raised to keep that floor below `ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
-/// ([`scaling::norm_ratio_floor_log2`]).
+/// Deflation floor: `francis::run` also deflates subdiagonals at or below
+/// [`francis::deflation_floor`]` = safmin`, at most `n` of them, so the gate's
+/// lower end is raised until `√n·safmin ≤ ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
+/// ([`thresholds::deflation_count_log2`], [`scaling::norm_ratio_floor_log2`]).
 fn francis_bound<T: RealScalar>(n: usize) -> impl FnOnce(&[T], T) -> GateBound {
     move |values, largest| GateBound {
         factor_log2: 2 * scaling::norm_ratio_log2(values, largest),
-        floor_log2: francis::deflation_floor_log2(n)
+        floor_log2: thresholds::deflation_count_log2(n)
             - scaling::norm_ratio_floor_log2(values, largest),
     }
 }

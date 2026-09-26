@@ -80,18 +80,14 @@ const MAX_ITER: usize = 2000;
 /// matrices stay scalar. Derived empirically (f64 AVX2: crossover ≈ 32 columns).
 const SPAN_SIMD_MIN: usize = 32;
 
-/// `⌈log₂ n⌉`, the exponent of [`deflation_floor`] over `safmin`.
-pub(super) fn deflation_floor_log2(n: usize) -> i32 {
-    crate::application::linalg::thresholds::ceil_log2_count(n)
-}
-
-/// The subnormal part of the deflation threshold of an order-`n` run,
-/// `2^⌈log₂ n⌉·safmin ≥ n·safmin`: a subdiagonal driven into the subnormals,
-/// where no relative test can be met short of an exact zero, still
-/// deflates. The matrix-tier gate (`schur/mod.rs`) raises its lower end so
-/// this stays below `ε·‖A‖_F`.
-pub(super) fn deflation_floor<T: RealScalar>(n: usize) -> T {
-    crate::application::linalg::thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(n))
+/// The subnormal part of the deflation threshold, `safmin`: a subdiagonal
+/// driven into the subnormals, where no relative test can be met short of an
+/// exact zero, still deflates. At most `n − 1` such deflations perturb by at
+/// most `√n·safmin` jointly, which the matrix-tier gate (`schur/mod.rs`,
+/// [`thresholds::deflation_count_log2`](crate::application::linalg::thresholds::deflation_count_log2))
+/// keeps below `ε·‖A‖_F`.
+pub(super) fn deflation_floor<T: RealScalar>() -> T {
+    crate::application::linalg::thresholds::safe_min::<T>()
 }
 
 /// The deflation threshold of a run on the order-`n` Hessenberg `h`: the
@@ -112,11 +108,12 @@ pub(super) fn deflation_floor<T: RealScalar>(n: usize) -> T {
 ///
 /// *Why capped at `ε`.* `safmin/ε` exceeds `ε` in `F16` (`2⁻⁴` against
 /// `2⁻¹⁰`); the cap keeps every deflation at or below `ε·2^e`, and
-/// `2^e ≤ ‖A‖_max` (`|h_{ij}| ≤ ‖H‖₂ = ‖A‖₂ ≤ n·‖A‖_max`), so each costs at
-/// most `ε·‖A‖_max` of backward error, as `backward_error.rs` counts it.
+/// `2^e ≤ ‖A‖_max/n` (`|h_{ij}| ≤ ‖H‖₂ = ‖A‖₂ ≤ n·‖A‖_max`), so at most `n`
+/// of them cost at most `ε·‖A‖_max/√n ≤ ε·‖A‖_F` jointly, within
+/// `backward_error.rs`'s count.
 fn run_floor<T: RealScalar>(h: &[T], n: usize) -> T {
     use crate::application::linalg::thresholds;
-    let absolute = deflation_floor::<T>(n);
+    let absolute = deflation_floor::<T>();
     let largest = h
         .iter()
         .fold(T::ZERO, |acc, &v| if v.abs() > acc { v.abs() } else { acc });
@@ -126,7 +123,7 @@ fn run_floor<T: RealScalar>(h: &[T], n: usize) -> T {
     let eps = thresholds::machine_epsilon::<T>();
     let smlnum = thresholds::safe_min::<T>()
         .div(eps)
-        .scale_binary(deflation_floor_log2(n));
+        .scale_binary(thresholds::ceil_log2_count(n));
     let relative = if smlnum < eps { smlnum } else { eps };
     let relative = relative.scale_binary(exponent - thresholds::ceil_log2_count(n));
     if relative > absolute {

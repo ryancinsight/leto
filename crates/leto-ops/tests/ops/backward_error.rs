@@ -37,7 +37,7 @@
 //! at or above `1` says nothing: callers assert one only through
 //! [`informative`]. At the caps it is vacuous for the iterative routines
 //! (SVD, Francis, QL) in `F16` and `Bf16` — one length-3 reflector alone
-//! costs `γ₅₃ ≈ 0.026` in `F16`, `0.21` in `Bf16` — for pivoted QR in
+//! costs `γ₅₃ ≈ 0.027` in `F16`, `0.26` in `Bf16` — for pivoted QR in
 //! `Bf16`, and in `f32` for Francis at `n = 8` (`η ≈ 1.03`) and the Schur
 //! residual ([`schur_factors`]) from `n = 5`. Those cases are covered by the *a-posteriori*
 //! certificates of `a_posteriori.rs`, which bound the returned values by the

@@ -28,6 +28,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
 use super::triangular_pair::triangular_svd;
+use super::zero_shift::zero_shift_sweep;
 use super::{validate_input, SvdDecomposition};
 use crate::application::linalg::scaling::{self, GateBound, KernelWindow};
 use crate::application::linalg::thresholds;
@@ -54,41 +55,33 @@ const MAX_ITER: usize = 4000;
 /// `[√safmin/ε, ε/√safmin]` form (`scaling::balanced(matrix, 2, …)`): the
 /// bound needs only degree 1, and `(Ω·2^−f)^½ ≤ Ω·2^−f` keeps it, but the
 /// sweep needs headroom below `‖A‖_max` for the small singular values it
-/// converges on. At the degree-1 lower end `smlnum` they sat within a few
-/// binades of `safmin` in the narrow formats, where the shifted sweep lost
-/// the relative precision it converges on and cycled (Bf16 skew-symmetric
-/// tridiagonals at `2⁻¹¹⁴`).
+/// converges on. At the degree-1 lower end `smlnum` they sit within a few
+/// binades of `safmin` in the narrow formats, and Bf16 skew-symmetric
+/// tridiagonals near `2⁻¹¹⁵` fail to converge even with the zero-shift sweep.
 ///
 /// Deflation floor: [`qr_iterate`] also deflates at or below
-/// [`deflation_floor`]`(k)`, `k = min(rows, cols)`, so the gate's lower end is
-/// raised to keep that floor below `ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
-/// ([`scaling::norm_ratio_floor_log2`]).
+/// [`deflation_floor`]` = safmin`, at most `k = min(rows, cols)` entries, so
+/// the gate's lower end is raised until `√k·safmin ≤ ε·2^l·‖A‖_max ≤ ε·‖A‖_F`
+/// ([`thresholds::deflation_count_log2`], [`scaling::norm_ratio_floor_log2`]).
 fn svd_bound<T: RealScalar>(rows: usize, cols: usize) -> impl FnOnce(&[T], T) -> GateBound {
     move |values, largest| {
         let half_log2_m = (thresholds::ceil_log2_count(rows.max(cols)) + 1) / 2;
         GateBound {
             factor_log2: 2 + half_log2_m + scaling::norm_ratio_log2(values, largest),
-            floor_log2: deflation_floor_log2(rows.min(cols))
+            floor_log2: thresholds::deflation_count_log2(rows.min(cols))
                 - scaling::norm_ratio_floor_log2(values, largest),
         }
     }
 }
 
-/// `⌈log₂ k⌉`, the exponent of [`deflation_floor`] over `safmin`.
-fn deflation_floor_log2(k: usize) -> i32 {
-    thresholds::ceil_log2_count(k)
-}
-
-/// The absolute deflation floor of an order-`k` bidiagonal,
-/// `2^⌈log₂ k⌉·safmin ≥ k·safmin`, in place of LAPACK `dbdsqr`'s
-/// `maxitr·n²·unfl` (`maxitr = 6`). That constant assumes `n²·unfl ≪ ulp`,
-/// which fails in `F16` (`6·24²·2⁻¹⁴ ≈ 0.2` at `k = 24`: it would split
-/// superdiagonals of unit-scale matrices). The floor keeps its purpose — an
-/// `eᵢ` driven into the subnormals, where no relative test can be met short
-/// of an exact zero, still deflates — and the gate keeps it below
-/// `ε·‖A‖_F`.
-fn deflation_floor<T: RealScalar>(k: usize) -> T {
-    thresholds::safe_min::<T>().scale_binary(deflation_floor_log2(k))
+/// The absolute deflation floor, `safmin`
+/// ([`thresholds::deflation_count_log2`] derives it), in place of LAPACK
+/// `dbdsqr`'s `MAXITR·(N·(N·UNFL))`, which in `F16` is `≈ 0.21` at `k = 24`
+/// and would split superdiagonals of unit-scale matrices. An `eᵢ` driven into
+/// the subnormals, where no relative test can be met short of an exact zero,
+/// still deflates.
+fn deflation_floor<T: RealScalar>() -> T {
+    thresholds::safe_min::<T>()
 }
 
 /// LAPACK `dbdsqr`'s relative-accuracy deflation (`TOL ≥ 0`): `tol =
@@ -126,7 +119,7 @@ impl<T: RealScalar> Deflation<T> {
         }
         let sminoa = sminoa.div(T::from_usize(k).sqrt());
         let relative = tol.mul(sminoa);
-        let floor = deflation_floor::<T>(k);
+        let floor = deflation_floor::<T>();
         Self {
             tol,
             thresh: if relative > floor { relative } else { floor },
@@ -137,6 +130,36 @@ impl<T: RealScalar> Deflation<T> {
     /// `|e_{q−1}| ≤ tol·|d_q|`, then the recurrence `μ ← |d_{i+1}|·μ/(μ + |eᵢ|)`
     /// from `μ = |d_p|`, splitting at the first `|eᵢ| ≤ tol·μ`. Returns the
     /// index of the superdiagonal it zeroes, if any.
+    /// `dbdsqr`'s first zero-shift test: `n·tol·(σ̃_min/σ_max) ≤ max(ε, tol/100)`
+    /// — shifting would ruin the relative accuracy of the block's smallest
+    /// singular value — with `σ̃_min` the forward recurrence's minimum over
+    /// the block `[p, q]` and `σ_max` the largest `|dᵢ|, |eᵢ|` of the
+    /// bidiagonal of order `k`.
+    fn shift_ruins_accuracy(self, d: &[T], e: &[T], p: usize, q: usize, k: usize) -> bool {
+        let largest = d[..k].iter().chain(&e[..k - 1]).fold(T::ZERO, |acc, &x| {
+            if x.abs() > acc {
+                x.abs()
+            } else {
+                acc
+            }
+        });
+        if largest == T::ZERO {
+            return false;
+        }
+        let mut mu = d[p].abs();
+        let mut smallest = mu;
+        for i in p..q {
+            mu = d[i + 1].abs().mul(mu.div(mu.add(e[i].abs())));
+            if mu < smallest {
+                smallest = mu;
+            }
+        }
+        let eps = thresholds::machine_epsilon::<T>();
+        let hundredth = self.tol.div(T::from_usize(100));
+        let bound = if eps > hundredth { eps } else { hundredth };
+        T::from_usize(k).mul(self.tol).mul(smallest.div(largest)) <= bound
+    }
+
     fn forward_split(self, d: &[T], e: &[T], p: usize, q: usize) -> Option<usize> {
         if e[q - 1].abs() <= self.tol.mul(d[q].abs()) {
             return Some(q - 1);
@@ -236,7 +259,7 @@ fn transpose_to_owned<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Array
 /// window the result is bit-for-bit the unscaled formula. `window` is
 /// [`SweepWindows::rotation`].
 #[inline]
-fn givens<T: RealScalar>(a: T, b: T, window: KernelWindow<T>) -> (T, T, T) {
+pub(super) fn givens<T: RealScalar>(a: T, b: T, window: KernelWindow<T>) -> (T, T, T) {
     if b == T::ZERO {
         return (T::ONE, T::ZERO, a);
     }
@@ -313,7 +336,7 @@ fn transpose_square<T: RealScalar>(src: &[T], n: usize) -> Vec<T> {
 ///
 /// `U`/`V` are accumulated as `Uᵀ`/`Vᵀ` so every rotation hits this path.
 #[inline]
-fn rotate_row_pair<T: RealScalar>(
+pub(super) fn rotate_row_pair<T: RealScalar>(
     mat: &mut [T],
     len: usize,
     first: usize,
@@ -540,7 +563,11 @@ fn qr_iterate<T: RealScalar, const VEC: bool>(
             continue;
         }
 
-        qr_step::<T, VEC>(d, e, p, q, u, m, v, n, windows);
+        if deflation.shift_ruins_accuracy(d, e, p, q, k) {
+            zero_shift_sweep::<T, VEC>(d, e, p, q, u, m, v, n, windows.rotation);
+        } else {
+            qr_step::<T, VEC>(d, e, p, q, u, m, v, n, windows);
+        }
     }
 }
 
@@ -573,6 +600,12 @@ fn qr_step<T: RealScalar, const VEC: bool>(
     let exponent = windows.shift.exponent(&local);
     let [dq, dq1, eq1, eq2, dp, ep] = local.map(|v| v.scale_binary(-exponent));
     let mu = wilkinson_shift(dq, dq1, eq1, eq2);
+    // `dbdsqr`'s second zero-shift test, `(σ/|d_p|)² < ε`, in `BᵀB`'s units:
+    // a shift negligible against `d_p²` only perturbs the step.
+    if mu.abs() < thresholds::machine_epsilon::<T>().mul(dp.mul(dp)) {
+        zero_shift_sweep::<T, VEC>(d, e, p, q, u, m, v, n, windows.rotation);
+        return;
+    }
     let mut y = dp.mul(dp).sub(mu);
     let mut z = dp.mul(ep);
 
@@ -918,26 +951,64 @@ mod tests {
         assert_eq!(&v[..3], &[1.0, 0.0, 0.0], "V row 0: {v:?}");
     }
 
-    /// The SVD gate keeps the floor within `ε·‖A‖_F`: F16, `k = 8`, a single
-    /// nonzero entry (`‖A‖_F = ‖A‖_max`, `l = 0`); the root end `√smlnum =
-    /// 0.25` lies below the floor end `2³·smlnum = 0.5`, so an entry at `0.3`
-    /// is moved up until `2³·safmin ≤ ε·‖A‖_F`.
+    /// The SVD gate keeps the joint floor `√k·safmin` within `ε·‖A‖_F`:
+    /// F16, `k = 64`, entries `0.3` and `0.225` (`‖A‖_F/‖A‖_max = 1.25`,
+    /// `r = 1`, `l = 0`); the floor end `2^(3 − l)·smlnum = 0.5` moves `0.3`
+    /// up, where crediting `r` would leave it at the root end `0.25`.
     #[test]
     fn gate_keeps_the_deflation_floor_below_epsilon_times_the_norm() {
-        use super::{deflation_floor, svd_bound};
-        use crate::application::linalg::{scaling, thresholds};
+        use super::svd_bound;
+        use crate::application::linalg::scaling;
         use eunomia::{FloatElement, NumericElement, F16};
-        let k = 8;
-        let largest = F16::from_f64(0.3);
+        let k = 64;
         let mut values = vec![F16::from_f64(0.0); k * k];
-        values[0] = largest;
+        values[0] = F16::from_f64(0.3);
+        values[1] = F16::from_f64(0.225);
+        let frobenius = |scale: i32| {
+            values
+                .iter()
+                .map(|v| v.scale_binary(scale).to_f64().powi(2))
+                .sum::<f64>()
+                .sqrt()
+        };
+        let (safmin, eps) = (2.0_f64.powi(-14), 2.0_f64.powi(-10));
+        let joint_floor = (k as f64).sqrt() * safmin;
+        assert!(joint_floor > eps * frobenius(0), "the input must violate");
         let exponent = scaling::gate_exponent(&values, 2, svd_bound(k, k))
             .expect("the range is non-empty")
             .expect("0.3 is below the floor end");
-        let moved = largest.scale_binary(-exponent);
-        let floor = deflation_floor::<F16>(k).to_f64();
-        let eps = thresholds::machine_epsilon::<F16>().to_f64();
-        assert!(floor <= eps * moved.to_f64(), "{exponent}");
-        assert!(floor > eps * largest.to_f64());
+        assert!(joint_floor <= eps * frobenius(-exponent), "{exponent}");
+        // `0.3·ones(64)`: `l = 5` credits `‖A‖_F = 64·‖A‖_max`, the floor end
+        // falls to `2⁻⁶` below the root end `¼`, and the input stays in place;
+        // without the credit the floor end `0.5` would move it.
+        let ones = vec![F16::from_f64(0.3); k * k];
+        let unmoved = scaling::gate_exponent(&ones, 2, svd_bound(k, k)).expect("non-empty");
+        assert_eq!(unmoved, None);
+    }
+
+    /// `dbdsqr`'s second zero-shift test: on `d = (1, 1, 10⁻⁹)`,
+    /// `e = (½, 10⁻⁹)` the Wilkinson shift is `≈ 10⁻¹⁸`, below `ε·d₀²`, so
+    /// the step is exactly the zero-shift sweep (a shifted step with that
+    /// shift rounds differently).
+    #[test]
+    fn negligible_shift_takes_the_zero_shift_sweep() {
+        use super::{qr_step, zero_shift_sweep, SweepWindows};
+        let windows = SweepWindows::<f64>::new();
+        let (mut d, mut e) = (vec![1.0, 1.0, 1e-9], vec![0.5, 1e-9, 0.0]);
+        let (mut d0, mut e0) = (d.clone(), e.clone());
+        let (mut no_u, mut no_v) = ([0.0f64; 0], [0.0f64; 0]);
+        qr_step::<f64, false>(&mut d, &mut e, 0, 2, &mut no_u, 0, &mut no_v, 0, windows);
+        zero_shift_sweep::<f64, false>(
+            &mut d0,
+            &mut e0,
+            0,
+            2,
+            &mut no_u,
+            0,
+            &mut no_v,
+            0,
+            windows.rotation,
+        );
+        assert_eq!((d, e), (d0, e0));
     }
 }

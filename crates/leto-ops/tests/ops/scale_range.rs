@@ -441,8 +441,8 @@ fn in_range_inputs_are_factored_unscaled() {
 /// in `F16`: at `k = 24` it is `6·24²·2⁻¹⁴ ≈ 0.21`, and would split every
 /// superdiagonal below that of a unit-scale matrix. Twelve copies of the block
 /// `[[1, a], [0, 1]]`, `a = 1/16` (already bidiagonal, so the reduction
-/// applies identity reflectors; `‖A‖_max = 1` sits at the gate's raised lower
-/// end `2^(5−1)·smlnum = 1` and is not moved), have singular values
+/// applies identity reflectors; `‖A‖_max = 1` lies inside the gate's range,
+/// lower end `√smlnum = ¼`, and is not moved), have singular values
 /// `√(1 + a²/4) ± a/2 ≈ 1.0317, 0.9692`; a split returns `1` for both. The
 /// check separates the two structurally: every `σ̂` more than `a/4` from `1`
 /// (the exact values are `≥ 0.030` away, the split `0`).
@@ -466,71 +466,6 @@ fn deflation_floor_keeps_unit_scale_superdiagonals_in_f16() {
             assert!(
                 (sigma - 1.0).abs() > a / 4.0,
                 "σ {sigma}: the superdiagonal {a} was deflated"
-            );
-        }
-    }
-}
-
-/// The all-ones matrix in `F16` at orders 64, 96 and 128 (spectrum `{n, 0, …}`,
-/// singular values `{n, 0, …}`): the floor condition is `floor ≤ ε·‖A‖_F`, and
-/// `‖A‖_F = n·‖A‖_max` leaves the gates room (at `n = 64` the floor `2⁻⁸`
-/// against `ε·‖A‖_F = 2⁻⁴`), so every routine factors — a condition on
-/// `ε·‖A‖_max` alone refused all of them. Each returned eigenvalue of `T̂` and
-/// singular value is certified a posteriori (`a_posteriori.rs`) against the
-/// exact spectrum.
-#[test]
-fn f16_all_ones_factor_at_orders_past_the_max_norm_floor() {
-    for n in [64_usize, 96, 128] {
-        let matrix = Array2::from_shape_vec([n, n], vec![F16::from_f64(1.0); n * n]).unwrap();
-        let image = vec![1.0_f64; n * n];
-        let nf = n as f64;
-        let as_f64 = |m: &Array2<F16>| -> Vec<f64> {
-            m.storage()
-                .as_slice()
-                .iter()
-                .map(|v| f64::from(v.to_f32()))
-                .collect()
-        };
-        eigenvalues(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: eigenvalues: {e}"));
-        singular_values(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: singular_values: {e}"));
-        let decomposition = schur(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: schur: {e}"));
-        let (q, t) = (as_f64(&decomposition.q()), as_f64(&decomposition.t()));
-        let residual = a_posteriori::residual(&image, &q, &t, &q, n, n, n);
-        let radius =
-            a_posteriori::schur_certificate(residual, a_posteriori::gram_defect(&q, n, n), &t);
-        for BlockEigenvalue { re, im, error } in a_posteriori::quasi_triangular_eigenvalues(&t, n) {
-            let nearest = re.hypot(im).min((re - nf).hypot(im));
-            assert!(
-                nearest <= radius + error,
-                "n = {n}: λ(T̂) {re}+{im}i is {nearest:e} from {{0, {n}}}, certified {radius:e}"
-            );
-        }
-        let full = svd_decompose(&matrix.view()).unwrap_or_else(|e| panic!("n = {n}: svd: {e}"));
-        let sigmas: Vec<f64> = full
-            .singular_values
-            .iter()
-            .map(|v| f64::from(v.to_f32()))
-            .collect();
-        let (u, v) = (
-            as_f64(&full.left_singular_vectors),
-            as_f64(&full.right_singular_vectors),
-        );
-        let mut diagonal = vec![0.0; n * n];
-        for (i, sigma) in sigmas.iter().enumerate() {
-            diagonal[i * n + i] = *sigma;
-        }
-        let residual = a_posteriori::residual(&image, &u, &diagonal, &v, n, n, n);
-        let radius = a_posteriori::svd_certificate(
-            residual,
-            a_posteriori::gram_defect(&u, n, n),
-            a_posteriori::gram_defect(&v, n, n),
-            &sigmas,
-        );
-        for (i, sigma) in sigmas.iter().enumerate() {
-            let exact = if i == 0 { nf } else { 0.0 };
-            assert!(
-                (sigma - exact).abs() <= radius,
-                "n = {n}: σ{i} {sigma} vs {exact}, certified {radius:e}"
             );
         }
     }

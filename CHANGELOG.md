@@ -162,15 +162,16 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   nonsymmetric input, the `f64` stalls on skew-symmetric tridiagonals, the
   `O(√ε)` error on double eigenvalues, and a wrong `Ok` near `2⁻⁴⁸⁵` in `f64`
   (`1.0163` for `1.002` on a clustered 8×8); the bidiagonal QR follows
-  `dbdsqr`'s relative-accuracy deflation and its `dlasv2` 2×2 blocks. Local
+  `dbdsqr`'s relative-accuracy deflation, zero-shift sweep and `dlasv2` 2×2
+  blocks. Local
   products (Givens and reflector norms, the Golub–Kahan shift) are formed
   scale-safely (`dlartg`, `dlarfg`), and both iterations deflate below an
   absolute underflow floor. The remaining whole-matrix intermediates are
   guarded by a per-routine gate (ADR 0033): an input inside it is factored
   unscaled, one outside it is moved by the minimal power of two and its
   results scaled back, and an order too large for the format's exponent
-  range — including one where no scaling keeps the underflow floor below
-  `ε·‖A‖_F` (in `F16`, from about order 512, by `‖A‖_F/‖A‖_max`) — is
+  range — including one where no scaling keeps the joint underflow floor
+  `√k·safmin` below `ε·‖A‖_F` (in `F16` only past order `2¹⁴`) — is
   `LetoError::Overflow`.
   The SVD gate uses `dgesvd`'s degree-2 range. The gate's upper end is the
   overflow threshold, so Jacobi returns `diag(1e300, 1e-300)` and `f32`

@@ -30,6 +30,7 @@ pub mod bidiagonal_qr;
 /// Moore-Penrose pseudoinverse.
 pub mod pseudoinverse;
 mod triangular_pair;
+mod zero_shift;
 
 pub use bidiagonal_qr::{singular_values, svd_decompose};
 pub use pseudoinverse::pinv;

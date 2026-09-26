@@ -378,3 +378,104 @@ fn svd_decompose_reconstructs_and_matches() {
 }
 
 mod rank_deficiency;
+
+/// Bf16 skew-symmetric tridiagonals near `safmin` (superdiagonals from a
+/// seeded search). The first two fail to converge when the SVD gate uses the
+/// degree-1 lower end `smlnum` — the small singular values then sit a few
+/// binades above `safmin` — and the third when the shift's lower window is
+/// degree 2; the gate's degree-2 range and the
+/// degree-4 shift window keep all three. Each result is certified against the
+/// `f64` singular values of the same entries (`a_posteriori.rs`, Weyl).
+#[test]
+fn bf16_skew_tridiagonals_near_safmin_converge() {
+    use super::a_posteriori;
+    use super::backward_error;
+    use eunomia::Bf16;
+    let cases: [&[f64]; 3] = [
+        &[
+            -4.738_711_601_752_347e-38,
+            6.244_813_738_743_402e-39,
+            3.801_989_540_940_836e-38,
+            1.864_260_572_007_221_6e-38,
+            1.416_470_692_740_856_4e-36,
+        ],
+        &[
+            -9.146_815_417_335_925e-38,
+            1.900_994_770_470_418e-38,
+            2.926_980_933_547_496e-36,
+            -3.808_601_696_664_211_5e-36,
+            -2.938_735_877_055_718_8e-37,
+            7.438_675_188_797_288e-39,
+            -2.846_900_380_897_727_6e-39,
+        ],
+        &[
+            5.260_337_219_929_737e-37,
+            3.379_546_258_614_076_6e-37,
+            1.763_241_526_233_431_3e-38,
+            -3.338_403_956_335_296_5e-36,
+            -3.818_005_651_470_79e-35,
+            8.228_460_455_756_013e-36,
+            7.310_105_494_176_1e-38,
+        ],
+    ];
+    for sup in cases {
+        let n = sup.len() + 1;
+        let mut image = vec![0.0_f64; n * n];
+        for (i, s) in sup.iter().enumerate() {
+            image[i * n + i + 1] = *s;
+            image[(i + 1) * n + i] = -s;
+        }
+        let values: Vec<Bf16> = image.iter().map(|&v| Bf16::from_f64(v)).collect();
+        assert!(
+            values
+                .iter()
+                .zip(&image)
+                .all(|(v, x)| f64::from(v.to_f32()) == *x),
+            "entries are exact in Bf16"
+        );
+        let matrix = Array2::from_shape_vec([n, n], values).unwrap();
+        singular_values(&matrix.view()).unwrap();
+        let full = svd_decompose(&matrix.view()).unwrap();
+        let as_f64 = |m: &Array2<Bf16>| -> Vec<f64> {
+            m.storage()
+                .as_slice()
+                .iter()
+                .map(|v| f64::from(v.to_f32()))
+                .collect()
+        };
+        let sigmas: Vec<f64> = full
+            .singular_values
+            .iter()
+            .map(|v| f64::from(v.to_f32()))
+            .collect();
+        let (u, v) = (
+            as_f64(&full.left_singular_vectors),
+            as_f64(&full.right_singular_vectors),
+        );
+        let mut diagonal = vec![0.0; n * n];
+        for (i, s) in sigmas.iter().enumerate() {
+            diagonal[i * n + i] = *s;
+        }
+        let residual = a_posteriori::residual(&image, &u, &diagonal, &v, n, n, n);
+        let radius = a_posteriori::svd_certificate(
+            residual,
+            a_posteriori::gram_defect(&u, n, n),
+            a_posteriori::gram_defect(&v, n, n),
+            &sigmas,
+        );
+        let reference = singular_values(
+            &Array2::from_shape_vec([n, n], image.clone())
+                .unwrap()
+                .view(),
+        )
+        .unwrap();
+        let norm = image.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let bound = radius + backward_error::svd(n, n, f64::EPSILON) * norm;
+        for (s, r) in sigmas.iter().zip(&reference) {
+            assert!(
+                (s - r).abs() <= bound,
+                "n = {n}: σ {s:e} vs {r:e}, certified {bound:e}"
+            );
+        }
+    }
+}

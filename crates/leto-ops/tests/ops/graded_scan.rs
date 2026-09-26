@@ -478,10 +478,10 @@ fn large_orders_factor_in_the_narrow_formats() {
 /// gate moves a matrix whose largest entry is `1`, so the block's converging
 /// subdiagonals stay in the subnormals, where the relative deflation test
 /// holds only for an exact zero and the sweep cycles. The absolute deflation
-/// floors (`2^⌈log₂ n⌉·safmin` in both iterations) deflate them. Every
-/// singular value and eigenvalue of `B` is at most `‖B‖_F`, and deflating
-/// perturbs it by at most the floor, so the results other than the exact `1`
-/// stay within `‖B‖_F + 2³·safmin`.
+/// floor (`safmin` in both iterations) deflates them. Every singular value
+/// and eigenvalue of `B` is at most `‖B‖_F`, and at most `k` floor
+/// deflations perturb by at most `√k·safmin` jointly, so the results other
+/// than the exact `1` stay within `‖B‖_F + √k·safmin`.
 fn check_subnormal_block_deflates<T: Format>(seed: u64) {
     let unit_value = T::ONE.scale_binary(T::MIN_EXPONENT - T::PRECISION + 1);
     let mut rng = Xorshift64::new(seed);
@@ -501,7 +501,8 @@ fn check_subnormal_block_deflates<T: Format>(seed: u64) {
             .map(|v| v.to_f64().powi(2))
             .sum::<f64>()
             .sqrt();
-        let tolerance = block_norm + T::ONE.scale_binary(T::MIN_EXPONENT + 3).to_f64();
+        let tolerance =
+            block_norm + (k as f64).sqrt() * T::ONE.scale_binary(T::MIN_EXPONENT).to_f64();
         let matrix = Array2::from_shape_vec([k, k], values).unwrap();
         let case = format!("{label} case {case} (n = {k})");
         for sigmas in [

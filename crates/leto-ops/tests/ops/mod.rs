@@ -13,6 +13,7 @@ pub mod format;
 pub mod full_piv_lu;
 pub mod graded_scan;
 pub mod hessenberg;
+pub mod large_orders;
 pub mod layout;
 pub mod loss;
 pub mod lu;

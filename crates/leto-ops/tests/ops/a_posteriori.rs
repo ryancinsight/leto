@@ -42,21 +42,36 @@ fn frobenius(values: impl Iterator<Item = f64>) -> f64 {
     values.map(|v| v * v).sum::<f64>().sqrt()
 }
 
+/// The nonzero positions of each row of a row-major `rows × cols` matrix,
+/// so the products below skip exact zeros (exact, and it keeps the
+/// structured large-order checks within the test budget).
+fn row_support(values: &[f64], rows: usize, cols: usize) -> Vec<Vec<usize>> {
+    (0..rows)
+        .map(|r| (0..cols).filter(|&c| values[r * cols + c] != 0.0).collect())
+        .collect()
+}
+
 /// An upper bound on `‖Q̂ᵀQ̂ − I‖₂` for the row-major `rows × cols` `q`: the
 /// computed Frobenius defect plus its evaluation rounding
 /// `γ_{rows+1}·‖|Q̂|ᵀ|Q̂| + I‖_F`.
 pub fn gram_defect(q: &[f64], rows: usize, cols: usize) -> f64 {
+    let mut dot = vec![0.0; cols * cols];
+    let mut magnitude = vec![0.0; cols * cols];
+    for (r, support) in row_support(q, rows, cols).iter().enumerate() {
+        for &i in support {
+            for &j in support {
+                let term = q[r * cols + i] * q[r * cols + j];
+                dot[i * cols + j] += term;
+                magnitude[i * cols + j] += term.abs();
+            }
+        }
+    }
     let (mut defect, mut rounding) = (0.0_f64, 0.0_f64);
     for i in 0..cols {
         for j in 0..cols {
             let identity = if i == j { 1.0 } else { 0.0 };
-            let dot: f64 = (0..rows).map(|r| q[r * cols + i] * q[r * cols + j]).sum();
-            let magnitude: f64 = (0..rows)
-                .map(|r| (q[r * cols + i] * q[r * cols + j]).abs())
-                .sum::<f64>()
-                + identity;
-            defect += (dot - identity).powi(2);
-            rounding += magnitude.powi(2);
+            defect += (dot[i * cols + j] - identity).powi(2);
+            rounding += (magnitude[i * cols + j] + identity).powi(2);
         }
     }
     defect.sqrt() + gamma(rows as f64 + 1.0, EPS) * rounding.sqrt()
@@ -64,7 +79,8 @@ pub fn gram_defect(q: &[f64], rows: usize, cols: usize) -> f64 {
 
 /// An upper bound on `‖Â − X·M·Yᵀ‖_F` for row-major `a` (`rows × cols`), `x`
 /// (`rows × inner`), `m` (`inner × inner`) and `y` (`cols × inner`),
-/// evaluated as `X·(M·Yᵀ)` with its rounding bounded.
+/// evaluated as `X·(M·Yᵀ)` with its rounding bounded (the order of the
+/// summation does not enter `γ`).
 pub fn residual(
     a: &[f64],
     x: &[f64],
@@ -77,33 +93,33 @@ pub fn residual(
     // `M·Yᵀ` and `|M||Y|ᵀ`, `inner × cols`.
     let mut my = vec![0.0; inner * cols];
     let mut my_abs = vec![0.0; inner * cols];
+    let y_support = row_support(y, cols, inner);
     for i in 0..inner {
-        for j in 0..cols {
-            my[i * cols + j] = (0..inner)
-                .map(|k| m[i * inner + k] * y[j * inner + k])
-                .sum();
-            my_abs[i * cols + j] = (0..inner)
-                .map(|k| (m[i * inner + k] * y[j * inner + k]).abs())
-                .sum();
+        for (j, support) in y_support.iter().enumerate() {
+            for &k in support {
+                let term = m[i * inner + k] * y[j * inner + k];
+                my[i * cols + j] += term;
+                my_abs[i * cols + j] += term.abs();
+            }
         }
     }
-    let (mut computed, mut magnitude) = (Vec::new(), Vec::new());
-    for i in 0..rows {
-        for j in 0..cols {
-            let product: f64 = (0..inner)
-                .map(|k| x[i * inner + k] * my[k * cols + j])
-                .sum();
-            let product_abs: f64 = (0..inner)
-                .map(|k| (x[i * inner + k] * my_abs[k * cols + j]).abs())
-                .sum();
-            computed.push(a[i * cols + j] - product);
-            magnitude.push(a[i * cols + j].abs() + product_abs);
+    let mut product = vec![0.0; rows * cols];
+    let mut product_abs = vec![0.0; rows * cols];
+    for (i, support) in row_support(x, rows, inner).iter().enumerate() {
+        for &k in support {
+            let xik = x[i * inner + k];
+            for j in 0..cols {
+                product[i * cols + j] += xik * my[k * cols + j];
+                product_abs[i * cols + j] += (xik * my_abs[k * cols + j]).abs();
+            }
         }
     }
+    let computed = (0..rows * cols).map(|t| a[t] - product[t]);
+    let magnitude = (0..rows * cols).map(|t| a[t].abs() + product_abs[t]);
     // The magnitudes are themselves evaluated with the same `γ`; `(1 + γ)`
     // covers their rounding.
     let g = gamma(2.0 * inner as f64 + 1.0, EPS);
-    frobenius(computed.into_iter()) + g * (1.0 + g) * frobenius(magnitude.into_iter())
+    frobenius(computed) + g * (1.0 + g) * frobenius(magnitude)
 }
 
 /// `‖E‖₂` of the Schur certificate: `residual + δ(2 + δ)‖T̂‖_F`.
@@ -138,7 +154,9 @@ pub struct BlockEigenvalue {
 /// The eigenvalues of a quasi-triangular `T̂` in `f64`, each with a bound on
 /// its `f64` evaluation error: `1 × 1` blocks exactly; a `2 × 2` block must be
 /// in `dlanv2` standard form (`a = d`, `b·c < 0`) — the Schur contract — and
-/// gives `a ± i·√|b|·√|c|`, within `γ₃·|Im|`.
+/// gives `a ± i·√|b|·√|c|`, within `γ₃·|Im|`. Restoring `T̂` onto the grid can
+/// underflow a standard block's `b` to zero; the block is then triangular and
+/// gives `d`, `a` exactly, in the order `dlanv2` returns them.
 pub fn quasi_triangular_eigenvalues(t: &[f64], n: usize) -> Vec<BlockEigenvalue> {
     let mut out = Vec::with_capacity(n);
     let mut i = 0;
@@ -150,6 +168,17 @@ pub fn quasi_triangular_eigenvalues(t: &[f64], n: usize) -> Vec<BlockEigenvalue>
                 t[(i + 1) * n + i],
                 t[(i + 1) * n + i + 1],
             );
+            if b == 0.0 {
+                for re in [d, a] {
+                    out.push(BlockEigenvalue {
+                        re,
+                        im: 0.0,
+                        error: 0.0,
+                    });
+                }
+                i += 2;
+                continue;
+            }
             assert!(
                 a == d && b * c < 0.0,
                 "2×2 block at {i} is not in standard form: [[{a:e}, {b:e}], [{c:e}, {d:e}]]"

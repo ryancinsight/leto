@@ -64,80 +64,105 @@ pub(crate) fn largest_magnitude<T: RealScalar>(values: impl IntoIterator<Item = 
 /// matrix has `r = 0`, where the dimension bound `√(mn)` would charge up to
 /// `log₂ n`).
 ///
-/// The sum of squared ratios is formed pairwise ([`pairwise_squares`]), so
-/// each term passes through at most `ℓ = ⌈log₂ len⌉ + 2` roundings and the
-/// computed `ŝ` satisfies `ŝ ≥ s·(1 − γ_ℓ) − len·η` (Higham, *Accuracy and
-/// Stability of Numerical Algorithms*, 2nd ed., §4.2; `η = safmin·ε` bounds
-/// the absolute loss of a term that underflows), with `s ≥ 1` (the largest
-/// term is exactly `1`). With `c` the power of two at least twice the larger
-/// of `2^⌈log₂(4ℓ + 4)⌉·u` and `2^⌈log₂(2·len)⌉·η`, `c ≥ 2γ_ℓ + 2·len·η`, and
-/// `s ≤ ŝ/(1 − c)`: a computed sum strictly inside `(2^k·(1 − c), 2^k)` may
-/// hide a true one above `2^k` and is charged `k + 1`. A computed sum
-/// exactly on `2^k` is taken as exact — the diagonal case, `ŝ = 1`, whose
-/// off-diagonal squares underflow, is the one where rounding can land there
-/// from above, and then by less than `c·2^k`. Recursive summation instead
-/// stagnates in the narrow formats (in `F16`, `2048 + 1 = 2048`: `128²` unit
-/// entries summed to `2048`, charging `r = 6` for a ratio of `2⁷`). Where
-/// `c ≥ ½`, or the sum leaves the range, the dimension bound
-/// `⌈⌈log₂ len⌉/2⌉` is used.
+/// The sum of squared ratios is formed pairwise with a running binary
+/// exponent ([`RatioSum`]), so it neither overflows (`256²` unit `F16`
+/// entries sum to `2¹⁶ > Ω`) nor stagnates (a recursive `F16` sum stops at
+/// `2048`, since `2048 + 1 = 2048`). Each term passes through at most
+/// `ℓ = ⌈log₂ len⌉ + 2` roundings, and underflow — of a squared ratio or of
+/// a partial sum aligned to a larger exponent — loses at most `η = safmin·ε`
+/// per term and per alignment, each against a total of at least `1` (the
+/// largest term is exactly `1`). So `|ŝ − s| ≤ γ_ℓ·s + 2·len·η·s` (Higham,
+/// *Accuracy and Stability of Numerical Algorithms*, 2nd ed., §4.2), and with
+/// `c` the power of two at least twice the larger of `2^⌈log₂(4ℓ + 4)⌉·u` and
+/// `2^⌈log₂(4·len)⌉·η`, `(1 − c)·s ≤ ŝ ≤ (1 + c)·s`. A computed sum strictly
+/// inside `(2^k·(1 − c), 2^k)` may hide a true one above `2^k` and is charged
+/// `k + 1`; one exactly on `2^k` is taken as exact — the diagonal case,
+/// `ŝ = 1`, whose off-diagonal squares underflow, is the one where rounding
+/// can land there from above, and then by less than `c·2^k`. Where `c ≥ ½`
+/// the dimension bound `⌈⌈log₂ len⌉/2⌉` is used.
 pub(crate) fn norm_ratio_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
     let dimension_bound = (thresholds::ceil_log2_count(values.len()) + 1) / 2;
-    let Some((sum, slack)) = ratio_sum(values, largest) else {
+    let Some(sum) = RatioSum::of(values, largest) else {
         return dimension_bound;
     };
-    // `sum ≤ 2^k`; `1 − slack` is exact (a power of two at least `ε`, below
-    // one half), so the band test is exact.
-    let mut k = thresholds::ceil_log2(sum);
+    // `mantissa ≤ 2^k`; `1 − slack` is exact (a power of two at least `ε`,
+    // below one half), so the band test is exact.
+    let mut k = thresholds::ceil_log2(sum.mantissa);
     let power = T::ONE.scale_binary(k);
-    if sum < power && sum > power.mul(T::ONE.sub(slack)) {
+    if sum.mantissa < power && sum.mantissa > power.mul(T::ONE.sub(sum.slack)) {
         k += 1;
     }
-    ((k + 1) / 2).min(dimension_bound)
+    ((k + sum.exponent + 1) / 2).min(dimension_bound)
 }
 
 /// A lower bound `l` on `log₂(‖A‖_F / ‖A‖_max)`, `2^l ≤ ‖A‖_F/‖A‖_max`, from
-/// the same sum as [`norm_ratio_log2`]: with `s ≥ ŝ·(1 − c) ≥ ŝ/2` (the rounding
-/// bound there read the other way, `ŝ ≤ s·(1 + γ_ℓ) + len·η ≤ s·(1 + c)`),
-/// `s ≥ 2^(⌊log₂ ŝ⌋ − 1)` and `l = ⌊(⌊log₂ ŝ⌋ − 1)/2⌋`. `0` (the ratio is at
+/// the same sum as [`norm_ratio_log2`]: `s ≥ ŝ/(1 + c) ≥ ŝ·(1 − c)`, and the
+/// product `ŝ·(1 − 2c)` rounds (upward by at most `u ≤ c`) to at most
+/// `ŝ·(1 − c)`, so `l = ⌊⌊log₂ fl(ŝ·(1 − 2c))⌋/2⌋`. `0` (the ratio is at
 /// least `1`) where the sum is not formed.
 pub(crate) fn norm_ratio_floor_log2<T: RealScalar>(values: &[T], largest: T) -> i32 {
-    ratio_sum(values, largest).map_or(0, |(sum, _)| {
-        (sum.binary_exponent().unwrap_or(0) - 1).max(0) / 2
+    RatioSum::of(values, largest).map_or(0, |sum| {
+        let lower = sum.mantissa.mul(T::ONE.sub(sum.slack.scale_binary(1)));
+        let bits = lower.binary_exponent().unwrap_or(0) + sum.exponent;
+        bits.max(0) / 2
     })
 }
 
-/// The pairwise sum `ŝ` of `(vᵢ/largest)²` and the power of two `c` bounding
-/// its relative rounding, or `None` where `c ≥ ½` or the sum leaves the
-/// range ([`norm_ratio_log2`]).
-fn ratio_sum<T: RealScalar>(values: &[T], largest: T) -> Option<(T, T)> {
-    let log2_len = thresholds::ceil_log2_count(values.len());
-    let roundings = usize::try_from(log2_len + 2).expect("invariant: a bit count is non-negative");
-    let log2_eps = thresholds::ceil_log2(thresholds::machine_epsilon::<T>());
-    let rounding_log2 = log2_eps - 1 + thresholds::ceil_log2_count(4 * roundings + 4);
-    let underflow_log2 = thresholds::ceil_log2(thresholds::safe_min::<T>())
-        + log2_eps
-        + thresholds::ceil_log2_count(2 * values.len());
-    let slack = T::ONE.scale_binary(rounding_log2.max(underflow_log2) + 1);
-    if slack.scale_binary(1) >= T::ONE {
-        return None;
-    }
-    let sum = pairwise_squares(values, largest);
-    (sum.is_finite() && sum >= T::ONE).then_some((sum, slack))
+/// `Σ (vᵢ/largest)² = mantissa·2^exponent`, summed pairwise, with the power
+/// of two `slack = c` bounding its relative rounding ([`norm_ratio_log2`]).
+struct RatioSum<T> {
+    mantissa: T,
+    exponent: i32,
+    slack: T,
 }
 
-/// `Σ (vᵢ/largest)²` by pairwise summation: halves recursively, each half
-/// summed the same way, so every term passes through at most
-/// `⌈log₂ len⌉` additions besides its division and square.
-fn pairwise_squares<T: RealScalar>(values: &[T], largest: T) -> T {
+impl<T: RealScalar> RatioSum<T> {
+    /// `None` where `c ≥ ½` or the sum is not finite.
+    fn of(values: &[T], largest: T) -> Option<Self> {
+        let log2_len = thresholds::ceil_log2_count(values.len());
+        let roundings =
+            usize::try_from(log2_len + 2).expect("invariant: a bit count is non-negative");
+        let log2_eps = thresholds::ceil_log2(thresholds::machine_epsilon::<T>());
+        let rounding_log2 = log2_eps - 1 + thresholds::ceil_log2_count(4 * roundings + 4);
+        let underflow_log2 = thresholds::ceil_log2(thresholds::safe_min::<T>())
+            + log2_eps
+            + thresholds::ceil_log2_count(4 * values.len());
+        let slack = T::ONE.scale_binary(rounding_log2.max(underflow_log2) + 1);
+        if slack.scale_binary(1) >= T::ONE {
+            return None;
+        }
+        let (mantissa, exponent) = pairwise_squares(values, largest);
+        (mantissa.is_finite() && mantissa > T::ZERO).then_some(Self {
+            mantissa,
+            exponent,
+            slack,
+        })
+    }
+}
+
+/// `Σ (vᵢ/largest)²` by pairwise summation as `(m, k)`, value `m·2^k`: halves
+/// recursively, the smaller exponent aligned to the larger (exact but for
+/// underflow) and a sum reaching `2` halved (exact), so `m < 2` for `k > 0`
+/// and nothing overflows. Every term passes through at most `⌈log₂ len⌉`
+/// additions besides its division and square.
+fn pairwise_squares<T: RealScalar>(values: &[T], largest: T) -> (T, i32) {
     match values {
-        [] => T::ZERO,
+        [] => (T::ZERO, 0),
         [value] => {
             let ratio = value.div(largest);
-            ratio.mul(ratio)
+            (ratio.mul(ratio), 0)
         }
         _ => {
             let (left, right) = values.split_at(values.len() / 2);
-            pairwise_squares(left, largest).add(pairwise_squares(right, largest))
+            let (a, ka) = pairwise_squares(left, largest);
+            let (b, kb) = pairwise_squares(right, largest);
+            let k = ka.max(kb);
+            let sum = a.scale_binary(ka - k).add(b.scale_binary(kb - k));
+            if sum >= T::ONE.add(T::ONE) {
+                (sum.scale_binary(-1), k + 1)
+            } else {
+                (sum, k)
+            }
         }
     }
 }
@@ -352,9 +377,11 @@ pub(crate) fn restore<T: RealScalar>(
 )]
 mod tests {
     use super::{
-        gate_exponent, norm_ratio_log2, restore, scale_by_power_of_two, GateBound, KernelWindow,
+        gate_exponent, norm_ratio_floor_log2, norm_ratio_log2, restore, scale_by_power_of_two,
+        GateBound, KernelWindow,
     };
     use crate::application::linalg::thresholds::homogeneous_safe_range;
+    use crate::domain::real::RealScalar;
     use leto::LetoError;
 
     fn no_factor(_: &[f64], _: f64) -> GateBound {
@@ -529,5 +556,96 @@ mod tests {
         let mut values = [1.5_f64, -3.0];
         restore(&mut values, 4, "probe").expect("in range");
         assert_eq!(values, [24.0, -48.0]);
+    }
+
+    /// `‖values‖_F/‖values‖_max` in `f64`, with its relative rounding bound
+    /// `γ_{len+1}(ε₆₄)` (each term exact, `len` additions and a square root).
+    fn exact_ratio<T: RealScalar>(values: &[T]) -> (f64, f64) {
+        let largest = values
+            .iter()
+            .fold(0.0_f64, |acc, v| acc.max(v.to_f64().abs()));
+        let sum: f64 = values.iter().map(|v| (v.to_f64() / largest).powi(2)).sum();
+        let slack = (values.len() as f64 + 2.0) * f64::EPSILON;
+        (sum.sqrt(), slack)
+    }
+
+    /// `2^l ≤ ‖A‖_F/‖A‖_max ≤ 2^r` on adversarial vectors in every format:
+    /// log-uniform magnitudes across each format's whole range (subnormals
+    /// included), constant vectors of every length, and near-power sums.
+    fn check_ratio_bounds<T: RealScalar>(seed: u64, min_exp: i32, max_exp: i32) {
+        let mut rng = crate::Xorshift64::new(seed);
+        let mut cases: Vec<Vec<T>> = Vec::new();
+        for len in [
+            1_usize, 2, 3, 4, 5, 7, 8, 15, 16, 17, 63, 64, 65, 255, 256, 1000, 4096,
+        ] {
+            cases.push(vec![T::ONE; len]);
+            for _ in 0..6 {
+                let span = f64::from(max_exp - min_exp);
+                cases.push(
+                    (0..len)
+                        .map(|_| {
+                            let e = f64::from(min_exp) + span * rng.next_unit_f64();
+                            T::from_f64((rng.next_unit_f64() - 0.5) * e.exp2())
+                        })
+                        .collect(),
+                );
+                let base = rng.next_unit_f64();
+                cases.push(
+                    (0..len)
+                        .map(|_| T::from_f64(base * (1.0 + 1e-3 * rng.next_unit_f64())))
+                        .collect(),
+                );
+            }
+        }
+        for values in cases {
+            let largest = values
+                .iter()
+                .fold(T::ZERO, |acc, v| if v.abs() > acc { v.abs() } else { acc });
+            if largest == T::ZERO {
+                continue;
+            }
+            let (ratio, slack) = exact_ratio(&values);
+            let (l, r) = (
+                norm_ratio_floor_log2(&values, largest),
+                norm_ratio_log2(&values, largest),
+            );
+            let len = values.len();
+            assert!(
+                2.0_f64.powi(l) <= ratio * (1.0 + slack),
+                "len {len}: 2^{l} > ratio {ratio}"
+            );
+            // `r` treats a sum exactly on a power of two as exact (documented):
+            // the true ratio may exceed `2^r` there by `√(1 + c)`, `c < ½`.
+            assert!(
+                ratio * (1.0 - slack) <= 2.0_f64.powi(r) * 1.5_f64.sqrt(),
+                "len {len}: ratio {ratio} > 2^{r}·√1.5"
+            );
+            assert!(l <= r, "len {len}: l {l} > r {r}");
+        }
+    }
+
+    #[test]
+    fn norm_ratio_bounds_hold_on_adversarial_vectors() {
+        check_ratio_bounds::<f64>(0xA1, -1074, 1023);
+        check_ratio_bounds::<f32>(0xA2, -149, 127);
+        check_ratio_bounds::<eunomia::F16>(0xA3, -24, 15);
+        check_ratio_bounds::<eunomia::Bf16>(0xA4, -133, 127);
+    }
+
+    /// Tight cases. `[1, 1, 1 − 2⁻¹¹, 1]` in F16: `s = 3.999…`, but the pairwise
+    /// sum rounds to exactly `4`; only the `(1 − 2c)` margin keeps `l = 0`
+    /// (`2^1 > √s`). `256²` unit F16 entries: the sum `2¹⁶` exceeds `Ω`, which
+    /// the running exponent absorbs, giving `r = 8` and `l = 7` rather than the
+    /// `l = 0` an overflowed sum forced.
+    #[test]
+    fn norm_ratio_floor_is_tight_where_rounding_crosses_a_power() {
+        use eunomia::F16;
+        let one = F16::from_f64(1.0);
+        let below = F16::from_f64(0.999_511_718_75);
+        let crossing = [one, one, below, one];
+        assert_eq!(norm_ratio_floor_log2(&crossing, one), 0);
+        let ones = vec![one; 256 * 256];
+        assert_eq!(norm_ratio_log2(&ones, one), 8);
+        assert_eq!(norm_ratio_floor_log2(&ones, one), 7);
     }
 }
