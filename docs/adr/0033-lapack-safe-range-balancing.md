@@ -1,6 +1,6 @@
 <a id="adr-0033"></a>
 
-# 0033. Scale-safe kernels with a minimal-move matrix gate for dense factorizations
+# ADR 0033: Scale-safe kernels with a minimal-move matrix gate for dense factorizations
 
 Status: Accepted
 
