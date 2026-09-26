@@ -46,7 +46,7 @@
 
 use super::a_posteriori::{self, BlockEigenvalue};
 use super::backward_error::{self, informative};
-use super::format::{epsilon, Format};
+use super::format::{epsilon, scale, Format};
 use super::spectral_condition::bauer_fike_factor;
 use eunomia::{Bf16, F16};
 use leto::{Array2, Storage};
@@ -70,12 +70,6 @@ const SIMILAR_CONDITION: f64 = 3.675;
 
 fn frobenius(values: &[f64]) -> f64 {
     values.iter().map(|v| v * v).sum::<f64>().sqrt()
-}
-
-/// `x·2^k` in `f64`, exact for every `k` a supported format produces.
-fn scale(x: f64, k: i32) -> f64 {
-    let half = k / 2;
-    x * 2.0_f64.powi(half) * 2.0_f64.powi(k - half)
 }
 
 /// One binade: `s = 2^e`, the matrix `T` holds, and its image in units of `s`.

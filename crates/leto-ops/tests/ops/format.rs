@@ -36,6 +36,17 @@ impl Format for Bf16 {
     const PRECISION: i32 = 8;
 }
 
+/// `x·2^k` in `f64`, exact whenever the result's significand fits.
+///
+/// Splits `k` so both factors are normal: `2.0.powi(k)` alone lowers to
+/// compiler-rt's `__powidf2`, which forms `2^|k|` and divides, so for
+/// `k < −1023` it overflows to `∞` and returns `0` on some targets — a
+/// subnormal test input silently becomes an all-zero matrix.
+pub fn scale(x: f64, k: i32) -> f64 {
+    let half = k / 2;
+    x * 2.0_f64.powi(half) * 2.0_f64.powi(k - half)
+}
+
 /// Machine epsilon of `T`, found through `T`'s own addition.
 pub fn epsilon<T: RealScalar>() -> f64 {
     let half = T::from_f64(0.5);

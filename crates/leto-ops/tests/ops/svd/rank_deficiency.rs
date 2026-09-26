@@ -6,6 +6,7 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
+use super::super::format::scale;
 use eunomia::RealField;
 use leto::{Array2, Storage};
 use leto_ops::{pinv, singular_values, svd_decompose, RealScalar};
@@ -240,16 +241,24 @@ fn pinv_reports_overflow_for_a_non_finite_reciprocal() {
     // largest entry (4.0) stays representable, so this is genuinely full
     // rank in F16, not rejected by the rank cutoff.
     let general: [f32; 9] = [4.0, 1.0, 0.5, 1.0, 3.0, 1.0, 0.25, 1.0, 2.0];
-    let scale = 2.0_f32.powi(-17);
-    let f16: Vec<F16> = general.iter().map(|&v| F16::from_f32(v * scale)).collect();
+    let f16: Vec<F16> = general
+        .iter()
+        .map(|&v| F16::from_f64(scale(f64::from(v), -17)))
+        .collect();
     let m = Array2::from_shape_vec([3, 3], f16).unwrap();
     match pinv(&m.view()) {
         Err(LetoError::Overflow { .. }) => {}
         other => panic!("expected Overflow, got {other:?}"),
     }
 
-    let scale = 2.0_f64.powi(-1030);
-    let f64_general: Vec<f64> = general.iter().map(|&v| f64::from(v) * scale).collect();
+    let f64_general: Vec<f64> = general
+        .iter()
+        .map(|&v| scale(f64::from(v), -1030))
+        .collect();
+    assert!(
+        f64_general.iter().all(|&v| v != 0.0),
+        "input must stay subnormal, not zero"
+    );
     let m = Array2::from_shape_vec([3, 3], f64_general).unwrap();
     match pinv(&m.view()) {
         Err(LetoError::Overflow { .. }) => {}

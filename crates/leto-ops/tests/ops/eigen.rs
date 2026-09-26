@@ -4,7 +4,7 @@
 )]
 
 use super::backward_error::symmetric_certificate;
-use super::format::{epsilon, Format};
+use super::format::{epsilon, scale, Format};
 use eunomia::{Bf16, F16};
 use leto::LetoError;
 use leto::{Array2, SliceArg, Storage};
@@ -389,8 +389,8 @@ fn check_diagonal_is_exact<T: Format>(pairs: &[(f64, f64)]) {
             for k in 1..8 {
                 let significand = 1.0 + f64::from(k) / 8.0;
                 cases.push((
-                    significand * 2.0_f64.powi(big_exponent),
-                    significand * 2.0_f64.powi(small_exponent),
+                    scale(significand, big_exponent),
+                    scale(significand, small_exponent),
                 ));
             }
         }

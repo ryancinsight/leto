@@ -46,17 +46,11 @@
 
 use super::a_posteriori::{self, BlockEigenvalue};
 use super::backward_error::{self, informative};
-use super::format::{epsilon, Format};
+use super::format::{epsilon, scale, Format};
 use super::spectral_condition::condition_by_inverse_iteration;
 use eunomia::{Bf16, F16};
 use leto::{Array2, Storage};
 use leto_ops::{eigenvalues, schur, singular_values, svd_decompose, Xorshift64};
-
-/// `x·2^k` in `f64`, exact for every `k` a supported format produces.
-fn scale(x: f64, k: i32) -> f64 {
-    let half = k / 2;
-    x * 2.0_f64.powi(half) * 2.0_f64.powi(k - half)
-}
 
 fn frobenius(values: &[f64]) -> f64 {
     let largest = values.iter().fold(0.0_f64, |acc, v| acc.max(v.abs()));
