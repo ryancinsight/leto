@@ -6,7 +6,7 @@ use super::deflation::{
     chase_negligible_diagonal_column, chase_negligible_diagonal_row, diagonal_is_negligible,
     Deflation,
 };
-use super::rotation::{givens, rotate_row_pair};
+use super::rotation::{givens, TransposedFactors};
 use super::zero_shift::zero_shift_sweep;
 use crate::application::linalg::scaling::KernelWindow;
 use crate::application::linalg::thresholds;
@@ -62,17 +62,14 @@ impl<T: RealScalar> SweepWindows<T> {
 
 /// Drive the bidiagonal `(d, e)` to diagonal form (all superdiagonals deflated).
 ///
-/// When `VEC`, the left/right Givens rotations are accumulated into `u`
-/// (`m × m`) and `v` (`n × n`); otherwise those updates are DCE'd
-/// (`u`/`v` may be empty) — a zero-cost specialization for the values-only path.
+/// When `VEC`, the left/right Givens rotations are accumulated into
+/// `factors`; otherwise those updates are DCE'd (`factors` may be empty) — a
+/// zero-cost specialization for the values-only path.
 pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
     d: &mut [T],
     e: &mut [T],
     k: usize,
-    u: &mut [T],
-    m: usize,
-    v: &mut [T],
-    n: usize,
+    factors: &mut TransposedFactors<'_, T>,
 ) -> Result<()> {
     if k <= 1 {
         return Ok(());
@@ -110,8 +107,8 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             e[p] = T::ZERO;
             d[q] = pair.ssmin;
             if VEC {
-                rotate_row_pair(v, n, p, q, pair.csr, pair.snr); // V accumulated transposed
-                rotate_row_pair(u, m, p, q, pair.csl, pair.snl); // U accumulated transposed
+                factors.rotate_right(p, q, pair.csr, pair.snr);
+                factors.rotate_left(p, q, pair.csl, pair.snl);
             }
             continue;
         }
@@ -137,32 +134,28 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
         // fires at most once per index and the iteration always makes progress.
         if let Some(i) = (p..=q).find(|&i| diagonal_is_negligible(d, e, i, p, q)) {
             if i < q {
-                chase_negligible_diagonal_row::<T, VEC>(d, e, i, q, u, m, windows.rotation);
+                chase_negligible_diagonal_row::<T, VEC>(d, e, i, q, factors, windows.rotation);
             } else {
-                chase_negligible_diagonal_column::<T, VEC>(d, e, p, q, v, n, windows.rotation);
+                chase_negligible_diagonal_column::<T, VEC>(d, e, p, q, factors, windows.rotation);
             }
             continue;
         }
 
         if deflation.shift_ruins_accuracy(d, e, p, q, k) {
-            zero_shift_sweep::<T, VEC>(d, e, p, q, u, m, v, n, windows.rotation);
+            zero_shift_sweep::<T, VEC>(d, e, p, q, factors, windows.rotation);
         } else {
-            qr_step::<T, VEC>(d, e, p, q, u, m, v, n, windows);
+            qr_step::<T, VEC>(d, e, p, q, factors, windows);
         }
     }
 }
 
 /// One implicit-shift Golub–Kahan SVD step on the block `d[p..=q]`, `e[p..q]`.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn qr_step<T: RealScalar, const VEC: bool>(
     d: &mut [T],
     e: &mut [T],
     p: usize,
     q: usize,
-    u: &mut [T],
-    m: usize,
-    v: &mut [T],
-    n: usize,
+    factors: &mut TransposedFactors<'_, T>,
     windows: SweepWindows<T>,
 ) {
     // First column of (BᵀB − μI), formed scale-safely (LAPACK `dbdsqr`'s
@@ -184,7 +177,7 @@ pub(super) fn qr_step<T: RealScalar, const VEC: bool>(
     // `dbdsqr`'s second zero-shift test, `(σ/|d_p|)² < ε`, in `BᵀB`'s units:
     // a shift negligible against `d_p²` only perturbs the step.
     if mu.abs() < thresholds::machine_epsilon::<T>().mul(dp.mul(dp)) {
-        zero_shift_sweep::<T, VEC>(d, e, p, q, u, m, v, n, windows.rotation);
+        zero_shift_sweep::<T, VEC>(d, e, p, q, factors, windows.rotation);
         return;
     }
     let mut y = dp.mul(dp).sub(mu);
@@ -194,7 +187,7 @@ pub(super) fn qr_step<T: RealScalar, const VEC: bool>(
         // Right rotation (mixes columns k, k+1) annihilating z → accumulate V.
         let (c, s, r_right) = givens(y, z, windows.rotation);
         if VEC {
-            rotate_row_pair(v, n, k, k + 1, c, s); // V accumulated transposed
+            factors.rotate_right(k, k + 1, c, s);
         }
         if k > p {
             // c·y + s·z = √(y²+z²) = r_right (returned by `givens`, not recomputed).
@@ -209,7 +202,7 @@ pub(super) fn qr_step<T: RealScalar, const VEC: bool>(
         // Left rotation (mixes rows k, k+1) annihilating the bulge → accumulate U.
         let (c, s, r_left) = givens(d[k], bulge_col, windows.rotation);
         if VEC {
-            rotate_row_pair(u, m, k, k + 1, c, s); // U accumulated transposed
+            factors.rotate_left(k, k + 1, c, s);
         }
         // c·d[k] + s·bulge_col = √(d[k]²+bulge_col²) = r_left (not recomputed).
         d[k] = r_left;

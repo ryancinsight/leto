@@ -32,6 +32,7 @@ use crate::application::linalg::scaling::{self, GateBound};
 use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
 use leto::{Array2, ArrayView2, Result, Storage};
+use rotation::TransposedFactors;
 use sweep::qr_iterate;
 
 mod deflation;
@@ -111,9 +112,7 @@ fn singular_values_of_balanced<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Res
     };
     let k = rows.min(cols);
 
-    let mut no_u: [T; 0] = [];
-    let mut no_v: [T; 0] = [];
-    qr_iterate::<T, false>(&mut d, &mut e, k, &mut no_u, 0, &mut no_v, 0)?;
+    qr_iterate::<T, false>(&mut d, &mut e, k, &mut TransposedFactors::none())?;
 
     let mut sigmas: Vec<T> = d.into_iter().map(|x| x.abs()).collect();
     sigmas.sort_by(|a, b| {
@@ -186,7 +185,12 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
         }
     }
 
-    qr_iterate::<T, true>(&mut d, &mut e, n, &mut ut, m, &mut vt, n)?;
+    qr_iterate::<T, true>(
+        &mut d,
+        &mut e,
+        n,
+        &mut TransposedFactors::new(&mut ut, m, &mut vt, n),
+    )?;
 
     // Force σ ≥ 0: a negative pivot flips the sign of its left singular vector
     // (column `i` of `U` = row `i` of `ut`, contiguous).

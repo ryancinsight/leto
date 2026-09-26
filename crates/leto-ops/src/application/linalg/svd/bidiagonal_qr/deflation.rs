@@ -1,7 +1,7 @@
 //! Deflation and splitting: `dbdsqr`'s relative convergence tests and the
 //! chases that rotate a negligible diagonal out of the block.
 
-use super::rotation::{givens, rotate_row_pair};
+use super::rotation::{givens, TransposedFactors};
 use crate::application::linalg::scaling::KernelWindow;
 use crate::application::linalg::thresholds;
 use crate::domain::real::RealScalar;
@@ -159,8 +159,7 @@ pub(super) fn chase_negligible_diagonal_row<T: RealScalar, const VEC: bool>(
     e: &mut [T],
     i: usize,
     q: usize,
-    u: &mut [T],
-    m: usize,
+    factors: &mut TransposedFactors<'_, T>,
     rotation: KernelWindow<T>,
 ) {
     d[i] = T::ZERO;
@@ -171,7 +170,7 @@ pub(super) fn chase_negligible_diagonal_row<T: RealScalar, const VEC: bool>(
         // as the surviving lead: the pair is ordered `(j, i)`.
         let (c, s, r) = givens(d[j], fill, rotation);
         if VEC {
-            rotate_row_pair(u, m, j, i, c, s); // U accumulated transposed
+            factors.rotate_left(j, i, c, s);
         }
         d[j] = r;
         if j < q {
@@ -196,8 +195,7 @@ pub(super) fn chase_negligible_diagonal_column<T: RealScalar, const VEC: bool>(
     e: &mut [T],
     p: usize,
     q: usize,
-    v: &mut [T],
-    n: usize,
+    factors: &mut TransposedFactors<'_, T>,
     rotation: KernelWindow<T>,
 ) {
     d[q] = T::ZERO;
@@ -207,7 +205,7 @@ pub(super) fn chase_negligible_diagonal_column<T: RealScalar, const VEC: bool>(
     loop {
         let (c, s, r) = givens(d[j], fill, rotation);
         if VEC {
-            rotate_row_pair(v, n, j, q, c, s); // V accumulated transposed
+            factors.rotate_right(j, q, c, s);
         }
         d[j] = r;
         if j == p {

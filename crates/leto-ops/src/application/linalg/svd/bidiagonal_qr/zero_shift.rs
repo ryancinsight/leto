@@ -1,6 +1,6 @@
 //! LAPACK `dbdsqr`'s zero-shift QR sweep on a bidiagonal block.
 
-use super::rotation::{givens, rotate_row_pair};
+use super::rotation::{givens, TransposedFactors};
 use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
 
@@ -13,30 +13,26 @@ use crate::domain::real::RealScalar;
 /// bottom-heavy block are resolved only to the normwise backward error, not
 /// to high relative accuracy (`LETO-BIDIAGONAL-CHASE-DIRECTION-2026-09-25`).
 /// Right rotations update `V`, left rotations `U`.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn zero_shift_sweep<T: RealScalar, const VEC: bool>(
     d: &mut [T],
     e: &mut [T],
     p: usize,
     q: usize,
-    u: &mut [T],
-    m: usize,
-    v: &mut [T],
-    n: usize,
+    factors: &mut TransposedFactors<'_, T>,
     rotation: KernelWindow<T>,
 ) {
     let (mut cs, mut oldcs, mut oldsn) = (T::ONE, T::ONE, T::ZERO);
     for i in p..q {
         let (c, s, r) = givens(d[i].mul(cs), e[i], rotation);
         if VEC {
-            rotate_row_pair(v, n, i, i + 1, c, s); // V accumulated transposed
+            factors.rotate_right(i, i + 1, c, s);
         }
         if i > p {
             e[i - 1] = oldsn.mul(r);
         }
         let (oc, os, di) = givens(oldcs.mul(r), d[i + 1].mul(s), rotation);
         if VEC {
-            rotate_row_pair(u, m, i, i + 1, oc, os); // U accumulated transposed
+            factors.rotate_left(i, i + 1, oc, os);
         }
         d[i] = di;
         (cs, oldcs, oldsn) = (c, oc, os);

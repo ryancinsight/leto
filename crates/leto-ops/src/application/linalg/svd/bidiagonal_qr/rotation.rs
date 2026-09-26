@@ -62,7 +62,7 @@ pub(super) fn givens<T: RealScalar>(a: T, b: T, window: KernelWindow<T>) -> (T, 
 ///
 /// `U`/`V` are accumulated as `Uᵀ`/`Vᵀ` so every rotation hits this path.
 #[inline]
-pub(super) fn rotate_row_pair<T: RealScalar>(
+fn rotate_row_pair<T: RealScalar>(
     mat: &mut [T],
     len: usize,
     first: usize,
@@ -84,5 +84,46 @@ pub(super) fn rotate_row_pair<T: RealScalar>(
         let (va, vb) = (*a, *b);
         *a = c.mul(va).add(s.mul(vb));
         *b = c.mul(vb).sub(s.mul(va));
+    }
+}
+
+/// The factors a sweep accumulates its rotations into, held transposed
+/// ([`rotate_row_pair`]): `Uᵀ` (`m × m`) takes the left rotations of `B`'s
+/// rows, `Vᵀ` (`n × n`) the right rotations of its columns. Empty on the
+/// values-only path (`VEC = false`), where no rotation reaches them.
+pub(super) struct TransposedFactors<'a, T> {
+    u: &'a mut [T],
+    m: usize,
+    v: &'a mut [T],
+    n: usize,
+}
+
+impl<'a, T: RealScalar> TransposedFactors<'a, T> {
+    /// `Uᵀ` (`m × m`) and `Vᵀ` (`n × n`), row-major.
+    pub(super) fn new(u: &'a mut [T], m: usize, v: &'a mut [T], n: usize) -> Self {
+        Self { u, m, v, n }
+    }
+
+    /// No factors: the values-only path.
+    pub(super) fn none() -> Self {
+        Self {
+            u: &mut [],
+            m: 0,
+            v: &mut [],
+            n: 0,
+        }
+    }
+
+    /// Accumulate a left rotation of rows `(first, second)` of `B` into `Uᵀ`.
+    #[inline]
+    pub(super) fn rotate_left(&mut self, first: usize, second: usize, c: T, s: T) {
+        rotate_row_pair(self.u, self.m, first, second, c, s);
+    }
+
+    /// Accumulate a right rotation of columns `(first, second)` of `B` into
+    /// `Vᵀ`.
+    #[inline]
+    pub(super) fn rotate_right(&mut self, first: usize, second: usize, c: T, s: T) {
+        rotate_row_pair(self.v, self.n, first, second, c, s);
     }
 }

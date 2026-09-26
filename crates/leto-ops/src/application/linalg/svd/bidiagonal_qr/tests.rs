@@ -1,3 +1,4 @@
+use super::rotation::TransposedFactors;
 use super::sweep::qr_iterate;
 use super::RealScalar;
 use eunomia::RealField;
@@ -13,8 +14,8 @@ use eunomia::RealField;
 /// for singular values and reconstruction, the bare relative one for
 /// orthonormality (`UᵀU − I` is already dimensionless).
 fn error_bounds<T: RealScalar + RealField>(k: usize, norm: f64) -> (f64, f64) {
-    #[allow(clippy::cast_precision_loss)]
-    let relative = 8.0 * k as f64 * <T as RealField>::EPSILON.to_f64();
+    let order = u32::try_from(k).expect("invariant: test orders fit in u32");
+    let relative = 8.0 * f64::from(order) * <T as RealField>::EPSILON.to_f64();
     (relative * norm, relative)
 }
 
@@ -41,8 +42,13 @@ fn check_bidiagonal<T: RealScalar + RealField>(diag: &[f64], superdiag: &[f64], 
         vt[i * k + i] = T::ONE;
     }
 
-    qr_iterate::<T, true>(&mut d, &mut e, k, &mut ut, k, &mut vt, k)
-        .expect("the bidiagonal iteration converges on a zero diagonal");
+    qr_iterate::<T, true>(
+        &mut d,
+        &mut e,
+        k,
+        &mut TransposedFactors::new(&mut ut, k, &mut vt, k),
+    )
+    .expect("the bidiagonal iteration converges on a zero diagonal");
 
     let (absolute, relative) = error_bounds::<T>(k, expected[0]);
 
@@ -147,8 +153,7 @@ fn chased_zero_singular_value_is_bit_exact() {
         let mut e: Vec<f32> = (0..k)
             .map(|i| superdiag.get(i).copied().unwrap_or(0.0) as f32)
             .collect();
-        let (mut no_u, mut no_v) = ([0.0f32; 0], [0.0f32; 0]);
-        qr_iterate::<f32, false>(&mut d, &mut e, k, &mut no_u, 0, &mut no_v, 0).unwrap();
+        qr_iterate::<f32, false>(&mut d, &mut e, k, &mut TransposedFactors::none()).unwrap();
         assert!(
             d.contains(&0.0),
             "the chased direction must be exactly zero, got {d:?}"
@@ -173,7 +178,13 @@ fn forward_test_splits_at_tolmul_eps() {
             .collect()
     };
     let (mut u, mut v) = (identity(3), identity(3));
-    qr_iterate::<f64, true>(&mut d, &mut e, 3, &mut u, 3, &mut v, 3).unwrap();
+    qr_iterate::<f64, true>(
+        &mut d,
+        &mut e,
+        3,
+        &mut TransposedFactors::new(&mut u, 3, &mut v, 3),
+    )
+    .unwrap();
     assert_eq!(&u[..3], &[1.0, 0.0, 0.0], "U row 0: {u:?}");
     assert_eq!(&v[..3], &[1.0, 0.0, 0.0], "V row 0: {v:?}");
 }
@@ -224,17 +235,20 @@ fn negligible_shift_takes_the_zero_shift_sweep() {
     let windows = SweepWindows::<f64>::new();
     let (mut d, mut e) = (vec![1.0, 1.0, 1e-9], vec![0.5, 1e-9, 0.0]);
     let (mut d0, mut e0) = (d.clone(), e.clone());
-    let (mut no_u, mut no_v) = ([0.0f64; 0], [0.0f64; 0]);
-    qr_step::<f64, false>(&mut d, &mut e, 0, 2, &mut no_u, 0, &mut no_v, 0, windows);
+    qr_step::<f64, false>(
+        &mut d,
+        &mut e,
+        0,
+        2,
+        &mut TransposedFactors::none(),
+        windows,
+    );
     zero_shift_sweep::<f64, false>(
         &mut d0,
         &mut e0,
         0,
         2,
-        &mut no_u,
-        0,
-        &mut no_v,
-        0,
+        &mut TransposedFactors::none(),
         windows.rotation,
     );
     assert_eq!((d, e), (d0, e0));
