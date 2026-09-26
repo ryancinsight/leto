@@ -1,6 +1,6 @@
 //! LAPACK `dbdsqr`'s zero-shift QR sweep on a bidiagonal block.
 
-use super::bidiagonal_qr::{givens, rotate_row_pair};
+use super::rotation::{givens, rotate_row_pair};
 use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
 

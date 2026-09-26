@@ -2,10 +2,10 @@
 //! and the safe-range-specific regressions (finding
 //! `LETO-DENSE-SCALE-RANGE-2026-09-24`, item A) for the symmetric
 //! tridiagonal-QL eigensolver. Split out of [`super`] to keep each file
-//! near the 500-line target; shares that module's helpers.
+//! near the 500-line target; shares its fixtures ([`super::fixtures`]).
 
 use super::super::format::{epsilon, Format};
-use super::{assert_spectrum, backward_bound, certified, round_into, with_spectrum};
+use super::fixtures::{assert_spectrum, backward_bound, certified, round_into, with_spectrum};
 use eunomia::{Bf16, F16};
 use leto::{Array2, LetoError, Storage};
 use leto_ops::{

@@ -59,7 +59,7 @@ use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 /// first column and `stack_reflector`, `standard_block.rs`'s `dlanv2`, the
 /// Hessenberg reflector), and `stack_reflector`'s `v` is normalized as
 /// `dlarfg`'s (`|vᵢ| ≤ 1`, `τ ≤ 2`), so the reflector applications
-/// (`francis::apply_left`, `apply_right`) are sums of at most three
+/// (`francis::bulge::apply_left`, `apply_right`) are sums of at most three
 /// entry-scale terms: `|vᵀ·H[rows, j]| ≤ √3·‖A‖₂ ≤ √3·2^r·‖A‖_max`
 /// (orthogonal similarity). The degree-1 sums (the Hessenberg reduction's
 /// `vᵀ·A` with `‖v‖₂ ≤ 4√n`, `householder::reflect_in_place`; the deflation
