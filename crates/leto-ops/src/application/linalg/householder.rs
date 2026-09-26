@@ -43,8 +43,13 @@ pub(crate) fn reflector<T: RealScalar>(x: &[T]) -> Option<(Reflector<T>, T)> {
 /// returns `(β, α)` with `β = 2/(vᵀv)`.
 ///
 /// The arithmetic of [`reflector`] without its allocation, for reductions that
-/// store `v` in the matrix they are reducing. `None` when `x` is empty or zero;
-/// `x` is then left unchanged.
+/// store `v` in the matrix they are reducing. The `None` conditions differ:
+/// [`reflector`] returns `None` whenever the tail of `x` is zero, while this
+/// returns `None` only when `x` is empty or zero (`x` then left unchanged) and
+/// otherwise builds the reflector, a sign flip `I − 2e₁e₁ᵀ` included, for a
+/// nonzero `x` on `e₁`. The symmetric tridiagonal reduction
+/// (`symmetric_qr/reduce.rs`) depends on this: it records `off_diagonal = 0`
+/// on `None`, which is exact only because `None` means `x = 0`.
 ///
 /// `x` is first scaled by `2⁻ᵏ`, `k` the binary exponent of `max|xᵢ|`, so its
 /// largest entry lies in `[1, 2)` (the per-row scaling of EISPACK `tred2`).

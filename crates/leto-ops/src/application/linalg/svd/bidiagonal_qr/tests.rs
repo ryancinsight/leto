@@ -100,8 +100,9 @@ fn check_bidiagonal<T: RealScalar + RealField>(diag: &[f64], superdiag: &[f64], 
 /// A **trailing** zero diagonal: `B = [[3, 4], [0, 0]]`, exactly rank 1.
 ///
 /// This is the reduced form of the downstream reproducer — `[[1,2],[2,4],[3,6]]`
-/// bidiagonalizes at `f32` to `d = [−3.7416573, 0]`, `e = [7.4833145]`, an
-/// *exact* zero. Shifted QR alone cannot deflate it: the implicit `BᵀB` is
+/// bidiagonalizes at `f32` to `d = [−3.7416573, 0]`, `e = [−7.4833145]`, an
+/// *exact* zero (`B`'s signs are unique only up to the reflectors' signs;
+/// a length-1 right reflector is skipped, not a sign flip). Shifted QR alone cannot deflate it: the implicit `BᵀB` is
 /// singular, the Wilkinson shift takes its nonzero eigenvalue, and the sweep
 /// converges to the fixed point `d = (0, 0)` with `|e|` preserved, which the
 /// `scale + |e| == scale` test never accepts. Measured before the trailing
