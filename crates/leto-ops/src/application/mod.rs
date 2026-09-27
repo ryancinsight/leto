@@ -47,6 +47,8 @@ pub mod stateful_update;
 pub mod statistics;
 /// Cartesian finite-difference stencil operations.
 pub mod stencil;
+/// Shared strided elementwise traversal for the map kernels.
+pub(crate) mod strided;
 /// Unary map operations.
 pub mod unary;
 /// Rank-1 vector operations.

@@ -1,45 +1,12 @@
-use crate::application::index::{
-    line_elements_for, validate_mutable_output, RowMajorTraversal, TileGeometry,
-};
+use crate::application::index::{line_elements_for, validate_mutable_output};
 use crate::domain::scalar::Scalar;
 use crate::infrastructure::cache::{cached_cache_geometry, CacheGeometry};
-use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
-
-/// Whether a bandwidth-bound elementwise op over `len` elements of `T` should
-/// run in parallel. A binary map reads two operands and writes one, so its
-/// working set is `operands · len · size_of::<T>()`. The op is memory-bandwidth-
-/// bound, and one core nearly saturates that bandwidth while the data is
-/// resident in the shared last-level cache; parallelism pays only once the
-/// working set spills past the LLC, where additional cores add DRAM bandwidth.
-/// Below that, thread-dispatch overhead is pure loss.
-///
-/// Replaces a fixed 65536-element gate (`256 KB` L2 / `4 B` f32) that ignored
-/// both element size and arithmetic intensity, parallelizing bandwidth-bound
-/// ops far too eagerly — a 64k `f64` `add` (1.5 MB working set) ran ~3x slower
-/// parallel than serial. See gap_audit `2026-07-19 Parallel Threshold`.
 #[cfg(feature = "parallel")]
-pub(crate) fn parallelize_bandwidth_bound<T>(len: usize, operands: usize) -> bool {
-    let working_set = len
-        .saturating_mul(operands)
-        .saturating_mul(core::mem::size_of::<T>());
-    working_set > crate::infrastructure::cache::cached_cache_geometry().l3_bytes()
-}
+use crate::infrastructure::parallel::parallelize_bandwidth_bound;
+use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
 
 mod sealed {
     pub trait Sealed {}
-}
-
-#[cfg(feature = "parallel")]
-struct StridedBinaryContext<'a, T, const N: usize> {
-    size: usize,
-    shape: [usize; N],
-    lhs_layout: leto::Layout<N>,
-    rhs_layout: leto::Layout<N>,
-    out_layout: leto::Layout<N>,
-    lhs_data: &'a [T],
-    rhs_data: &'a [T],
-    out_data: &'a mut [T],
-    cache_line_bytes: usize,
 }
 
 /// Zero-sized binary operation contract for element-wise kernels.
@@ -244,7 +211,12 @@ where
             #[cfg(feature = "parallel")]
             {
                 if parallelize_bandwidth_bound::<T>(lhs_slice.len(), 3) {
-                    parallel_binary_map_slice::<Op, T>(lhs_slice, rhs_slice, out_slice);
+                    crate::application::strided::parallel_slice_into::<T, T, 2, _>(
+                        [lhs_slice, rhs_slice],
+                        out_slice,
+                        3 * core::mem::size_of::<T>(),
+                        |inputs, out| Op::apply_slice(inputs[0], inputs[1], out),
+                    );
                     return Ok(());
                 }
             }
@@ -267,268 +239,66 @@ where
     let out_data = out.data_mut();
     let cache_line_bytes =
         cache_line_bytes.unwrap_or_else(|| cached_cache_geometry().cache_line_bytes());
+    let in_tile = line_elements_for::<T>(cache_line_bytes);
 
     #[cfg(feature = "parallel")]
     {
         // Output injectivity is established by `validate_binary_storage`, so
         // parallel workers' logical rows map to disjoint physical elements.
         if parallelize_bandwidth_bound::<T>(size, 3) {
-            parallel_binary_map_strided::<Op, T, N>(StridedBinaryContext {
-                size,
-                shape,
-                lhs_layout,
-                rhs_layout,
-                out_layout,
-                lhs_data,
-                rhs_data,
-                out_data,
-                cache_line_bytes,
-            });
-            return Ok(());
-        }
-    }
-
-    // Row-walk traversal: one offset computation per innermost row, then a
-    // pure stride-increment walk along the last axis. Removes the per-element
-    // div/mod index decomposition and the three per-element offset products
-    // (the measured ~87x strided-vs-contiguous gap; see gap_audit.md).
-    let Some(traversal) = RowMajorTraversal::new(size, shape) else {
-        return Ok(());
-    };
-    let lhs_step = traversal.last_axis_stride(lhs_layout);
-    let rhs_step = traversal.last_axis_stride(rhs_layout);
-    let out_step = traversal.last_axis_stride(out_layout);
-
-    // Cache-line micro-tiling pays exactly when some operand's last-axis
-    // walk skips whole lines (|stride| >= elements-per-line); unit and
-    // reverse-unit strides already consume lines fully and keep row-walk.
-    let tile = line_elements_for::<T>(cache_line_bytes);
-    let column_walk = lhs_step.unsigned_abs() >= tile
-        || rhs_step.unsigned_abs() >= tile
-        || out_step.unsigned_abs() >= tile;
-    if column_walk {
-        if let Some(geometry) = TileGeometry::new(size, shape, tile) {
-            let (lhs_rs, rhs_rs, out_rs) = (
-                lhs_layout.strides()[N - 2],
-                rhs_layout.strides()[N - 2],
-                out_layout.strides()[N - 2],
-            );
-            for slab in 0..geometry.slabs() {
-                let base_idx = geometry.slab_base_index(slab);
-                let lhs_base = lhs_layout.offset_of(base_idx)? as isize;
-                let rhs_base = rhs_layout.offset_of(base_idx)? as isize;
-                let out_base = out_layout.offset_of(base_idx)? as isize;
-                let mut rb = 0;
-                while rb < geometry.height() {
-                    let rend = (rb + geometry.tile()).min(geometry.height());
-                    let mut cb = 0;
-                    while cb < geometry.width() {
-                        let cend = (cb + geometry.tile()).min(geometry.width());
-                        for r in rb..rend {
-                            let r = r as isize;
-                            let c0 = cb as isize;
-                            let mut lhs_off = lhs_base + r * lhs_rs + c0 * lhs_step;
-                            let mut rhs_off = rhs_base + r * rhs_rs + c0 * rhs_step;
-                            let mut out_off = out_base + r * out_rs + c0 * out_step;
-                            for _ in cb..cend {
-                                out_data[out_off as usize] = Op::apply(
-                                    lhs_data[lhs_off as usize],
-                                    rhs_data[rhs_off as usize],
-                                );
-                                lhs_off += lhs_step;
-                                rhs_off += rhs_step;
-                                out_off += out_step;
-                            }
-                        }
-                        cb = cend;
-                    }
-                    rb = rend;
-                }
-            }
-            return Ok(());
-        }
-    }
-
-    for row in 0..traversal.rows() {
-        let base_idx = traversal.base_index(row);
-        let mut lhs_off = lhs_layout.offset_of(base_idx)? as isize;
-        let mut rhs_off = rhs_layout.offset_of(base_idx)? as isize;
-        let mut out_off = out_layout.offset_of(base_idx)? as isize;
-        for _ in 0..traversal.inner() {
-            // Every walked offset equals offset_of of a validated logical
-            // index, so the usize casts are in-bounds by the storage-span
-            // validation above; safe indexing still guards against defects.
-            out_data[out_off as usize] =
-                Op::apply(lhs_data[lhs_off as usize], rhs_data[rhs_off as usize]);
-            lhs_off += lhs_step;
-            rhs_off += rhs_step;
-            out_off += out_step;
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(feature = "parallel")]
-fn parallel_binary_map_slice<Op, T>(lhs: &[T], rhs: &[T], out: &mut [T])
-where
-    Op: BinaryOp<T>,
-    T: Scalar,
-{
-    // One unit moves two inputs and one output, which is what sizes the task.
-    crate::infrastructure::parallel::for_each_unit_run_mut(
-        out,
-        3 * core::mem::size_of::<T>(),
-        |first, run| {
-            let end = first + run.len();
-            Op::apply_slice(&lhs[first..end], &rhs[first..end], run);
-        },
-    );
-}
-
-#[cfg(feature = "parallel")]
-fn parallel_binary_map_strided<Op, T, const N: usize>(ctx: StridedBinaryContext<'_, T, N>)
-where
-    Op: BinaryOp<T>,
-    T: Scalar,
-{
-    let lhs_ptr = ctx.lhs_data.as_ptr() as usize;
-    let rhs_ptr = ctx.rhs_data.as_ptr() as usize;
-    let out_ptr = ctx.out_data.as_mut_ptr() as usize;
-
-    // Row-walk parallel traversal: workers own disjoint ranges of innermost
-    // rows; each row costs one offset computation plus a stride-increment
-    // walk (see the serial path for the rationale and baseline numbers).
-    let Some(traversal) = RowMajorTraversal::new(ctx.size, ctx.shape) else {
-        return;
-    };
-    let lhs_step = traversal.last_axis_stride(ctx.lhs_layout);
-    let rhs_step = traversal.last_axis_stride(ctx.rhs_layout);
-    let out_step = traversal.last_axis_stride(ctx.out_layout);
-
-    // Cache-line micro-tiling for column walks (see the serial path): workers
-    // own disjoint (slab, row-block) pairs, so no two workers share an output
-    // row and the aliasing-rejection guarantee carries over unchanged.
-    let tile = line_elements_for::<T>(ctx.cache_line_bytes);
-    let column_walk = lhs_step.unsigned_abs() >= tile
-        || rhs_step.unsigned_abs() >= tile
-        || out_step.unsigned_abs() >= tile;
-    if column_walk {
-        if let Some(geometry) = TileGeometry::new(ctx.size, ctx.shape, tile) {
-            let (lhs_rs, rhs_rs, out_rs) = (
-                ctx.lhs_layout.strides()[N - 2],
-                ctx.rhs_layout.strides()[N - 2],
-                ctx.out_layout.strides()[N - 2],
-            );
-            let blocks = geometry.slabs() * geometry.row_blocks();
-            // One unit is a tile of rows across the block's width, moving two
-            // inputs and one output per element.
-            let block_bytes = geometry
-                .tile()
-                .saturating_mul(geometry.width())
-                .saturating_mul(3 * core::mem::size_of::<T>());
-            crate::infrastructure::parallel::for_each_unit_range(
-                blocks,
-                block_bytes,
-                move |first, count| {
-                    for block in first..first + count {
-                        let slab = block / geometry.row_blocks();
-                        let rb = (block % geometry.row_blocks()) * geometry.tile();
-                        let rend = (rb + geometry.tile()).min(geometry.height());
-                        let base_idx = geometry.slab_base_index(slab);
-                        let lhs_base = ctx
-                            .lhs_layout
-                            .offset_of(base_idx)
-                            .expect("validated lhs layout must map every logical index")
-                            as isize;
-                        let rhs_base = ctx
-                            .rhs_layout
-                            .offset_of(base_idx)
-                            .expect("validated rhs layout must map every logical index")
-                            as isize;
-                        let out_base = ctx
-                            .out_layout
-                            .offset_of(base_idx)
-                            .expect("validated output layout must map every logical index")
-                            as isize;
-                        let mut cb = 0;
-                        while cb < geometry.width() {
-                            let cend = (cb + geometry.tile()).min(geometry.width());
-                            for r in rb..rend {
-                                let r = r as isize;
-                                let c0 = cb as isize;
-                                let mut lhs_off = lhs_base + r * lhs_rs + c0 * lhs_step;
-                                let mut rhs_off = rhs_base + r * rhs_rs + c0 * rhs_step;
-                                let mut out_off = out_base + r * out_rs + c0 * out_step;
-                                // SAFETY: spans validated before dispatch; every
-                                // walked offset equals offset_of of a validated
-                                // logical index; workers own disjoint row blocks
-                                // and zero-stride output aliasing is rejected.
-                                unsafe {
-                                    for _ in cb..cend {
-                                        let lhs_val = *(lhs_ptr as *const T).offset(lhs_off);
-                                        let rhs_val = *(rhs_ptr as *const T).offset(rhs_off);
-                                        *(out_ptr as *mut T).offset(out_off) =
-                                            Op::apply(lhs_val, rhs_val);
-                                        lhs_off += lhs_step;
-                                        rhs_off += rhs_step;
-                                        out_off += out_step;
-                                    }
-                                }
-                            }
-                            cb = cend;
-                        }
+            let lhs_ptr = lhs_data.as_ptr() as usize;
+            let rhs_ptr = rhs_data.as_ptr() as usize;
+            let out_ptr = out_data.as_mut_ptr() as usize;
+            crate::application::strided::strided_parallel::<N, 2, 1, _>(
+                crate::application::strided::StridedLayout::new(
+                    size,
+                    shape,
+                    [lhs_layout, rhs_layout],
+                    [out_layout],
+                    in_tile,
+                    in_tile,
+                ),
+                3 * core::mem::size_of::<T>(),
+                move |in_off: [isize; 2], out_off: [isize; 1]| {
+                    // SAFETY: spans validated before dispatch; every walked
+                    // offset equals offset_of of a validated logical index;
+                    // workers own disjoint (slab, row-block) pairs and the
+                    // output layout has no zero-stride aliasing, so no two
+                    // workers write one element.
+                    unsafe {
+                        let lhs_value = *(lhs_ptr as *const T).offset(in_off[0]);
+                        let rhs_value = *(rhs_ptr as *const T).offset(in_off[1]);
+                        *(out_ptr as *mut T).offset(out_off[0]) = Op::apply(lhs_value, rhs_value);
                     }
                 },
             );
-            return;
+            return Ok(());
         }
     }
-    // One unit is an innermost row, moving two inputs and one output per
-    // element.
-    let row_bytes = traversal
-        .inner()
-        .saturating_mul(3 * core::mem::size_of::<T>());
 
-    crate::infrastructure::parallel::for_each_unit_range(
-        traversal.rows(),
-        row_bytes,
-        move |first, count| {
-            for row in first..first + count {
-                let base_idx = traversal.base_index(row);
-                let mut lhs_off = ctx
-                    .lhs_layout
-                    .offset_of(base_idx)
-                    .expect("validated lhs layout must map every logical index")
-                    as isize;
-                let mut rhs_off = ctx
-                    .rhs_layout
-                    .offset_of(base_idx)
-                    .expect("validated rhs layout must map every logical index")
-                    as isize;
-                let mut out_off = ctx
-                    .out_layout
-                    .offset_of(base_idx)
-                    .expect("validated output layout must map every logical index")
-                    as isize;
-
-                // SAFETY: storage spans are validated before dispatch; every
-                // walked offset equals offset_of of a validated logical index;
-                // each worker owns disjoint rows and the output layout has no
-                // zero-stride aliasing, so no two workers write one element.
-                unsafe {
-                    for _ in 0..traversal.inner() {
-                        let lhs_val = *(lhs_ptr as *const T).offset(lhs_off);
-                        let rhs_val = *(rhs_ptr as *const T).offset(rhs_off);
-                        *(out_ptr as *mut T).offset(out_off) = Op::apply(lhs_val, rhs_val);
-                        lhs_off += lhs_step;
-                        rhs_off += rhs_step;
-                        out_off += out_step;
-                    }
-                }
-            }
+    // Row-walk traversal: one offset computation per innermost row, then a pure
+    // stride-increment walk along the last axis, removing the per-element
+    // div/mod index decomposition and the three per-element offset products
+    // (the measured ~87x strided-vs-contiguous gap; see gap_audit.md). Column-
+    // walk views use cache-line micro-tiles. Both arms live in
+    // `application::strided`, shared with the unary map.
+    crate::application::strided::strided_serial::<N, 2, 1, _>(
+        crate::application::strided::StridedLayout::new(
+            size,
+            shape,
+            [lhs_layout, rhs_layout],
+            [out_layout],
+            in_tile,
+            in_tile,
+        ),
+        |in_off: [isize; 2], out_off: [isize; 1]| {
+            // Every walked offset equals offset_of of a validated logical index,
+            // so the usize casts are in-bounds by the storage-span validation
+            // above; safe indexing still guards against defects.
+            out_data[out_off[0] as usize] =
+                Op::apply(lhs_data[in_off[0] as usize], rhs_data[in_off[1] as usize]);
         },
-    );
+    )
 }
 
 /// Element-wise array addition: `out = lhs + rhs`.
