@@ -909,3 +909,43 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   (no-split regresses; naïve splitting breaks rank-deficient). DoD: differential parity
   across the battery + adversarial clustered/tiny/zero/wide-range inputs, AND a measured
   64²/256² win before merge (asymptotic-only is insufficient at n=64).
+
+<a id="LETO-FILE-SIZE-DEBT-2026-09-26"></a>
+
+## LETO-FILE-SIZE-DEBT-2026-09-26 — Split files past the 500-line target [patch] [tightening]
+
+- Status: todo; priority: tightening; updated: 2026-09-26.
+- Outcome: no non-test-fixture source file exceeds ~500 lines; each split
+  isolates one operation family or bounded concern into its own leaf module
+  per architecture_scoping's canonical component homes, with no behavior
+  change.
+- Scope: `crates/leto-ops/src/application/matrix.rs` (1080),
+  `crates/leto/src/application/view.rs` (1070),
+  `crates/leto-ops/src/application/sparse/lu_sparse.rs` (1001),
+  `crates/leto-ops/src/application/zip.rs` (994),
+  `crates/leto/src/application/array.rs` (851),
+  `crates/leto-ops/src/application/sparse/lu_numeric.rs` (812),
+  `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr.rs` (697),
+  `crates/leto-ops/src/application/nonlinear/anderson.rs` (692),
+  `crates/leto/src/application/iter/element.rs` (679),
+  `crates/leto-ops/src/application/reduction.rs` (670),
+  `crates/leto-ops/src/application/sparse/csc.rs` (654),
+  `crates/leto/src/application/fixed/matrix.rs` (588, already split once
+  this item's basis commit from `fixed.rs`; further split by concern
+  (generic ops vs 4x4 methods) if touched again),
+  `crates/leto-ops/src/application/optimization/lbfgs.rs` (555),
+  `crates/leto-ops/src/application/linalg/nnls.rs` (539).
+  Test-only and bench-only files (`benches/kernels.rs`,
+  `tests/ops/*.rs`) are excluded per test-placement convention
+  (one-or-few harness binaries; splitting them multiplies debug-tree
+  binaries, the opposite of the intended effect).
+- Acceptance: each split file's public paths are unchanged (re-exported from
+  the manifest module) or the break is a same-change consumer update; fmt,
+  clippy `-D warnings`, nextest, doctests, and `cargo doc` all pass per
+  ci.yml.
+- Verification: local gate mirrored from `.github/workflows/ci.yml` run from
+  outside the `D:/atlas` overlay with `--manifest-path` and the shared
+  `CARGO_TARGET_DIR`.
+- Next step: start with `matrix.rs` (largest, `leto-ops` hot path) —
+  identify operation-family boundaries (assign/mul/decompose) before
+  splitting.
