@@ -925,10 +925,8 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   `crates/leto-ops/src/application/zip.rs` (994),
   `crates/leto/src/application/array.rs` (851),
   `crates/leto-ops/src/application/sparse/lu_numeric.rs` (812),
-  `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr.rs` (697),
   `crates/leto/src/application/iter/element.rs` (679),
   `crates/leto-ops/src/application/reduction.rs` (670),
-  `crates/leto-ops/src/application/sparse/csc.rs` (654),
   `crates/leto/src/application/fixed/matrix.rs` (588, already split once
   this item's basis commit from `fixed.rs`; further split by concern
   (generic ops vs 4x4 methods) if touched again),
@@ -940,6 +938,14 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   solver.rs 442 + tests.rs 208; three private fields and one private struct
   widened to `pub(super)` for the differential test to reach internal state)
   in the delivering PRs for this item.
+  `crates/leto-ops/src/application/sparse/csc.rs` (654) split (mod.rs 26 +
+  types.rs 52 + construction.rs 167 + accessors.rs 102 + mutation.rs 61 +
+  properties.rs 104 + conversion.rs 66 + tests.rs 122) in the delivering
+  PR for this item.
+  `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr.rs` (697) was
+  already split into `bidiagonal_qr/{sweep,rotation,deflation,zero_shift,
+  tests}.rs` (282-line manifest remaining) before this item's basis
+  commit; removed from scope as already satisfied.
   Test-only and bench-only files (`benches/kernels.rs`,
   `tests/ops/*.rs`) are excluded per test-placement convention
   (one-or-few harness binaries; splitting them multiplies debug-tree
