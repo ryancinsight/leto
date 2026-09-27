@@ -921,10 +921,10 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   change.
 - Scope: `crates/leto-ops/src/application/matrix.rs` (1080),
   `crates/leto/src/application/view.rs` (1070),
-  `crates/leto-ops/src/application/sparse/lu_sparse.rs` (1001),
   `crates/leto-ops/src/application/zip.rs` (994),
   `crates/leto/src/application/array.rs` (851),
-  `crates/leto-ops/src/application/sparse/lu_numeric.rs` (812),
+  `crates/leto-ops/src/application/sparse/lu_numeric.rs` (812, split
+  pending merge on `refactor/leto-lu-numeric-split-20260927`),
   `crates/leto-ops/src/application/reduction.rs` (670, split pending
   merge on `refactor/leto-reduction-split-20260927`),
   `crates/leto/src/application/fixed/matrix.rs` (588, already split once
@@ -951,6 +951,14 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   into_iter}.rs` — shared odometer/mutable-aliasing-proof primitives,
   plain and indexed iterators, mutable task partitioning, and the
   `IntoIterator` impls each in their own leaf module — in the delivering
+  PR for this item.
+  `crates/leto-ops/src/application/sparse/lu_sparse.rs` (1001) split into
+  `lu_sparse/{mod,types,solver,owned,convenience,tests}.rs` —
+  `SparseLuSolver`'s config/constants/`OrderingStrategy`, its dispatch and
+  solve/factor methods, `OwnedNumericLu`, and the `sparse_lu_solve`/
+  `csr_to_dense` convenience functions each in their own leaf module;
+  `use_dense_path` widened to `pub(super)` so the dispatch-sanity
+  assertions in the differential tests still reach it — in the delivering
   PR for this item.
   Test-only and bench-only files (`benches/kernels.rs`,
   `tests/ops/*.rs`) are excluded per test-placement convention
