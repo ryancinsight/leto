@@ -281,3 +281,37 @@ fn zero_shift_test_scales_with_the_order() {
         );
     }
 }
+
+/// `SMAX` in `dbdsqr`'s first zero-shift test is taken over the active
+/// block's own scan, not the whole bidiagonal (LAPACK 3.12.0 `dbdsqr.f`
+/// lines 453–462, `DO 90 LLL = LL, M`): a block `[1, 3]` of `d = (1, 1, x)`
+/// sitting inside a length-5 bidiagonal whose entries *outside* the block
+/// (`d[0]`, `d[4]`, `e[0]`, `e[3]`) are `1e6` must fire the zero-shift test
+/// exactly as the order-3, whole-matrix case above does at `x = 1/150`
+/// (`false`) — a whole-bidiagonal `SMAX` instead makes the denominator
+/// `1e6`, driving `n·tol·(σ̃/σ_max)` to zero and firing regardless of `x`.
+/// `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
+#[test]
+fn zero_shift_test_scopes_smax_to_the_active_block() {
+    use super::chase::{Down, Oriented};
+    use super::deflation::Deflation;
+    let x = 1.0 / 150.0;
+    let outside = 1.0e6;
+    let mut d = vec![outside, 1.0, 1.0, x, outside];
+    let mut e = vec![outside, 0.0, 0.0, outside];
+    // `Deflation::new` reads the whole array for `tol`/`order` (LAPACK's `N`,
+    // not the block size — dbdsqr.f's `N*TOL*(SMINL/SMAX)` test), unaffected
+    // by this fix; only `SMAX` (`largest_entry`) is at issue here.
+    let deflation = Deflation::new(&d, &e, 5);
+    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(
+        block.largest_entry(1, 3),
+        1.0,
+        "SMAX must come from the block [1, 3], not the outside 1e6 entries"
+    );
+    assert!(
+        !deflation.shift_ruins_accuracy(&block, 1, 3),
+        "a whole-bidiagonal SMAX of 1e6 would fire the zero-shift test at any x; \
+         the block's own SMAX of 1 must not, at x = {x}"
+    );
+}
