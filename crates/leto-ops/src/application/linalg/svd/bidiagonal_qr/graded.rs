@@ -104,13 +104,17 @@ fn graded<T: RealScalar>(
     (d, e)
 }
 
-/// The grading span: twice the precision in binades (so `σ_min/σ_max ≈ ε²`,
-/// far below what the normwise bound resolves), capped by a quarter of the
-/// normal range so no entry or rotation product is subnormal.
+/// The grading span: twice the precision in binades, so `σ_min/σ_max ≈ ε²`
+/// — far below the normwise bound `ε·σ_max`, where a chase from the small
+/// end returns `σ_min` as `0` — capped so the smallest entry, `≥ 2^−span`,
+/// keeps `ε` times itself normal (`span ≤ range − precision`), where the
+/// relative accuracy Theorem 6 speaks of is representable. Every product
+/// the sweep forms is scale-safe (`givens`, the shift window), so no
+/// tighter cap applies: `f32` `min(46, 126 − 23)`, `f64` `min(104, 1022 − 52)`.
 fn span<T: RealScalar + RealField>() -> f64 {
     let precision = -<T as RealField>::EPSILON.to_f64().log2();
     let range = -thresholds::safe_min::<T>().to_f64().log2();
-    (2.0 * precision).min(range / 4.0)
+    (2.0 * precision).min(range - precision)
 }
 
 /// Demmel & Kahan's Theorem 6 relative bound for one zero-shift sweep of
@@ -193,9 +197,12 @@ fn zero_shift_sweep_keeps_relative_accuracy_in_both_directions() {
 /// - a zero-shift sweep: Theorem 6, `ω₀ = 69k²ε/(1 − 69k²ε)`;
 /// - a shifted step, taken only when `dbdsqr`'s first zero-shift test fails,
 ///   i.e. `σ_max/σ̃ < k·tol/max(ε, tol/100)` with `σ̃` the block's
-///   recurrence minimum and `σ_min ≥ σ̃/√k` (Demmel & Kahan eq. 2.5): its
-///   normwise error `8kε·σ_max` (Golub & Van Loan §8.6.3, the `p = 8k` of
-///   `tests.rs`) is `ω_s = 8k^{5/2}·(tol/max(ε, tol/100))·ε` relative;
+///   recurrence minimum, `σ_max` the largest entry and `σ_min ≥ σ̃/√k`
+///   (Demmel & Kahan eq. 2.5): its normwise error `8kε·‖B‖₂` (the `p = 8k`
+///   `tests.rs` takes from Golub & Van Loan §8.6.3 — a chosen constant for
+///   that analysis's `O(k)` rotations per entry), with
+///   `‖B‖₂ ≤ max|dᵢ| + max|eᵢ| ≤ 2σ_max`, is
+///   `ω_s = 16k^{5/2}·(tol/max(ε, tol/100))·ε` relative;
 /// - a split (`k − 1` at most), by convergence criteria 1a/1b or the
 ///   threshold `tol·σ̃_min/√k ≤ tol·σ_min`: Theorem 4, `k·tol/√2`;
 /// - the one 2×2 each value passes through (`dlasv2`, "a few ulps"),
@@ -209,7 +216,7 @@ fn reduction_bound<T: RealScalar + RealField>(k: usize, sweeps: usize) -> f64 {
     let tolmul = machine.powf(-0.125).clamp(10.0, 100.0);
     let tol = tolmul * machine;
     let order = f64::from(u32::try_from(k).expect("invariant: small order"));
-    let shifted = 8.0 * order.powf(2.5) * (tol / machine.max(tol / 100.0)) * eps;
+    let shifted = 16.0 * order.powf(2.5) * (tol / machine.max(tol / 100.0)) * eps;
     let per_sweep = zero_shift_bound(k, eps).max(shifted);
     let split = order * tol / core::f64::consts::SQRT_2;
     let sweeps = i32::try_from(sweeps).expect("invariant: sweep count fits in i32");
@@ -219,21 +226,54 @@ fn reduction_bound<T: RealScalar + RealField>(k: usize, sweeps: usize) -> f64 {
         + reference_error(k)
 }
 
+/// The iteration count a graded block of order `k` and grading `step`
+/// binades needs at most: `e` at the small end converges to zero linearly
+/// with factor `(σᵢ₊₁/σᵢ)²` per zero-shift sweep (Demmel & Kahan, end of
+/// §3), at most `2^(−2(step − 1))` here (mantissas in `[1, 2)`); a split
+/// needs `|e| ≤ tol·μ`, from `|e|/μ ≤ 2^(step/2 + 2)` (each `eᵢ` halfway
+/// between its diagonal neighbours, mantissas again), so
+/// `⌈(step/2 + 2 + log₂(1/tol))/(2(step − 1))⌉` sweeps per split and
+/// `k − 1` splits.
+fn sweep_ceiling<T: RealScalar>(k: usize, step: f64) -> usize {
+    let machine = thresholds::machine_epsilon::<T>().to_f64();
+    let tol = machine.powf(-0.125).clamp(10.0, 100.0) * machine;
+    let per_split = ((step / 2.0 + 2.0 - tol.log2()) / (2.0 * (step - 1.0))).ceil();
+    let per_split = u32::try_from(per_split as i64).expect("invariant: a few sweeps per split");
+    (k - 1) * per_split as usize
+}
+
+/// The grading step of a graded block of order `k`.
+fn step<T: RealScalar + RealField>(k: usize) -> f64 {
+    span::<T>() / f64::from(u32::try_from(k - 1).expect("invariant: small order"))
+}
+
+/// Run `qr_iterate` on `(d0, e0)` in `T`: the singular values, ascending,
+/// and the iteration count.
+fn iterate<T: RealScalar>(d0: &[f64], e0: &[f64]) -> (Vec<f64>, usize) {
+    let mut d: Vec<T> = d0.iter().map(|&x| T::from_f64(x)).collect();
+    let mut e: Vec<T> = e0
+        .iter()
+        .map(|&x| T::from_f64(x))
+        .chain([T::ZERO])
+        .collect();
+    let sweeps = qr_iterate::<T, false>(&mut d, &mut e, d0.len(), &mut TransposedFactors::none())
+        .expect("a graded bidiagonal converges");
+    let mut sigma: Vec<f64> = d.iter().map(|x| x.to_f64().abs()).collect();
+    sigma.sort_by(f64::total_cmp);
+    (sigma, sweeps)
+}
+
 fn graded_reductions_are_relatively_accurate<T: RealScalar + RealField>() {
     let mut rng = Xorshift64::new(0x0b07_70e5);
     for case in 0..600 {
         let k = 3 + case % 6;
         for bottom_heavy in [true, false] {
             let (d0, e0) = graded::<T>(&mut rng, k, span::<T>(), bottom_heavy);
-            let mut d: Vec<T> = d0.iter().map(|&x| T::from_f64(x)).collect();
-            let mut e: Vec<T> = e0
-                .iter()
-                .map(|&x| T::from_f64(x))
-                .chain([T::ZERO])
-                .collect();
-            let sweeps = qr_iterate::<T, false>(&mut d, &mut e, k, &mut TransposedFactors::none())
-                .expect("a graded bidiagonal converges");
-            let got: Vec<f64> = d.iter().map(|x| x.to_f64()).collect();
+            let (got, sweeps) = iterate::<T>(&d0, &e0);
+            assert!(
+                sweeps <= sweep_ceiling::<T>(k, step::<T>(k)),
+                "{sweeps} iterations at order {k}; d {d0:?} e {e0:?}"
+            );
             let bound = reduction_bound::<T>(k, sweeps);
             assert_relative(&got, &d0, &e0, bound, "graded reduction");
         }
@@ -241,9 +281,10 @@ fn graded_reductions_are_relatively_accurate<T: RealScalar + RealField>() {
 }
 
 /// Every singular value of a graded bidiagonal — its smallest `≈ ε²` of its
-/// largest — keeps high relative accuracy whichever end is small. Without
-/// `dbdsqr`'s chase-direction choice the bottom-heavy half returns
-/// smallest singular values as `0` (relative error 1) at `f32`.
+/// largest — keeps high relative accuracy whichever end is small, within
+/// the derived iteration ceiling. With the direction forced down the
+/// bottom-heavy half returns smallest singular values as `0` (relative
+/// error 1) in both formats.
 #[test]
 fn graded_bidiagonals_keep_relative_accuracy_at_either_end() {
     graded_reductions_are_relatively_accurate::<f32>();
@@ -266,4 +307,72 @@ fn bottom_heavy_iteration_reconstructs_its_input() {
     }
     check::<f32>();
     check::<f64>();
+}
+
+/// A graded block with the small end at the top above one with the small end
+/// at the bottom, split by an exact zero: `dbdsqr` re-chooses the direction
+/// on each block disjoint from the previous one (LAPACK 3.12.0 `dbdsqr.f`
+/// lines 507–522), so the bottom block is chased down and the top one up.
+/// Keeping the first block's direction returns the top block's smallest
+/// singular value as `0`.
+fn composite_blocks_are_relatively_accurate<T: RealScalar + RealField>() {
+    let mut rng = Xorshift64::new(0x00b1_0c55);
+    for case in 0..300 {
+        let (upper, lower) = (3 + case % 4, 3 + (case / 4) % 4);
+        let (du, eu) = graded::<T>(&mut rng, upper, span::<T>(), true);
+        let (dl, el) = graded::<T>(&mut rng, lower, span::<T>(), false);
+        let d0: Vec<f64> = du.iter().chain(&dl).copied().collect();
+        let e0: Vec<f64> = eu.iter().chain(&[0.0]).chain(&el).copied().collect();
+        let (got, sweeps) = iterate::<T>(&d0, &e0);
+        let ceiling = sweep_ceiling::<T>(upper, step::<T>(upper))
+            + sweep_ceiling::<T>(lower, step::<T>(lower));
+        assert!(sweeps <= ceiling, "{sweeps} > {ceiling}; d {d0:?} e {e0:?}");
+        let bound = reduction_bound::<T>(upper + lower, sweeps);
+        assert_relative(&got, &d0, &e0, bound, "composite reduction");
+    }
+}
+
+#[test]
+fn each_block_takes_its_own_chase_direction() {
+    composite_blocks_are_relatively_accurate::<f32>();
+    composite_blocks_are_relatively_accurate::<f64>();
+}
+
+/// The iteration on `B` and on its reflection `P Bᵀ P` (`d`, `e` reversed)
+/// are mirror images step for step: every sweep and convergence test of the
+/// chase up on `B` is the chase down on `P Bᵀ P` in the same arithmetic
+/// (`chase.rs`), the direction choice mirrors (`|d_p| ≥ |d_q|` against
+/// `|d_q| ≥ |d_p|`, never tied on these inputs), and on single graded
+/// blocks every split falls at the small end, so both reach the same `2×2`
+/// blocks. The singular values agree bitwise and the iteration counts
+/// exactly, which a direction-specific slip (the wrong convergence test,
+/// the wrong recurrence in the zero-shift test, a shifted step chased the
+/// wrong way) breaks: the strongly graded half runs zero-shift sweeps only,
+/// the mildly graded half shifted steps as well.
+fn reflection_is_a_mirror<T: RealScalar + RealField>() {
+    let mut rng = Xorshift64::new(0x0b07_70e5);
+    for case in 0..1200 {
+        let k = 3 + case % 6;
+        // Every other case mildly graded, `2` to `12` binades end to end:
+        // there `σ̃/σ_max` straddles the zero-shift test's `1/(k·tolmul)`,
+        // so shifted steps run and the recurrence direction decides.
+        let span = if case % 4 < 2 {
+            span::<T>()
+        } else {
+            2.0 + f64::from(u32::try_from(case % 11).expect("invariant: small"))
+        };
+        let (d0, e0) = graded::<T>(&mut rng, k, span, case % 2 == 0);
+        let dr: Vec<f64> = d0.iter().rev().copied().collect();
+        let er: Vec<f64> = e0.iter().rev().copied().collect();
+        let (sigma, sweeps) = iterate::<T>(&d0, &e0);
+        let (mirrored, mirrored_sweeps) = iterate::<T>(&dr, &er);
+        assert_eq!(sigma, mirrored, "d {d0:?} e {e0:?}");
+        assert_eq!(sweeps, mirrored_sweeps, "d {d0:?} e {e0:?}");
+    }
+}
+
+#[test]
+fn reflected_input_iterates_as_the_mirror_image() {
+    reflection_is_a_mirror::<f32>();
+    reflection_is_a_mirror::<f64>();
 }

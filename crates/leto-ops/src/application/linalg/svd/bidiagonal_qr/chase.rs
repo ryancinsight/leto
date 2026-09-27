@@ -9,8 +9,10 @@
 //! a left rotation of rows `(p+q−a, p+q−b)` of `B` with the same `(c, s)`
 //! and the same `first' = c·first + s·second` form; symmetrically a left
 //! rotation of `B'` is a right rotation of `B`. So `dbdsqr`'s bottom-to-top
-//! loops (130 and 150 of the reference `dbdsqr.f`, and the backward
-//! convergence test, loop 110) are its top-to-bottom loops (120, 140, 100)
+//! loops (LAPACK 3.12.0 `dbdsqr.f`: loop 130, lines 661–695, loop 150,
+//! lines 751–790, and the backward convergence test, loop 110, lines
+//! 556–580) are its top-to-bottom loops (120, lines 623–657; 140, lines
+//! 703–745; 100, lines 528–552)
 //! run on `B'`, with the `U`/`V` roles swapped — which is how `dbdsqr`
 //! applies them: its bottom-to-top sweeps update `VT` with the second
 //! (`OLDCS`/`COSL`) rotation of each pair and `U` with the first. ∎
@@ -145,7 +147,9 @@ impl Chase for Up {
     }
 }
 
-/// The block `[p, q]` of `(d, e)` seen in orientation `C`.
+/// The block `[p, q]` of `(d, e)` seen in orientation `C`, `p < q`: the
+/// oriented superdiagonal is defined on `p ≤ j < q` only, and a one-row
+/// block has none (for [`Up`] its index map would leave the block).
 pub(super) struct Oriented<'s, T, C> {
     d: &'s mut [T],
     e: &'s mut [T],
@@ -156,6 +160,7 @@ pub(super) struct Oriented<'s, T, C> {
 
 impl<'s, T: RealScalar, C: Chase> Oriented<'s, T, C> {
     pub(super) fn new(d: &'s mut [T], e: &'s mut [T], p: usize, q: usize) -> Self {
+        assert!(p < q, "invariant: an oriented block has at least two rows");
         Self {
             d,
             e,
@@ -188,7 +193,10 @@ impl<'s, T: RealScalar, C: Chase> Oriented<'s, T, C> {
     }
 
     /// The largest `|dᵢ|, |eᵢ|` of the stored bidiagonal of order `k`
-    /// (`dbdsqr`'s `SMAX`; orientation-independent).
+    /// (orientation-independent). `dbdsqr` takes its `SMAX` over the active
+    /// block's scan (LAPACK 3.12.0 `dbdsqr.f` lines 453–462); this is the
+    /// whole bidiagonal's, which makes the zero-shift test fire at least as
+    /// often (`LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`).
     pub(super) fn largest_entry(&self, k: usize) -> T {
         self.d[..k]
             .iter()

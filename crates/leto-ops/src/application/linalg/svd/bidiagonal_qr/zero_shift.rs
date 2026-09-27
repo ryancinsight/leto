@@ -5,8 +5,8 @@ use super::rotation::{givens, TransposedFactors};
 use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
 
-/// LAPACK `dbdsqr`'s zero-shift QR sweep (Demmel & Kahan 1990, §3; loops
-/// 120 and 130 of the reference `dbdsqr.f`): one implicit QR step on `BᵀB`
+/// LAPACK `dbdsqr`'s zero-shift QR sweep (Demmel & Kahan 1990, §3; LAPACK
+/// 3.12.0 `dbdsqr.f` loop 120, lines 623–657, and loop 130, lines 661–695): one implicit QR step on `BᵀB`
 /// with shift `0`, chased in orientation `C` — top to bottom
 /// ([`Down`](super::chase::Down)) or, as the reflection, bottom to top
 /// ([`Up`](super::chase::Up)). Each sweep perturbs every singular value by

@@ -66,8 +66,9 @@ impl<T: RealScalar> Deflation<T> {
     /// — shifting would ruin the relative accuracy of the block's smallest
     /// singular value — with `σ̃_min` the minimum of the convergence
     /// recurrence run in the chase direction over the block (`SMIN` of loops
-    /// 100/110 of the reference `dbdsqr.f`) and `σ_max` the largest
-    /// `|dᵢ|, |eᵢ|` of the bidiagonal of order `k`.
+    /// 100/110, LAPACK 3.12.0 `dbdsqr.f` lines 544–551 and 572–579) and
+    /// `σ_max` the largest `|dᵢ|, |eᵢ|` of the bidiagonal of order `k`
+    /// ([`Oriented::largest_entry`]).
     pub(super) fn shift_ruins_accuracy<C: Chase>(
         self,
         block: &Oriented<'_, T, C>,
@@ -96,9 +97,10 @@ impl<T: RealScalar> Deflation<T> {
     }
 
     /// `dbdsqr`'s convergence test on the block `[p, q]` in the chase
-    /// direction (the forward test, loop 100 of the reference `dbdsqr.f`,
-    /// on the oriented block; for [`Up`](super::chase::Up) it is the
-    /// backward test, loop 110): the far end `|e_{q−1}| ≤ tol·|d_q|`, then
+    /// direction (the forward test, loop 100, LAPACK 3.12.0 `dbdsqr.f` lines
+    /// 528–552, on the oriented block; for [`Up`](super::chase::Up) it is
+    /// the backward test, loop 110, lines 556–580): the far end
+    /// `|e_{q−1}| ≤ tol·|d_q|`, then
     /// the recurrence `μ ← |d_{i+1}|·μ/(μ + |eᵢ|)` from `μ = |d_p|`,
     /// splitting at the first `|eᵢ| ≤ tol·μ` (Demmel & Kahan, convergence
     /// criteria 1a/1b, eqs. 4.3–4.4). Returns the **stored** index of the
