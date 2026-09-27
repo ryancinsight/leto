@@ -942,3 +942,20 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   binding for any reopened work. Limits: one AVX2 host, one value
   distribution, references at default features (matrixmultiply runtime
   detection); the E-core 128² cell is recorded, not disputed.
+
+## 2026-09-26 Board narrative drift (backlog.md / gap_audit.md)
+
+`gap_audit.md` (944 lines pre-compaction) and `backlog.md` (890 lines
+pre-compaction) both sit near the 1,000-line hard budget while carrying
+per-item bodies far past the ~5/~15-line schema (context_and_memory: Boards).
+Several `gap_audit.md` entries record risks explicitly marked CLOSED with
+their fix landed (e.g. the 2026-06-23 matmul offset-routing audit) but are
+kept as full narrative instead of collapsing to their retiring lint/ADR
+reference. One `Status: done` backlog item (LETO-CTC-LOSS) was found and
+deleted this cycle (its record is PR 177).
+
+Re-open trigger: next touch that pushes either file over 1,000 lines, or a
+dedicated compaction pass — rewrite each closed/landed entry down to its
+retiring commit/PR/ADR reference, move narrative history to git log, and
+verify no unique risk data is lost (diff old vs compacted line counts against
+retained facts).
