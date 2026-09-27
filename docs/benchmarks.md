@@ -311,3 +311,130 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   binding for any reopened work. Limits: one AVX2 host, one value
   distribution, references at default features (matrixmultiply runtime
   detection); the E-core 128² cell is recorded, not disputed.
+
+## Decomposition kernel SIMD dispatch (2026-07-20)
+
+LU, Hessenberg reduction, the SVD values-path, Francis QR, and the shared
+Householder primitive already routed inner sweeps through the SIMD `Scalar`
+ops (`dot_slice`/`axpy_slice`); three hot O(n³) kernels had not been
+converted. Meta-pattern found: a scalar loop-carried **reduction** (`dot`)
+does not autovectorize and converting it to `dot_slice` wins; a scalar
+**axpy** already autovectorizes at the SSE2 baseline, so converting it only
+wins when the slice is provably long (full-dimension), and loses (extra
+cross-crate call + assert + Result) on short/shrinking slices.
+
+Shipped:
+- Cholesky–Crout inner product → `dot_slice`: **−49%/−72%/−65%** at
+  n=128/256/512 (`bench_cholesky_scaling`), 2–3.5×; 15 QR/Cholesky value
+  tests pass.
+- SVD bidiagonal U/V accumulation (`dot` + paired long-slice axpy, both
+  converted): **−52%/−49%/−38%** at n=64/128/192 (`bench_svd_scaling`),
+  1.6–2.1×; 13 SVD tests pass — confirms the "provably long axpy" exception.
+- udu weighted-dot, hoisted loop-invariant `w[k]` plus `dot_slice`:
+  **−44%/−62%/−69%** at n=64/128/256 (`bench_udu_scaling`), 1.8–3.2×; 3 UDU
+  tests pass — largest per-decomposition win measured.
+
+Rejected (do not retry without a changed model):
+- QR panel reflector apply (`qr/decompose.rs`): axpys over short,
+  shrinking (~n/2, 32-col blocked panel) trailing slices. `axpy_slice`
+  measured **+9–18%** at n=64/128/192/256 (`bench_qr_scaling`, p=0.00). Kept
+  scalar.
+
+Open (unclaimed, no backlog item filed as of 2026-09-27 — file before
+picking up): full_piv_lu / bunch_kaufman trailing-update axpys are LU-style
+long slices, profile against the meta-pattern before converting;
+col_piv_qr pivot-norm down-dating needs a different, non-SIMD fix.
+
+Cross-crate lead, not a leto item: hermes's CSR SpMV scalar remainder
+(`hermes-simd-core/src/sparse/spmv.rs`) re-checks a gather bound the SIMD
+body above it already trusts; short rows (nnz < LANE_COUNT) pay it in full.
+Report to hermes, not tracked here.
+
+## SpMV bounds-check elision (Krylov kernel, 2026-07-20)
+
+`spmv_slice_into` (every Krylov iteration's CSR matvec) carried three
+per-nonzero bounds checks the compiler could not prove away. Collapsing the
+row loop to `row_ptr.windows(2)` zip `y`, slicing each row's value/column
+runs, reduces `O(nnz)` checks to `O(nrows)`. Pure refactor — same traversal
+order, bitwise-identical output.
+
+- CSR: **−14% (n=4096) / −19% (n=65536) / −27% (n=1<<20, CI 19–34%)** vs
+  `spmv_pre` (clean-host criterion, p=0.00); DRAM-bound case rose
+  ~12.6→~18 GB/s.
+- CSC (same elision, scatter-add): **−24% (n=4096) / −16% (n=65536)**
+  (`bench_csc_spmv`).
+
+Rejected: an unsafe `xs.get_unchecked(col)` on the remaining data-dependent
+gather. The cache-resident n=4096 case (least bandwidth-sensitive) showed no
+change (p=0.29) — no demonstrated benefit for the added unsafe/miri burden.
+Not shipped.
+
+Blocked lever, not yet filed: narrowing `CsrMatrix`'s `col_indices`/
+`row_ptr` from `usize` to `u32` would halve index traffic on DRAM-bound
+SpMV (the dominant term), but it is a public-API format change — file as a
+[major] backlog item with an ADR before starting.
+
+Lesson: memory-bound benchmarks are invalid under concurrent builds — gate
+measurement on a quiet host (rustc/cargo process count ≈ 0).
+
+## Blocked LU cache-resident regression (2026-07-20)
+
+`lu_decompose` is unblocked (BLAS-2, rank-1 SIMD axpy trailing update); a
+right-looking blocked (BLAS-3) LU (64-col panel, unit-lower solve, matmul
+trailing update) was implemented and verified correct (`P·A=L·U` at n=200)
+but measured **slower** at tested sizes: LU@256 988 µs → 1.65 ms; @512
+neutral. Cause: this host's 36 MiB L3 keeps LU matrices cache-resident to
+n≈1200, so unblocked SIMD axpy runs at cache bandwidth and the blocked
+version's panel-extraction/allocation overhead dominates before the L3
+threshold. Reverted — never ship a regression.
+
+Re-open only with: (a) a gate on `working_set > l3_bytes` (the cache-aware
+threshold the parallel policy already uses) so cache-resident sizes never
+regress, (b) trailing-update copies eliminated via matmul into strided
+views, (c) the win verified past the LLC on a quiet host. `lu_scaling` and
+a large-n `P·A=L·U` reconstruction test are retained as coverage.
+
+## Layout-copy / assign kernel (Apollo FFT gather/scatter, 2026-08-26)
+
+Apollo's non-contiguous 2-D/3-D FFT axis passes use caller-owned scratch and
+cache-tiled gather/scatter loops; Leto's `assign` was value-correct over the
+same transposed views but converted every linear position to an N-D index
+with checked per-element lookup.
+
+Pre-change baseline (locked Criterion, identical source/output allocations,
+view construction outside timed closures), Leto `assign` vs. Apollo's tiled
+loop:
+
+| Shape | Direction | Leto `assign` | Apollo tiled loop | Ratio |
+|---|---:|---:|---:|---:|
+| 4096×16 | gather | 753.62 µs [747.54, 759.14] | 26.010 µs [25.747, 26.432] | 29.0× |
+| 4096×16 | scatter | 747.83 µs [743.04, 752.47] | 28.851 µs [28.386, 29.279] | 25.9× |
+| 4096×64 | gather | 3.1190 ms [3.0997, 3.1340] | 165.06 µs [163.29, 167.65] | 18.9× |
+| 4096×64 | scatter | 3.7923 ms [3.7586, 3.8246] | 174.19 µs [171.51, 177.33] | 21.8× |
+| 16384×16 | gather | 3.0940 ms [3.0847, 3.1056] | 202.27 µs [200.96, 205.07] | 15.3× |
+| 16384×16 | scatter | 3.1699 ms [3.1543, 3.1857] | 172.02 µs [169.38, 174.31] | 18.4× |
+| 65536×4 | gather | 3.0278 ms [3.0168, 3.0511] | 143.89 µs [141.43, 145.81] | 21.0× |
+| 65536×4 | scatter | 3.0087 ms [2.9903, 3.0232] | 153.19 µs [149.14, 156.62] | 19.6× |
+
+This established a Leto traversal gap, not an allocation or Apollo
+FFT-arithmetic gap. Accepted target: one validated assignment kernel shared
+by owned arrays and mutable views, with a tiled rank-2 transpose route and a
+structural bounds-elided fallback for other strided layouts.
+
+Post-change (same binary, no unsafe code, no transient allocation):
+
+| Shape | Direction | Leto candidate | Apollo tiled loop | Comparison |
+|---|---:|---:|---:|---:|
+| 4096×16 | gather | 23.526 µs [23.299, 23.739] | 25.947 µs [25.459, 26.290] | Leto 9.3% lower; disjoint |
+| 4096×16 | scatter | 28.290 µs [27.963, 28.711] | 28.580 µs [28.169, 29.075] | overlap |
+| 4096×64 | gather | 174.46 µs [172.36, 176.63] | 175.21 µs [173.20, 176.34] | overlap |
+| 4096×64 | scatter | 172.26 µs [168.98, 177.58] | 176.97 µs [174.52, 180.29] | overlap |
+| 16384×16 | gather | 156.80 µs [155.95, 158.24] | 166.85 µs [164.27, 169.95] | Leto 6.0% lower; disjoint |
+| 16384×16 | scatter | 163.07 µs [160.69, 166.01] | 185.15 µs [183.65, 186.87] | Leto 11.9% lower; disjoint |
+| 65536×4 | gather | 142.88 µs [140.11, 146.23] | 149.88 µs [147.80, 152.86] | Leto 4.7% lower; disjoint |
+| 65536×4 | scatter | 151.54 µs [149.00, 155.67] | 150.74 µs [148.57, 154.28] | overlap |
+
+4/8 rows disjoint favoring Leto, 4/8 overlap (inconclusive, not a
+regression). This establishes layout-copy throughput only; full FFT
+behavior and steady-state allocation verification is Apollo's (tracked by
+backlog `LETO-FFT-LAYOUT-THROUGHPUT`).

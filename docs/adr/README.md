@@ -42,3 +42,4 @@
 | [0031](0031-runtime-rank-layout-contract.md) | Runtime-rank broadcast and injectivity contract | Accepted |
 | [0032](0032-fused-passes-any-destination-count-over-plane-windows.md) | Fused derivative passes write any destination count, over plane windows | Accepted |
 | [0033](0033-lapack-safe-range-balancing.md) | Scale-safe kernels with a minimal-move matrix gate for dense factorizations | Accepted |
+| [0034](0034-layer-boundary-decision.md) | Atlas array/linalg layer boundary | Accepted |
