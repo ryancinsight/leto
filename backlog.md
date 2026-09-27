@@ -928,41 +928,24 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   `crates/leto/src/application/fixed/matrix.rs` (588, already split once
   this item's basis commit from `fixed.rs`; further split by concern
   (generic ops vs 4x4 methods) if touched again),
-  `crates/leto-ops/src/application/linalg/nnls.rs` split (mod.rs 19 +
-  active_set.rs 307 + tests.rs 205, PR #258),
-  `crates/leto-ops/src/application/optimization/lbfgs.rs` split (mod.rs 19 +
-  solver.rs 366 + tests.rs 173), and
-  `crates/leto-ops/src/application/nonlinear/anderson.rs` split (mod.rs 50 +
-  solver.rs 442 + tests.rs 208; three private fields and one private struct
-  widened to `pub(super)` for the differential test to reach internal state)
-  in the delivering PRs for this item.
-  `crates/leto-ops/src/application/sparse/csc.rs` (654) split (mod.rs 26 +
-  types.rs 52 + construction.rs 167 + accessors.rs 102 + mutation.rs 61 +
-  properties.rs 104 + conversion.rs 66 + tests.rs 122) in the delivering
-  PR for this item.
-  `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr.rs` (697) was
-  already split into `bidiagonal_qr/{sweep,rotation,deflation,zero_shift,
-  tests}.rs` (282-line manifest remaining) before this item's basis
-  commit; removed from scope as already satisfied.
-  `crates/leto/src/application/iter/element.rs` (679) split into
-  `element/{mod,odometer,element_iter,indexed_iter,task_partition,
-  into_iter}.rs` — shared odometer/mutable-aliasing-proof primitives,
-  plain and indexed iterators, mutable task partitioning, and the
-  `IntoIterator` impls each in their own leaf module — in the delivering
-  PR for this item.
-  `crates/leto-ops/src/application/sparse/lu_sparse.rs` (1001) split into
-  `lu_sparse/{mod,types,solver,owned,convenience,tests}.rs` —
-  `SparseLuSolver`'s config/constants/`OrderingStrategy`, its dispatch and
-  solve/factor methods, `OwnedNumericLu`, and the `sparse_lu_solve`/
-  `csr_to_dense` convenience functions each in their own leaf module;
-  `use_dense_path` widened to `pub(super)` so the dispatch-sanity
-  assertions in the differential tests still reach it — in the delivering
-  PR for this item.
-  `crates/leto-ops/src/application/reduction.rs` (670) split into
-  `reduction/{mod,strategies,whole_array,axis,convenience}.rs` — one
-  family per module (marker types, all-elements reduce, keep-dim axis
-  reduce incl. the parallel path, named per-strategy wrappers) — in the
-  delivering PR for this item.
+  Already split, each in its own delivering PR, one operation family per
+  leaf module, no behavior change: `linalg/nnls.rs` (mod.rs 19 +
+  active_set.rs 307 + tests.rs 205, PR #258); `optimization/lbfgs.rs`
+  (mod.rs 19 + solver.rs 366 + tests.rs 173); `nonlinear/anderson.rs`
+  (mod.rs 50 + solver.rs 442 + tests.rs 208, three fields and one struct
+  widened to `pub(super)` for the differential test); `sparse/csc.rs`
+  (mod/types/construction/accessors/mutation/properties/conversion/tests,
+  654→8 files); `linalg/svd/bidiagonal_qr.rs` (697) was already split
+  into `bidiagonal_qr/{sweep,rotation,deflation,zero_shift,tests}.rs`
+  before this item's basis commit, removed from scope as satisfied;
+  `iter/element.rs` (mod/odometer/element_iter/indexed_iter/
+  task_partition/into_iter, 679→6 files); `sparse/lu_sparse.rs`
+  (mod/types/solver/owned/convenience/tests, 1001→6 files,
+  `use_dense_path` widened to `pub(super)` for the dispatch-sanity test
+  assertions); `reduction.rs` (mod/strategies/whole_array/axis/
+  convenience, 670→5 files); `sparse/lu_numeric.rs`
+  (mod/types/solve/factor/tests, 812→5 files, `solve` holds the
+  `triangular_solve_into` core `lu_sparse::OwnedNumericLu` also reuses).
   Test-only and bench-only files (`benches/kernels.rs`,
   `tests/ops/*.rs`) are excluded per test-placement convention
   (one-or-few harness binaries; splitting them multiplies debug-tree
