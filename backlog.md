@@ -933,9 +933,10 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   `crates/leto/src/application/fixed/matrix.rs` (588, already split once
   this item's basis commit from `fixed.rs`; further split by concern
   (generic ops vs 4x4 methods) if touched again),
-  `crates/leto-ops/src/application/optimization/lbfgs.rs` (555).
-  `crates/leto-ops/src/application/linalg/nnls.rs` split (mod.rs 331 +
-  tests.rs 205) in the delivering PR for this item.
+  `crates/leto-ops/src/application/linalg/nnls.rs` split (mod.rs 19 +
+  active_set.rs 307 + tests.rs 205, PR #258) and
+  `crates/leto-ops/src/application/optimization/lbfgs.rs` split (mod.rs 19 +
+  solver.rs 366 + tests.rs 173) in the delivering PRs for this item.
   Test-only and bench-only files (`benches/kernels.rs`,
   `tests/ops/*.rs`) are excluded per test-placement convention
   (one-or-few harness binaries; splitting them multiplies debug-tree
