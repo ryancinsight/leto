@@ -949,3 +949,23 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
 - Next step: start with `matrix.rs` (largest, `leto-ops` hot path) —
   identify operation-family boundaries (assign/mul/decompose) before
   splitting.
+
+<a id="LETO-GAPAUDIT-ENTRY-COMPACTION"></a>
+
+## LETO-GAPAUDIT-ENTRY-COMPACTION — Compact the remaining gap_audit.md entries to ≤5 lines [patch] [tightening]
+
+- Status: todo; priority: tightening; updated: 2026-09-27.
+- Outcome: every `gap_audit.md` entry holds `risk`/`evidence`/`re-open
+  trigger`/`owner` in ≤5 lines (context_and_memory: Boards schema); narrative
+  history moves to git log or the retiring PR/ADR, never deleted outright.
+- Scope: ~24 entries dated 2026-07-15 through 2026-09-01 (the largest:
+  `D. Residual Risk Register` at 110 lines, `2026-08-26 Apollo FFT
+  layout-copy baseline` at 55, `2026-07-20 Decomposition SIMD-Dispatch Gap`
+  at 52, `2026-07-20 SpMV Bounds-Check Elision` at 45). Each closed/CLOSED
+  entry collapses to its retiring PR/commit/ADR reference; each still-open
+  entry keeps only the current numbers, not the history that produced them.
+- Acceptance: `gap_audit.md` total line count strictly decreases; no entry's
+  risk, current evidence, or re-open trigger is lost — verified by diffing
+  the retained facts (not just line counts) against the pre-compaction text
+  for each entry touched.
+- Next step: start with `D. Residual Risk Register` (largest, most-referenced).
