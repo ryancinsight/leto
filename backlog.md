@@ -910,60 +910,6 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   across the battery + adversarial clustered/tiny/zero/wide-range inputs, AND a measured
   64²/256² win before merge (asymptotic-only is insufficient at n=64).
 
-<a id="LETO-FILE-SIZE-DEBT-2026-09-26"></a>
-
-## LETO-FILE-SIZE-DEBT-2026-09-26 — Split files past the 500-line target [patch] [tightening]
-
-- Status: todo; priority: tightening; updated: 2026-09-26.
-- Outcome: no non-test-fixture source file exceeds ~500 lines; each split
-  isolates one operation family or bounded concern into its own leaf module
-  per architecture_scoping's canonical component homes, with no behavior
-  change.
-- Scope: `crates/leto-ops/src/application/matrix.rs` (1080),
-  `crates/leto/src/application/fixed/matrix.rs` (588, already split once
-  this item's basis commit from `fixed.rs`; further split by concern
-  (generic ops vs 4x4 methods) if touched again),
-  Already split, each in its own delivering PR, one operation family per
-  leaf module, no behavior change: `linalg/nnls.rs` (mod.rs 19 +
-  active_set.rs 307 + tests.rs 205, PR #258); `optimization/lbfgs.rs`
-  (mod.rs 19 + solver.rs 366 + tests.rs 173); `nonlinear/anderson.rs`
-  (mod.rs 50 + solver.rs 442 + tests.rs 208, three fields and one struct
-  widened to `pub(super)` for the differential test); `sparse/csc.rs`
-  (mod/types/construction/accessors/mutation/properties/conversion/tests,
-  654→8 files); `linalg/svd/bidiagonal_qr.rs` (697) was already split
-  into `bidiagonal_qr/{sweep,rotation,deflation,zero_shift,tests}.rs`
-  before this item's basis commit, removed from scope as satisfied;
-  `iter/element.rs` (mod/odometer/element_iter/indexed_iter/
-  task_partition/into_iter, 679→6 files); `sparse/lu_sparse.rs`
-  (mod/types/solver/owned/convenience/tests, 1001→6 files,
-  `use_dense_path` widened to `pub(super)` for the dispatch-sanity test
-  assertions); `reduction.rs` (mod/strategies/whole_array/axis/
-  convenience, 670→5 files); `sparse/lu_numeric.rs`
-  (mod/types/solve/factor/tests, 812→5 files, `solve` holds the
-  `triangular_solve_into` core `lu_sparse::OwnedNumericLu` also reuses);
-  `zip.rs` (mod/traversal/fold/map/coordinate/sources/outputs, 994→7
-  files; the two private sealing traits behind `ZipMutOutputs` and
-  `IndexedZipMutOutputs` merged into one `outputs::sealed::Sealed` since
-  both public traits and every implementor were already identical);
-  `array.rs` (mod/types/construction/assign_source/accessors/mutation/
-  indexing/equality, 851→8 files); `view.rs` (mod/raw/immutable/
-  mutable_core/mutable_transform/indexing/as_array_tests, 1070→7 files).
-  Test-only and bench-only files (`benches/kernels.rs`,
-  `tests/ops/*.rs`) are excluded per test-placement convention
-  (one-or-few harness binaries; splitting them multiplies debug-tree
-  binaries, the opposite of the intended effect).
-- Acceptance: each split file's public paths are unchanged (re-exported from
-  the manifest module) or the break is a same-change consumer update; fmt,
-  clippy `-D warnings`, nextest, doctests, and `cargo doc` all pass per
-  ci.yml.
-- Verification: local gate mirrored from `.github/workflows/ci.yml` run from
-  outside the `D:/atlas` overlay with `--manifest-path` and the shared
-  `CARGO_TARGET_DIR`.
-- Next step: `matrix.rs` (1080, `leto-ops` hot path), the last file in
-  scope — identify its dispatch-seam boundaries (kernel selection vs
-  kernels vs packing vs tests) before splitting, or record why no coherent
-  split exists if none does.
-
 <a id="LETO-GAPAUDIT-ENTRY-COMPACTION"></a>
 
 ## LETO-GAPAUDIT-ENTRY-COMPACTION — Compact the remaining gap_audit.md entries to ≤5 lines [patch] [tightening]
