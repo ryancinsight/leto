@@ -925,8 +925,8 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   `crates/leto-ops/src/application/zip.rs` (994),
   `crates/leto/src/application/array.rs` (851),
   `crates/leto-ops/src/application/sparse/lu_numeric.rs` (812),
-  `crates/leto/src/application/iter/element.rs` (679),
-  `crates/leto-ops/src/application/reduction.rs` (670),
+  `crates/leto-ops/src/application/reduction.rs` (670, split pending
+  merge on `refactor/leto-reduction-split-20260927`),
   `crates/leto/src/application/fixed/matrix.rs` (588, already split once
   this item's basis commit from `fixed.rs`; further split by concern
   (generic ops vs 4x4 methods) if touched again),
@@ -946,6 +946,12 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   already split into `bidiagonal_qr/{sweep,rotation,deflation,zero_shift,
   tests}.rs` (282-line manifest remaining) before this item's basis
   commit; removed from scope as already satisfied.
+  `crates/leto/src/application/iter/element.rs` (679) split into
+  `element/{mod,odometer,element_iter,indexed_iter,task_partition,
+  into_iter}.rs` — shared odometer/mutable-aliasing-proof primitives,
+  plain and indexed iterators, mutable task partitioning, and the
+  `IntoIterator` impls each in their own leaf module — in the delivering
+  PR for this item.
   Test-only and bench-only files (`benches/kernels.rs`,
   `tests/ops/*.rs`) are excluded per test-placement convention
   (one-or-few harness binaries; splitting them multiplies debug-tree
