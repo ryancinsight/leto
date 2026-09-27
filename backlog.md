@@ -921,10 +921,7 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   change.
 - Scope: `crates/leto-ops/src/application/matrix.rs` (1080),
   `crates/leto/src/application/view.rs` (1070),
-  `crates/leto-ops/src/application/zip.rs` (994),
   `crates/leto/src/application/array.rs` (851),
-  `crates/leto-ops/src/application/sparse/lu_numeric.rs` (812, split
-  pending merge on `refactor/leto-lu-numeric-split-20260927`),
   `crates/leto/src/application/fixed/matrix.rs` (588, already split once
   this item's basis commit from `fixed.rs`; further split by concern
   (generic ops vs 4x4 methods) if touched again),
@@ -945,7 +942,11 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   assertions); `reduction.rs` (mod/strategies/whole_array/axis/
   convenience, 670→5 files); `sparse/lu_numeric.rs`
   (mod/types/solve/factor/tests, 812→5 files, `solve` holds the
-  `triangular_solve_into` core `lu_sparse::OwnedNumericLu` also reuses).
+  `triangular_solve_into` core `lu_sparse::OwnedNumericLu` also reuses);
+  `zip.rs` (mod/traversal/fold/map/coordinate/sources/outputs, 994→7
+  files; the two private sealing traits behind `ZipMutOutputs` and
+  `IndexedZipMutOutputs` merged into one `outputs::sealed::Sealed` since
+  both public traits and every implementor were already identical).
   Test-only and bench-only files (`benches/kernels.rs`,
   `tests/ops/*.rs`) are excluded per test-placement convention
   (one-or-few harness binaries; splitting them multiplies debug-tree
@@ -957,9 +958,10 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
 - Verification: local gate mirrored from `.github/workflows/ci.yml` run from
   outside the `D:/atlas` overlay with `--manifest-path` and the shared
   `CARGO_TARGET_DIR`.
-- Next step: start with `matrix.rs` (largest, `leto-ops` hot path) —
-  identify operation-family boundaries (assign/mul/decompose) before
-  splitting.
+- Next step: `array.rs` (851) and `view.rs` (1070) next, then `matrix.rs`
+  (1080, `leto-ops` hot path) last — identify its dispatch-seam boundaries
+  (kernel selection vs kernels vs packing vs tests) before splitting, or
+  record why no coherent split exists if none does.
 
 <a id="LETO-GAPAUDIT-ENTRY-COMPACTION"></a>
 
