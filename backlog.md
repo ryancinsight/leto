@@ -925,8 +925,6 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   `crates/leto/src/application/array.rs` (851),
   `crates/leto-ops/src/application/sparse/lu_numeric.rs` (812, split
   pending merge on `refactor/leto-lu-numeric-split-20260927`),
-  `crates/leto-ops/src/application/reduction.rs` (670, split pending
-  merge on `refactor/leto-reduction-split-20260927`),
   `crates/leto/src/application/fixed/matrix.rs` (588, already split once
   this item's basis commit from `fixed.rs`; further split by concern
   (generic ops vs 4x4 methods) if touched again),
@@ -960,6 +958,11 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   `use_dense_path` widened to `pub(super)` so the dispatch-sanity
   assertions in the differential tests still reach it — in the delivering
   PR for this item.
+  `crates/leto-ops/src/application/reduction.rs` (670) split into
+  `reduction/{mod,strategies,whole_array,axis,convenience}.rs` — one
+  family per module (marker types, all-elements reduce, keep-dim axis
+  reduce incl. the parallel path, named per-strategy wrappers) — in the
+  delivering PR for this item.
   Test-only and bench-only files (`benches/kernels.rs`,
   `tests/ops/*.rs`) are excluded per test-placement convention
   (one-or-few harness binaries; splitting them multiplies debug-tree
