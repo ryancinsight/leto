@@ -2,6 +2,7 @@
 //! and the iteration driving the bidiagonal to diagonal form.
 
 use super::super::triangular_pair::triangular_svd;
+use super::chase::{Chase, Direction, Down, Oriented, Up};
 use super::deflation::{
     chase_negligible_diagonal_column, chase_negligible_diagonal_row, diagonal_is_negligible,
     Deflation,
@@ -65,19 +66,32 @@ impl<T: RealScalar> SweepWindows<T> {
 /// When `VEC`, the left/right Givens rotations are accumulated into
 /// `factors`; otherwise those updates are DCE'd (`factors` may be empty) — a
 /// zero-cost specialization for the values-only path.
+///
+/// Each block's bulge is chased from its larger end towards its smaller
+/// (`dbdsqr`'s `IDIR`, chosen when the iteration moves to a block disjoint
+/// from the previous one; Demmel & Kahan 1990, §5, "Chasing the bulge up or
+/// down"), so a graded block converges its smallest singular value at the
+/// small end and keeps it to high relative accuracy whichever end is small.
+///
+/// Returns the number of sweeps run — the `K` of Demmel & Kahan's
+/// accumulated relative error bound (Theorem 6: `69·K·n²·ε` to first order
+/// for `K` zero-shift sweeps).
 pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
     d: &mut [T],
     e: &mut [T],
     k: usize,
     factors: &mut TransposedFactors<'_, T>,
-) -> Result<()> {
+) -> Result<usize> {
     if k <= 1 {
-        return Ok(());
+        return Ok(0);
     }
     let windows = SweepWindows::new();
     let deflation = Deflation::new(d, e, k);
     let mut q = k - 1;
     let mut iter = 0usize;
+    // The block the last sweep ran on and its chase direction (`dbdsqr`'s
+    // `OLDLL`, `OLDM`, `IDIR`).
+    let mut chased: Option<(usize, usize, Direction)> = None;
     loop {
         // Peel converged singular values off the bottom. Only the active
         // region near the bottom is touched — already-converged blocks above
@@ -86,7 +100,7 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             q -= 1;
         }
         if q == 0 {
-            return Ok(());
+            return Ok(iter);
         }
         // Top of the bottom-most unreduced block: scan up, splitting at the
         // first `|e| ≤ thresh` (`dbdsqr`'s scan); a split at the bottom itself
@@ -112,11 +126,25 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             }
             continue;
         }
-        // `dbdsqr`'s relative convergence tests inside the block.
-        if let Some(i) = deflation.forward_split(d, e, p, q) {
+        // `dbdsqr` chooses the chase direction only on a block disjoint from
+        // the previous one ("from larger end diagonal element towards
+        // smaller", reference `dbdsqr.f` before loop 100), so a block whose
+        // ends reorder while it converges does not flip back and forth.
+        let direction = match chased {
+            Some((old_p, old_q, direction)) if p <= old_q && q >= old_p => direction,
+            _ => Direction::of_block(d, p, q),
+        };
+        // `dbdsqr`'s relative convergence tests inside the block, run in the
+        // chase direction (loop 100 down, loop 110 up).
+        let split = match direction {
+            Direction::Down => deflation.split(&Oriented::<T, Down>::new(d, e, p, q), p, q),
+            Direction::Up => deflation.split(&Oriented::<T, Up>::new(d, e, p, q), p, q),
+        };
+        if let Some(i) = split {
             e[i] = T::ZERO;
             continue;
         }
+        chased = Some((p, q, direction));
 
         iter += 1;
         if iter > MAX_ITER {
@@ -141,16 +169,38 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             continue;
         }
 
-        if deflation.shift_ruins_accuracy(d, e, p, q, k) {
-            zero_shift_sweep::<T, VEC>(d, e, p, q, factors, windows.rotation);
-        } else {
-            qr_step::<T, VEC>(d, e, p, q, factors, windows);
+        match direction {
+            Direction::Down => sweep::<T, VEC, Down>(d, e, p, q, deflation, factors, windows),
+            Direction::Up => sweep::<T, VEC, Up>(d, e, p, q, deflation, factors, windows),
         }
     }
 }
 
-/// One implicit-shift Golub–Kahan SVD step on the block `d[p..=q]`, `e[p..q]`.
-pub(super) fn qr_step<T: RealScalar, const VEC: bool>(
+/// One sweep on the block `[p, q]` in orientation `C`: the zero-shift sweep
+/// when `dbdsqr`'s first zero-shift test says a shift would ruin the relative
+/// accuracy of the block's smallest singular value, else the shifted step.
+fn sweep<T: RealScalar, const VEC: bool, C: Chase>(
+    d: &mut [T],
+    e: &mut [T],
+    p: usize,
+    q: usize,
+    deflation: Deflation<T>,
+    factors: &mut TransposedFactors<'_, T>,
+    windows: SweepWindows<T>,
+) {
+    let ruins = deflation.shift_ruins_accuracy(&Oriented::<T, C>::new(d, e, p, q), p, q);
+    if ruins {
+        zero_shift_sweep::<T, VEC, C>(d, e, p, q, factors, windows.rotation);
+    } else {
+        qr_step::<T, VEC, C>(d, e, p, q, factors, windows);
+    }
+}
+
+/// One implicit-shift Golub–Kahan SVD step on the block `d[p..=q]`, `e[p..q]`,
+/// chased in orientation `C` (loops 140 and 150 of the reference `dbdsqr.f`):
+/// the shift comes from the trailing 2×2 of the oriented block — for
+/// [`Up`] its top, as `dbdsqr`'s `IDIR = 2` takes it.
+pub(super) fn qr_step<T: RealScalar, const VEC: bool, C: Chase>(
     d: &mut [T],
     e: &mut [T],
     p: usize,
@@ -158,6 +208,7 @@ pub(super) fn qr_step<T: RealScalar, const VEC: bool>(
     factors: &mut TransposedFactors<'_, T>,
     windows: SweepWindows<T>,
 ) {
+    let mut block = Oriented::<T, C>::new(d, e, p, q);
     // First column of (BᵀB − μI), formed scale-safely (LAPACK `dbdsqr`'s
     // shift, with `dlas2`'s care for the squares): with `m` the largest of
     // the six entries it reads, `t11, t22 ≤ 2m²`, `|t12| ≤ m²`, `|δ| ≤ m²`,
@@ -166,54 +217,61 @@ pub(super) fn qr_step<T: RealScalar, const VEC: bool>(
     // degree-4 term normal and finite (`safmin ≤ m⁴`, `2m⁴ ≤ Ω`): an
     // underflowed `t12²` degrades the Wilkinson shift to the Rayleigh shift
     // `t22`, which stagnates on a nearly equal trailing pair (probed: a
-    // `Bf16` 2×2 at every exponent from `2⁻¹³⁰` to `2⁻³²`); otherwise the six entries are divided by the power of two bringing
-    // `m` into `[1, 2)` — exact, and only `c, s` of the first rotation are
-    // used (its `r` is discarded below), which are scale-invariant.
-    let eq2 = if q >= p + 2 { e[q - 2] } else { T::ZERO };
-    let local = [d[q], d[q - 1], e[q - 1], eq2, d[p], e[p]];
+    // `Bf16` 2×2 at every exponent from `2⁻¹³⁰` to `2⁻³²`); otherwise the
+    // six entries are divided by the power of two bringing `m` into
+    // `[1, 2)` — exact, and only `c, s` of the first rotation are used (its
+    // `r` is discarded below), which are scale-invariant.
+    let eq2 = if q >= p + 2 { block.e(q - 2) } else { T::ZERO };
+    let local = [
+        block.d(q),
+        block.d(q - 1),
+        block.e(q - 1),
+        eq2,
+        block.d(p),
+        block.e(p),
+    ];
     let exponent = windows.shift.exponent(&local);
     let [dq, dq1, eq1, eq2, dp, ep] = local.map(|v| v.scale_binary(-exponent));
     let mu = wilkinson_shift(dq, dq1, eq1, eq2);
     // `dbdsqr`'s second zero-shift test, `(σ/|d_p|)² < ε`, in `BᵀB`'s units:
     // a shift negligible against `d_p²` only perturbs the step.
     if mu.abs() < thresholds::machine_epsilon::<T>().mul(dp.mul(dp)) {
-        zero_shift_sweep::<T, VEC>(d, e, p, q, factors, windows.rotation);
+        zero_shift_sweep::<T, VEC, C>(d, e, p, q, factors, windows.rotation);
         return;
     }
     let mut y = dp.mul(dp).sub(mu);
     let mut z = dp.mul(ep);
 
     for k in p..q {
-        // Right rotation (mixes columns k, k+1) annihilating z → accumulate V.
+        // Column rotation (mixes columns k, k+1) annihilating z.
         let (c, s, r_right) = givens(y, z, windows.rotation);
         if VEC {
-            factors.rotate_right(k, k + 1, c, s);
+            block.rotate_columns(factors, k, k + 1, (c, s));
         }
         if k > p {
             // c·y + s·z = √(y²+z²) = r_right (returned by `givens`, not recomputed).
-            e[k - 1] = r_right;
+            block.set_e(k - 1, r_right);
         }
-        let mut f = c.mul(d[k]).add(s.mul(e[k]));
-        e[k] = c.mul(e[k]).sub(s.mul(d[k]));
-        let bulge_col = s.mul(d[k + 1]);
-        d[k + 1] = c.mul(d[k + 1]);
-        d[k] = f;
+        let (dk, ek, dk1) = (block.d(k), block.e(k), block.d(k + 1));
+        let f = c.mul(dk).add(s.mul(ek));
+        let ek = c.mul(ek).sub(s.mul(dk));
+        let bulge_col = s.mul(dk1);
+        let dk1 = c.mul(dk1);
 
-        // Left rotation (mixes rows k, k+1) annihilating the bulge → accumulate U.
-        let (c, s, r_left) = givens(d[k], bulge_col, windows.rotation);
+        // Row rotation (mixes rows k, k+1) annihilating the bulge.
+        let (c, s, r_left) = givens(f, bulge_col, windows.rotation);
         if VEC {
-            factors.rotate_left(k, k + 1, c, s);
+            block.rotate_rows(factors, k, k + 1, (c, s));
         }
-        // c·d[k] + s·bulge_col = √(d[k]²+bulge_col²) = r_left (not recomputed).
-        d[k] = r_left;
-        f = c.mul(e[k]).add(s.mul(d[k + 1]));
-        d[k + 1] = c.mul(d[k + 1]).sub(s.mul(e[k]));
-        e[k] = f;
+        // c·f + s·bulge_col = √(f²+bulge_col²) = r_left (not recomputed).
+        block.set_d(k, r_left);
+        block.set_e(k, c.mul(ek).add(s.mul(dk1)));
+        block.set_d(k + 1, c.mul(dk1).sub(s.mul(ek)));
         if k + 1 < q {
-            let bulge_row = s.mul(e[k + 1]);
-            e[k + 1] = c.mul(e[k + 1]);
-            y = e[k];
-            z = bulge_row;
+            let ek1 = block.e(k + 1);
+            y = block.e(k);
+            z = s.mul(ek1);
+            block.set_e(k + 1, c.mul(ek1));
         }
     }
 }

@@ -140,6 +140,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Fixed
 
+- [patch] The bidiagonal QR iteration behind `singular_values` and
+  `svd_decompose` chooses LAPACK `dbdsqr`'s chase direction: each block's
+  bulge runs from its larger end towards its smaller, with the matching
+  convergence test, so graded bidiagonals keep every singular value to high
+  relative accuracy whichever end is small (Demmel & Kahan 1990, §5).
+  Before, a bottom-heavy block returned singular values `≈ ε²·σ_max` as `0`
+  in both `f32` and `f64`.
 - [patch] `singular_values`, `svd_decompose`, `pinv`, `schur`, `eigenvalues`,
   `col_piv_qr`, `symmetric_eigen_jacobi`/`symmetric_eigenvalues_jacobi` and
   `symmetric_eigen_qr` return neither a wrong `Ok` nor a non-convergence on
