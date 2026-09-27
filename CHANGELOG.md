@@ -147,6 +147,15 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   relative accuracy whichever end is small (Demmel & Kahan 1990, §5).
   Before, a bottom-heavy block returned singular values `≈ ε²·σ_max` as `0`
   in both `f32` and `f64`.
+- [patch] `schur` and `eigenvalues` converge on Bf16 skew-symmetric
+  tridiagonals whose iterate ties two eigenvalue clusters within one ulp:
+  a block not deflated through both of `dlahqr`'s exceptional shifts
+  deflates a subdiagonal `≤ ulp` times its neighbourhood (both diagonal
+  entries and both adjacent subdiagonals), which the Ahues–Tisseur test
+  never does across a zero diagonal. The iteration cap is `dlahqr`'s
+  `30·max(10, n)` per deflation (was 2000). Non-convergence is now
+  `LetoError::ConvergenceError` carrying the block's smallest relative
+  subdiagonal, not `StorageError`.
 - [patch] `singular_values`, `svd_decompose`, `pinv`, `schur`, `eigenvalues`,
   `col_piv_qr`, `symmetric_eigen_jacobi`/`symmetric_eigenvalues_jacobi` and
   `symmetric_eigen_qr` return neither a wrong `Ok` nor a non-convergence on

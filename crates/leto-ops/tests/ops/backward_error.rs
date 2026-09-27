@@ -122,8 +122,11 @@ pub fn entries(count: usize, r: usize, size: f64, eps: f64) -> f64 {
 
 /// `bidiagonal_qr`'s iteration cap (`MAX_ITER`).
 pub const SVD_ITERATION_CAP: usize = 4000;
-/// `francis`'s per-deflation iteration cap (`MAX_ITER`).
-pub const FRANCIS_ITERATION_CAP: usize = 2000;
+/// `francis`'s per-deflation iteration cap at order `n` (`iteration_cap`):
+/// `dlahqr`'s `ITMAX = 30·max(10, n)`.
+pub fn francis_iteration_cap(n: usize) -> usize {
+    30 * n.max(10)
+}
 /// `symmetric_qr/ql.rs`'s sweeps per eigenvalue (`dsteqr`'s `30`).
 pub const QL_SWEEPS_PER_EIGENVALUE: usize = 30;
 
@@ -162,12 +165,13 @@ pub fn svd(rows: usize, cols: usize, eps: f64) -> f64 {
 /// η·‖A‖_F`.
 ///
 /// - Hessenberg: `n − 2` two-sided reflectors of length `≤ n − 1`;
-/// - Francis steps: at most `FRANCIS_ITERATION_CAP` per deflation, at most
+/// - Francis steps: at most `francis_iteration_cap(n)` per deflation, at most
 ///   `n` deflations, each step at most `n − 1` two-sided reflectors of
 ///   length `≤ 3` (the eigenvalues-only window applies the same reflectors to
 ///   a subset of columns; the skipped entries never reach a diagonal block);
 /// - deflations: at most `n − 1` subdiagonals zeroed, each `≤ ulp·tst ≤
-///   2ε‖H‖₂` by `dlahqr`'s pre-check (or the floor);
+///   2ε‖H‖₂` by `dlahqr`'s pre-check, `≤ 4ε‖H‖₂` by the neighbourhood test
+///   of a stalled block (four entries of `H`), or the floor;
 /// - `dlanv2` per 2×2 block (at most `n/2`): its rotation (`ĉs, ŝn` carry at
 ///   most `θ₃₀` through the equal-diagonal and triangularizing rotations)
 ///   applied two-sided outside the block, and the four block entries written
@@ -177,7 +181,7 @@ pub fn svd(rows: usize, cols: usize, eps: f64) -> f64 {
 ///   eigenvalue `a′ ± i√|b′|√|c′|` read with `θ₃` on `|b′c′|`.
 pub fn francis(n: usize, eps: f64) -> f64 {
     let nf = n as f64;
-    let steps = (FRANCIS_ITERATION_CAP as f64) * nf;
+    let steps = francis_iteration_cap(n) as f64 * nf;
     let blocks = (nf / 2.0).floor();
     compose(&[
         repeat(
@@ -185,7 +189,7 @@ pub fn francis(n: usize, eps: f64) -> f64 {
             2.0 * (nf - 2.0).max(0.0),
         ),
         repeat(householder(3, eps), steps * 2.0 * (nf - 1.0)),
-        repeat(2.0 * eps, nf - 1.0),
+        repeat(4.0 * eps, nf - 1.0),
         repeat(
             2.0 * rotation(30, eps) + entries(4, 40, 5.0, eps) + gamma(3.0, eps),
             blocks,
@@ -322,7 +326,7 @@ pub fn francis_vectors(n: usize, eps: f64) -> f64 {
         repeat(householder(n, eps), (nf - 2.0).max(0.0)),
         repeat(
             householder(3, eps),
-            (FRANCIS_ITERATION_CAP as f64) * nf * (nf - 1.0),
+            francis_iteration_cap(n) as f64 * nf * (nf - 1.0),
         ),
         repeat(rotation(30, eps), (nf / 2.0).floor()),
     ])

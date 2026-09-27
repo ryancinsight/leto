@@ -32,8 +32,10 @@ use leto::{ArrayView2, Result};
 ///
 /// # Errors
 /// [`LetoError::ShapeMismatch`](leto::LetoError) for non-square input;
-/// [`LetoError::StorageError`](leto::LetoError) for non-finite input or QR
-/// non-convergence.
+/// [`LetoError::StorageError`](leto::LetoError) for non-finite input;
+/// [`LetoError::ConvergenceError`](leto::LetoError) for QR non-convergence:
+/// `residual` is the stalled block's smallest subdiagonal relative to its
+/// neighbourhood, `tol` the `ε` it had to reach.
 pub fn eigenvalues<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Vec<Complex<T>>> {
     crate::application::linalg::schur::real_eigenvalues(matrix)
 }

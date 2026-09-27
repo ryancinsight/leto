@@ -4,6 +4,10 @@
 use super::at;
 use crate::domain::real::RealScalar;
 
+/// `dlahqr`'s `KEXSH`: the iterations without a deflation between
+/// exceptional shifts (`dlahqr.f` line 227).
+pub(super) const KEXSH: usize = 10;
+
 /// Which shift pair a Francis step uses — LAPACK `dlahqr`'s choice by the
 /// iteration count since the last deflation (`KDEFL`, `KEXSH = 10`).
 #[derive(Clone, Copy)]
@@ -20,7 +24,6 @@ impl Shift {
     /// `dlahqr`: every `2·KEXSH` iterations an exceptional shift from the
     /// bottom, every other `KEXSH` one from the top.
     pub(super) fn for_iteration(iteration: usize) -> Self {
-        const KEXSH: usize = 10;
         if iteration.is_multiple_of(2 * KEXSH) {
             Self::ExceptionalBottom
         } else if iteration.is_multiple_of(KEXSH) {
