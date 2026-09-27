@@ -73,9 +73,10 @@ impl<T: RealScalar> SweepWindows<T> {
 /// down"), so a graded block converges its smallest singular value at the
 /// small end and keeps it to high relative accuracy whichever end is small.
 ///
-/// Returns the number of sweeps run — the `K` of Demmel & Kahan's
-/// accumulated relative error bound (Theorem 6: `69·K·n²·ε` to first order
-/// for `K` zero-shift sweeps).
+/// Returns the number of iterations run: sweeps (zero-shift or shifted)
+/// and negligible-diagonal chases — an upper bound on the `K` of Demmel &
+/// Kahan's accumulated relative error bound (Theorem 6: `69·K·n²·ε` to first
+/// order for `K` zero-shift sweeps).
 pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
     d: &mut [T],
     e: &mut [T],
@@ -103,8 +104,9 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             return Ok(iter);
         }
         // Top of the bottom-most unreduced block: scan up, splitting at the
-        // first `|e| ≤ thresh` (`dbdsqr`'s scan); a split at the bottom itself
-        // leaves `p = q`, which the bottom test below then peels.
+        // first `|e| ≤ thresh` (`dbdsqr`'s scan). A split at the bottom itself
+        // leaves `p = q`, a converged value the peel above takes next pass
+        // (`dbdsqr`'s `M = M − 1`, LAPACK 3.12.0 `dbdsqr.f` lines 471–477).
         let mut p = q;
         while p > 0 {
             if e[p - 1].abs() <= deflation.thresh {
@@ -112,6 +114,9 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
                 break;
             }
             p -= 1;
+        }
+        if p == q {
+            continue;
         }
         // A 2×2 block is diagonalized directly (`dbdsqr` with `dlasv2`): shifted
         // steps on it cycle when its smaller singular value is subnormal.
@@ -128,14 +133,15 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
         }
         // `dbdsqr` chooses the chase direction only on a block disjoint from
         // the previous one ("from larger end diagonal element towards
-        // smaller", reference `dbdsqr.f` before loop 100), so a block whose
+        // smaller", LAPACK 3.12.0 `dbdsqr.f` lines 507–522), so a block whose
         // ends reorder while it converges does not flip back and forth.
         let direction = match chased {
             Some((old_p, old_q, direction)) if p <= old_q && q >= old_p => direction,
             _ => Direction::of_block(d, p, q),
         };
         // `dbdsqr`'s relative convergence tests inside the block, run in the
-        // chase direction (loop 100 down, loop 110 up).
+        // chase direction (loop 100 down, lines 528–552; loop 110 up, lines
+        // 556–580).
         let split = match direction {
             Direction::Down => deflation.split(&Oriented::<T, Down>::new(d, e, p, q), p, q),
             Direction::Up => deflation.split(&Oriented::<T, Up>::new(d, e, p, q), p, q),
@@ -197,7 +203,8 @@ fn sweep<T: RealScalar, const VEC: bool, C: Chase>(
 }
 
 /// One implicit-shift Golub–Kahan SVD step on the block `d[p..=q]`, `e[p..q]`,
-/// chased in orientation `C` (loops 140 and 150 of the reference `dbdsqr.f`):
+/// chased in orientation `C` (LAPACK 3.12.0 `dbdsqr.f` loop 140, lines
+/// 703–745, and loop 150, lines 751–790):
 /// the shift comes from the trailing 2×2 of the oriented block — for
 /// [`Up`] its top, as `dbdsqr`'s `IDIR = 2` takes it.
 pub(super) fn qr_step<T: RealScalar, const VEC: bool, C: Chase>(
