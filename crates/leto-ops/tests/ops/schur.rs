@@ -16,6 +16,7 @@ use leto_ops::{schur, MatrixDecompose, RealScalar, Xorshift64};
 use contract::{assert_schur_contract, certified_blocks, mat, reconstruct};
 
 mod contract;
+mod skew_ties;
 
 #[test]
 fn schur_symmetric_real_spectrum() {

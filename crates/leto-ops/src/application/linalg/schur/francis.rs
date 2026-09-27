@@ -66,18 +66,15 @@
 
 use crate::domain::real::RealScalar;
 use bulge::{francis_step, step_window, StepWorkspace};
-use deflation::{negligible_subdiagonal, run_floor};
+use deflation::{
+    iteration_cap, negligible_subdiagonal, neighbourhood_scale, run_floor, Criterion, STALLED,
+};
 use leto::{LetoError, Result};
 use shift::Shift;
 
 mod bulge;
 mod deflation;
 mod shift;
-
-/// Iteration cap per deflation before declaring non-convergence (Wilkinson +
-/// exceptional shifts converge in `O(n)` steps; this is a safety bound, and
-/// the backward-error bounds of the test suite are taken at it).
-const MAX_ITER: usize = 2000;
 
 /// The subnormal part of the deflation threshold, `safmin`: a subdiagonal
 /// driven into the subnormals, where no relative test can be met short of an
@@ -87,6 +84,23 @@ const MAX_ITER: usize = 2000;
 /// keeps below `ε·‖A‖_F`.
 pub(super) fn deflation_floor<T: RealScalar>() -> T {
     crate::application::linalg::thresholds::safe_min::<T>()
+}
+
+/// The smallest `|h_{k,k−1}|` over the block `[lo, hi]` relative to its
+/// [`neighbourhood_scale`]: how far the block is from its nearest
+/// deflation, in units of `ulp` once divided by it, reported when the
+/// iteration gives up.
+fn smallest_relative_subdiagonal<T: RealScalar>(h: &[T], n: usize, lo: usize, hi: usize) -> T {
+    let ratio = |k: usize| at(h, k, k - 1, n).abs().div(neighbourhood_scale(h, n, k));
+    (lo + 2..=hi)
+        .map(ratio)
+        .fold(ratio(lo + 1), |smallest, ratio| {
+            if ratio < smallest {
+                ratio
+            } else {
+                smallest
+            }
+        })
 }
 
 #[inline]
@@ -99,7 +113,11 @@ fn at<T: Copy>(h: &[T], i: usize, j: usize, n: usize) -> T {
 /// orthogonal similarity so that `H₀ = z T zᵀ`.
 ///
 /// # Errors
-/// [`LetoError::StorageError`] if a block fails to converge within [`MAX_ITER`].
+/// [`LetoError::ConvergenceError`] if a block fails to converge within
+/// [`iteration_cap`]: `max_iters` is the cap, `residual` the block's
+/// smallest `|h_{k,k−1}|` relative to its [`neighbourhood_scale`] (the
+/// quantity the last deflation test compares), `tol` the `ulp` it had to
+/// reach. The backward-error bounds of the test suite are taken at the cap.
 pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     h: &mut [T],
     z: &mut [T],
@@ -126,12 +144,18 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     };
     let mut hi = n - 1;
     let mut iter = 0usize;
+    let cap = iteration_cap(n);
     loop {
         // Bottom-most unreduced block: scan up while the subdiagonal is
         // non-negligible ([`negligible_subdiagonal`]).
+        let criterion = if iter < STALLED {
+            Criterion::AhuesTisseur
+        } else {
+            Criterion::Neighbourhood
+        };
         let mut lo = hi;
         while lo > 0 {
-            if negligible_subdiagonal(h, n, lo, ulp, floor) {
+            if negligible_subdiagonal(h, n, lo, (ulp, floor), criterion) {
                 h[lo * n + (lo - 1)] = T::ZERO;
                 break;
             }
@@ -158,9 +182,11 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
         }
 
         iter += 1;
-        if iter > MAX_ITER {
-            return Err(LetoError::StorageError {
-                reason: "Schur QR iteration failed to converge".to_string(),
+        if iter > cap {
+            return Err(LetoError::ConvergenceError {
+                max_iters: cap,
+                residual: smallest_relative_subdiagonal(h, n, lo, hi).to_f64(),
+                tol: ulp.to_f64(),
             });
         }
         francis_step::<T, ACCUMULATE_Q>(

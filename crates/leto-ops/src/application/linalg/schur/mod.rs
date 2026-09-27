@@ -95,7 +95,10 @@ pub struct RealSchur<T> {
 ///
 /// # Errors
 /// [`LetoError::ShapeMismatch`] for non-square input;
-/// [`LetoError::StorageError`] for non-finite input or QR non-convergence.
+/// [`LetoError::StorageError`] for non-finite input;
+/// [`LetoError::ConvergenceError`] for QR non-convergence: `residual` is
+/// the stalled block's smallest subdiagonal relative to its neighbourhood,
+/// `tol` the `ε` it had to reach.
 pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> {
     let [rows, cols] = matrix.shape();
     if rows != cols {
@@ -148,7 +151,10 @@ pub fn schur<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<RealSchur<T>> 
 ///
 /// # Errors
 /// [`LetoError::ShapeMismatch`] for non-square input;
-/// [`LetoError::StorageError`] for non-finite input or QR non-convergence.
+/// [`LetoError::StorageError`] for non-finite input;
+/// [`LetoError::ConvergenceError`] for QR non-convergence: `residual` is
+/// the stalled block's smallest subdiagonal relative to its neighbourhood,
+/// `tol` the `ε` it had to reach.
 pub(crate) fn real_eigenvalues<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
 ) -> Result<Vec<Complex<T>>> {

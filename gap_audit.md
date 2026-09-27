@@ -1,5 +1,11 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-09-27 Francis skew ties beyond one ulp (Bf16)
+
+- risk: a Bf16 skew tridiagonal whose iterate couples two `[[0, a], [−a, 0]]` blocks by `ulp·2a < δ ≲ 2·ulp·2a` cycles to the iteration cap and returns `ConvergenceError` (3 of 90,000 scan matrices, orders 3–8); `dhseqr`'s recovery for a failed `dlahqr` is `dlaqr0` (AED), which leto lacks.
+- evidence: `tests/ops/schur.rs::unresolvable_bf16_skew_tie_reports_its_residual`; the Wilkinson shift sits between the clusters `±i(a ± δ/2)` and Bf16 rounding restores the tie after each exceptional shift.
+- re-open trigger: a consumer needs Bf16 `schur`/`eigenvalues` on skew-symmetric input, or an AED (`dlaqr3`) port is planned.
+
 ## 2026-09-01 Apollo complex matrix-batch transpose
 
 - risk: none (closed) — see ADR 0027.

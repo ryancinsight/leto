@@ -45,17 +45,6 @@
 - Outcome: an authoritative-algorithm-specification-backed native-precision generic sparse LU (or equivalent) over CSR, with value-semantic and differential tests, closing the failure-mode-independence gap for a downstream direct-after-GMRES consumer.
 - Next step: locate the authoritative reference algorithm (e.g. a documented sparse LU with fill-reducing ordering) and its domain of validity before implementation.
 
-<a id="LETO-BF16-SKEW-FRANCIS-STALL-2026-09-25"></a>
-
-## LETO-BF16-SKEW-FRANCIS-STALL-2026-09-25 — Francis stalls on one graded Bf16 skew-symmetric tridiagonal [patch] — todo
-- priority: correctness
-- needs: none
-- scope: `crates/leto-ops/src/application/linalg/schur/francis.rs`, `crates/leto-ops/tests/ops/schur.rs`
-- Evidence: a seeded sweep of 46,440 Bf16 skew-symmetric tridiagonals (orders 3–8, magnitudes log-uniform over `[10⁻⁴, 1]`, every exponent) found one (and a finer sweep, every exponent, 2 of 30,960) where `schur`/`eigenvalues` exhaust `MAX_ITER`: order 8, superdiagonal `(2.05e-21, −1.50e-22, 3.18e-23, −5.56e-24, 5.48e-24, 2.40e-24, −3.18e-23)`, failing at every scale the gate maps to one landing (present at 3dbea45 as well). A subdiagonal `≈ 1.6·10⁻⁶·‖H‖` sits at the rounding-noise level of the zero diagonal (`tst ≈ 10⁻⁵·‖H‖`), so neither the `ulp·tst` pre-check nor Ahues–Tisseur deflates it and the bulge dies there.
-- Outcome: the order-8 case converges, and the scan's skew families add Bf16 orders with that dynamic range.
-- Acceptance: the case returns `Ok` with the a-posteriori certificate holding; no regression in the skew probes.
-- Next step: trace the iterate against `dlahqr`'s arithmetic emulated in Bf16 before choosing a deflation change.
-
 <a id="LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25"></a>
 
 ## LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25 — No derived oracle bounds F16/Bf16 factor accuracy [patch] — todo
