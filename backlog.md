@@ -106,12 +106,6 @@
 - Outcome: `rank_pivot_ratio` converts the shared `1e-12` denominator through `FloatElement::from_f64`, so ColPivQR, Jacobi eigen, FullPivLU, SVD pseudoinverse, and UDU compile on 32-bit targets without changing the native threshold. The duplicate literal is deleted.
 - Acceptance evidence: Atlas-overlay `cargo check --offline -p leto-ops --target wasm32-unknown-unknown`, standalone strict Clippy, 585/585 `leto-ops` nextest, and the new f32/f64 threshold contract test pass. PR pending.
 
-<a id="leto-ctc-loss"></a>
-
-## LETO-CTC-LOSS — Evaluate temporal label alignment loss [minor] [arch]
-- Status: done; [PR 177](https://github.com/ryancinsight/leto/pull/177), merge ba8a879; native scalar loss/gradients and [ADR 0030](docs/adr/0030-temporal-label-alignment.md); full local gates pass, hosted checks pending.
-- Primary integration preserves Apollo source and uses main's lock: Hermes `9d68a9e`, Eunomia `8e18d6d`, Moirai `0.6.0` at `00fb0ae`. Lock guard, format, minimal features, strict Clippy, CTC debug/release (10 each; `3b80fee3`/`7de39bb0`), 30 doctests and strict Rustdoc pass; prior Apollo performance evidence does not cover this graph.
-
 <a id="leto-windows-source-identity"></a>
 
 ## LETO-WINDOWS-SOURCE-IDENTITY — Preserve source identity across mapped checkouts [patch]
