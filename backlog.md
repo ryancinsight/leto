@@ -5,7 +5,7 @@
 ## LETO-BIDIAGONAL-CHASE-DIRECTION-2026-09-25 — Bidiagonal QR lacks `dbdsqr`'s chase-direction choice [patch] — todo
 - priority: correctness
 - needs: none
-- scope: `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr.rs`, `crates/leto-ops/src/application/linalg/svd/zero_shift.rs`, `crates/leto-ops/tests/ops/svd/`
+- scope: `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr/{sweep,zero_shift}.rs`, `crates/leto-ops/tests/ops/svd/`
 - Evidence: the sweeps (shifted and zero-shift) always chase top to bottom with the forward convergence tests; `dbdsqr` chases bottom to top when `|d_q| > |d_p|`, with the matching backward tests. On bottom-heavy f32 bidiagonals (smallest singular value `≈ 6·10⁻¹⁵` of the largest) the smallest is returned as `0` in 28 of 600 (PR #237 review of 6e397c8; base failed all 28); the result is within the normwise bound only.
 - Outcome: implement `dbdsqr`'s direction choice (`IDIR`), both sweep directions and the backward convergence tests, so tiny singular values of graded bidiagonals keep high relative accuracy.
 - Acceptance: on those 600 bidiagonals every singular value is within `c·k·ε` relative of the `f64` reference, `c` derived from Demmel & Kahan's relative error bound for the zero-shift sweep.
