@@ -22,9 +22,10 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use leto::{Array, SliceArg};
 use leto_ops::{
-    add, bunch_kaufman, cached_cache_geometry, dot, map_into, map_into_with_cache_geometry, matmul,
-    matmul_with_tile_policy, norm_l1, norm_l2, norm_max, scalar_map_into, schur, sum, unary_map,
-    zip_mut_with, AddOp, CacheGeometry, ExpOp, MatmulTilePolicy,
+    add, bunch_kaufman, cached_cache_geometry, dot, full_piv_lu, map_into,
+    map_into_with_cache_geometry, matmul, matmul_with_tile_policy, norm_l1, norm_l2, norm_max,
+    scalar_map_into, schur, sum, unary_map, zip_mut_with, AddOp, CacheGeometry, ExpOp,
+    MatmulTilePolicy,
 };
 use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
@@ -831,6 +832,44 @@ fn bench_lu_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+/// Full-pivoting LU scaling instrument. Complete pivoting's trailing-update
+/// axpy (`LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27`) is a long slice at every
+/// step (`n - k - 1` down to `0`, same shape as `bench_lu_scaling`'s
+/// partial-pivot update), so this isolates the SIMD-dispatch win on the
+/// complete-pivoting path specifically.
+fn bench_full_piv_lu_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("full_piv_lu_scaling");
+    for &n in &[128usize, 256, 512] {
+        let mat = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0e-3)).unwrap();
+        group.bench_function(format!("full_piv_lu_{n}x{n}"), |b| {
+            b.iter(|| black_box(full_piv_lu(black_box(&mat.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
+/// Bunch-Kaufman scaling instrument. Both the 1x1 and 2x2 pivot trailing
+/// updates (`LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27`) are long-slice axpys
+/// over the symmetric trailing block, same shape as Cholesky's converted
+/// updates.
+fn bench_bunch_kaufman_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bunch_kaufman_scaling");
+    for &n in &[128usize, 256, 512] {
+        let values = pinned_values(n * n, 1.0e-3);
+        let mut sym = vec![0.0f64; n * n];
+        for i in 0..n {
+            for j in 0..n {
+                sym[i * n + j] = values[if i < j { i * n + j } else { j * n + i }];
+            }
+        }
+        let mat = Array::from_shape_vec([n, n], sym).unwrap();
+        group.bench_function(format!("bunch_kaufman_{n}x{n}"), |b| {
+            b.iter(|| black_box(bunch_kaufman(black_box(&mat.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
 /// Banded CSR matrix with  nonzeros per interior row — the
 /// structure of a 1-D stencil / discretized-PDE operator, the canonical Krylov
 /// SpMV workload. Column indices are strictly increasing within each row (CSR
@@ -1064,6 +1103,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = bench_matmul, bench_elementwise, bench_operator_chain, bench_parallel_crossover, bench_unary_map, bench_runtime_tile_geometry, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling, bench_qr_scaling, bench_svd_scaling, bench_udu_scaling
+    targets = bench_matmul, bench_elementwise, bench_operator_chain, bench_parallel_crossover, bench_unary_map, bench_runtime_tile_geometry, bench_reductions, bench_zip, bench_oracle_compare, bench_parity_oracle, bench_linalg_compare, bench_decomposition_compare, bench_lu_scaling, bench_full_piv_lu_scaling, bench_bunch_kaufman_scaling, bench_sparse_compare, bench_spmv, bench_csc_spmv, bench_cholesky_scaling, bench_qr_scaling, bench_svd_scaling, bench_udu_scaling
 }
 criterion_main!(kernels);
