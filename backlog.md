@@ -1,5 +1,50 @@
 # Leto Work Backlog
 
+<a id="LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27"></a>
+
+## LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27 — Convert long-slice decomposition axpys to SIMD [patch] — todo
+
+- priority: tightening
+- needs: none
+- scope: `crates/leto-ops/src/application/linalg/lu/{full_piv,bunch_kaufman}.rs`, `crates/leto-ops/src/application/linalg/qr/col_piv.rs`
+- Evidence: the 2026-07-20 decomposition SIMD-dispatch sweep (`docs/benchmarks.md#decomposition-kernel-simd-dispatch-2026-07-20`) found full_piv_lu/bunch_kaufman trailing-update axpys are LU-style long slices (the meta-pattern's "provably long axpy" case, where `axpy_slice` measured a 2–3.5x win on Cholesky/SVD/udu) but left them unconverted; col_piv_qr's pivot-norm down-dating needs a distinct non-SIMD fix.
+- Outcome: convert the two trailing-update axpys through `axpy_slice` and give col_piv_qr its own pivot-norm fix, each with a `bench_*_scaling` measurement before/after per the meta-pattern.
+- Next step: profile full_piv_lu's trailing update against the meta-pattern (long vs short/shrinking slice) before converting.
+
+<a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
+
+## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow CSR index storage from usize to u32 [major] [arch] — todo
+
+- priority: tightening
+- needs: none
+- scope: `crates/leto-ops/src/application/sparse/csr.rs` and every CSR constructor/consumer (public format change)
+- Evidence: the 2026-07-20 SpMV bounds-check elision audit (`docs/benchmarks.md#spmv-bounds-check-elision-krylov-kernel-2026-07-20`) identified `col_indices`/`row_ptr: usize` as the dominant index-traffic term for DRAM-bound SpMV (halving it halves index bytes moved per nonzero); at the time this collided with in-flight sparse-LU/SpGEMM work on the same format. Re-verify that work has settled before starting.
+- Outcome: an ADR proposing the format change (breaking, public), a migration for every in-repo call site, and a re-measurement of `bench_csr_spmv`/`bench_csc_spmv` confirming the halved-traffic win.
+- Next step: `git log --oneline -- crates/leto-ops/src/application/sparse` to confirm the sparse-LU/SpGEMM format has stabilized, then draft the ADR.
+
+<a id="LETO-BLOCKED-LU-L3-GATE-2026-09-27"></a>
+
+## LETO-BLOCKED-LU-L3-GATE-2026-09-27 — Cache-aware gate for blocked (BLAS-3) LU [patch] — todo
+
+- priority: tightening
+- needs: none
+- scope: `crates/leto-ops/src/application/linalg/lu/decompose.rs`, `crates/leto-ops/benches/kernels.rs`
+- Evidence: the 2026-07-20 blocked-LU experiment (`docs/benchmarks.md#blocked-lu-cache-resident-regression-2026-07-20`) measured a right-looking blocked LU as a regression at n=256/512 on a 36 MiB-L3 host, because unblocked SIMD axpy already runs at cache bandwidth below `n ≈ 1200`; it was reverted, not deleted from history.
+- Outcome: a blocked LU gated on `working_set > l3_bytes` (reusing the parallel policy's cache-aware threshold) that never regresses cache-resident sizes and wins past the LLC, with trailing-update copies eliminated via matmul into strided views.
+- Acceptance: `lu_scaling` shows no regression at any cache-resident `n`, and a measured win past `l3_bytes` on a quiet host.
+- Next step: instrument `working_set > l3_bytes` as the routing predicate before reintroducing the blocked path.
+
+<a id="LETO-SPARSE-DIRECT-1"></a>
+
+## LETO-SPARSE-DIRECT-1 — Own sparse direct (LU) factorization over CSR [feature] — todo
+
+- priority: feature
+- needs: none
+- scope: `crates/leto-ops/src/application/sparse/` (new direct-factorization module)
+- Evidence: CFDrs calls a direct sparse solver only after its GMRES tiers stagnate, break down, or exhaust their iteration budget — a real failure-mode-independence requirement, not a preference. Leto owns CSR storage, sparse products, CG, and GMRES today but exposes no sparse direct factorization or reusable sparse LU factors, so CFDrs retains a third-party solver for that tier. Sparse factorization belongs with Leto's CSR representation (upstream ownership) — a CFDrs-local wrapper, dense materialization, or iterative fallback would preserve the gap instead of closing it.
+- Outcome: an authoritative-algorithm-specification-backed native-precision generic sparse LU (or equivalent) over CSR, with value-semantic and differential tests, closing the failure-mode-independence gap for a downstream direct-after-GMRES consumer.
+- Next step: locate the authoritative reference algorithm (e.g. a documented sparse LU with fill-reducing ordering) and its domain of validity before implementation.
+
 <a id="LETO-BIDIAGONAL-CHASE-DIRECTION-2026-09-25"></a>
 
 ## LETO-BIDIAGONAL-CHASE-DIRECTION-2026-09-25 — Bidiagonal QR lacks `dbdsqr`'s chase-direction choice [patch] — todo
@@ -909,23 +954,3 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   (no-split regresses; naïve splitting breaks rank-deficient). DoD: differential parity
   across the battery + adversarial clustered/tiny/zero/wide-range inputs, AND a measured
   64²/256² win before merge (asymptotic-only is insufficient at n=64).
-
-<a id="LETO-GAPAUDIT-ENTRY-COMPACTION"></a>
-
-## LETO-GAPAUDIT-ENTRY-COMPACTION — Compact the remaining gap_audit.md entries to ≤5 lines [patch] [tightening]
-
-- Status: todo; priority: tightening; updated: 2026-09-27.
-- Outcome: every `gap_audit.md` entry holds `risk`/`evidence`/`re-open
-  trigger`/`owner` in ≤5 lines (context_and_memory: Boards schema); narrative
-  history moves to git log or the retiring PR/ADR, never deleted outright.
-- Scope: ~24 entries dated 2026-07-15 through 2026-09-01 (the largest:
-  `D. Residual Risk Register` at 110 lines, `2026-08-26 Apollo FFT
-  layout-copy baseline` at 55, `2026-07-20 Decomposition SIMD-Dispatch Gap`
-  at 52, `2026-07-20 SpMV Bounds-Check Elision` at 45). Each closed/CLOSED
-  entry collapses to its retiring PR/commit/ADR reference; each still-open
-  entry keeps only the current numbers, not the history that produced them.
-- Acceptance: `gap_audit.md` total line count strictly decreases; no entry's
-  risk, current evidence, or re-open trigger is lost — verified by diffing
-  the retained facts (not just line counts) against the pre-compaction text
-  for each entry touched.
-- Next step: start with `D. Residual Risk Register` (largest, most-referenced).
