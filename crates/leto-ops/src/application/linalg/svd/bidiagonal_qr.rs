@@ -35,7 +35,10 @@ use leto::{Array2, ArrayView2, Result, Storage};
 use rotation::TransposedFactors;
 use sweep::qr_iterate;
 
+mod chase;
 mod deflation;
+#[cfg(test)]
+mod graded;
 mod rotation;
 mod sweep;
 #[cfg(test)]

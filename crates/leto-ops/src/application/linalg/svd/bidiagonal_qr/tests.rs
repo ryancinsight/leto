@@ -29,7 +29,11 @@ fn error_bounds<T: RealScalar + RealField>(k: usize, norm: f64) -> (f64, f64) {
 /// than only of the deflation: a chase that zeroes the right entries but
 /// accumulates into the wrong plane, the wrong row pair, or with the wrong
 /// sign leaves the singular values correct and the reconstruction wrong.
-fn check_bidiagonal<T: RealScalar + RealField>(diag: &[f64], superdiag: &[f64], expected: &[f64]) {
+pub(super) fn check_bidiagonal<T: RealScalar + RealField>(
+    diag: &[f64],
+    superdiag: &[f64],
+    expected: &[f64],
+) {
     let k = diag.len();
     let mut d: Vec<T> = diag.iter().map(|&x| T::from_f64(x)).collect();
     let mut e: Vec<T> = (0..k)
@@ -231,12 +235,13 @@ fn gate_keeps_the_deflation_floor_below_epsilon_times_the_norm() {
 /// shift rounds differently).
 #[test]
 fn negligible_shift_takes_the_zero_shift_sweep() {
+    use super::chase::Down;
     use super::sweep::{qr_step, SweepWindows};
     use super::zero_shift::zero_shift_sweep;
     let windows = SweepWindows::<f64>::new();
     let (mut d, mut e) = (vec![1.0, 1.0, 1e-9], vec![0.5, 1e-9, 0.0]);
     let (mut d0, mut e0) = (d.clone(), e.clone());
-    qr_step::<f64, false>(
+    qr_step::<f64, false, Down>(
         &mut d,
         &mut e,
         0,
@@ -244,7 +249,7 @@ fn negligible_shift_takes_the_zero_shift_sweep() {
         &mut TransposedFactors::none(),
         windows,
     );
-    zero_shift_sweep::<f64, false>(
+    zero_shift_sweep::<f64, false, Down>(
         &mut d0,
         &mut e0,
         0,
@@ -262,12 +267,15 @@ fn negligible_shift_takes_the_zero_shift_sweep() {
 /// at `x = 1/400` it must.
 #[test]
 fn zero_shift_test_scales_with_the_order() {
+    use super::chase::{Down, Oriented};
     use super::deflation::Deflation;
     for (x, fires) in [(1.0 / 150.0, false), (1.0 / 400.0, true)] {
         let (d, e) = (vec![1.0f64, 1.0, x], vec![0.0, 0.0, 0.0]);
+        let (mut d, mut e) = (d, e);
         let deflation = Deflation::new(&d, &e, 3);
+        let block = Oriented::<f64, Down>::new(&mut d, &mut e, 0, 2);
         assert_eq!(
-            deflation.shift_ruins_accuracy(&d, &e, 0, 2, 3),
+            deflation.shift_ruins_accuracy(&block, 0, 2),
             fires,
             "x = {x}"
         );

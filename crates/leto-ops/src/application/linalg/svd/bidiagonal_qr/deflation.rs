@@ -1,6 +1,7 @@
 //! Deflation and splitting: `dbdsqr`'s relative convergence tests and the
 //! chases that rotate a negligible diagonal out of the block.
 
+use super::chase::{Chase, Oriented};
 use super::rotation::{givens, TransposedFactors};
 use crate::application::linalg::scaling::KernelWindow;
 use crate::application::linalg::thresholds;
@@ -24,6 +25,8 @@ fn deflation_floor<T: RealScalar>() -> T {
 pub(super) struct Deflation<T> {
     tol: T,
     pub(super) thresh: T,
+    /// The order `k` of the bidiagonal.
+    order: usize,
 }
 
 impl<T: RealScalar> Deflation<T> {
@@ -55,36 +58,30 @@ impl<T: RealScalar> Deflation<T> {
         Self {
             tol,
             thresh: if relative > floor { relative } else { floor },
+            order: k,
         }
     }
 
     /// `dbdsqr`'s first zero-shift test: `n·tol·(σ̃_min/σ_max) ≤ max(ε, tol/100)`
     /// — shifting would ruin the relative accuracy of the block's smallest
-    /// singular value — with `σ̃_min` the forward recurrence's minimum over
-    /// the block `[p, q]` and `σ_max` the largest `|dᵢ|, |eᵢ|` of the
-    /// bidiagonal of order `k`.
-    pub(super) fn shift_ruins_accuracy(
+    /// singular value — with `σ̃_min` the minimum of the convergence
+    /// recurrence run in the chase direction over the block (`SMIN` of loops
+    /// 100/110 of the reference `dbdsqr.f`) and `σ_max` the largest
+    /// `|dᵢ|, |eᵢ|` of the bidiagonal of order `k`.
+    pub(super) fn shift_ruins_accuracy<C: Chase>(
         self,
-        d: &[T],
-        e: &[T],
+        block: &Oriented<'_, T, C>,
         p: usize,
         q: usize,
-        k: usize,
     ) -> bool {
-        let largest = d[..k].iter().chain(&e[..k - 1]).fold(T::ZERO, |acc, &x| {
-            if x.abs() > acc {
-                x.abs()
-            } else {
-                acc
-            }
-        });
+        let largest = block.largest_entry(self.order);
         if largest == T::ZERO {
             return false;
         }
-        let mut mu = d[p].abs();
+        let mut mu = block.d(p).abs();
         let mut smallest = mu;
         for i in p..q {
-            mu = d[i + 1].abs().mul(mu.div(mu.add(e[i].abs())));
+            mu = block.d(i + 1).abs().mul(mu.div(mu.add(block.e(i).abs())));
             if mu < smallest {
                 smallest = mu;
             }
@@ -92,23 +89,35 @@ impl<T: RealScalar> Deflation<T> {
         let eps = thresholds::machine_epsilon::<T>();
         let hundredth = self.tol.div(T::from_usize(100));
         let bound = if eps > hundredth { eps } else { hundredth };
-        T::from_usize(k).mul(self.tol).mul(smallest.div(largest)) <= bound
+        T::from_usize(self.order)
+            .mul(self.tol)
+            .mul(smallest.div(largest))
+            <= bound
     }
 
-    /// `dbdsqr`'s forward convergence test on the block `[p, q]`: the bottom
-    /// `|e_{q−1}| ≤ tol·|d_q|`, then the recurrence `μ ← |d_{i+1}|·μ/(μ + |eᵢ|)`
-    /// from `μ = |d_p|`, splitting at the first `|eᵢ| ≤ tol·μ`. Returns the
-    /// index of the superdiagonal it zeroes, if any.
-    pub(super) fn forward_split(self, d: &[T], e: &[T], p: usize, q: usize) -> Option<usize> {
-        if e[q - 1].abs() <= self.tol.mul(d[q].abs()) {
-            return Some(q - 1);
+    /// `dbdsqr`'s convergence test on the block `[p, q]` in the chase
+    /// direction (the forward test, loop 100 of the reference `dbdsqr.f`,
+    /// on the oriented block; for [`Up`](super::chase::Up) it is the
+    /// backward test, loop 110): the far end `|e_{q−1}| ≤ tol·|d_q|`, then
+    /// the recurrence `μ ← |d_{i+1}|·μ/(μ + |eᵢ|)` from `μ = |d_p|`,
+    /// splitting at the first `|eᵢ| ≤ tol·μ` (Demmel & Kahan, convergence
+    /// criteria 1a/1b, eqs. 4.3–4.4). Returns the **stored** index of the
+    /// superdiagonal it zeroes, if any.
+    pub(super) fn split<C: Chase>(
+        self,
+        block: &Oriented<'_, T, C>,
+        p: usize,
+        q: usize,
+    ) -> Option<usize> {
+        if block.e(q - 1).abs() <= self.tol.mul(block.d(q).abs()) {
+            return Some(block.stored_superdiagonal(q - 1));
         }
-        let mut mu = d[p].abs();
+        let mut mu = block.d(p).abs();
         for i in p..q {
-            if e[i].abs() <= self.tol.mul(mu) {
-                return Some(i);
+            if block.e(i).abs() <= self.tol.mul(mu) {
+                return Some(block.stored_superdiagonal(i));
             }
-            mu = d[i + 1].abs().mul(mu.div(mu.add(e[i].abs())));
+            mu = block.d(i + 1).abs().mul(mu.div(mu.add(block.e(i).abs())));
         }
         None
     }
