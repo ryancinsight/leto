@@ -958,7 +958,12 @@ Re-open trigger: next touch that pushes either file over 1,000 lines, or a
 dedicated compaction pass — rewrite each closed/landed entry down to its
 retiring commit/PR/ADR reference, move narrative history to git log, and
 verify no unique risk data is lost (diff old vs compacted line counts against
-retained facts).
+retained facts). Largest target: `2026-08-13 leto-ops criterion baselines`
+(~310 lines) — `Historical oracle comparison gate`/`Measured optimization
+history` are superseded and git-reconstructable; `Current state`,
+`Rejected optimization candidates`, `Open measured targets` stay.
+2026-09-27 audit (basis `77f5a06`): no correctness/verification gaps beyond
+the file-size debt filed above.
 
 ## 2026-09-26 Stack-owned source-identity pre-push check fails on lockfile pushes
 
