@@ -959,3 +959,35 @@ dedicated compaction pass — rewrite each closed/landed entry down to its
 retiring commit/PR/ADR reference, move narrative history to git log, and
 verify no unique risk data is lost (diff old vs compacted line counts against
 retained facts).
+
+## 2026-09-26 Stack-owned source-identity pre-push check fails on lockfile pushes
+
+`.githooks/pre-push`'s source-identity step (`atlas-build-identity.py`,
+fetched from the stack cache, not owned by this repo) runs
+`cargo clippy --manifest-path <repo_root>/Cargo.toml -p <pkg> --all-targets
+--locked` with cwd set to `repo_root` (`D:/atlas/repos/leto`). Cargo's config
+discovery walks every ancestor directory from cwd, so this invocation still
+picks up the stack `[patch]` overlay at `D:/atlas/.cargo/config.toml` even
+though the committed `Cargo.lock` was regenerated outside it (source lines
+present for every git dependency). The overlay wants to resolve patched
+deps to local path sources, which requires rewriting `Cargo.lock` to drop
+their `source =` lines; `--locked` forbids that rewrite, so the step always
+fails with `cannot update the lock file ... because --locked was passed`
+whenever a push's range touches `Cargo.lock`/`Cargo.toml` — reproduced twice
+in a row on two independently regenerated, verified-good locks (`Cargo.lock
+resolves under --locked` via `scripts/lockfile.py`, `atlas-stack-overlay.py
+check` reports `stack aligned` both times).
+
+Independent verification this cycle (from outside the overlay,
+`--manifest-path`, shared `CARGO_TARGET_DIR`): fmt, clippy `-D warnings`,
+nextest (1070/1070), doctests, `--no-default-features`, and
+`RUSTDOCFLAGS="-D warnings" cargo doc` all pass on the exact pushed
+revision. Pushed with `SKIP_LOCAL_GATE=1` per the hook's own documented
+escape hatch, evidence recorded in the PR body.
+
+Re-open trigger: fix is in the stack-owned `atlas-build-identity.py` or the
+hook's `gate_cwd` for the identity step — run it from a directory outside
+every member's tree (or pass the overlay-stripped config per
+architecture_scoping's development-overlay verification note) instead of
+`repo_root`. Not actionable from this repo; filed here because this is
+where the symptom is observed. Report to the meta board.
