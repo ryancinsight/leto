@@ -281,3 +281,150 @@ fn zero_shift_test_scales_with_the_order() {
         );
     }
 }
+
+/// [`Oriented::largest_entry`] reads exactly the active block `[p, q]`:
+/// three sub-cases each make a different one of the block's boundary
+/// elements — `d(p)`, `d(q)`, and the interior `e(q-1)` — the block's
+/// unique maximum, with every other in-block entry smaller and every
+/// *outside*-the-block entry (`d[0]`, `d[4]`, `e[0]`, `e[3]`) a distinct
+/// value that must never be picked up. Dropping any one of `d(p)`, `d(q)`,
+/// or `e(q-1)` from the scan (e.g. an off-by-one at either loop bound)
+/// changes the computed maximum in exactly the sub-case built around it.
+/// `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
+#[test]
+fn largest_entry_reads_every_boundary_of_the_active_block() {
+    use super::chase::{Down, Oriented};
+    // Block is [1, 3] inside a length-5 array; outside entries (indices
+    // 0, 4 and the e's at 0, 3) are distinct decoys smaller than the
+    // in-block maximum, so picking one up would also be caught.
+    let outside = 3.0;
+    // d(p) = d(1) uniquely largest.
+    let mut d = vec![outside, 5.0, 1.0, 0.5, outside];
+    let mut e = vec![outside, 0.2, 0.3, outside];
+    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(block.largest_entry(), 5.0, "d(p) must be read");
+
+    // d(q) = d(3) uniquely largest.
+    let mut d = vec![outside, 0.5, 1.0, 5.0, outside];
+    let mut e = vec![outside, 0.2, 0.3, outside];
+    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(block.largest_entry(), 5.0, "d(q) must be read");
+
+    // e(q-1) = e(2), the interior superdiagonal, uniquely largest.
+    let mut d = vec![outside, 0.5, 1.0, 0.7, outside];
+    let mut e = vec![outside, 0.2, 5.0, outside];
+    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(block.largest_entry(), 5.0, "e(q-1) must be read");
+}
+
+/// `SMAX` in `dbdsqr`'s first zero-shift test is taken over the active
+/// block's own scan, not the whole bidiagonal (LAPACK 3.12.0 `dbdsqr.f`
+/// lines 453–462: `SMAX = ABS(D(M))`, then `DO 70 LLL = 1, M-1` /
+/// `LL = M-LLL`, `SMAX = MAX(SMAX, ABSS, ABSE)` at each `LL` in turn until
+/// a negligible `E(LL)` fixes the block's lower bound — so the scan, and
+/// the `SMAX` it feeds, cover exactly `[LL, M]`).
+///
+/// A block `[1, 3]` of `d = (1, 1, x)` inside a length-5 bidiagonal whose
+/// *outside* entries (`d[0]`, `d[4]`, `e[0]`, `e[3]`) are `1000×` the
+/// block's own scale must not fire the zero-shift test at an `x` just
+/// above the block-scoped cutoff `bound/(n·tol)` (`bound = max(ε,
+/// tol/100)`, `tol = tolmul·ε`) — a whole-bidiagonal `SMAX` instead makes
+/// the denominator `1000×` too large, driving `n·tol·(σ̃/σ_max)` far below
+/// `bound` and firing regardless of `x`. Generic over every shipped
+/// scalar type: `tolmul` (hence the cutoff) differs by type — `f64`'s
+/// `ε^(-1/8) ≈ 90.5` versus the `10` floor `f32`/`F16`/`Bf16` all hit —
+/// and `1000×` a block of scale `1` stays representable even in `F16`
+/// (max ≈ 65504). `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
+fn zero_shift_test_scopes_smax_to_the_active_block<T: RealScalar>() {
+    use super::chase::{Down, Oriented};
+    use super::deflation::Deflation;
+    use crate::application::linalg::thresholds;
+
+    // `dbdsqr`'s tolmul/tol/bound, exactly as `Deflation::new` derives them.
+    let eps = thresholds::machine_epsilon::<T>();
+    let eighth_root = T::ONE.div(eps).sqrt().sqrt().sqrt();
+    let (ten, hundred) = (T::from_usize(10), T::from_usize(100));
+    let capped = if eighth_root < hundred {
+        eighth_root
+    } else {
+        hundred
+    };
+    let tolmul = if capped > ten { capped } else { ten };
+    let tol = tolmul.mul(eps);
+    let hundredth = tol.div(T::from_usize(100));
+    let bound = if eps > hundredth { eps } else { hundredth };
+
+    let n = 5usize;
+    let outside = T::from_usize(1000);
+    // Block-scoped SMAX is 1: the zero-shift test fires when
+    // `n·tol·x ≤ bound`, i.e. `x ≤ bound/(n·tol)`. Pick `x` at twice that
+    // cutoff so the correctly-scoped test does not fire.
+    let cutoff = bound.div(T::from_usize(n).mul(tol));
+    let x = cutoff.add(cutoff);
+    assert!(
+        x < T::ONE,
+        "construction invariant: x must stay below the block's own scale of 1"
+    );
+
+    let mut d = vec![outside, T::ONE, T::ONE, x, outside];
+    let mut e = vec![outside, T::ZERO, T::ZERO, outside];
+    // `Deflation::new` reads the whole array for `tol`/`order` (LAPACK's `N`,
+    // not the block size — dbdsqr.f's `N*TOL*(SMINL/SMAX)` test), unaffected
+    // by this fix; only `SMAX` (`largest_entry`) is at issue here.
+    let deflation = Deflation::new(&d, &e, n);
+    let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(
+        block.largest_entry(),
+        T::ONE,
+        "SMAX must come from the block [1, 3], not the outside entries"
+    );
+    assert!(
+        !deflation.shift_ruins_accuracy(&block, 1, 3),
+        "a whole-bidiagonal SMAX would fire the zero-shift test regardless of x; \
+         the block's own SMAX of 1 must not, at this construction's x"
+    );
+}
+
+#[test]
+fn zero_shift_test_scopes_smax_to_the_active_block_across_scalar_types() {
+    use eunomia::{Bf16, F16};
+    zero_shift_test_scopes_smax_to_the_active_block::<f32>();
+    zero_shift_test_scopes_smax_to_the_active_block::<f64>();
+    zero_shift_test_scopes_smax_to_the_active_block::<F16>();
+    zero_shift_test_scopes_smax_to_the_active_block::<Bf16>();
+}
+
+/// A `largest_entry` that dropped the superdiagonal from its scan (only
+/// visiting `d(p)` and `d(j + 1)`, never `e(j)`) would still pass every
+/// prior `largest_entry`/`SMAX` test here: the boundary-reading case pins
+/// `e(q-1)` against decoy *outside* entries rather than an in-block `d`,
+/// and the zero-shift case makes its in-block `e`s exactly zero (`e[1] =
+/// e[2] = T::ZERO`), so neither can distinguish "reads `e`" from "reads
+/// only `d`, and the outside entries never mattered."
+///
+/// This fixture is additionally the *reachable* form the prior zero-shift
+/// case was not: `dbdsqr` isolates a block by driving its boundary
+/// superdiagonal entries to exactly zero (LAPACK 3.12.0 `dbdsqr.f` line
+/// 466, `E(LL) = ZERO`, once `ABS(E(LL))` tests negligible at line 459) —
+/// not by leaving them at some large decoy scale. `e[0] = e[3] = 0` here
+/// severs the block `[1, 3]` from `d[0]` and `d[4]` exactly as the real
+/// search would, and the in-block superdiagonal `e[2]` is the block's
+/// unique maximum, strictly larger than every in-block `d`. A scan that
+/// skips `e` computes `1` (the in-block `d`s); the correct scan computes
+/// `e[2]`.
+#[test]
+fn largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal() {
+    use super::chase::{Down, Oriented};
+
+    let (outside_d0, outside_d4) = (7.0, -9.0);
+    let mut d = vec![outside_d0, 1.0, 1.0, 1.0, outside_d4];
+    // e[0] = e[3] = 0: block [1, 3] is genuinely severed from d[0]/d[4],
+    // as a real split would leave it. e[2] dominates every in-block d.
+    let mut e = vec![0.0, 0.2, 5.0, 0.0];
+    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(
+        block.largest_entry(),
+        5.0,
+        "SMAX must be the in-block superdiagonal e[2], not the in-block d's"
+    );
+}

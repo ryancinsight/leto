@@ -66,16 +66,18 @@ impl<T: RealScalar> Deflation<T> {
     /// — shifting would ruin the relative accuracy of the block's smallest
     /// singular value — with `σ̃_min` the minimum of the convergence
     /// recurrence run in the chase direction over the block (`SMIN` of loops
-    /// 100/110, LAPACK 3.12.0 `dbdsqr.f` lines 544–551 and 572–579) and
-    /// `σ_max` the largest `|dᵢ|, |eᵢ|` of the bidiagonal of order `k`
-    /// ([`Oriented::largest_entry`]).
+    /// 100/110, LAPACK 3.12.0 `dbdsqr.f` lines 544–551 and 572–579), `n` the
+    /// order of the whole bidiagonal (`dbdsqr`'s matrix parameter `N`, not
+    /// the block size), and `σ_max` the largest `|dᵢ|, |eᵢ|` over the active
+    /// block `[p, q]` ([`Oriented::largest_entry`]; LAPACK 3.12.0 `dbdsqr.f`
+    /// lines 453–462).
     pub(super) fn shift_ruins_accuracy<C: Chase>(
         self,
         block: &Oriented<'_, T, C>,
         p: usize,
         q: usize,
     ) -> bool {
-        let largest = block.largest_entry(self.order);
+        let largest = block.largest_entry();
         if largest == T::ZERO {
             return false;
         }

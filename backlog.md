@@ -34,18 +34,6 @@
 - Acceptance: `lu_scaling` shows no regression at any cache-resident `n`, and a measured win past `l3_bytes` on a quiet host.
 - Next step: instrument `working_set > l3_bytes` as the routing predicate before reintroducing the blocked path.
 
-<a id="LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27"></a>
-
-## LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27 — Take the zero-shift test's SMAX over the active block [patch] — todo
-
-- priority: correctness
-- needs: none
-- scope: `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr/{chase,deflation,sweep}.rs`
-- Evidence: `Oriented::largest_entry` feeds `shift_ruins_accuracy` the largest `|dᵢ|, |eᵢ|` of the whole order-`k` bidiagonal; `dbdsqr` takes `SMAX` over the active block's scan (LAPACK 3.12.0 `dbdsqr.f` lines 453–462). Leto's choice fires the zero shift at least as often (never less accurate), but on a block far below the matrix's largest entry it forgoes shifted steps `dbdsqr` takes (post-merge judge of #271).
-- Outcome: `SMAX` over the active block as `dbdsqr` computes it, or a recorded derivation that the whole-matrix scope is required.
-- Acceptance: the graded, composite and mirror tests in `bidiagonal_qr/graded.rs` hold; iteration counts on a composite of a large block over a small one do not rise.
-- Next step: carry the scan's running maximum out of `qr_iterate`'s block search into `shift_ruins_accuracy`.
-
 <a id="LETO-SPARSE-DIRECT-1"></a>
 
 ## LETO-SPARSE-DIRECT-1 — Own sparse direct (LU) factorization over CSR [feature] — todo

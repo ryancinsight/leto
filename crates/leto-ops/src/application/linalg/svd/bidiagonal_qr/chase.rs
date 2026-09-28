@@ -192,16 +192,29 @@ impl<'s, T: RealScalar, C: Chase> Oriented<'s, T, C> {
         self.e[C::superdiagonal(self.p, self.q, j)] = value;
     }
 
-    /// The largest `|dᵢ|, |eᵢ|` of the stored bidiagonal of order `k`
-    /// (orientation-independent). `dbdsqr` takes its `SMAX` over the active
-    /// block's scan (LAPACK 3.12.0 `dbdsqr.f` lines 453–462); this is the
-    /// whole bidiagonal's, which makes the zero-shift test fire at least as
-    /// often (`LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`).
-    pub(super) fn largest_entry(&self, k: usize) -> T {
-        self.d[..k]
-            .iter()
-            .chain(&self.e[..k - 1])
-            .fold(T::ZERO, |acc, &x| if x.abs() > acc { x.abs() } else { acc })
+    /// The largest `|dᵢ|, |eᵢ|` over the active block `[p, q]`
+    /// (orientation-independent: the oriented accessors visit exactly the
+    /// stored entries of `[p, q]`, in a block-local permutation of them).
+    /// `dbdsqr` accumulates this same `SMAX` while it searches backward for
+    /// the active block's start (LAPACK 3.12.0 `dbdsqr.f` lines 453–462:
+    /// `SMAX = ABS(D(M))` then `DO 70 LLL = 1, M-1` / `LL = M-LLL`,
+    /// `SMAX = MAX(SMAX, ABSS, ABSE)` at each `LL` until a negligible
+    /// `E(LL)` fixes the block's lower bound — so the scan and the `SMAX`
+    /// it feeds cover exactly `[LL, M]`, this method's `[p, q]`).
+    pub(super) fn largest_entry(&self) -> T {
+        let (p, q) = (self.p, self.q);
+        let mut largest = self.d(p).abs();
+        for j in p..q {
+            let e = self.e(j).abs();
+            if e > largest {
+                largest = e;
+            }
+            let d = self.d(j + 1).abs();
+            if d > largest {
+                largest = d;
+            }
+        }
+        largest
     }
 
     /// Stored index of the oriented superdiagonal entry `j`.
