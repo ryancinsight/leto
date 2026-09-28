@@ -195,9 +195,14 @@ impl<'s, T: RealScalar, C: Chase> Oriented<'s, T, C> {
     /// The largest `|dᵢ|, |eᵢ|` over the active block `[p, q]`
     /// (orientation-independent: the oriented accessors visit exactly the
     /// stored entries of `[p, q]`, in a block-local permutation of them).
-    /// `dbdsqr` takes its `SMAX` over this same scan (LAPACK 3.12.0
-    /// `dbdsqr.f` lines 453–462, `DO 90 LLL = LL, M`).
-    pub(super) fn largest_entry(&self, p: usize, q: usize) -> T {
+    /// `dbdsqr` accumulates this same `SMAX` while it searches backward for
+    /// the active block's start (LAPACK 3.12.0 `dbdsqr.f` lines 453–462:
+    /// `SMAX = ABS(D(M))` then `DO 70 LLL = 1, M-1` / `LL = M-LLL`,
+    /// `SMAX = MAX(SMAX, ABSS, ABSE)` at each `LL` until a negligible
+    /// `E(LL)` fixes the block's lower bound — so the scan and the `SMAX`
+    /// it feeds cover exactly `[LL, M]`, this method's `[p, q]`).
+    pub(super) fn largest_entry(&self) -> T {
+        let (p, q) = (self.p, self.q);
         let mut largest = self.d(p).abs();
         for j in p..q {
             let e = self.e(j).abs();

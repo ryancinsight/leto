@@ -338,6 +338,60 @@ fn each_block_takes_its_own_chase_direction() {
     composite_blocks_are_relatively_accurate::<f64>();
 }
 
+/// A large-magnitude block (~4e6) over a small one (~1), split by an exact
+/// zero: with `SMAX` scoped to the active block, each block's zero-shift
+/// decision depends only on its own entries, so the composite never needs
+/// more sweeps than running each block alone (plus the one extra deflation
+/// event the exact zero split itself may cost) — the two blocks are
+/// otherwise independent. Scoped to the whole bidiagonal (the pre-fix
+/// behavior), the small block's zero-shift denominator becomes the *large*
+/// block's entries, forcing zero-shift sweeps there instead of the
+/// quadratically convergent shifted step `dbdsqr` would take, so the
+/// composite runs far more sweeps than its blocks need alone.
+/// `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
+fn large_over_small_block_never_exceeds_running_each_alone<T: RealScalar + RealField>() {
+    let mut rng = Xorshift64::new(0x1a46_e5ca_b10c);
+    // A mild grading (few binades) so the correctly-scoped block still takes
+    // shifted steps rather than converging by zero-shift alone, which is
+    // what makes the bug's forced zero-shift sweeps visible.
+    let mild_span = 3.0;
+    let scale = 4.0e6;
+    for &k in &[4usize, 5] {
+        let (du, eu) = graded::<T>(&mut rng, k, mild_span, true);
+        let (dl, el) = graded::<T>(&mut rng, k, mild_span, false);
+        let du: Vec<f64> = du.iter().map(|x| x * scale).collect();
+        let eu: Vec<f64> = eu.iter().map(|x| x * scale).collect();
+        let (_, upper_alone) = iterate::<T>(&du, &eu);
+        let (_, lower_alone) = iterate::<T>(&dl, &el);
+        let d0: Vec<f64> = du.iter().chain(&dl).copied().collect();
+        let e0: Vec<f64> = eu.iter().chain(&[0.0]).chain(&el).copied().collect();
+        let (got, sweeps) = iterate::<T>(&d0, &e0);
+        // +1: the exact-zero split itself is one deflation event the two
+        // alone-runs never pay (each alone-run's input already has no
+        // trailing zero to split off).
+        let ceiling = upper_alone + lower_alone + 1;
+        assert!(
+            sweeps <= ceiling,
+            "k={k}: composite took {sweeps} sweeps, alone-sum + 1 is {ceiling} \
+             (upper {upper_alone}, lower {lower_alone}); d {d0:?} e {e0:?}"
+        );
+        let bound = reduction_bound::<T>(2 * k, sweeps);
+        assert_relative(
+            &got,
+            &d0,
+            &e0,
+            bound,
+            "large-over-small composite reduction",
+        );
+    }
+}
+
+#[test]
+fn large_over_small_block_matches_its_blocks_run_in_isolation() {
+    large_over_small_block_never_exceeds_running_each_alone::<f32>();
+    large_over_small_block_never_exceeds_running_each_alone::<f64>();
+}
+
 /// The iteration on `B` and on its reflection `P Bᵀ P` (`d`, `e` reversed)
 /// are mirror images step for step: every sweep and convergence test of the
 /// chase up on `B` is the chase down on `P Bᵀ P` in the same arithmetic

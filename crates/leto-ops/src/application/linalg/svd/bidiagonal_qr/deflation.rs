@@ -70,14 +70,14 @@ impl<T: RealScalar> Deflation<T> {
     /// order of the whole bidiagonal (`dbdsqr`'s matrix parameter `N`, not
     /// the block size), and `σ_max` the largest `|dᵢ|, |eᵢ|` over the active
     /// block `[p, q]` ([`Oriented::largest_entry`]; LAPACK 3.12.0 `dbdsqr.f`
-    /// lines 453–462, `DO 90 LLL = LL, M`).
+    /// lines 453–462).
     pub(super) fn shift_ruins_accuracy<C: Chase>(
         self,
         block: &Oriented<'_, T, C>,
         p: usize,
         q: usize,
     ) -> bool {
-        let largest = block.largest_entry(p, q);
+        let largest = block.largest_entry();
         if largest == T::ZERO {
             return false;
         }
