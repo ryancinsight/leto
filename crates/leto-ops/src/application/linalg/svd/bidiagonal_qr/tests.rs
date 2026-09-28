@@ -265,21 +265,44 @@ fn negligible_shift_takes_the_zero_shift_sweep() {
 /// `f64`, so the test fires for `x ≤ 1/(3·90.5) ≈ 1/272`. At `x = 1/150`
 /// it must not fire (without the order factor it would, `90.5/150 < 1`);
 /// at `x = 1/400` it must.
-#[test]
-fn zero_shift_test_scales_with_the_order() {
-    use super::chase::{Down, Oriented};
+fn zero_shift_test_scales_with_the_order_for<C: super::chase::Chase>() {
+    use super::chase::Oriented;
     use super::deflation::Deflation;
     for (x, fires) in [(1.0 / 150.0, false), (1.0 / 400.0, true)] {
         let (d, e) = (vec![1.0f64, 1.0, x], vec![0.0, 0.0, 0.0]);
         let (mut d, mut e) = (d, e);
         let deflation = Deflation::new(&d, &e, 3);
-        let block = Oriented::<f64, Down>::new(&mut d, &mut e, 0, 2);
-        assert_eq!(
-            deflation.shift_ruins_accuracy(&block, 0, 2),
-            fires,
-            "x = {x}"
-        );
+        let block = Oriented::<f64, C>::new(&mut d, &mut e, 0, 2);
+        assert_eq!(deflation.shift_ruins_accuracy(&block), fires, "x = {x}");
     }
+}
+
+#[test]
+fn zero_shift_test_scales_with_the_order_in_both_directions() {
+    use super::chase::{Down, Up};
+    zero_shift_test_scales_with_the_order_for::<Down>();
+    zero_shift_test_scales_with_the_order_for::<Up>();
+}
+
+fn split_reads_oriented_bounds<C: super::chase::Chase>() -> usize {
+    use super::chase::Oriented;
+    use super::deflation::Deflation;
+
+    let mut d = vec![1.0f64; 5];
+    let mut e = vec![1.0f64; 4];
+    let deflation = Deflation::new(&d, &e, 5);
+    let mut block = Oriented::<f64, C>::new(&mut d, &mut e, 1, 3);
+    block.set_e(2, 0.0);
+    let stored = block.stored_superdiagonal(2);
+    assert_eq!(deflation.split(&block), Some(stored));
+    stored
+}
+
+#[test]
+fn split_reads_oriented_bounds_in_both_directions() {
+    use super::chase::{Down, Up};
+    assert_eq!(split_reads_oriented_bounds::<Down>(), 2);
+    assert_eq!(split_reads_oriented_bounds::<Up>(), 1);
 }
 
 /// [`Oriented::largest_entry`] reads exactly the active block `[p, q]`:
@@ -409,7 +432,7 @@ fn zero_shift_test_scopes_smax_to_the_active_block<T: RealScalar>() {
         "SMAX must come from the block [1, 3], not the outside entries"
     );
     assert!(
-        !deflation.shift_ruins_accuracy(&block, 1, 3),
+        !deflation.shift_ruins_accuracy(&block),
         "a whole-bidiagonal SMAX would fire the zero-shift test regardless of x; \
          the block's own SMAX of 1 must not, at this construction's x"
     );
