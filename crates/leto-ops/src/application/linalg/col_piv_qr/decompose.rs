@@ -27,6 +27,16 @@ fn tail_norm_sq<T: RealScalar>(r: &[T], n: usize, m: usize, j: usize, r0: usize)
     acc
 }
 
+#[inline]
+fn partial_norm_factor<T: RealScalar>(ratio: T) -> T {
+    let factor = T::ONE.sub(ratio.mul(ratio));
+    if factor > T::ZERO {
+        factor
+    } else {
+        T::ZERO
+    }
+}
+
 trait ColumnNorms<T: RealScalar> {
     fn new(r: &[T], n: usize, m: usize) -> Self;
 
@@ -52,9 +62,11 @@ impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
         Self {
             current,
             reference,
-            // LAPACK 3.12.0 DLAQP2 lines 185–186 set TOL3Z to √ε.
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L185-L186
-            recompute_threshold: machine_epsilon::<T>().sqrt(),
+            // LAPACK 3.12.0 DLAQP2 sets TOL3Z to √(DLAMCH('Epsilon')).
+            // This crate's machine_epsilon is the spacing above one, while
+            // DLAMCH('Epsilon') is the unit roundoff (half that spacing).
+            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L1067-L1069
+            recompute_threshold: machine_epsilon::<T>().div(T::from_usize(2)).sqrt(),
         }
     }
 
@@ -81,12 +93,10 @@ impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
             // exactly when cancellation makes the estimate unreliable.
             // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L227-L248
             let ratio = r[row * n + column].abs().div(current);
-            let estimate = T::ONE.add(ratio).mul(T::ONE.sub(ratio));
-            let estimate = if estimate > T::ZERO {
-                estimate
-            } else {
-                T::ZERO
-            };
+            // DLAQP2 computes 1 - (|a| / norm)^2 directly.  Keeping the
+            // square as one operation avoids the extra rounding from the
+            // algebraically equivalent (1 + ratio) * (1 - ratio) form.
+            let estimate = partial_norm_factor(ratio);
             let relative = current.div(self.reference[column]);
             let reliability = estimate.mul(relative.mul(relative));
             if reliability <= self.recompute_threshold {
@@ -233,7 +243,9 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
 
 #[cfg(test)]
 mod tests {
-    use super::{factor, factor_with_norms, RecomputedColumnNorms};
+    use super::{
+        factor, factor_with_norms, machine_epsilon, partial_norm_factor, RecomputedColumnNorms,
+    };
     use crate::domain::real::RealScalar;
     use leto::Array2;
 
@@ -305,5 +317,14 @@ mod tests {
         existing_contract_fixtures_match_recomputed::<f32>();
         existing_contract_fixtures_match_recomputed::<F16>();
         existing_contract_fixtures_match_recomputed::<Bf16>();
+    }
+
+    #[test]
+    fn partial_norm_update_matches_lapack_rounding_contract() {
+        let ratio = 0.75_f64;
+        assert_eq!(partial_norm_factor(ratio), 1.0 - ratio * ratio);
+        let expected_threshold = (f64::EPSILON / 2.0).sqrt();
+        let actual_threshold = (machine_epsilon::<f64>() / 2.0).sqrt();
+        assert_eq!(actual_threshold, expected_threshold);
     }
 }
