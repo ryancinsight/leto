@@ -393,3 +393,38 @@ fn zero_shift_test_scopes_smax_to_the_active_block_across_scalar_types() {
     zero_shift_test_scopes_smax_to_the_active_block::<F16>();
     zero_shift_test_scopes_smax_to_the_active_block::<Bf16>();
 }
+
+/// A `largest_entry` that dropped the superdiagonal from its scan (only
+/// visiting `d(p)` and `d(j + 1)`, never `e(j)`) would still pass every
+/// prior `largest_entry`/`SMAX` test here: the boundary-reading case pins
+/// `e(q-1)` against decoy *outside* entries rather than an in-block `d`,
+/// and the zero-shift case makes its in-block `e`s exactly zero (`e[1] =
+/// e[2] = T::ZERO`), so neither can distinguish "reads `e`" from "reads
+/// only `d`, and the outside entries never mattered."
+///
+/// This fixture is additionally the *reachable* form the prior zero-shift
+/// case was not: `dbdsqr` isolates a block by driving its boundary
+/// superdiagonal entries to exactly zero (LAPACK 3.12.0 `dbdsqr.f` line
+/// 466, `E(LL) = ZERO`, once `ABS(E(LL))` tests negligible at line 459) —
+/// not by leaving them at some large decoy scale. `e[0] = e[3] = 0` here
+/// severs the block `[1, 3]` from `d[0]` and `d[4]` exactly as the real
+/// search would, and the in-block superdiagonal `e[2]` is the block's
+/// unique maximum, strictly larger than every in-block `d`. A scan that
+/// skips `e` computes `1` (the in-block `d`s); the correct scan computes
+/// `e[2]`.
+#[test]
+fn largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal() {
+    use super::chase::{Down, Oriented};
+
+    let (outside_d0, outside_d4) = (7.0, -9.0);
+    let mut d = vec![outside_d0, 1.0, 1.0, 1.0, outside_d4];
+    // e[0] = e[3] = 0: block [1, 3] is genuinely severed from d[0]/d[4],
+    // as a real split would leave it. e[2] dominates every in-block d.
+    let mut e = vec![0.0, 0.2, 5.0, 0.0];
+    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(
+        block.largest_entry(),
+        5.0,
+        "SMAX must be the in-block superdiagonal e[2], not the in-block d's"
+    );
+}

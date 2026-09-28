@@ -265,3 +265,55 @@ fn pinv_reports_overflow_for_a_non_finite_reciprocal() {
         other => panic!("expected Overflow, got {other:?}"),
     }
 }
+
+// ── Numerically rank-deficient regression: SMAX block-scope ─────────────────
+
+/// A 100x150 matrix, centered per row from three sinusoids so its rank is
+/// exactly 3 up to f64 rounding (matches the construction that reproduced
+/// `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27` against kwavers' clutter filter).
+fn synthetic_near_rank_three(rows: usize, cols: usize) -> Vec<f64> {
+    use std::f64::consts::PI;
+    let mut values = vec![0.0; rows * cols];
+    for i in 0..rows {
+        let row: Vec<f64> = (0..cols)
+            .map(|t| 10.0 * (2.0 * PI * t as f64 / 50.0).sin() + 0.5 * ((i + t) as f64).sin())
+            .collect();
+        let mean = row.iter().sum::<f64>() / cols as f64;
+        for (t, value) in row.into_iter().enumerate() {
+            values[i * cols + t] = value - mean;
+        }
+    }
+    values
+}
+
+/// End-to-end regression for `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`: `main`
+/// at `74ab646` fails this exact input with `"bidiagonal SVD QR failed to
+/// converge"` — the zero-shift test's `SMAX` scanned the whole bidiagonal
+/// instead of the active block `[p, q]`, so a late block whose own scale sits
+/// far below an earlier block's largest entry gets an inflated denominator
+/// and never takes a shifted step. `min(rows, cols) = 100` forces the
+/// multi-block scan the small exact-rank-deficient fixtures above never
+/// exercise (their `O(1)`-order bidiagonals split into at most a couple of
+/// blocks).
+///
+/// The matrix is centered per row from three sinusoids, which drives its
+/// rank to exactly 3 up to rounding: singular values 4..100 sit at the f64
+/// noise floor (`~1e-13`), not at an analytically exact zero — the
+/// *numerical* rank-deficiency form the SMAX bug needs, distinct from the
+/// exactly-zero-diagonal fixtures elsewhere in this file.
+///
+/// Reference: NumPy 2.5.2 `numpy.linalg.svd` (LAPACK `dgesdd`) at full
+/// double precision, same construction. The trailing 97 singular values are
+/// numerical zero and are asserted against `0.0` within this file's derived
+/// backward-error bound, exactly as the exact-rank-deficient cases above
+/// assert their analytic zeros.
+#[test]
+fn svd_decompose_converges_on_a_numerically_rank_three_100x150_matrix() {
+    let (rows, cols) = (100, 150);
+    let entries = synthetic_near_rank_three(rows, cols);
+    let mut expected = vec![0.0f64; rows.min(cols)];
+    expected[0] = 8.660_255_719_245_877e2;
+    expected[1] = 3.079_665_033_434_496e1;
+    expected[2] = 3.043_873_844_644_974e1;
+    assert_rank_deficient_svd::<f64>(rows, cols, &entries, &expected);
+}
