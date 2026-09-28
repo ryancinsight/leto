@@ -170,6 +170,12 @@ impl<'s, T: RealScalar, C: Chase> Oriented<'s, T, C> {
         }
     }
 
+    /// Stored bounds of the active block.
+    #[inline]
+    pub(super) fn bounds(&self) -> (usize, usize) {
+        (self.p, self.q)
+    }
+
     /// Oriented diagonal entry `j`.
     #[inline]
     pub(super) fn d(&self, j: usize) -> T {

@@ -143,8 +143,8 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
         // chase direction (loop 100 down, lines 528–552; loop 110 up, lines
         // 556–580).
         let split = match direction {
-            Direction::Down => deflation.split(&Oriented::<T, Down>::new(d, e, p, q), p, q),
-            Direction::Up => deflation.split(&Oriented::<T, Up>::new(d, e, p, q), p, q),
+            Direction::Down => deflation.split(&Oriented::<T, Down>::new(d, e, p, q)),
+            Direction::Up => deflation.split(&Oriented::<T, Up>::new(d, e, p, q)),
         };
         if let Some(i) = split {
             e[i] = T::ZERO;
@@ -194,7 +194,7 @@ fn sweep<T: RealScalar, const VEC: bool, C: Chase>(
     factors: &mut TransposedFactors<'_, T>,
     windows: SweepWindows<T>,
 ) {
-    let ruins = deflation.shift_ruins_accuracy(&Oriented::<T, C>::new(d, e, p, q), p, q);
+    let ruins = deflation.shift_ruins_accuracy(&Oriented::<T, C>::new(d, e, p, q));
     if ruins {
         zero_shift_sweep::<T, VEC, C>(d, e, p, q, factors, windows.rotation);
     } else {

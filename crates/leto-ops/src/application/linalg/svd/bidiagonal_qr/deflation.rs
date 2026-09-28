@@ -71,12 +71,8 @@ impl<T: RealScalar> Deflation<T> {
     /// the block size), and `σ_max` the largest `|dᵢ|, |eᵢ|` over the active
     /// block `[p, q]` ([`Oriented::largest_entry`]; LAPACK 3.12.0 `dbdsqr.f`
     /// lines 453–462).
-    pub(super) fn shift_ruins_accuracy<C: Chase>(
-        self,
-        block: &Oriented<'_, T, C>,
-        p: usize,
-        q: usize,
-    ) -> bool {
+    pub(super) fn shift_ruins_accuracy<C: Chase>(self, block: &Oriented<'_, T, C>) -> bool {
+        let (p, q) = block.bounds();
         let largest = block.largest_entry();
         if largest == T::ZERO {
             return false;
@@ -107,12 +103,8 @@ impl<T: RealScalar> Deflation<T> {
     /// splitting at the first `|eᵢ| ≤ tol·μ` (Demmel & Kahan, convergence
     /// criteria 1a/1b, eqs. 4.3–4.4). Returns the **stored** index of the
     /// superdiagonal it zeroes, if any.
-    pub(super) fn split<C: Chase>(
-        self,
-        block: &Oriented<'_, T, C>,
-        p: usize,
-        q: usize,
-    ) -> Option<usize> {
+    pub(super) fn split<C: Chase>(self, block: &Oriented<'_, T, C>) -> Option<usize> {
+        let (p, q) = block.bounds();
         if block.e(q - 1).abs() <= self.tol.mul(block.d(q).abs()) {
             return Some(block.stored_superdiagonal(q - 1));
         }
