@@ -5,6 +5,11 @@
 //! adjoint identity that makes the leapfrog conservative, and the wall closure
 //! the reflection is supposed to impose.
 
+#![expect(
+    clippy::unwrap_used,
+    reason = "test code: unwraps on fixed fixtures are the floor's test exemption"
+)]
+
 use leto::Array3;
 
 use super::super::coefficients::{

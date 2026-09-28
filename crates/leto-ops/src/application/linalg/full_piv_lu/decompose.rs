@@ -92,13 +92,21 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         }
 
         let pivot = a[k * n + k];
-        for i in k + 1..n {
-            let factor = a[i * n + k].div(pivot);
-            a[i * n + k] = factor;
-            for j in k + 1..n {
-                let update = factor.mul(a[k * n + j]);
-                a[i * n + j] = a[i * n + j].sub(update);
-            }
+        // Rank-1 elimination of the trailing submatrix: for each row `i > k`,
+        // `a[i, k+1..] -= (a[i,k]/pivot) · a[k, k+1..]` — a fused axpy over
+        // two contiguous, disjoint rows (`k < i`), dispatched through the
+        // SIMD `axpy_slice` (SSOT with `lu.rs`'s partial-pivot row update).
+        // `split_at_mut` separates the pivot row (`head`) from the trailing
+        // rows (`tail`).
+        let (head, tail) = a.split_at_mut((k + 1) * n);
+        let pivot_row = &head[k * n + (k + 1)..k * n + n];
+        for i in (k + 1)..n {
+            let base = (i - (k + 1)) * n;
+            let factor = tail[base + k].div(pivot);
+            tail[base + k] = factor;
+            let target = &mut tail[base + (k + 1)..base + n];
+            // target += (−factor)·pivot_row  ≡  target −= factor·pivot_row.
+            T::axpy_slice(T::ZERO.sub(factor), pivot_row, target);
         }
     }
 

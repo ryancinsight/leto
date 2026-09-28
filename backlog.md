@@ -11,16 +11,16 @@
 - Outcome: drop the `p`/`q` parameters from both methods, reading `block.p`/`block.q` (or accessor methods, matching `largest_entry`'s fix) internally; update the two call sites.
 - Next step: add `p()`/`q()` accessors to `Oriented` (or reuse the private fields via `pub(super)`) before editing the call sites.
 
-<a id="LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27"></a>
+<a id="LETO-COLPIVQR-NORM-DOWNDATE-2026-09-27"></a>
 
-## LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27 — Convert long-slice decomposition axpys to SIMD [patch] — todo
+## LETO-COLPIVQR-NORM-DOWNDATE-2026-09-27 — col_piv_qr recomputes every remaining column's tail norm each step [patch] — todo
 
 - priority: tightening
 - needs: none
-- scope: `crates/leto-ops/src/application/linalg/lu/{full_piv,bunch_kaufman}.rs`, `crates/leto-ops/src/application/linalg/qr/col_piv.rs`
-- Evidence: the 2026-07-20 decomposition SIMD-dispatch sweep (`docs/benchmarks.md#decomposition-kernel-simd-dispatch-2026-07-20`) found full_piv_lu/bunch_kaufman trailing-update axpys are LU-style long slices (the meta-pattern's "provably long axpy" case, where `axpy_slice` measured a 2–3.5x win on Cholesky/SVD/udu) but left them unconverted; col_piv_qr's pivot-norm down-dating needs a distinct non-SIMD fix.
-- Outcome: convert the two trailing-update axpys through `axpy_slice` and give col_piv_qr its own pivot-norm fix, each with a `bench_*_scaling` measurement before/after per the meta-pattern.
-- Next step: profile full_piv_lu's trailing update against the meta-pattern (long vs short/shrinking slice) before converting.
+- scope: `crates/leto-ops/src/application/linalg/col_piv_qr/decompose.rs`
+- Evidence: split off `LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27` (delivered: the full_piv_lu/bunch_kaufman axpy conversion), whose evidence found `tail_norm_sq` recomputed from scratch for every remaining column at every step (O(p·n·m) total) instead of downdating a maintained running norm (O(p·n)) — the fix that item's own text called "distinct" and "non-SIMD". LAPACK's `dgeqpf`/`dlaqps` maintain a downdated norm with a recompute safeguard (Lawson & Hanson; also Reichel & Gragg) guarding against the downdated value drifting from the true norm under cancellation.
+- Outcome: maintain per-column downdated norms with LAPACK's safeguard (recompute exactly when the downdate is no longer numerically trustworthy), verified against the exact-recompute baseline (differential test: identical pivot sequence and rank on the existing `col_piv_qr` test suite, plus an adversarial near-cancellation case that would silently diverge without the safeguard), with a `bench_col_piv_qr_scaling` measurement before/after.
+- Next step: read LAPACK 3.12.0 `dgeqpf.f` (and/or `dlaqps.f`) directly and cite its exact downdating formula and recompute-safeguard threshold with verified line numbers before implementing — this codebase's convention (e.g. `dbdsqr.f` citations elsewhere) requires a verified citation, not one from memory.
 
 <a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
 
