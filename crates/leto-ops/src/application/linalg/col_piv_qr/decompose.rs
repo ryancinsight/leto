@@ -327,4 +327,31 @@ mod tests {
         let actual_threshold = (machine_epsilon::<f64>() / 2.0).sqrt();
         assert_eq!(actual_threshold, expected_threshold);
     }
+
+    #[test]
+    fn partial_norm_downdates_match_recomputed_tails_at_boundary() {
+        let delta = f64::EPSILON.sqrt() / 2.0;
+        let r = vec![
+            2.0,
+            1.0,
+            1.0, // Removed row.
+            0.0,
+            delta,
+            0.0, // First remaining tail.
+            0.0,
+            0.0,
+            2.0 * delta, // Second remaining tail.
+        ];
+        let mut partial = PartialColumnNorms::new(&r, 3, 3);
+
+        partial.remove_row(&r, 3, 3, 0);
+
+        for column in 1..3 {
+            let expected = tail_norm_sq(&r, 3, 3, column, 1).sqrt();
+            assert_eq!(
+                partial.current[column], expected,
+                "boundary trailing norm for column {column}"
+            );
+        }
+    }
 }
