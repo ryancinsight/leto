@@ -112,3 +112,18 @@ fn col_piv_qr_reveals_rank_deficiency() {
     let b = Array::from_shape_vec([m], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
     assert!(f.solve_least_squares(&b.view()).is_err());
 }
+
+#[test]
+fn col_piv_qr_recomputes_a_cancelled_partial_norm() {
+    let delta = f64::EPSILON.sqrt() / 2.0;
+    let values = vec![2.0, 1.0, 1.0, 0.0, delta, 0.0, 0.0, 0.0, 2.0 * delta];
+    let matrix = Array2::from_shape_vec([3, 3], values).unwrap();
+    let decomposition = col_piv_qr(&matrix.view()).unwrap();
+
+    // Removing row zero from columns one and two evaluates the LAPACK
+    // partial-norm update as zero in f64 even though their tails are
+    // `delta` and `2·delta`. Exact recomputation must select column two next;
+    // accepting the cancelled downdates would retain column one instead.
+    assert_eq!(decomposition.permutation(), &[0, 2, 1]);
+    assert_eq!(decomposition.rank(), 3);
+}
