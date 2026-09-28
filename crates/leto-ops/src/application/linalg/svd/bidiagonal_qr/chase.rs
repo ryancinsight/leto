@@ -197,10 +197,12 @@ impl<'s, T: RealScalar, C: Chase> Oriented<'s, T, C> {
     /// stored entries of `[p, q]`, in a block-local permutation of them).
     /// `dbdsqr` accumulates this same `SMAX` while it searches backward for
     /// the active block's start (LAPACK 3.12.0 `dbdsqr.f` lines 453–462:
-    /// `SMAX = ABS(D(M))` then `DO 70 LLL = 1, M-1` / `LL = M-LLL`,
-    /// `SMAX = MAX(SMAX, ABSS, ABSE)` at each `LL` until a negligible
-    /// `E(LL)` fixes the block's lower bound — so the scan and the `SMAX`
-    /// it feeds cover exactly `[LL, M]`, this method's `[p, q]`).
+    /// `SMAX = ABS(D(M))` then `DO 70 LLL = 1, M-1` / `LL = M-LLL`, negligible
+    /// at line 460 (`IF (ABSE.LE.THRESH) GO TO 80`), else
+    /// `SMAX = MAX(SMAX, ABSS, ABSE)`; on `GO TO 80`, `E(LL) = ZERO` splits
+    /// the matrix at line 467, and `LL = LL + 1` at line 479 fixes the new
+    /// block's lower bound — so the scan and the `SMAX` it feeds cover
+    /// `[LL+1, M]` at that point, this method's `[p, q]`).
     pub(super) fn largest_entry(&self) -> T {
         let (p, q) = (self.p, self.q);
         let mut largest = self.d(p).abs();

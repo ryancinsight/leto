@@ -1,6 +1,15 @@
 //! Exactly rank-deficient SVD input, at every precision, plus the pinv
 //! Overflow regression. Split out of `super` (`svd.rs`) to keep each file
 //! near the 500-line target.
+//!
+//! The numerically rank-deficient `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`
+//! regression below is `f64`-only, unlike the exact-rank-deficient fixtures
+//! above: the bug it reproduces needs a late bidiagonal block whose own
+//! scale sits far enough below an earlier block's to flip the (whole-array,
+//! pre-fix) zero-shift test regardless of the block's true condition, and
+//! `f32`'s narrower exponent range and much larger machine epsilon converge
+//! this same construction on the pre-fix code — the bug does not reproduce
+//! there, so pinning it at `f32` would assert nothing.
 #![expect(
     clippy::unwrap_used,
     reason = "test scope: failed precondition = test failure"
@@ -265,8 +274,6 @@ fn pinv_reports_overflow_for_a_non_finite_reciprocal() {
         other => panic!("expected Overflow, got {other:?}"),
     }
 }
-
-// ── Numerically rank-deficient regression: SMAX block-scope ─────────────────
 
 /// A 100x150 matrix, centered per row from three sinusoids so its rank is
 /// exactly 3 up to f64 rounding (matches the construction that reproduced
