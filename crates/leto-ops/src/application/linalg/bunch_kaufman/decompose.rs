@@ -190,16 +190,16 @@ fn eliminate_1x1<T: RealScalar>(a: &mut [T], l: &mut [T], d: &mut [T], k: usize,
     }
 
     let (row_k_part, trailing_part) = a.split_at_mut((k + 1) * n);
-    let row_k = &row_k_part[k * n..];
+    let row_k = &row_k_part[k * n + (k + 1)..];
 
+    // `row_i[k+1..] -= factor · row_k[k+1..]` — a fused axpy over two
+    // contiguous, disjoint rows (`k < i`), dispatched through the SIMD
+    // `axpy_slice` (SSOT with `lu.rs`'s partial-pivot row update).
     for i in (k + 1)..n {
         let factor = l[idx(i, k, n)];
         let row_i_idx = (i - (k + 1)) * n;
-        let row_i = &mut trailing_part[row_i_idx..row_i_idx + n];
-        for j in (k + 1)..n {
-            let update = factor.mul(row_k[j]);
-            row_i[j] = row_i[j].sub(update);
-        }
+        let row_i = &mut trailing_part[row_i_idx + (k + 1)..row_i_idx + n];
+        T::axpy_slice(T::ZERO.sub(factor), row_k, row_i);
     }
 }
 
@@ -243,18 +243,19 @@ fn eliminate_2x2<T: RealScalar>(
     }
 
     let (rows_k_k1, trailing_part) = a.split_at_mut((k + 2) * n);
-    let row_k = &rows_k_k1[k * n..(k + 1) * n];
-    let row_k1 = &rows_k_k1[(k + 1) * n..(k + 2) * n];
+    let row_k = &rows_k_k1[k * n + (k + 2)..(k + 1) * n];
+    let row_k1 = &rows_k_k1[(k + 1) * n + (k + 2)..(k + 2) * n];
 
+    // `row_i[k+2..] -= li0 · row_k[k+2..] + li1 · row_k1[k+2..]` — a rank-2
+    // update as two fused axpys over contiguous, disjoint rows, each
+    // dispatched through the SIMD `axpy_slice`.
     for i in (k + 2)..n {
         let li0 = l[idx(i, k, n)];
         let li1 = l[idx(i, k + 1, n)];
         let row_i_idx = (i - (k + 2)) * n;
-        let row_i = &mut trailing_part[row_i_idx..row_i_idx + n];
-        for j in (k + 2)..n {
-            let update = li0.mul(row_k[j]).add(li1.mul(row_k1[j]));
-            row_i[j] = row_i[j].sub(update);
-        }
+        let row_i = &mut trailing_part[row_i_idx + (k + 2)..row_i_idx + n];
+        T::axpy_slice(T::ZERO.sub(li0), row_k, row_i);
+        T::axpy_slice(T::ZERO.sub(li1), row_k1, row_i);
     }
     Ok(())
 }
