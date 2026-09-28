@@ -1,5 +1,16 @@
 # Leto Work Backlog
 
+<a id="LETO-BIDIAGONAL-PQ-DUPLICATION-2026-09-28"></a>
+
+## LETO-BIDIAGONAL-PQ-DUPLICATION-2026-09-28 — shift_ruins_accuracy/split duplicate the block's stored p/q [patch] — todo
+
+- priority: tightening
+- needs: none
+- scope: `crates/leto-ops/src/application/linalg/svd/bidiagonal_qr/{deflation,sweep}.rs`
+- Evidence: post-merge judge of #276 (item LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27): `Deflation::shift_ruins_accuracy(block, p, q)` and `Deflation::split(block, p, q)` (deflation.rs:74-79,110-115) take `p`/`q` as separate parameters even though `block: &Oriented<'_, T, C>` already stores them (the same duplication `Oriented::largest_entry` had before this item removed its own `(p, q)` parameters); `sweep.rs:146-147,197` are the call sites passing the redundant values.
+- Outcome: drop the `p`/`q` parameters from both methods, reading `block.p`/`block.q` (or accessor methods, matching `largest_entry`'s fix) internally; update the two call sites.
+- Next step: add `p()`/`q()` accessors to `Oriented` (or reuse the private fields via `pub(super)`) before editing the call sites.
+
 <a id="LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27"></a>
 
 ## LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27 — Convert long-slice decomposition axpys to SIMD [patch] — todo

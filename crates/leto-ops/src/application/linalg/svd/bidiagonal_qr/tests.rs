@@ -285,44 +285,74 @@ fn zero_shift_test_scales_with_the_order() {
 /// [`Oriented::largest_entry`] reads exactly the active block `[p, q]`:
 /// three sub-cases each make a different one of the block's boundary
 /// elements — `d(p)`, `d(q)`, and the interior `e(q-1)` — the block's
-/// unique maximum, with every other in-block entry smaller and every
-/// *outside*-the-block entry (`d[0]`, `d[4]`, `e[0]`, `e[3]`) a distinct
-/// value that must never be picked up. Dropping any one of `d(p)`, `d(q)`,
-/// or `e(q-1)` from the scan (e.g. an off-by-one at either loop bound)
-/// changes the computed maximum in exactly the sub-case built around it.
-/// `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
-#[test]
-fn largest_entry_reads_every_boundary_of_the_active_block() {
+/// unique in-block maximum, with every other in-block entry smaller. The
+/// four *outside*-the-block entries (`d[0]`, `d[4]`, `e[0]`, `e[3]`) are
+/// four pairwise-distinct values, each larger in magnitude than the
+/// in-block maximum: a correct scan never reads them (bounded by `[p, q]`
+/// regardless of their magnitude), so any mutant that reads even one —
+/// dropping `d(p)`/`d(q)`/`e(q-1)` in favor of an off-by-one that reaches
+/// past the block, or scanning the whole array — picks up a decoy larger
+/// than `5.0` and is caught, distinguishable from every other decoy by its
+/// distinct value. `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
+fn largest_entry_reads_every_boundary_of_the_active_block<T: RealScalar>() {
     use super::chase::{Down, Oriented};
-    // Block is [1, 3] inside a length-5 array; outside entries (indices
-    // 0, 4 and the e's at 0, 3) are distinct decoys smaller than the
-    // in-block maximum, so picking one up would also be caught.
-    let outside = 3.0;
-    // d(p) = d(1) uniquely largest.
-    let mut d = vec![outside, 5.0, 1.0, 0.5, outside];
-    let mut e = vec![outside, 0.2, 0.3, outside];
-    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
-    assert_eq!(block.largest_entry(), 5.0, "d(p) must be read");
+    // Block is [1, 3] inside a length-5 array; outside entries (indices 0,
+    // 4 and the e's at 0, 3) are four distinct decoys, each larger than
+    // the in-block maximum of 5, so an over-scanning mutant is caught.
+    let (five, one, half) = (T::from_usize(5), T::ONE, T::ONE.div(T::from_usize(2)));
+    let (d0, e0, e3, d4) = (
+        T::from_usize(101),
+        T::from_usize(103),
+        T::from_usize(107),
+        T::from_usize(109),
+    );
 
-    // d(q) = d(3) uniquely largest.
-    let mut d = vec![outside, 0.5, 1.0, 5.0, outside];
-    let mut e = vec![outside, 0.2, 0.3, outside];
-    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
-    assert_eq!(block.largest_entry(), 5.0, "d(q) must be read");
+    // d(p) = d(1) uniquely largest in-block.
+    let mut d = vec![d0, five, one, half, d4];
+    let mut e = vec![
+        e0,
+        T::from_usize(2).div(T::from_usize(10)),
+        T::from_usize(3).div(T::from_usize(10)),
+        e3,
+    ];
+    let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(block.largest_entry(), five, "d(p) must be read");
 
-    // e(q-1) = e(2), the interior superdiagonal, uniquely largest.
-    let mut d = vec![outside, 0.5, 1.0, 0.7, outside];
-    let mut e = vec![outside, 0.2, 5.0, outside];
-    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
-    assert_eq!(block.largest_entry(), 5.0, "e(q-1) must be read");
+    // d(q) = d(3) uniquely largest in-block.
+    let mut d = vec![d0, half, one, five, d4];
+    let mut e = vec![
+        e0,
+        T::from_usize(2).div(T::from_usize(10)),
+        T::from_usize(3).div(T::from_usize(10)),
+        e3,
+    ];
+    let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(block.largest_entry(), five, "d(q) must be read");
+
+    // e(q-1) = e(2), the interior superdiagonal, uniquely largest in-block.
+    let seven_tenths = T::from_usize(7).div(T::from_usize(10));
+    let mut d = vec![d0, half, one, seven_tenths, d4];
+    let mut e = vec![e0, T::from_usize(2).div(T::from_usize(10)), five, e3];
+    let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
+    assert_eq!(block.largest_entry(), five, "e(q-1) must be read");
+}
+
+#[test]
+fn largest_entry_reads_every_boundary_of_the_active_block_across_scalar_types() {
+    use eunomia::{Bf16, F16};
+    largest_entry_reads_every_boundary_of_the_active_block::<f32>();
+    largest_entry_reads_every_boundary_of_the_active_block::<f64>();
+    largest_entry_reads_every_boundary_of_the_active_block::<F16>();
+    largest_entry_reads_every_boundary_of_the_active_block::<Bf16>();
 }
 
 /// `SMAX` in `dbdsqr`'s first zero-shift test is taken over the active
 /// block's own scan, not the whole bidiagonal (LAPACK 3.12.0 `dbdsqr.f`
 /// lines 453–462: `SMAX = ABS(D(M))`, then `DO 70 LLL = 1, M-1` /
-/// `LL = M-LLL`, `SMAX = MAX(SMAX, ABSS, ABSE)` at each `LL` in turn until
-/// a negligible `E(LL)` fixes the block's lower bound — so the scan, and
-/// the `SMAX` it feeds, cover exactly `[LL, M]`).
+/// `LL = M-LLL`, negligible at line 460, else `SMAX = MAX(SMAX, ABSS,
+/// ABSE)`; on the negligible branch `E(LL) = ZERO` at line 467 splits the
+/// matrix and `LL = LL + 1` at line 479 fixes the new block's lower bound
+/// — so the scan and the `SMAX` it feeds cover `[LL+1, M]` at that point).
 ///
 /// A block `[1, 3]` of `d = (1, 1, x)` inside a length-5 bidiagonal whose
 /// *outside* entries (`d[0]`, `d[4]`, `e[0]`, `e[3]`) are `1000×` the
@@ -404,27 +434,40 @@ fn zero_shift_test_scopes_smax_to_the_active_block_across_scalar_types() {
 ///
 /// This fixture is additionally the *reachable* form the prior zero-shift
 /// case was not: `dbdsqr` isolates a block by driving its boundary
-/// superdiagonal entries to exactly zero (LAPACK 3.12.0 `dbdsqr.f` line
-/// 466, `E(LL) = ZERO`, once `ABS(E(LL))` tests negligible at line 459) —
-/// not by leaving them at some large decoy scale. `e[0] = e[3] = 0` here
-/// severs the block `[1, 3]` from `d[0]` and `d[4]` exactly as the real
-/// search would, and the in-block superdiagonal `e[2]` is the block's
-/// unique maximum, strictly larger than every in-block `d`. A scan that
-/// skips `e` computes `1` (the in-block `d`s); the correct scan computes
-/// `e[2]`.
-#[test]
-fn largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal() {
+/// superdiagonal entry to exactly zero (LAPACK 3.12.0 `dbdsqr.f` line 467,
+/// `E(LL) = ZERO`, once `ABS(E(LL))` tests negligible at line 460) — not by
+/// leaving them at some large decoy scale. `e[0] = e[3] = 0` here severs
+/// the block `[1, 3]` from `d[0]` and `d[4]` exactly as the real search
+/// would, and the in-block superdiagonal `e[2]` is the block's unique
+/// maximum, strictly larger than every in-block `d`. A scan that skips `e`
+/// computes `1` (the in-block `d`s); the correct scan computes `e[2]`.
+fn largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal<T: RealScalar>() {
     use super::chase::{Down, Oriented};
 
-    let (outside_d0, outside_d4) = (7.0, -9.0);
-    let mut d = vec![outside_d0, 1.0, 1.0, 1.0, outside_d4];
+    let (outside_d0, outside_d4) = (T::from_usize(7), T::from_usize(9).neg());
+    let one = T::ONE;
+    let mut d = vec![outside_d0, one, one, one, outside_d4];
     // e[0] = e[3] = 0: block [1, 3] is genuinely severed from d[0]/d[4],
     // as a real split would leave it. e[2] dominates every in-block d.
-    let mut e = vec![0.0, 0.2, 5.0, 0.0];
-    let block = Oriented::<f64, Down>::new(&mut d, &mut e, 1, 3);
+    let mut e = vec![
+        T::ZERO,
+        T::from_usize(2).div(T::from_usize(10)),
+        T::from_usize(5),
+        T::ZERO,
+    ];
+    let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
     assert_eq!(
         block.largest_entry(),
-        5.0,
+        T::from_usize(5),
         "SMAX must be the in-block superdiagonal e[2], not the in-block d's"
     );
+}
+
+#[test]
+fn largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal_across_scalar_types() {
+    use eunomia::{Bf16, F16};
+    largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal::<f32>();
+    largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal::<f64>();
+    largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal::<F16>();
+    largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal::<Bf16>();
 }

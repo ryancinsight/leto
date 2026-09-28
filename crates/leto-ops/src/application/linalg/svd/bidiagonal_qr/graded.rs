@@ -338,24 +338,29 @@ fn each_block_takes_its_own_chase_direction() {
     composite_blocks_are_relatively_accurate::<f64>();
 }
 
-/// A large-magnitude block (~4e6) over a small one (~1), split by an exact
-/// zero: with `SMAX` scoped to the active block, each block's zero-shift
-/// decision depends only on its own entries, so the composite never needs
-/// more sweeps than running each block alone (plus the one extra deflation
-/// event the exact zero split itself may cost) — the two blocks are
-/// otherwise independent. Scoped to the whole bidiagonal (the pre-fix
-/// behavior), the small block's zero-shift denominator becomes the *large*
-/// block's entries, forcing zero-shift sweeps there instead of the
-/// quadratically convergent shifted step `dbdsqr` would take, so the
-/// composite runs far more sweeps than its blocks need alone.
-/// `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
+/// A large-magnitude block (~4.19e6, `2^22`) over a small one (~1), split by
+/// an exact zero: with `SMAX` scoped to the active block, each block's
+/// zero-shift decision depends only on its own entries, so the composite
+/// never needs more sweeps than running each block alone — `qr_iterate`
+/// counts only sweeps and negligible-diagonal chases (never the peel/split
+/// itself, which `continue`s before the counter increments), so the exact
+/// zero splitting the composite costs no extra sweep. The two blocks'
+/// zero-shift *decisions* are independent (each scopes `SMAX` to its own
+/// entries); `Deflation::new`'s split *threshold* is not — it derives
+/// `thresh` from the whole composite's `sminoa` over `√(2k)` with `n = 2k`
+/// (the matrix order, not either block's), shared by both blocks. Scoped to
+/// the whole bidiagonal (the pre-fix behavior), the small block's
+/// zero-shift denominator becomes the *large* block's entries, forcing
+/// zero-shift sweeps there instead of the quadratically convergent shifted
+/// step `dbdsqr` would take, so the composite runs far more sweeps than its
+/// blocks need alone. `LETO-BIDIAGONAL-SMAX-SCOPE-2026-09-27`.
 fn large_over_small_block_never_exceeds_running_each_alone<T: RealScalar + RealField>() {
     let mut rng = Xorshift64::new(0x1a46_e5ca_b10c);
     // A mild grading (few binades) so the correctly-scoped block still takes
     // shifted steps rather than converging by zero-shift alone, which is
     // what makes the bug's forced zero-shift sweeps visible.
     let mild_span = 3.0;
-    let scale = 4.0e6;
+    let scale = 2f64.powi(22); // 4_194_304.0: power-of-two, exact in T.
     for &k in &[4usize, 5] {
         let (du, eu) = graded::<T>(&mut rng, k, mild_span, true);
         let (dl, el) = graded::<T>(&mut rng, k, mild_span, false);
@@ -366,13 +371,10 @@ fn large_over_small_block_never_exceeds_running_each_alone<T: RealScalar + RealF
         let d0: Vec<f64> = du.iter().chain(&dl).copied().collect();
         let e0: Vec<f64> = eu.iter().chain(&[0.0]).chain(&el).copied().collect();
         let (got, sweeps) = iterate::<T>(&d0, &e0);
-        // +1: the exact-zero split itself is one deflation event the two
-        // alone-runs never pay (each alone-run's input already has no
-        // trailing zero to split off).
-        let ceiling = upper_alone + lower_alone + 1;
+        let ceiling = upper_alone + lower_alone;
         assert!(
             sweeps <= ceiling,
-            "k={k}: composite took {sweeps} sweeps, alone-sum + 1 is {ceiling} \
+            "k={k}: composite took {sweeps} sweeps, alone-sum is {ceiling} \
              (upper {upper_alone}, lower {lower_alone}); d {d0:?} e {e0:?}"
         );
         let bound = reduction_bound::<T>(2 * k, sweeps);
