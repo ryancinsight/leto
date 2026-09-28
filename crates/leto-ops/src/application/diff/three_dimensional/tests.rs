@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "test code: unwraps on fixed fixtures are the floor's test exemption"
+)]
+
 use super::*;
 use leto::Array3;
 
