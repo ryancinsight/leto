@@ -27,20 +27,10 @@ fn tail_norm_sq<T: RealScalar>(r: &[T], n: usize, m: usize, j: usize, r0: usize)
     acc
 }
 
-#[inline]
-fn partial_norm_factor<T: RealScalar>(ratio: T) -> T {
-    let factor = T::ONE.sub(ratio.mul(ratio));
-    if factor > T::ZERO {
-        factor
-    } else {
-        T::ZERO
-    }
-}
-
 trait ColumnNorms<T: RealScalar> {
     fn new(r: &[T], n: usize, m: usize) -> Self;
 
-    fn value(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T;
+    fn squared_norm(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T;
 
     fn swap(&mut self, lhs: usize, rhs: usize);
 
@@ -48,20 +38,20 @@ trait ColumnNorms<T: RealScalar> {
 }
 
 struct PartialColumnNorms<T> {
-    current: Box<[T]>,
-    reference: Box<[T]>,
+    current_squared: Box<[T]>,
+    reference_squared: Box<[T]>,
     recompute_threshold: T,
 }
 
 impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
     fn new(r: &[T], n: usize, m: usize) -> Self {
-        let current: Box<[T]> = (0..n)
-            .map(|column| tail_norm_sq(r, n, m, column, 0).sqrt())
+        let current_squared: Box<[T]> = (0..n)
+            .map(|column| tail_norm_sq(r, n, m, column, 0))
             .collect();
-        let reference = current.clone();
+        let reference_squared = current_squared.clone();
         Self {
-            current,
-            reference,
+            current_squared,
+            reference_squared,
             // LAPACK 3.12.0 DLAQP2 sets TOL3Z to √(DLAMCH('Epsilon')).
             // This crate's machine_epsilon is the spacing above one, while
             // DLAMCH('Epsilon') is the unit roundoff (half that spacing).
@@ -71,40 +61,47 @@ impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
     }
 
     #[inline]
-    fn value(&self, _r: &[T], _n: usize, _m: usize, column: usize, _first_row: usize) -> T {
-        self.current[column]
+    fn squared_norm(&self, _r: &[T], _n: usize, _m: usize, column: usize, _first_row: usize) -> T {
+        self.current_squared[column]
     }
 
     #[inline]
     fn swap(&mut self, lhs: usize, rhs: usize) {
-        self.current.swap(lhs, rhs);
-        self.reference.swap(lhs, rhs);
+        self.current_squared.swap(lhs, rhs);
+        self.reference_squared.swap(lhs, rhs);
     }
 
     fn remove_row(&mut self, r: &[T], n: usize, m: usize, row: usize) {
         for column in (row + 1)..n {
-            let current = self.current[column];
-            if current == T::ZERO {
+            let current_squared = self.current_squared[column];
+            if current_squared == T::ZERO {
                 continue;
             }
 
-            // LAPACK 3.12.0 DLAQP2 lines 227–248: downdate the partial
-            // column norm after removing this row, but recompute the tail
-            // exactly when cancellation makes the estimate unreliable.
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L227-L248
-            let ratio = r[row * n + column].abs().div(current);
-            // DLAQP2 computes 1 - (|a| / norm)^2 directly.  Keeping the
-            // square as one operation avoids the extra rounding from the
-            // algebraically equivalent (1 + ratio) * (1 - ratio) form.
-            let estimate = partial_norm_factor(ratio);
-            let relative = current.div(self.reference[column]);
-            let reliability = estimate.mul(relative.mul(relative));
-            if reliability <= self.recompute_threshold {
-                let recomputed = tail_norm_sq(r, n, m, column, row + 1).sqrt();
-                self.current[column] = recomputed;
-                self.reference[column] = recomputed;
+            // Keep the squared sum as the pivot key. Taking its square root
+            // first can round distinct column tails to the same norm and
+            // change the pivot selected by the exact-recompute algorithm.
+            let removed_squared = r[row * n + column].mul(r[row * n + column]);
+            let difference = current_squared.sub(removed_squared);
+            let estimate = if difference > T::ZERO {
+                difference
             } else {
-                self.current[column] = current.mul(estimate.sqrt());
+                T::ZERO
+            };
+
+            // DLAQP2's cancellation test is
+            // (1 - (|a|/current_norm)^2) * (current_norm/reference_norm)^2.
+            // In squared-norm state this reduces algebraically to the
+            // estimated remaining squared norm over the reference squared
+            // norm. Recompute exactly when that ratio falls below TOL3Z.
+            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L235-L248
+            let reliability = estimate.div(self.reference_squared[column]);
+            if reliability <= self.recompute_threshold {
+                let recomputed = tail_norm_sq(r, n, m, column, row + 1);
+                self.current_squared[column] = recomputed;
+                self.reference_squared[column] = recomputed;
+            } else {
+                self.current_squared[column] = estimate;
             }
         }
     }
@@ -119,8 +116,8 @@ impl<T: RealScalar> ColumnNorms<T> for RecomputedColumnNorms {
         Self
     }
 
-    fn value(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T {
-        tail_norm_sq(r, n, m, column, first_row).sqrt()
+    fn squared_norm(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T {
+        tail_norm_sq(r, n, m, column, first_row)
     }
 
     fn swap(&mut self, _lhs: usize, _rhs: usize) {}
@@ -166,29 +163,29 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
     let p = m.min(n);
     let mut norms = N::new(&r, n, m);
     // Relative threshold from the largest initial full column norm.
-    let mut ref_norm = T::ZERO;
+    let mut ref_norm_sq = T::ZERO;
     for j in 0..n {
-        let nrm = norms.value(&r, n, m, j, 0);
-        if nrm > ref_norm {
-            ref_norm = nrm;
+        let norm_squared = norms.squared_norm(&r, n, m, j, 0);
+        if norm_squared > ref_norm_sq {
+            ref_norm_sq = norm_squared;
         }
     }
-    let tol = ref_norm.mul(rank_pivot_ratio::<T>());
+    let tol = ref_norm_sq.sqrt().mul(rank_pivot_ratio::<T>());
     let mut rank = p;
 
     let mut alw: Vec<T> = Vec::with_capacity(n);
     for k in 0..p {
         // Pivot: column with the largest tail norm among k..n.
         let mut best = k;
-        let mut best_norm = norms.value(&r, n, m, k, k);
+        let mut best_norm_sq = norms.squared_norm(&r, n, m, k, k);
         for j in (k + 1)..n {
-            let nrm = norms.value(&r, n, m, j, k);
-            if nrm > best_norm {
-                best_norm = nrm;
+            let norm_squared = norms.squared_norm(&r, n, m, j, k);
+            if norm_squared > best_norm_sq {
+                best_norm_sq = norm_squared;
                 best = j;
             }
         }
-        if best_norm <= tol {
+        if best_norm_sq.sqrt() <= tol {
             rank = k;
             break;
         }
@@ -244,7 +241,8 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
 #[cfg(test)]
 mod tests {
     use super::{
-        factor, factor_with_norms, machine_epsilon, partial_norm_factor, RecomputedColumnNorms,
+        factor, factor_with_norms, machine_epsilon, tail_norm_sq, ColumnNorms, PartialColumnNorms,
+        RecomputedColumnNorms,
     };
     use crate::domain::real::RealScalar;
     use leto::Array2;
@@ -320,9 +318,11 @@ mod tests {
     }
 
     #[test]
-    fn partial_norm_update_matches_lapack_rounding_contract() {
-        let ratio = 0.75_f64;
-        assert_eq!(partial_norm_factor(ratio), 1.0 - ratio * ratio);
+    fn squared_partial_norm_update_matches_the_lapack_reliability_bound() {
+        let current_squared = 1.0_f64;
+        let removed_squared = 0.75_f64 * 0.75_f64;
+        let remaining_squared = current_squared - removed_squared;
+        assert_eq!(remaining_squared, 1.0 - 0.75_f64 * 0.75_f64);
         let expected_threshold = (f64::EPSILON / 2.0).sqrt();
         let actual_threshold = (machine_epsilon::<f64>() / 2.0).sqrt();
         assert_eq!(actual_threshold, expected_threshold);
@@ -347,11 +347,36 @@ mod tests {
         partial.remove_row(&r, 3, 3, 0);
 
         for column in 1..3 {
-            let expected = tail_norm_sq(&r, 3, 3, column, 1).sqrt();
+            let expected = tail_norm_sq(&r, 3, 3, column, 1);
             assert_eq!(
-                partial.current[column], expected,
-                "boundary trailing norm for column {column}"
+                partial.current_squared[column], expected,
+                "boundary trailing squared norm for column {column}"
             );
         }
+    }
+
+    fn squared_norm_order_survives_a_rounded_root_tie<T: RealScalar>() {
+        let delta = machine_epsilon::<T>().sqrt();
+        let matrix = Array2::from_shape_vec([2, 2], vec![T::ONE, T::ONE, T::ZERO, delta])
+            .expect("invariant: fixture count matches its matrix shape");
+
+        let decomposition = factor(&matrix.view()).expect("finite fixture must factor");
+
+        assert_eq!(
+            decomposition.perm,
+            vec![1, 0],
+            "squared column norms remain distinguishable for {}",
+            core::any::type_name::<T>()
+        );
+    }
+
+    #[test]
+    fn pivots_preserve_squared_norm_order_across_scalar_types() {
+        use eunomia::{Bf16, F16};
+
+        squared_norm_order_survives_a_rounded_root_tie::<f64>();
+        squared_norm_order_survives_a_rounded_root_tie::<f32>();
+        squared_norm_order_survives_a_rounded_root_tie::<F16>();
+        squared_norm_order_survives_a_rounded_root_tie::<Bf16>();
     }
 }

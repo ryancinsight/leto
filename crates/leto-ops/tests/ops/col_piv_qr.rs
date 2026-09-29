@@ -114,6 +114,18 @@ fn col_piv_qr_reveals_rank_deficiency() {
 }
 
 #[test]
+fn col_piv_qr_preserves_squared_norm_order_when_norms_round_together() {
+    let delta = f64::EPSILON.sqrt();
+    let matrix = Array2::from_shape_vec([2, 2], vec![1.0, 1.0, 0.0, delta]).unwrap();
+
+    let decomposition = col_piv_qr(&matrix.view()).unwrap();
+
+    // The squared norms are 1 and 1 + EPSILON, while sqrt(1 + EPSILON)
+    // rounds to 1. Comparing square roots would change the pivot to column 0.
+    assert_eq!(decomposition.permutation(), &[1, 0]);
+}
+
+#[test]
 fn col_piv_qr_recomputes_a_cancelled_partial_norm() {
     let delta = f64::EPSILON.sqrt() / 2.0;
     let values = vec![2.0, 1.0, 1.0, 0.0, delta, 0.0, 0.0, 0.0, 2.0 * delta];
