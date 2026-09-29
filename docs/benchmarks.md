@@ -20,6 +20,41 @@ workstation (AVX2-class). These baselines gate optimization work (Atlas ADR
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
 
+### Bounded full runs
+
+Run the complete Criterion suite with `python scripts/bench.py`, or one binary
+with the same committed per-binary ceiling, for example
+`python scripts/bench.py col_piv_qr`. The runner reads the `leto-ops` benchmark
+target inventory from Cargo metadata and requires it to match
+`.config/bench.toml`; adding or removing a `[[bench]]` entry therefore requires
+updating its analytical time model in the same change. The five target ceilings
+sum to 297 seconds under a 300-second suite deadline. Each ceiling is the
+benchmark source's case count multiplied by its configured Criterion warm-up
+and measurement time, plus the explicit warm-cache build and process allowance
+recorded in the configuration.
+
+The runner preserves Cargo's target directory, profiles, pinned Rust toolchain,
+and member `.cargo/config.toml` environment. Inside the Atlas stack it invokes
+Cargo from a temporary config root containing the stack configuration with only
+the generated development `[patch]` overlay removed; this keeps the committed
+lock in standalone form and the shared build cache and profile hashes
+unchanged. It passes no target-directory or profile command-line override.
+Every Cargo child has a finite absolute deadline. Each target reserves part of
+its ceiling for process-tree termination and captured-output cleanup, and that
+cleanup remains inside the 300-second suite deadline. A Windows tree-kill
+failure stops the run rather than falling back to killing only the parent.
+Standard benchmark output remains attached to the terminal so Criterion
+medians and confidence intervals can be recorded directly.
+
+A completed run proves that the declared binaries finished inside the committed
+wall-clock budgets and supplies empirical Criterion estimates for that host and
+revision. It does not establish value correctness, cross-host performance, or a
+speedup by itself. Performance comparisons still require identical inputs and
+features, a recorded machine class and concurrent load, and median plus
+confidence-interval comparison against the relevant baseline revision. A
+timeout is a benchmark or production-path defect; do not increase the budget or
+reduce the workload to make it pass.
+
 ## Current state (fused multi-row AXPY, 0.19.7, 2026-06-13)
 
 0.19.7 keeps the row-blocked matmul contraction and replaces repeated per-row
