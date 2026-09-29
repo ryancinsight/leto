@@ -199,12 +199,12 @@ fn seeded_pair(n: usize, rank: usize, seed: u64) -> (Vec<f64>, Vec<f64>) {
     let mut dense = vec![0.0; n * n];
     for i in 0..n {
         for j in 0..=i {
-            let value = 2.0 * rng.next_unit_f64() - 1.0;
+            let value = 2.0 * rng.next_unit() - 1.0;
             dense[i * n + j] = value;
             dense[j * n + i] = value;
         }
     }
-    let x: Vec<f64> = (0..rank * n).map(|_| rng.next_unit_f64() - 0.5).collect();
+    let x: Vec<f64> = (0..rank * n).map(|_| rng.next_unit() - 0.5).collect();
     let mut gram = vec![0.0; n * n];
     for i in 0..n {
         for j in 0..n {
@@ -269,7 +269,7 @@ fn symmetric_eigen_jacobi_accepts_rounding_level_asymmetry() {
 fn accumulated_qdqt(n: usize, seed: u64, scale: f64) -> (Vec<f64>, Vec<f64>) {
     let mut rng = leto_ops::Xorshift64::new(seed);
     let mut reflector = || {
-        let v: Vec<f64> = (0..n).map(|_| rng.next_unit_f64() - 0.5).collect();
+        let v: Vec<f64> = (0..n).map(|_| rng.next_unit() - 0.5).collect();
         let beta = 2.0 / v.iter().map(|x| x * x).sum::<f64>();
         move |i: usize, j: usize| f64::from(u8::from(i == j)) - beta * v[i] * v[j]
     };
@@ -281,7 +281,7 @@ fn accumulated_qdqt(n: usize, seed: u64, scale: f64) -> (Vec<f64>, Vec<f64>) {
         }
     }
     let d: Vec<f64> = (0..n)
-        .map(|_| scale * (2.0 * rng.next_unit_f64() - 1.0))
+        .map(|_| scale * (2.0 * rng.next_unit() - 1.0))
         .collect();
     let mut a = vec![0.0; n * n];
     for i in 0..n {

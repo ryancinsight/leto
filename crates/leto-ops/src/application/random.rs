@@ -15,7 +15,7 @@ use std::sync::LazyLock;
 /// probability at least one half.
 fn uniform_draw<T: RealScalar>(rng: &mut Xorshift64, low: T, span: T, high: T) -> T {
     loop {
-        let sample = low.add(T::from_f64(rng.next_unit_f64()).mul(span));
+        let sample = low.add(T::from_f64(rng.next_unit()).mul(span));
         if sample < high {
             return sample;
         }
@@ -178,7 +178,7 @@ impl ZigguratNormal {
         loop {
             // Low 32 bits as a signed value: its sign is the output sign, its low
             // 7 bits select the layer, its magnitude scales the sample.
-            let hz = rng.next_u64() as u32 as i32;
+            let hz = rng.next_raw() as u32 as i32;
             let iz = (hz & 127) as usize;
             if (hz as i64).unsigned_abs() < self.kn[iz] {
                 return hz as f64 * self.wn[iz];
@@ -187,8 +187,8 @@ impl ZigguratNormal {
                 // Base layer: sample the tail beyond `r` by Marsaglia's method —
                 // `x = −ln(u₁)/r`, accepted when `x² ≤ −2·ln(u₂)`.
                 let tail = loop {
-                    let x = -rng.next_unit_f64().ln() / ZIG_R;
-                    let y = -rng.next_unit_f64().ln();
+                    let x = -rng.next_unit().ln() / ZIG_R;
+                    let y = -rng.next_unit().ln();
                     if x * x <= y + y {
                         break x;
                     }
@@ -198,7 +198,7 @@ impl ZigguratNormal {
             let x = hz as f64 * self.wn[iz];
             // Wedge: accept when a uniform height between the layer's lower and
             // upper density bounds falls below the true density at `x`.
-            if self.fx[iz] + rng.next_unit_f64() * (self.fx[iz - 1] - self.fx[iz])
+            if self.fx[iz] + rng.next_unit() * (self.fx[iz - 1] - self.fx[iz])
                 < (-0.5 * x * x).exp()
             {
                 return x;

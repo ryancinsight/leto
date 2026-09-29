@@ -40,7 +40,6 @@ where
 ///
 /// # Errors
 /// Returns `Err` if `axis >= N` or if the layout is invalid.
-#[allow(clippy::needless_range_loop)]
 pub fn sum_axis<T, S, const N: usize, const M: usize>(
     arr: &Array<T, S, N>,
     axis: usize,

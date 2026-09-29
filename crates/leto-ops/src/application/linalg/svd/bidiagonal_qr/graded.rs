@@ -90,8 +90,7 @@ fn graded<T: RealScalar>(
         let from_large = if bottom_heavy { k - 1 - i } else { i };
         -step * f64::from(u32::try_from(from_large).expect("invariant: small order"))
     };
-    let mut round =
-        |exponent: f64| T::from_f64((1.0 + rng.next_unit_f64()) * exponent.exp2()).to_f64();
+    let mut round = |exponent: f64| T::from_f64((1.0 + rng.next_unit()) * exponent.exp2()).to_f64();
     let mut d = Vec::with_capacity(k);
     let mut e = Vec::with_capacity(k - 1);
     for i in 0..k {

@@ -15,6 +15,13 @@ use numpy::{Complex64, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+/// A Python-owned `f64` matrix (`numpy.ndarray`).
+type MatF64<'py> = Bound<'py, PyArray2<f64>>;
+/// A Python-owned `f64` vector.
+type VecF64<'py> = Bound<'py, PyArray1<f64>>;
+/// A Python-owned `u64` vector (a permutation or index vector).
+type VecU64<'py> = Bound<'py, PyArray1<u64>>;
+
 #[pyfunction]
 #[pyo3(name = "det")]
 pub(crate) fn det_py(py: Python<'_>, a: PyReadonlyArray2<'_, f64>) -> PyResult<f64> {
@@ -109,7 +116,7 @@ pub(crate) fn cholesky_inv_py<'py>(
 pub(crate) fn qr_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
+) -> PyResult<(MatF64<'py>, MatF64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp = py.allow_threads(|| {
@@ -129,11 +136,7 @@ pub(crate) fn qr_py<'py>(
 pub(crate) fn col_piv_qr_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray1<u64>>,
-)> {
+) -> PyResult<(MatF64<'py>, MatF64<'py>, VecU64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp =
@@ -158,11 +161,7 @@ pub(crate) fn col_piv_qr_py<'py>(
 pub(crate) fn svd_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray1<f64>>,
-    Bound<'py, PyArray2<f64>>,
-)> {
+) -> PyResult<(MatF64<'py>, VecF64<'py>, MatF64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp = py.allow_threads(|| {
@@ -194,7 +193,7 @@ pub(crate) fn svd_py<'py>(
 pub(crate) fn symmetric_eigen_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
+) -> PyResult<(VecF64<'py>, MatF64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp = py.allow_threads(|| {
@@ -257,7 +256,7 @@ pub(crate) fn norm_py(
 pub(crate) fn schur_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
+) -> PyResult<(MatF64<'py>, MatF64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp =
@@ -276,11 +275,7 @@ pub(crate) fn schur_py<'py>(
 pub(crate) fn bunch_kaufman_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray1<u64>>,
-)> {
+) -> PyResult<(MatF64<'py>, MatF64<'py>, VecU64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp = py.allow_threads(|| {
@@ -347,7 +342,7 @@ pub(crate) fn trace_py(py: Python<'_>, a: PyReadonlyArray2<'_, f64>) -> PyResult
 pub(crate) fn hessenberg_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
+) -> PyResult<(MatF64<'py>, MatF64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp =
@@ -385,12 +380,7 @@ pub(crate) fn eigenvalues_py<'py>(
 pub(crate) fn full_piv_lu_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray1<u64>>,
-    Bound<'py, PyArray1<u64>>,
-)> {
+) -> PyResult<(MatF64<'py>, MatF64<'py>, VecU64<'py>, VecU64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp = py
@@ -417,7 +407,7 @@ pub(crate) fn full_piv_lu_py<'py>(
 pub(crate) fn udu_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>)> {
+) -> PyResult<(MatF64<'py>, VecF64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp = py.allow_threads(|| {
@@ -436,11 +426,7 @@ pub(crate) fn udu_py<'py>(
 pub(crate) fn bidiagonalize_py<'py>(
     py: Python<'py>,
     a: PyReadonlyArray2<'_, f64>,
-) -> PyResult<(
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray2<f64>>,
-    Bound<'py, PyArray2<f64>>,
-)> {
+) -> PyResult<(MatF64<'py>, MatF64<'py>, MatF64<'py>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp = py.allow_threads(|| {

@@ -2,7 +2,7 @@
 //!
 //! Exposes Leto and `leto-ops` operations to Python via PyO3.
 
-#![allow(clippy::type_complexity)]
+#![deny(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
 mod elementwise;

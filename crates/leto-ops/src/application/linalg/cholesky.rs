@@ -113,7 +113,6 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
     }
 
     /// Solve `A · x = rhs` directly into a caller-owned view `out`.
-    #[allow(clippy::needless_range_loop)]
     pub fn solve_into(
         &self,
         rhs: &ArrayView1<'_, T>,
@@ -137,15 +136,15 @@ impl<T: RealScalar> CholeskyDecomposition<T> {
             if let Some(rhs_slice) = rhs.as_slice() {
                 out_slice[..n].copy_from_slice(&rhs_slice[..n]);
             } else {
-                for k in 0..n {
-                    out_slice[k] = *rhs.get([k])?;
+                for (k, slot) in out_slice[..n].iter_mut().enumerate() {
+                    *slot = *rhs.get([k])?;
                 }
             }
             self.solve_in_place(out_slice);
         } else {
             if let Some(rhs_slice) = rhs.as_slice() {
-                for k in 0..n {
-                    *out.get_mut([k])? = rhs_slice[k];
+                for (k, &value) in rhs_slice[..n].iter().enumerate() {
+                    *out.get_mut([k])? = value;
                 }
             } else {
                 for k in 0..n {

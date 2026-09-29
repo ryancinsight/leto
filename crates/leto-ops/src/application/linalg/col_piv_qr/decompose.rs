@@ -69,6 +69,11 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
     let mut rank = p;
 
     let mut alw: Vec<T> = Vec::with_capacity(n);
+    // Scratch for the strided column gather, hoisted out of the loop so its
+    // capacity is reused across the `p` steps (one allocation for the whole
+    // factorization, not one per step).
+    let mut col_stack = [T::ZERO; 128];
+    let mut col_vec: Vec<T> = Vec::new();
     for k in 0..p {
         // Pivot: column with the largest tail norm among k..n.
         let mut best = k;
@@ -93,15 +98,14 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
 
         // Householder on column k, rows k..m.
         let len = m - k;
-        let mut col_stack = [T::ZERO; 128];
-        let mut col_vec = Vec::new();
         let col = if len <= 128 {
             for i in 0..len {
                 col_stack[i] = r[(k + i) * n + k];
             }
             &col_stack[..len]
         } else {
-            col_vec.reserve_exact(len);
+            col_vec.clear();
+            col_vec.reserve(len);
             for i in 0..len {
                 col_vec.push(r[(k + i) * n + k]);
             }

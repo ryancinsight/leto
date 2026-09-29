@@ -20,7 +20,7 @@ pub(super) fn random_symmetric(n: usize, seed: u64) -> Vec<f64> {
     let mut values = vec![0.0; n * n];
     for i in 0..n {
         for j in 0..=i {
-            let value = 2.0 * rng.next_unit_f64() - 1.0;
+            let value = 2.0 * rng.next_unit() - 1.0;
             values[i * n + j] = value;
             values[j * n + i] = value;
         }
@@ -34,7 +34,7 @@ pub(super) fn random_symmetric(n: usize, seed: u64) -> Vec<f64> {
 pub(super) fn with_spectrum(spectrum: &[f64], seed: u64) -> Vec<f64> {
     let n = spectrum.len();
     let mut rng = Xorshift64::new(seed);
-    let v: Vec<f64> = (0..n).map(|_| rng.next_unit_f64() - 0.5).collect();
+    let v: Vec<f64> = (0..n).map(|_| rng.next_unit() - 0.5).collect();
     let scale = 2.0 / v.iter().map(|x| x * x).sum::<f64>();
     let q = |i: usize, j: usize| f64::from(u8::from(i == j)) - scale * v[i] * v[j];
     let mut values = vec![0.0; n * n];
@@ -55,7 +55,7 @@ pub(super) fn with_spectrum(spectrum: &[f64], seed: u64) -> Vec<f64> {
 /// Gram matrix `XᵀX` of a seeded `rows × n` matrix: rank `min(rows, n)`.
 pub(super) fn random_gram(rows: usize, n: usize, seed: u64) -> Vec<f64> {
     let mut rng = Xorshift64::new(seed);
-    let x: Vec<f64> = (0..rows * n).map(|_| rng.next_unit_f64() - 0.5).collect();
+    let x: Vec<f64> = (0..rows * n).map(|_| rng.next_unit() - 0.5).collect();
     let mut gram = vec![0.0; n * n];
     for i in 0..n {
         for j in 0..n {

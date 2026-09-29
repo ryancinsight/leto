@@ -24,7 +24,7 @@ impl Xorshift64 {
 
     /// Advance the state and return the next 64-bit value.
     #[inline]
-    pub fn next_u64(&mut self) -> u64 {
+    pub fn next_raw(&mut self) -> u64 {
         let mut x = self.state;
         x ^= x >> 12;
         x ^= x << 25;
@@ -37,8 +37,8 @@ impl Xorshift64 {
     ///
     /// Uses the top 53 bits so every representable `f64` mantissa is reachable.
     #[inline]
-    pub fn next_unit_f64(&mut self) -> f64 {
-        let bits = self.next_u64() >> 11;
+    pub fn next_unit(&mut self) -> f64 {
+        let bits = self.next_raw() >> 11;
         bits as f64 * (1.0 / (1u64 << 53) as f64)
     }
 }
