@@ -5,8 +5,9 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
+use super::{a_posteriori, backward_error};
 use leto::{Array, Array2, Storage};
-use leto_ops::{col_piv_qr, solve_least_squares, MatrixProduct};
+use leto_ops::{col_piv_qr, solve_least_squares};
 
 #[track_caller]
 fn assert_close(actual: f64, expected: f64) {
@@ -24,14 +25,63 @@ fn assert_close_slice(actual: &[f64], expected: &[f64]) {
     }
 }
 
-fn assert_orthogonal(q: &Array2<f64>, n: usize) {
-    let gram = q.transpose([1, 0]).unwrap().matmul(q).unwrap();
-    let g = gram.storage().as_slice();
-    for i in 0..n {
-        for j in 0..n {
-            assert_close(g[i * n + j], if i == j { 1.0 } else { 0.0 });
+fn assert_factorization(
+    values: &[f64],
+    rows: usize,
+    columns: usize,
+    q: &[f64],
+    r: &[f64],
+    perm: &[usize],
+) {
+    assert_eq!(perm.len(), columns);
+    let mut sorted_permutation = perm.to_vec();
+    sorted_permutation.sort_unstable();
+    assert_eq!(sorted_permutation, (0..columns).collect::<Vec<_>>());
+
+    for row in 0..rows {
+        for column in 0..columns {
+            if row > column {
+                assert_eq!(r[row * columns + column], 0.0);
+            }
         }
     }
+
+    let mut permuted = vec![0.0; rows * columns];
+    for row in 0..rows {
+        for column in 0..columns {
+            permuted[row * columns + column] = values[row * columns + perm[column]];
+        }
+    }
+
+    let mut square_r = vec![0.0; rows * rows];
+    for row in 0..rows {
+        for column in 0..columns {
+            square_r[row * rows + column] = r[row * columns + column];
+        }
+    }
+    let mut selector = vec![0.0; columns * rows];
+    for diagonal in 0..columns.min(rows) {
+        selector[diagonal * rows + diagonal] = 1.0;
+    }
+
+    let residual = a_posteriori::residual(&permuted, q, &square_r, &selector, rows, columns, rows);
+    let norm = values.iter().map(|value| value * value).sum::<f64>().sqrt();
+    let factorization_bound = backward_error::col_piv_qr(rows, columns, f64::EPSILON) * norm;
+    assert!(
+        residual <= factorization_bound,
+        "‖A·P − Q·R‖_F {residual:e} exceeds derived bound {factorization_bound:e}"
+    );
+
+    let reflector_error = backward_error::householder(rows, f64::EPSILON);
+    let steps = rows.min(columns) as f64;
+    let accumulated_error = (steps * reflector_error.ln_1p()).exp_m1();
+    let q_error = (rows as f64).sqrt() * accumulated_error;
+    let orthogonality_bound = 2.0 * q_error + q_error * q_error;
+    let orthogonality = a_posteriori::gram_defect(q, rows, rows);
+    assert!(
+        orthogonality <= orthogonality_bound,
+        "‖QᵀQ − I‖_F {orthogonality:e} exceeds derived bound {orthogonality_bound:e}"
+    );
 }
 
 #[test]
@@ -49,28 +99,14 @@ fn col_piv_qr_reconstructs_a_p() {
     assert_eq!(q.shape(), [m, m]);
     assert_eq!(r.shape(), [m, n]);
 
-    assert_orthogonal(&q, m);
-
-    // R upper triangular (zero strictly below the diagonal).
-    let rs = r.storage().as_slice();
-    for i in 0..m {
-        for j in 0..n {
-            if i > j {
-                assert_close(rs[i * n + j], 0.0);
-            }
-        }
-    }
-
-    // A P = Q R: (A P)[i][k] = A[i][perm[k]].
-    let qr = q.matmul(&r).unwrap();
-    let perm = f.permutation();
-    let mut ap = vec![0.0; m * n];
-    for i in 0..m {
-        for k in 0..n {
-            ap[i * n + k] = values[i * n + perm[k]];
-        }
-    }
-    assert_close_slice(qr.storage().as_slice(), &ap);
+    assert_factorization(
+        &values,
+        m,
+        n,
+        q.storage().as_slice(),
+        r.storage().as_slice(),
+        f.permutation(),
+    );
 }
 
 #[test]
@@ -105,9 +141,12 @@ fn col_piv_qr_reveals_rank_deficiency() {
     // Column 2 = column 0 + column 1 ⇒ rank 2 (of 3).
     let (m, n) = (4, 3);
     let values = vec![1.0, 0.0, 1.0, 2.0, 1.0, 3.0, 3.0, 0.0, 3.0, 4.0, 1.0, 5.0];
-    let a = Array2::from_shape_vec([m, n], values).unwrap();
+    let a = Array2::from_shape_vec([m, n], values.clone()).unwrap();
     let f = col_piv_qr(&a.view()).unwrap();
     assert_eq!(f.rank(), 2);
+    let q = f.q().storage().as_slice().to_vec();
+    let r = f.r().storage().as_slice().to_vec();
+    assert_factorization(&values, m, n, &q, &r, f.permutation());
     // Rank-deficient least squares is rejected (not silently wrong).
     let b = Array::from_shape_vec([m], vec![1.0, 2.0, 3.0, 4.0]).unwrap();
     assert!(f.solve_least_squares(&b.view()).is_err());
@@ -132,10 +171,29 @@ fn col_piv_qr_recomputes_a_cancelled_partial_norm() {
     let matrix = Array2::from_shape_vec([3, 3], values).unwrap();
     let decomposition = col_piv_qr(&matrix.view()).unwrap();
 
-    // Removing row zero from columns one and two evaluates the LAPACK
-    // partial-norm update as zero in f64 even though their tails are
-    // `delta` and `2·delta`. Exact recomputation must select column two next;
-    // accepting the cancelled downdates would retain column one instead.
+    // With ε = f64::EPSILON and δ² = ε/4, the initial squared norms round to
+    // 1 and 1 + ε. Removing row zero estimates tails 0 and ε, while exact
+    // tails are ε/4 and ε. Both estimates cross LAPACK's sqrt(ε/2) reliability
+    // threshold; this checks recomputed internal state, while the public pivot
+    // remains column two.
     assert_eq!(decomposition.permutation(), &[0, 2, 1]);
     assert_eq!(decomposition.rank(), 3);
+}
+
+#[test]
+fn col_piv_qr_near_tied_tail_order_preserves_the_factorization() {
+    // At 2, the spacing is 2ε and 3ε/4 stays below the midpoint; at 1, it
+    // exceeds the ε/2 midpoint. Downdated squared norms therefore tie at 1
+    // although the exact tails are 1 and 1 + ε, selecting opposite columns.
+    let delta = (0.75 * f64::EPSILON).sqrt();
+    let values = [2.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, delta];
+    let matrix = Array2::from_shape_vec([4, 3], values.to_vec()).unwrap();
+    let decomposition = col_piv_qr(&matrix.view()).unwrap();
+
+    assert_eq!(decomposition.permutation(), &[0, 1, 2]);
+    assert_eq!(decomposition.rank(), 3);
+
+    let q = decomposition.q().storage().as_slice().to_vec();
+    let r = decomposition.r().storage().as_slice().to_vec();
+    assert_factorization(&values, 4, 3, &q, &r, decomposition.permutation());
 }

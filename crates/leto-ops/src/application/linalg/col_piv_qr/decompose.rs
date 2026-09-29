@@ -55,7 +55,7 @@ impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
             // LAPACK 3.12.0 DLAQP2 sets TOL3Z to √(DLAMCH('Epsilon')).
             // This crate's machine_epsilon is the spacing above one, while
             // DLAMCH('Epsilon') is the unit roundoff (half that spacing).
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L1067-L1069
+            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L187
             recompute_threshold: machine_epsilon::<T>().div(T::from_usize(2)).sqrt(),
         }
     }
@@ -94,7 +94,7 @@ impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
             // In squared-norm state this reduces algebraically to the
             // estimated remaining squared norm over the reference squared
             // norm. Recompute exactly when that ratio falls below TOL3Z.
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L1164-L1190
+            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L236-L249
             let reliability = estimate.div(self.reference_squared[column]);
             if reliability <= self.recompute_threshold {
                 let recomputed = tail_norm_sq(r, n, m, column, row + 1);
@@ -247,12 +247,18 @@ mod tests {
     use crate::domain::real::RealScalar;
     use leto::Array2;
 
+    #[derive(Clone, Copy)]
+    enum PivotContract {
+        Exact,
+        RankOnly,
+    }
+
     fn assert_matches_recomputed<T: RealScalar>(
         case: &str,
         rows: usize,
         columns: usize,
         values: &[f64],
-        permutation_must_match: bool,
+        pivot_contract: PivotContract,
     ) {
         let matrix = Array2::from_shape_vec(
             [rows, columns],
@@ -262,11 +268,25 @@ mod tests {
         let downdated = factor(&matrix.view()).expect("finite fixture must factor");
         let recomputed = factor_with_norms::<T, RecomputedColumnNorms>(&matrix.view())
             .expect("finite fixture must factor");
-        if permutation_must_match {
+        if let PivotContract::Exact = pivot_contract {
             assert_eq!(
                 downdated.perm,
                 recomputed.perm,
                 "{case} permutation for {}",
+                core::any::type_name::<T>()
+            );
+        }
+        if downdated.perm == recomputed.perm {
+            assert_eq!(
+                downdated.q,
+                recomputed.q,
+                "{case} Q for {}",
+                core::any::type_name::<T>()
+            );
+            assert_eq!(
+                downdated.r,
+                recomputed.r,
+                "{case} R for {}",
                 core::any::type_name::<T>()
             );
         }
@@ -286,14 +306,14 @@ mod tests {
             &[
                 4.0, 1.0, -2.0, 2.0, 3.0, 0.0, 1.0, -1.0, 2.0, 0.0, 5.0, -3.0,
             ],
-            true,
+            PivotContract::Exact,
         );
         assert_matches_recomputed::<T>(
             "least squares",
             4,
             2,
             &[1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0],
-            true,
+            PivotContract::Exact,
         );
         // Equal residual norms permit either tied pivot; rank is the contract.
         assert_matches_recomputed::<T>(
@@ -301,8 +321,72 @@ mod tests {
             4,
             3,
             &[1.0, 0.0, 1.0, 2.0, 1.0, 3.0, 3.0, 0.0, 3.0, 4.0, 1.0, 5.0],
-            false,
+            PivotContract::RankOnly,
         );
+    }
+
+    fn near_tied_pivots_after_downdate_follow_native_rounding<T: RealScalar>() {
+        // Let ε be the spacing above one and δ² = 3ε/4. At 2, the spacing is
+        // 2ε, so 2 + δ² rounds to 2; at 1, δ² exceeds the ε/2 midpoint, so
+        // 1 + δ² rounds to 1 + ε. The initial norms tie, while exact tails do
+        // not. With unit roundoff u = ε/2 ≤ 1/256, rounding sqrt and then its
+        // square bounds δ² between (3/4)(1−u)^3 ε and (3/4)(1+u)^3 ε, inside
+        // (ε/2, ε) for every supported binary format.
+        let delta = machine_epsilon::<T>().mul(T::from_f64(0.75)).sqrt();
+        let matrix = Array2::from_shape_vec(
+            [4, 3],
+            vec![
+                T::from_usize(2),
+                T::ONE,
+                T::ONE,
+                T::ZERO,
+                T::ONE,
+                T::ZERO,
+                T::ZERO,
+                T::ZERO,
+                T::ONE,
+                T::ZERO,
+                T::ZERO,
+                delta,
+            ],
+        )
+        .expect("invariant: fixture count matches its matrix shape");
+        let downdated = factor(&matrix.view()).expect("finite fixture must factor");
+        let recomputed = factor_with_norms::<T, RecomputedColumnNorms>(&matrix.view())
+            .expect("finite fixture must factor");
+
+        assert_eq!(downdated.perm, [0, 1, 2]);
+        assert_eq!(recomputed.perm, [0, 2, 1]);
+        assert_eq!(downdated.rank, 3);
+        assert_eq!(recomputed.rank, 3);
+    }
+
+    fn cancellation_boundary_matches_recomputed<T: RealScalar>() {
+        let delta = machine_epsilon::<T>().sqrt().div(T::from_usize(2));
+        let matrix = Array2::from_shape_vec(
+            [3, 3],
+            vec![
+                T::from_usize(2),
+                T::ONE,
+                T::ONE,
+                T::ZERO,
+                delta,
+                T::ZERO,
+                T::ZERO,
+                T::ZERO,
+                delta.mul(T::from_usize(2)),
+            ],
+        )
+        .expect("invariant: fixture count matches its matrix shape");
+        let downdated = factor(&matrix.view()).expect("finite fixture must factor");
+        let recomputed = factor_with_norms::<T, RecomputedColumnNorms>(&matrix.view())
+            .expect("finite fixture must factor");
+
+        assert_eq!(downdated.perm, [0, 2, 1]);
+        assert_eq!(downdated.perm, recomputed.perm);
+        assert_eq!(downdated.rank, recomputed.rank);
+        assert_eq!(downdated.q, recomputed.q);
+        assert_eq!(downdated.r, recomputed.r);
     }
 
     #[test]
@@ -313,6 +397,16 @@ mod tests {
         existing_contract_fixtures_match_recomputed::<f32>();
         existing_contract_fixtures_match_recomputed::<F16>();
         existing_contract_fixtures_match_recomputed::<Bf16>();
+
+        cancellation_boundary_matches_recomputed::<f64>();
+        cancellation_boundary_matches_recomputed::<f32>();
+        cancellation_boundary_matches_recomputed::<F16>();
+        cancellation_boundary_matches_recomputed::<Bf16>();
+
+        near_tied_pivots_after_downdate_follow_native_rounding::<f64>();
+        near_tied_pivots_after_downdate_follow_native_rounding::<f32>();
+        near_tied_pivots_after_downdate_follow_native_rounding::<F16>();
+        near_tied_pivots_after_downdate_follow_native_rounding::<Bf16>();
     }
 
     #[test]
