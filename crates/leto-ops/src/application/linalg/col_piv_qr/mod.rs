@@ -18,6 +18,10 @@
 //! diagonal means the first negligible one reveals the rank — more reliably than
 //! a Gram-spectrum count for borderline cases.
 //!
+//! In finite precision, partial squared-norm updates use LAPACK DLAQP2's
+//! cancellation safeguard and exact tail recomputation. Near-tie permutations
+//! may differ from an implementation that recomputes every tail norm.
+//!
 //! Leaf modules: `decompose` (the pivoted reduction, on the shared
 //! `householder` primitive) and the solve logic here.
 //! Generic over [`crate::RealScalar`], native precision.

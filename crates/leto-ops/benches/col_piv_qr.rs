@@ -1,9 +1,4 @@
-//! Column-pivoted QR scaling instrument.
-
-#![expect(
-    clippy::unwrap_used,
-    reason = "benchmark fixture construction has fixed valid shapes"
-)]
+#![expect(clippy::unwrap_used, reason = "fixed benchmark fixture shapes")]
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use leto::{Array, Array2};
@@ -17,12 +12,7 @@ fn matrix(order: usize) -> Array2<f64> {
             (0..order).map(move |column| {
                 let residue = u32::try_from((row * 131 + column * 197 + row * column * 17) % 1_021)
                     .expect("invariant: residue is below 1,021");
-                let centered = f64::from(residue) / 512.0 - 1.0;
-                if row == column {
-                    centered + 4.0
-                } else {
-                    centered
-                }
+                f64::from(residue) / 512.0 - 1.0 + if row == column { 4.0 } else { 0.0 }
             })
         })
         .collect();

@@ -340,10 +340,8 @@ Rejected (do not retry without a changed model):
   measured **+9–18%** at n=64/128/192/256 (`bench_qr_scaling`, p=0.00). Kept
   scalar.
 
-Open (unclaimed, no backlog item filed as of 2026-09-27 — file before
-picking up): full_piv_lu / bunch_kaufman trailing-update axpys are LU-style
-long slices, profile against the meta-pattern before converting;
-col_piv_qr pivot-norm down-dating needs a different, non-SIMD fix.
+Open: full_piv_lu / bunch_kaufman trailing-update axpys are LU-style long slices.
+col_piv_qr pivot-norm down-dating is tracked by PR #290.
 
 Cross-crate lead, not a leto item: hermes's CSR SpMV scalar remainder
 (`hermes-simd-core/src/sparse/spmv.rs`) re-checks a gather bound the SIMD

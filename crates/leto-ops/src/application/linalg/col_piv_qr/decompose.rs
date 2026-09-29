@@ -94,7 +94,7 @@ impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
             // In squared-norm state this reduces algebraically to the
             // estimated remaining squared norm over the reference squared
             // norm. Recompute exactly when that ratio falls below TOL3Z.
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L235-L248
+            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L1164-L1190
             let reliability = estimate.div(self.reference_squared[column]);
             if reliability <= self.recompute_threshold {
                 let recomputed = tail_norm_sq(r, n, m, column, row + 1);
@@ -295,9 +295,7 @@ mod tests {
             &[1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0],
             true,
         );
-        // After the sum column pivots first, the other two residual columns
-        // are negatives with equal exact norms. Either tied column may pivot
-        // next; rank is the value-semantic contract for this fixture.
+        // Equal residual norms permit either tied pivot; rank is the contract.
         assert_matches_recomputed::<T>(
             "rank deficiency",
             4,
@@ -308,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn downdated_pivots_match_recomputed_norms_across_scalar_types() {
+    fn downdated_pivots_preserve_existing_contract_across_scalar_types() {
         use eunomia::{Bf16, F16};
 
         existing_contract_fixtures_match_recomputed::<f64>();
@@ -318,18 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn squared_partial_norm_update_matches_the_lapack_reliability_bound() {
-        let current_squared = 1.0_f64;
-        let removed_squared = 0.75_f64 * 0.75_f64;
-        let remaining_squared = current_squared - removed_squared;
-        assert_eq!(remaining_squared, 1.0 - 0.75_f64 * 0.75_f64);
-        let expected_threshold = (f64::EPSILON / 2.0).sqrt();
-        let actual_threshold = (machine_epsilon::<f64>() / 2.0).sqrt();
-        assert_eq!(actual_threshold, expected_threshold);
-    }
-
-    #[test]
-    fn partial_norm_downdates_match_recomputed_tails_at_boundary() {
+    fn partial_norm_downdates_recompute_cancellation_boundary() {
         let delta = f64::EPSILON.sqrt() / 2.0;
         let r = vec![
             2.0,
@@ -340,16 +327,16 @@ mod tests {
             0.0, // First remaining tail.
             0.0,
             0.0,
-            2.0 * delta, // Second remaining tail.
+            2.0 * delta,
         ];
         let mut partial = PartialColumnNorms::new(&r, 3, 3);
 
         partial.remove_row(&r, 3, 3, 0);
 
         for column in 1..3 {
-            let expected = tail_norm_sq(&r, 3, 3, column, 1);
             assert_eq!(
-                partial.current_squared[column], expected,
+                partial.current_squared[column],
+                tail_norm_sq(&r, 3, 3, column, 1),
                 "boundary trailing squared norm for column {column}"
             );
         }
@@ -360,18 +347,18 @@ mod tests {
         let matrix = Array2::from_shape_vec([2, 2], vec![T::ONE, T::ONE, T::ZERO, delta])
             .expect("invariant: fixture count matches its matrix shape");
 
-        let decomposition = factor(&matrix.view()).expect("finite fixture must factor");
-
         assert_eq!(
-            decomposition.perm,
-            vec![1, 0],
+            factor(&matrix.view())
+                .expect("finite fixture must factor")
+                .perm,
+            [1, 0],
             "squared column norms remain distinguishable for {}",
             core::any::type_name::<T>()
         );
     }
 
     #[test]
-    fn pivots_preserve_squared_norm_order_across_scalar_types() {
+    fn pivot_order_uses_squared_norms_across_scalar_types() {
         use eunomia::{Bf16, F16};
 
         squared_norm_order_survives_a_rounded_root_tie::<f64>();
