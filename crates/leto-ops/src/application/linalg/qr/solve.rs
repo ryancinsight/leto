@@ -10,7 +10,6 @@ impl<T: RealScalar> QrDecomposition<T> {
     /// Applies the stored reflectors to `rhs` (computing `Qᵀ·rhs` without
     /// materializing `Q`), then back-substitutes against `R`.
     /// Solve `min ‖A·x − rhs‖₂` directly into a caller-owned view `out`.
-    #[allow(clippy::needless_range_loop)]
     pub fn solve_least_squares_into(
         &self,
         rhs: &ArrayView1<'_, T>,
@@ -36,8 +35,8 @@ impl<T: RealScalar> QrDecomposition<T> {
             if let Some(slice) = rhs.as_slice() {
                 y_stack[..m].copy_from_slice(&slice[..m]);
             } else {
-                for k in 0..m {
-                    y_stack[k] = *rhs.get([k])?;
+                for (k, slot) in y_stack[..m].iter_mut().enumerate() {
+                    *slot = *rhs.get([k])?;
                 }
             }
             &mut y_stack[..m]
@@ -80,8 +79,8 @@ impl<T: RealScalar> QrDecomposition<T> {
         if let Some(out_slice) = out.as_mut_slice() {
             out_slice.copy_from_slice(&y[..n]);
         } else {
-            for k in 0..n {
-                *out.get_mut([k])? = y[k];
+            for (k, &value) in y[..n].iter().enumerate() {
+                *out.get_mut([k])? = value;
             }
         }
         Ok(())

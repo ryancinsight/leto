@@ -79,7 +79,7 @@ mod shift;
 /// The subnormal part of the deflation threshold, `safmin`: a subdiagonal
 /// driven into the subnormals, where no relative test can be met short of an
 /// exact zero, still deflates. At most `n − 1` such deflations perturb by at
-/// most `√n·safmin` jointly, which the matrix-tier gate (`schur/mod.rs`,
+/// most `√n·safmin` jointly, which the matrix-tier gate (`schur.rs`,
 /// [`thresholds::deflation_count_log2`](crate::application::linalg::thresholds::deflation_count_log2))
 /// keeps below `ε·‖A‖_F`.
 pub(super) fn deflation_floor<T: RealScalar>() -> T {

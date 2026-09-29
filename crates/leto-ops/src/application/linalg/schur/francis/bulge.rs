@@ -5,6 +5,7 @@ use super::at;
 use super::shift::{first_column, shift_pair, Shift};
 use crate::application::linalg::scaling::KernelWindow;
 use crate::domain::real::RealScalar;
+use core::ops::RangeInclusive;
 
 /// Minimum left-apply column span at which the vectorized row-oriented sweep
 /// (two contiguous `axpy_slice` passes) overtakes the per-column scalar sweep.
@@ -81,32 +82,31 @@ fn stack_reflector<T: RealScalar>(
 }
 
 /// Left-apply a Householder reflector `P = I − β v vᵀ` (positioned at base row
-/// `k`, `v.len()` rows) across columns `c_lo..=c_hi`: `H ← P H`.
+/// `k`, `v.len()` rows) across the column window `cols`: `H ← P H`.
 ///
-/// Row-oriented: accumulate `w = (β vᵀ)·H[rows, c_lo..=c_hi]` by sweeping each
+/// Row-oriented: accumulate `w = (β vᵀ)·H[rows, cols]` by sweeping each
 /// reflector row contiguously into the caller-owned `scratch`, then apply
 /// `H −= v·w` row by row — both inner sweeps are contiguous `axpy_slice` updates
 /// (SSOT SIMD path). The per-`w[j]` summation order (reflector rows ascending)
 /// and the `vᵢ·(β·w[j])` grouping match the column-oriented form exactly, so the
 /// result is bitwise-identical (hermes `axpy` performs no FMA contraction); the
 /// reflector spans only 2–3 rows but the column span is the active-block width,
-/// where the vectorized sweep pays off. `scratch` must hold `≥ c_hi − c_lo + 1`
+/// where the vectorized sweep pays off. `scratch` must hold `≥ cols.len()`
 /// elements (the caller sizes it to `n`, reused across the whole iteration —
 /// allocation-free hot path).
-// Eight tight primitive parameters (matrix, reflector vector + β, base row, dim,
-// column range, scratch); each is a distinct kernel input and bundling them into
-// a struct would add an artificial indirection on this hot inner routine.
-#[allow(clippy::too_many_arguments)]
+// The reflector (`v`, `beta`) and its position (`k` into the `n`-strided
+// matrix, `cols`) are distinct kernel inputs; the column window is one value,
+// not two, so `cols` stays a `RangeInclusive` rather than a struct wrapper.
 fn apply_left<T: RealScalar>(
     h: &mut [T],
     v: &[T],
     beta: T,
     k: usize,
     n: usize,
-    c_lo: usize,
-    c_hi: usize,
+    cols: RangeInclusive<usize>,
     scratch: &mut [T],
 ) {
+    let (c_lo, c_hi) = (*cols.start(), *cols.end());
     if c_hi < c_lo {
         return;
     }
@@ -280,7 +280,7 @@ pub(super) fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
                 // Schur path (`WANTT`, `WANTZ`): `T` and the Schur vectors are
                 // outputs, so the rows extend right to `n` and the columns up
                 // to row `0`, and `Z` takes every row.
-                apply_left(h, v_slice, refl.tau, k, n, k, n - 1, scratch);
+                apply_left(h, v_slice, refl.tau, k, n, k..=(n - 1), scratch);
                 apply_right(h, v_slice, refl.tau, k, n, 0, last_row);
                 apply_right(z, v_slice, refl.tau, k, n, 0, n - 1);
             } else {
@@ -290,7 +290,7 @@ pub(super) fn francis_step<T: RealScalar, const ACCUMULATE_Q: bool>(
                 // off every diagonal block and never feed back (`hi` only
                 // decreases; `lo` is monotone non-decreasing for fixed `hi` via
                 // exact-zero deflation).
-                apply_left(h, v_slice, refl.tau, k, n, k, hi, scratch);
+                apply_left(h, v_slice, refl.tau, k, n, k..=hi, scratch);
                 apply_right(h, v_slice, refl.tau, k, n, lo, last_row);
             }
         }

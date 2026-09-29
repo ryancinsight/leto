@@ -19,7 +19,6 @@ use leto::{ArrayView, ArrayViewMut, ConvolutionParameters, Result};
 /// Returns [`leto::LetoError`] when no target is requested, a shape or storage
 /// contract is invalid, a mutable target aliases through a zero stride, or
 /// dimension arithmetic overflows.
-#[allow(clippy::too_many_arguments)]
 pub fn convolution_backward_accumulate<T: Scalar, const R: usize, const D: usize>(
     input: &ArrayView<'_, T, R>,
     weight: &ArrayView<'_, T, R>,

@@ -129,7 +129,6 @@ fn validate_accumulation<T: RealScalar>(
 /// assert_eq!(value_gradient.storage().as_slice(), &[7.0]);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(clippy::too_many_arguments)]
 pub fn scaled_dot_product_attention_backward_accumulate<T: RealScalar + RealField>(
     output_gradient: &ArrayView<'_, T, 3>,
     query: &ArrayView<'_, T, 3>,
