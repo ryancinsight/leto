@@ -190,7 +190,7 @@ fn col_piv_qr_near_tied_tail_order_preserves_the_factorization() {
     let matrix = Array2::from_shape_vec([4, 3], values.to_vec()).unwrap();
     let decomposition = col_piv_qr(&matrix.view()).unwrap();
 
-    assert_eq!(decomposition.permutation(), &[0, 1, 2]);
+    assert_eq!(decomposition.permutation(), &[0, 2, 1]);
     assert_eq!(decomposition.rank(), 3);
 
     let q = decomposition.q().storage().as_slice().to_vec();

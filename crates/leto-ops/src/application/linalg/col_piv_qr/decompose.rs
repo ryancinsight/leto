@@ -1,7 +1,14 @@
 //! Householder QR with column pivoting: `A P = Q R`.
 
+mod column_norms;
+mod norm_bounds;
+#[cfg(test)]
+mod tests;
+
+use self::column_norms::{tail_norm_sq, ColumnNorms, PartialColumnNorms};
+
 use crate::application::linalg::householder::{apply_left, apply_right, reflector};
-use crate::application::linalg::thresholds::{machine_epsilon, rank_pivot_ratio};
+use crate::application::linalg::thresholds::rank_pivot_ratio;
 use crate::domain::real::RealScalar;
 use leto::{ArrayView2, LetoError, Result};
 
@@ -15,114 +22,6 @@ pub(super) struct Factored<T> {
     pub(super) rank: usize,
     pub(super) m: usize,
     pub(super) n: usize,
-}
-
-/// Squared Euclidean norm of column `j` over rows `[r0 .. m)`.
-fn tail_norm_sq<T: RealScalar>(r: &[T], n: usize, m: usize, j: usize, r0: usize) -> T {
-    let mut acc = T::ZERO;
-    for i in r0..m {
-        let x = r[i * n + j];
-        acc = acc.add(x.mul(x));
-    }
-    acc
-}
-
-trait ColumnNorms<T: RealScalar> {
-    fn new(r: &[T], n: usize, m: usize) -> Self;
-
-    fn squared_norm(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T;
-
-    fn swap(&mut self, lhs: usize, rhs: usize);
-
-    fn remove_row(&mut self, r: &[T], n: usize, m: usize, row: usize);
-}
-
-struct PartialColumnNorms<T> {
-    current_squared: Box<[T]>,
-    reference_squared: Box<[T]>,
-    recompute_threshold: T,
-}
-
-impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
-    fn new(r: &[T], n: usize, m: usize) -> Self {
-        let current_squared: Box<[T]> = (0..n)
-            .map(|column| tail_norm_sq(r, n, m, column, 0))
-            .collect();
-        let reference_squared = current_squared.clone();
-        Self {
-            current_squared,
-            reference_squared,
-            // LAPACK 3.12.0 DLAQP2 sets TOL3Z to √(DLAMCH('Epsilon')).
-            // This crate's machine_epsilon is the spacing above one, while
-            // DLAMCH('Epsilon') is the unit roundoff (half that spacing).
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L187
-            recompute_threshold: machine_epsilon::<T>().div(T::from_usize(2)).sqrt(),
-        }
-    }
-
-    #[inline]
-    fn squared_norm(&self, _r: &[T], _n: usize, _m: usize, column: usize, _first_row: usize) -> T {
-        self.current_squared[column]
-    }
-
-    #[inline]
-    fn swap(&mut self, lhs: usize, rhs: usize) {
-        self.current_squared.swap(lhs, rhs);
-        self.reference_squared.swap(lhs, rhs);
-    }
-
-    fn remove_row(&mut self, r: &[T], n: usize, m: usize, row: usize) {
-        for column in (row + 1)..n {
-            let current_squared = self.current_squared[column];
-            if current_squared == T::ZERO {
-                continue;
-            }
-
-            // Keep the squared sum as the pivot key. Taking its square root
-            // first can round distinct column tails to the same norm and
-            // change the pivot selected by the exact-recompute algorithm.
-            let removed_squared = r[row * n + column].mul(r[row * n + column]);
-            let difference = current_squared.sub(removed_squared);
-            let estimate = if difference > T::ZERO {
-                difference
-            } else {
-                T::ZERO
-            };
-
-            // DLAQP2's cancellation test is
-            // (1 - (|a|/current_norm)^2) * (current_norm/reference_norm)^2.
-            // In squared-norm state this reduces algebraically to the
-            // estimated remaining squared norm over the reference squared
-            // norm. Recompute exactly when that ratio falls below TOL3Z.
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L236-L249
-            let reliability = estimate.div(self.reference_squared[column]);
-            if reliability <= self.recompute_threshold {
-                let recomputed = tail_norm_sq(r, n, m, column, row + 1);
-                self.current_squared[column] = recomputed;
-                self.reference_squared[column] = recomputed;
-            } else {
-                self.current_squared[column] = estimate;
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-struct RecomputedColumnNorms;
-
-#[cfg(test)]
-impl<T: RealScalar> ColumnNorms<T> for RecomputedColumnNorms {
-    fn new(_r: &[T], _n: usize, _m: usize) -> Self {
-        Self
-    }
-
-    fn squared_norm(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T {
-        tail_norm_sq(r, n, m, column, first_row)
-    }
-
-    fn swap(&mut self, _lhs: usize, _rhs: usize) {}
-
-    fn remove_row(&mut self, _r: &[T], _n: usize, _m: usize, _row: usize) {}
 }
 
 /// Factor `A` (m×n) with column pivoting.
@@ -174,17 +73,32 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
     let mut rank = p;
 
     let mut alw: Vec<T> = Vec::with_capacity(n);
+    let mut col_stack = [T::ZERO; 128];
+    let mut col_vec: Vec<T> = Vec::new();
     for k in 0..p {
         // Pivot: column with the largest tail norm among k..n.
-        let mut best = k;
-        let mut best_norm_sq = norms.squared_norm(&r, n, m, k, k);
-        for j in (k + 1)..n {
-            let norm_squared = norms.squared_norm(&r, n, m, j, k);
-            if norm_squared > best_norm_sq {
-                best_norm_sq = norm_squared;
-                best = j;
+        #[cfg(test)]
+        norms.assert_bounds_cover_exact_keys(&r, n, m, k);
+        let certified = norms.certified_pivot(k, n, m - k);
+        let best = if let Some(best) = certified {
+            best
+        } else {
+            norms.refresh_remaining(&r, n, m, k);
+            let mut best = k;
+            let mut best_norm_sq = norms.squared_norm(&r, n, m, k, k);
+            for j in (k + 1)..n {
+                let norm_squared = norms.squared_norm(&r, n, m, j, k);
+                if norm_squared > best_norm_sq {
+                    best_norm_sq = norm_squared;
+                    best = j;
+                }
             }
-        }
+            best
+        };
+        // The baseline rank contract compares the selected column's exact
+        // native-precision tail sum, even when interval separation certified
+        // its pivot without recomputing every competing column.
+        let best_norm_sq = tail_norm_sq(&r, n, m, best, k);
         if best_norm_sq.sqrt() <= tol {
             rank = k;
             break;
@@ -199,15 +113,14 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
 
         // Householder on column k, rows k..m.
         let len = m - k;
-        let mut col_stack = [T::ZERO; 128];
-        let mut col_vec = Vec::new();
         let col = if len <= 128 {
             for i in 0..len {
                 col_stack[i] = r[(k + i) * n + k];
             }
             &col_stack[..len]
         } else {
-            col_vec.reserve_exact(len);
+            col_vec.clear();
+            col_vec.reserve(len);
             for i in 0..len {
                 col_vec.push(r[(k + i) * n + k]);
             }
@@ -217,8 +130,10 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
         if let Some((refl, _alpha)) = reflector(col) {
             apply_left(&refl, &mut r, n, k, k, n, &mut alw); // rows k..m, cols k..n
             apply_right(&refl, &mut q, m, k, 0, m); // Q ← Q Hₖ
+            norms.remove_row(&r, n, m, k, Some(&refl));
+        } else {
+            norms.remove_row(&r, n, m, k, None);
         }
-        norms.remove_row(&r, n, m, k);
     }
 
     // Present the exact upper-triangular R (zero the reflector tails below the diagonal).
@@ -236,228 +151,4 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
         m,
         n,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        factor, factor_with_norms, machine_epsilon, tail_norm_sq, ColumnNorms, PartialColumnNorms,
-        RecomputedColumnNorms,
-    };
-    use crate::domain::real::RealScalar;
-    use leto::Array2;
-
-    #[derive(Clone, Copy)]
-    enum PivotContract {
-        Exact,
-        RankOnly,
-    }
-
-    fn assert_matches_recomputed<T: RealScalar>(
-        case: &str,
-        rows: usize,
-        columns: usize,
-        values: &[f64],
-        pivot_contract: PivotContract,
-    ) {
-        let matrix = Array2::from_shape_vec(
-            [rows, columns],
-            values.iter().copied().map(T::from_f64).collect(),
-        )
-        .expect("invariant: fixture count matches its matrix shape");
-        let downdated = factor(&matrix.view()).expect("finite fixture must factor");
-        let recomputed = factor_with_norms::<T, RecomputedColumnNorms>(&matrix.view())
-            .expect("finite fixture must factor");
-        if let PivotContract::Exact = pivot_contract {
-            assert_eq!(
-                downdated.perm,
-                recomputed.perm,
-                "{case} permutation for {}",
-                core::any::type_name::<T>()
-            );
-        }
-        if downdated.perm == recomputed.perm {
-            assert_eq!(
-                downdated.q,
-                recomputed.q,
-                "{case} Q for {}",
-                core::any::type_name::<T>()
-            );
-            assert_eq!(
-                downdated.r,
-                recomputed.r,
-                "{case} R for {}",
-                core::any::type_name::<T>()
-            );
-        }
-        assert_eq!(
-            downdated.rank,
-            recomputed.rank,
-            "{case} rank for {}",
-            core::any::type_name::<T>()
-        );
-    }
-
-    fn existing_contract_fixtures_match_recomputed<T: RealScalar>() {
-        assert_matches_recomputed::<T>(
-            "reconstruction",
-            4,
-            3,
-            &[
-                4.0, 1.0, -2.0, 2.0, 3.0, 0.0, 1.0, -1.0, 2.0, 0.0, 5.0, -3.0,
-            ],
-            PivotContract::Exact,
-        );
-        assert_matches_recomputed::<T>(
-            "least squares",
-            4,
-            2,
-            &[1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0],
-            PivotContract::Exact,
-        );
-        // Equal residual norms permit either tied pivot; rank is the contract.
-        assert_matches_recomputed::<T>(
-            "rank deficiency",
-            4,
-            3,
-            &[1.0, 0.0, 1.0, 2.0, 1.0, 3.0, 3.0, 0.0, 3.0, 4.0, 1.0, 5.0],
-            PivotContract::RankOnly,
-        );
-    }
-
-    fn near_tied_pivots_after_downdate_follow_native_rounding<T: RealScalar>() {
-        // Let ε be the spacing above one and δ² = 3ε/4. At 2, the spacing is
-        // 2ε, so 2 + δ² rounds to 2; at 1, δ² exceeds the ε/2 midpoint, so
-        // 1 + δ² rounds to 1 + ε. The initial norms tie, while exact tails do
-        // not. With unit roundoff u = ε/2 ≤ 1/256, rounding sqrt and then its
-        // square bounds δ² between (3/4)(1−u)^3 ε and (3/4)(1+u)^3 ε, inside
-        // (ε/2, ε) for every supported binary format.
-        let delta = machine_epsilon::<T>().mul(T::from_f64(0.75)).sqrt();
-        let matrix = Array2::from_shape_vec(
-            [4, 3],
-            vec![
-                T::from_usize(2),
-                T::ONE,
-                T::ONE,
-                T::ZERO,
-                T::ONE,
-                T::ZERO,
-                T::ZERO,
-                T::ZERO,
-                T::ONE,
-                T::ZERO,
-                T::ZERO,
-                delta,
-            ],
-        )
-        .expect("invariant: fixture count matches its matrix shape");
-        let downdated = factor(&matrix.view()).expect("finite fixture must factor");
-        let recomputed = factor_with_norms::<T, RecomputedColumnNorms>(&matrix.view())
-            .expect("finite fixture must factor");
-
-        assert_eq!(downdated.perm, [0, 1, 2]);
-        assert_eq!(recomputed.perm, [0, 2, 1]);
-        assert_eq!(downdated.rank, 3);
-        assert_eq!(recomputed.rank, 3);
-    }
-
-    fn cancellation_boundary_matches_recomputed<T: RealScalar>() {
-        let delta = machine_epsilon::<T>().sqrt().div(T::from_usize(2));
-        let matrix = Array2::from_shape_vec(
-            [3, 3],
-            vec![
-                T::from_usize(2),
-                T::ONE,
-                T::ONE,
-                T::ZERO,
-                delta,
-                T::ZERO,
-                T::ZERO,
-                T::ZERO,
-                delta.mul(T::from_usize(2)),
-            ],
-        )
-        .expect("invariant: fixture count matches its matrix shape");
-        let downdated = factor(&matrix.view()).expect("finite fixture must factor");
-        let recomputed = factor_with_norms::<T, RecomputedColumnNorms>(&matrix.view())
-            .expect("finite fixture must factor");
-
-        assert_eq!(downdated.perm, [0, 2, 1]);
-        assert_eq!(downdated.perm, recomputed.perm);
-        assert_eq!(downdated.rank, recomputed.rank);
-        assert_eq!(downdated.q, recomputed.q);
-        assert_eq!(downdated.r, recomputed.r);
-    }
-
-    #[test]
-    fn downdated_pivots_preserve_existing_contract_across_scalar_types() {
-        use eunomia::{Bf16, F16};
-
-        existing_contract_fixtures_match_recomputed::<f64>();
-        existing_contract_fixtures_match_recomputed::<f32>();
-        existing_contract_fixtures_match_recomputed::<F16>();
-        existing_contract_fixtures_match_recomputed::<Bf16>();
-
-        cancellation_boundary_matches_recomputed::<f64>();
-        cancellation_boundary_matches_recomputed::<f32>();
-        cancellation_boundary_matches_recomputed::<F16>();
-        cancellation_boundary_matches_recomputed::<Bf16>();
-
-        near_tied_pivots_after_downdate_follow_native_rounding::<f64>();
-        near_tied_pivots_after_downdate_follow_native_rounding::<f32>();
-        near_tied_pivots_after_downdate_follow_native_rounding::<F16>();
-        near_tied_pivots_after_downdate_follow_native_rounding::<Bf16>();
-    }
-
-    #[test]
-    fn partial_norm_downdates_recompute_cancellation_boundary() {
-        let delta = f64::EPSILON.sqrt() / 2.0;
-        let r = vec![
-            2.0,
-            1.0,
-            1.0, // Removed row.
-            0.0,
-            delta,
-            0.0, // First remaining tail.
-            0.0,
-            0.0,
-            2.0 * delta,
-        ];
-        let mut partial = PartialColumnNorms::new(&r, 3, 3);
-
-        partial.remove_row(&r, 3, 3, 0);
-
-        for column in 1..3 {
-            assert_eq!(
-                partial.current_squared[column],
-                tail_norm_sq(&r, 3, 3, column, 1),
-                "boundary trailing squared norm for column {column}"
-            );
-        }
-    }
-
-    fn squared_norm_order_survives_a_rounded_root_tie<T: RealScalar>() {
-        let delta = machine_epsilon::<T>().sqrt();
-        let matrix = Array2::from_shape_vec([2, 2], vec![T::ONE, T::ONE, T::ZERO, delta])
-            .expect("invariant: fixture count matches its matrix shape");
-
-        assert_eq!(
-            factor(&matrix.view())
-                .expect("finite fixture must factor")
-                .perm,
-            [1, 0],
-            "squared column norms remain distinguishable for {}",
-            core::any::type_name::<T>()
-        );
-    }
-
-    #[test]
-    fn pivot_order_uses_squared_norms_across_scalar_types() {
-        use eunomia::{Bf16, F16};
-
-        squared_norm_order_survives_a_rounded_root_tie::<f64>();
-        squared_norm_order_survives_a_rounded_root_tie::<f32>();
-        squared_norm_order_survives_a_rounded_root_tie::<F16>();
-        squared_norm_order_survives_a_rounded_root_tie::<Bf16>();
-    }
 }
