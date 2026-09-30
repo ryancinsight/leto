@@ -206,15 +206,15 @@ fn check_ratio_bounds<T: RealScalar>(seed: u64, min_exp: i32, max_exp: i32) {
             cases.push(
                 (0..len)
                     .map(|_| {
-                        let e = f64::from(min_exp) + span * rng.next_unit_f64();
-                        T::from_f64((rng.next_unit_f64() - 0.5) * e.exp2())
+                        let e = f64::from(min_exp) + span * rng.next_unit();
+                        T::from_f64((rng.next_unit() - 0.5) * e.exp2())
                     })
                     .collect(),
             );
-            let base = rng.next_unit_f64();
+            let base = rng.next_unit();
             cases.push(
                 (0..len)
-                    .map(|_| T::from_f64(base * (1.0 + 1e-3 * rng.next_unit_f64())))
+                    .map(|_| T::from_f64(base * (1.0 + 1e-3 * rng.next_unit())))
                     .collect(),
             );
         }

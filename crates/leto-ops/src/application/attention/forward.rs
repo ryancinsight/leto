@@ -73,7 +73,6 @@ fn convex_combine<T: RealScalar>(current: T, value: T, value_weight: T) -> T {
 /// assert_eq!(weights.storage().as_slice(), &[1.0]);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(clippy::too_many_arguments)]
 pub fn scaled_dot_product_attention_into<T: RealScalar + RealField>(
     query: &ArrayView<'_, T, 3>,
     key: &ArrayView<'_, T, 3>,

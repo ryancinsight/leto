@@ -130,8 +130,10 @@ pub fn normalized_rmse<T: RealField>(a: &[T], b: &[T]) -> T {
 
 /// RMSE of `b` relative to `a`, normalised by the dynamic range of `a`.
 ///
-/// Measures error relative to the signal's peak-to-peak span.
-/// Returns `T::ZERO` when slices differ in length, are empty, or `a` has zero range.
+/// Measures error relative to the signal's peak-to-peak span. Returns
+/// `T::ZERO` when the slices differ in length or are empty; the normalising
+/// span is floored at `1e-12`, so a zero-range `a` (all samples equal) yields
+/// a finite, large ratio rather than a division by zero.
 #[must_use]
 pub fn nrmse<T: RealField>(a: &[T], b: &[T]) -> T {
     if a.len() != b.len() || a.is_empty() {

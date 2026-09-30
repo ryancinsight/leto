@@ -5,7 +5,7 @@ use leto::Array2;
 use leto_ops::Xorshift64;
 
 pub(super) fn unit(rng: &mut Xorshift64) -> f64 {
-    2.0 * rng.next_unit_f64() - 1.0
+    2.0 * rng.next_unit() - 1.0
 }
 
 /// A random orthogonal `n × n` (Gram–Schmidt, twice, on uniform columns).
@@ -106,7 +106,7 @@ impl Family {
                 let mut m = vec![0.0; n * n];
                 for i in 0..n - 1 {
                     let sign = if unit(rng) < 0.0 { -1.0 } else { 1.0 };
-                    let magnitude = 10.0_f64.powf(-4.0 * rng.next_unit_f64());
+                    let magnitude = 10.0_f64.powf(-4.0 * rng.next_unit());
                     m[i * n + i + 1] = sign * magnitude;
                     m[(i + 1) * n + i] = -sign * magnitude;
                 }
