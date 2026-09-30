@@ -235,7 +235,7 @@ fn schur_matches_the_f64_reference_within_the_bauer_fike_bound() {
         for seed in [1_u64, 2, 3, 4, 5] {
             let mut rng = Xorshift64::new(seed);
             let raw: Vec<f64> = (0..n * n)
-                .map(|_| 4.0 * (2.0 * rng.next_unit_f64() - 1.0))
+                .map(|_| 4.0 * (2.0 * rng.next_unit() - 1.0))
                 .collect();
             let narrowed: Vec<T> = raw.iter().map(|&v| T::from_f64(v)).collect();
             let image: Vec<f64> = narrowed.iter().map(|v| v.to_f64()).collect();
@@ -312,7 +312,7 @@ fn schur_is_accurate_on_clusters_at_the_gate_edge() {
         // A random orthogonal Q (Gram–Schmidt, twice).
         let mut q = vec![0.0; n * n];
         for j in 0..n {
-            let mut v: Vec<f64> = (0..n).map(|_| 2.0 * rng.next_unit_f64() - 1.0).collect();
+            let mut v: Vec<f64> = (0..n).map(|_| 2.0 * rng.next_unit() - 1.0).collect();
             for _ in 0..2 {
                 for k in 0..j {
                     let d: f64 = (0..n).map(|i| v[i] * q[i * n + k]).sum();

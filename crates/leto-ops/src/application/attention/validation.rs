@@ -295,7 +295,6 @@ pub(super) fn validate_forward<T: RealScalar + RealField>(
     Ok(plan)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn validate_backward<T: RealScalar + RealField>(
     output_gradient: &ArrayView<'_, T, 3>,
     query: &ArrayView<'_, T, 3>,

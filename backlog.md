@@ -136,8 +136,8 @@
 - Outcome: standalone Windows builds cannot reuse another checkout's crate metadata when drive aliases are recycled; keep the single shared target directory.
 - Scope: centralize the standalone Cargo mapping/freshness mechanism and adopt it in Leto's committed verification path; no mathematical or workload changes.
 - Evidence: merged primary exports `transpose_copy`, but release reused local `leto-2960c0092a779492` metadata without that export; its relative-path dep-info and 05:07 UTC artifact were newer than primary source. Debug compilation passed; release failed E0432 in `application/layout/complex/batch.rs:8`.
-- Current mechanism: verification borrows `../coeus/scripts/lockfile.py::unused_windows_drive`; alternating primary/lane sources can retain one relative-path Cargo identity. Changing Z: to Y: still produced artifact `2960c0092a779492`, so a different drive letter alone is insufficient. Leto's committed lock guard does not own build freshness.
-- Recovery: invalidate only that crate's release fingerprint and artifacts; unchanged source then rebuilds metadata containing `transpose_copy` and passes release CTC 10/10 (`7de39bb0`). No full-cache deletion or source workaround.
+- Current mechanism: verification borrows `../coeus/scripts/lockfile.py::unused_windows_drive`; alternating primary/lane sources can retain one relative-path Cargo identity. Changing Z: to Y: still produced artifact `leto-2960c0092a779492`, so a different drive letter alone is insufficient. Leto's committed lock guard does not own build freshness.
+- Recovery: invalidate only that crate's release fingerprint and artifacts; unchanged source then rebuilds metadata containing `transpose_copy` and passes release CTC 10/10. No full-cache deletion or source workaround.
 - Acceptance: alternate the actual primary and lane source states under one shared cache; each build exposes exactly its own API and computes its expected values, including when the incoming source has older timestamps.
 - Verification: source-identity regression plus the existing locked debug/release CTC gate; no cache fork, Cargo flag suppression, test retries, or source workaround.
 - Dependencies/authority: Atlas-owned standalone runner integration; Change through merge. Prior Apollo performance evidence remains bound to its original dependency graph.
@@ -257,7 +257,7 @@
 
 ## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
 
-- **Integrator:** claude-fable session 03d80d33 subagent.
+- **Integrator:** claude-fable session-03d80d33 subagent.
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.
@@ -411,7 +411,7 @@ open.
   mappers are kwavers-boundary's `indexed_map_inplace` calls (CPML, adaptive
   coupling), and that entry is a sequential row walk with no parallel gate, so
   it neither pays nor needs the threshold this item concerns.
-- **Integrator:** Claude session 03d80d33. **Last-update:** 2026-09-01.
+- **Integrator:** Claude session-03d80d33. **Last-update:** 2026-09-01.
 
 ## Atlas in-house replacement roadmap — leto slice [arch]
 

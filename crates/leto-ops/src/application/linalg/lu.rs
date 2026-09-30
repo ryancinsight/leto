@@ -146,7 +146,6 @@ impl<T: RealScalar> LuDecomposition<T> {
     }
 
     /// Solve `A · x = rhs` directly into a caller-owned view `out`.
-    #[allow(clippy::needless_range_loop)]
     pub fn solve_into(
         &self,
         rhs: &ArrayView1<'_, T>,
@@ -168,12 +167,12 @@ impl<T: RealScalar> LuDecomposition<T> {
 
         if let Some(out_slice) = out.as_mut_slice() {
             if let Some(rhs_slice) = rhs.as_slice() {
-                for k in 0..n {
-                    out_slice[k] = rhs_slice[self.pivots[k]];
+                for (k, slot) in out_slice[..n].iter_mut().enumerate() {
+                    *slot = rhs_slice[self.pivots[k]];
                 }
             } else {
-                for k in 0..n {
-                    out_slice[k] = *rhs.get([self.pivots[k]])?;
+                for (k, slot) in out_slice[..n].iter_mut().enumerate() {
+                    *slot = *rhs.get([self.pivots[k]])?;
                 }
             }
             self.solve_in_place(out_slice);

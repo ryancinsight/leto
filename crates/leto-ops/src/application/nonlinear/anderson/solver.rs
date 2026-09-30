@@ -255,7 +255,6 @@ impl<T: RealField + Copy + FloatElement + std::fmt::Debug> AndersonAccelerator<T
     ///
     /// # Returns
     /// Accelerated next state $\mathbf{x}_{k+1}$.
-    #[allow(clippy::many_single_char_names)]
     pub fn compute_next(&mut self, x: &Array1<T>, g_x: &Array1<T>) -> Array1<T> {
         let f = sub(g_x, x);
 

@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Leto is a systems-optimized N-dimensional strided array library.
 
 /// Application-level array and view types.

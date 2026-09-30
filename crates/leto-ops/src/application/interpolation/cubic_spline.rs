@@ -14,10 +14,8 @@ use super::{check_bounds, search::find_interval, validate_nodes, Interpolation1D
 use eunomia::{FloatElement, RealField};
 use leto::{LetoError, Result};
 
-#[inline]
-fn f64_as<T: FloatElement>(v: f64) -> T {
-    T::from_f64(v)
-}
+/// Natural-spline polynomial coefficients `(a, b, c, d)` per interval.
+type SplineCoefficients<T> = (Vec<T>, Vec<T>, Vec<T>, Vec<T>);
 
 /// Natural cubic spline interpolation.
 #[derive(Debug, Clone)]
@@ -48,16 +46,15 @@ impl<T: RealField + FloatElement + Copy> CubicSplineInterpolation<T> {
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn compute_coefficients<T: RealField + FloatElement + Copy>(
     x: &[T],
     y: &[T],
-) -> Result<(Vec<T>, Vec<T>, Vec<T>, Vec<T>)> {
+) -> Result<SplineCoefficients<T>> {
     let n = x.len();
     let nm1 = n - 1;
-    let zero = f64_as::<T>(0.0);
-    let three = f64_as::<T>(3.0);
-    let two = f64_as::<T>(2.0);
+    let zero = T::from_f64(0.0);
+    let three = T::from_f64(3.0);
+    let two = T::from_f64(2.0);
 
     let a = y.to_vec();
     let h: Vec<T> = (0..nm1).map(|i| x[i + 1] - x[i]).collect();
@@ -70,7 +67,7 @@ fn compute_coefficients<T: RealField + FloatElement + Copy>(
     let mut l = vec![zero; n];
     let mut mu = vec![zero; n];
     let mut z = vec![zero; n];
-    l[0] = f64_as(1.0);
+    l[0] = T::from_f64(1.0);
     for i in 1..nm1 {
         l[i] = two * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
         if l[i] == zero {
@@ -81,7 +78,7 @@ fn compute_coefficients<T: RealField + FloatElement + Copy>(
         mu[i] = h[i] / l[i];
         z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
     }
-    l[nm1] = f64_as(1.0);
+    l[nm1] = T::from_f64(1.0);
 
     let mut c = vec![zero; n];
     let mut b = vec![zero; nm1];
