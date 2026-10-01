@@ -32,7 +32,7 @@ moirai = { package = "moirai-runtime", version = "0.6.0", git = "https://github.
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 aequitas = { package = "aequitas", version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
-themis = { package = "themis-topology", version = "0.10.1", git = "https://github.com/ryancinsight/themis", default-features = false }
+themis = { package = "themis-topology", version = "0.11.0", git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # ── Dev-only compatibility deps were removed per LETO-NDARRAY-BOUNDARY-1 ──
 
