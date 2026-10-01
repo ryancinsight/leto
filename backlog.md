@@ -1,5 +1,19 @@
 # Leto Work Backlog
 
+<a id="LETO-RESCUE-QUEUE"></a>
+
+## LETO-RESCUE-QUEUE — Complete or close the open rescue PRs [patch] — todo
+
+- priority: correctness
+- needs: none
+- scope: `crates/leto-ops/` (code: 62 paths each, linalg/attention/sparse/benches), `backlog.md`
+- Outcome: each rescue PR below is completed onto current main (ported, fmt, gate green, merged) or closed once its diff resolves empty against main.
+- Acceptance: no open `rescue/` PR for leto remains unaccounted for.
+- ryancinsight/leto#299 (`rescue/leto-conformance-sweep-20260929`): one commit on base e3dd4ae; conformance sweep (module roots, oversized splits, lint-cause fixes), +2142/-2094 over 62 paths incl. `backlog.md`; fails `cargo fmt --check`.
+- ryancinsight/leto#292 (`rescue/leto-stale-dirty-work-20260929`): one commit on base e3dd4ae; unique dirt from a stale detached checkout, +2128/-2092 over the same 62 paths; unverified.
+- Overlap: #299 and #292 differ in 4 files (+4/-16) (`benches/kernels.rs`, two bench submodules, `sparse/csr.rs`); treat them as one change. Port #299 first, then diff #292 against the result and close it once empty.
+- Next step: port #299 onto the fetched main hunk by hunk (both touch `backlog.md`, so resolve that file against current board content), run `cargo fmt`, then the committed gate.
+
 <a id="LETO-COLPIVQR-NORM-DOWNDATE-2026-09-27"></a>
 
 ## LETO-COLPIVQR-NORM-DOWNDATE-2026-09-27 — col_piv_qr recomputes every remaining column's tail norm each step [patch] — todo
