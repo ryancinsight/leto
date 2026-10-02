@@ -249,3 +249,7 @@ impl<T: RealScalar> ColumnNorms<T> for RecomputedColumnNorms {
     #[cfg(test)]
     fn assert_bounds_cover_exact_keys(&self, _r: &[T], _n: usize, _m: usize, _first_row: usize) {}
 }
+
+#[cfg(test)]
+#[path = "column_norms/tests.rs"]
+mod tests;

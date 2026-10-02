@@ -135,6 +135,38 @@ impl<T: RealScalar> Arithmetic<T> {
         TailBounds::new(tail.lower.max(T::ZERO), tail.upper)
     }
 
+    /// Bound the norm change from the rounded left application of a reflector.
+    ///
+    /// `householder::apply_left` accumulates each dot product in reflector-row
+    /// order, scales it by `beta`, then updates each output component through
+    /// `Scalar::axpy_slice`. The Hermes SIMD path can fuse the update's multiply
+    /// and add; the scalar path rounds them separately. The bound below allows
+    /// two rounded operations for every dot term and output component, so it
+    /// covers both paths. It assumes finite intermediates, round-to-nearest,
+    /// gradual underflow, and a nonnegative reflector coefficient.
+    ///
+    /// Let `u = rho`, `a = tau`, `l = v.len()`, and `k = 2l`. For `ku < 1`,
+    /// composing the componentwise operation bound `|fl(z) - z| ≤ u|z| + a`
+    /// gives `gamma = ku/(1-ku)` and additive error `eta = ka/(1-ku)` for the
+    /// dot product. Cauchy-Schwarz bounds `Σ|vᵢxᵢ|` by `‖v‖₂‖x‖₂`. Rounding
+    /// `beta * dot` then gives relative coefficient error
+    /// `g = (1+u)(1+gamma)-1` and absolute error
+    /// `eta_p = |beta|(1+u)eta+a`.
+    ///
+    /// One separate multiply and add in an output update has relative terms
+    /// bounded by `u|xᵢ| + c|beta·dot·vᵢ|`, with `c = 2u+u²`, and additive
+    /// error `(2+u)a`. This also bounds a fused update. Thus the update error
+    /// norm is at most `r‖x‖₂ + b`, where
+    /// `r = u + |beta|‖v‖₂²[g+c(1+g)]` and
+    /// `b = (1+c)‖v‖₂eta_p + √l(2+u)a`.
+    ///
+    /// For the exact matrix `H = I - beta·v·vᵀ`, reflector construction gives
+    /// `beta ≥ 0`; its singular values are `1` off `v` and
+    /// `|1-beta‖v‖₂²|` along `v`. Their distance from one is bounded by
+    /// `d = |beta‖v‖₂²-2|`. Therefore the rounded result `y` satisfies
+    /// `|‖y‖₂-‖x‖₂| ≤ (d+r)‖x‖₂+b`. If this right-hand side is `e`, then
+    /// `|‖y‖₂²-‖x‖₂²| ≤ 2‖x‖₂e+e²`; `ReflectorError::apply` rounds this drift
+    /// outward before the pivot-row entry is removed.
     pub(super) fn reflector_error(self, reflector: &Reflector<T>) -> Option<ReflectorError<T>> {
         let length = reflector.v.len();
         let mut squared_norm = Interval::point(T::ZERO)?;
@@ -400,49 +432,5 @@ impl<T: RealScalar> TailBounds<T> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::Arithmetic;
-    use crate::application::linalg::thresholds::{machine_epsilon, safe_min};
-    use crate::domain::real::RealScalar;
-
-    fn pivot_keys_remain_enclosed_at_exponent_boundaries<T: RealScalar>() {
-        let epsilon = machine_epsilon::<T>();
-        let sigma = safe_min::<T>().mul(epsilon);
-        let arithmetic = Arithmetic::new().expect("shipped format meets the error bound");
-        let values = [
-            T::ZERO,
-            sigma,
-            sigma.scale_binary(1),
-            safe_min::<T>(),
-            safe_min::<T>().scale_binary(1),
-            T::ONE.scale_binary(-1),
-            T::ONE,
-        ];
-
-        for value in values {
-            let Some(bounds) = arithmetic.enclose_squared_sum(value, 1) else {
-                panic!("finite boundary value must admit a norm interval: {value:?}");
-            };
-            let Some(key) = arithmetic.pivot_key(bounds, 1) else {
-                panic!("finite boundary value must admit a pivot interval: {value:?}");
-            };
-            assert!(
-                key.contains(value),
-                "native key {value:?} outside [{:?}, {:?}] for {}",
-                key.lower,
-                key.upper,
-                core::any::type_name::<T>()
-            );
-        }
-    }
-
-    #[test]
-    fn pivot_key_intervals_cover_normal_and_subnormal_boundaries() {
-        use eunomia::{Bf16, F16};
-
-        pivot_keys_remain_enclosed_at_exponent_boundaries::<f64>();
-        pivot_keys_remain_enclosed_at_exponent_boundaries::<f32>();
-        pivot_keys_remain_enclosed_at_exponent_boundaries::<F16>();
-        pivot_keys_remain_enclosed_at_exponent_boundaries::<Bf16>();
-    }
-}
+#[path = "norm_bounds/tests.rs"]
+mod tests;

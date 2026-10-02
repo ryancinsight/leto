@@ -61,6 +61,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Test bounded benchmark runner
+        working-directory: scripts
+        run: python -m unittest discover -s tests/bench -t tests -p 'test_*.py'
+
       - name: Install the pinned Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
