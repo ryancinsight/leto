@@ -14,7 +14,7 @@ fn reserve<T>(length: usize) -> Result<Vec<T>, CtcError> {
 }
 
 fn extent<T: RealScalar>(value: usize) -> Result<T, CtcError> {
-    let scalar = T::from_usize(value);
+    let scalar = T::from_count(value);
     if !NumericElement::is_finite(scalar) {
         return Err(CtcError::ScalarExtent { extent: value });
     }

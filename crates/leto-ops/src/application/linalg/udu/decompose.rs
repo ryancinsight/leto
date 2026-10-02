@@ -52,7 +52,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
             }
         }
     }
-    let sym_tol = scale.mul(T::ONE.div(T::from_usize(1_000_000_000)));
+    let sym_tol = scale.mul(T::ONE.div(T::from_count(1_000_000_000)));
     for i in 0..n {
         for j in (i + 1)..n {
             if a[i * n + j].sub(a[j * n + i]).abs() > sym_tol {

@@ -14,8 +14,8 @@ where
     let values = (0..ny)
         .flat_map(|y| {
             (0..nx).map(move |x| {
-                let x = T::from_usize(x) * dx;
-                let y = T::from_usize(y) * dy;
+                let x = T::from_count(x) * dx;
+                let y = T::from_count(y) * dy;
                 x * x + three * y * y
             })
         })

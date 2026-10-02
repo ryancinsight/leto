@@ -63,7 +63,7 @@ pub(super) fn diagonalize<T: RealScalar>(
 ) -> Result<()> {
     let mut shift_total = T::ZERO;
     let mut sweeps = 0_usize;
-    let two = T::from_usize(2);
+    let two = T::from_count(2);
     // `tql2` grows `t` as `l` advances; the full `t = maxᵢ(|dᵢ| + |eᵢ|)` from
     // the start keeps deflation normwise over the whole matrix, which is what
     // the backward-error bound assumes, and bounds the shift ratio below: a

@@ -1,6 +1,7 @@
 //! [`AxisReduction`] strategy marker types: `Sum`/`Product`/`Mean`/`Min`/`Max`.
 
 use crate::domain::scalar::Scalar;
+use eunomia::FloatElement;
 
 mod sealed {
     pub trait Sealed {}
@@ -31,6 +32,8 @@ pub struct SumAxis;
 pub struct ProductAxis;
 
 /// Mean axis-reduction marker.
+///
+/// Defined for float elements: the divisor is the axis length converted to `T`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MeanAxis;
 
@@ -112,7 +115,7 @@ impl<T: Scalar> AxisReduction<T> for ProductAxis {
     }
 }
 
-impl<T: Scalar> AxisReduction<T> for MeanAxis {
+impl<T: Scalar + FloatElement> AxisReduction<T> for MeanAxis {
     #[inline(always)]
     fn initial(first: T) -> T {
         first
@@ -125,7 +128,7 @@ impl<T: Scalar> AxisReduction<T> for MeanAxis {
 
     #[inline(always)]
     fn finalize(acc: T, axis_len: usize) -> T {
-        acc.div(T::from_usize(axis_len))
+        acc.div(T::from_count(axis_len))
     }
 
     const ALLOW_EMPTY: bool = false;

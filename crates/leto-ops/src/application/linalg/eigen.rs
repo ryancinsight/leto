@@ -72,7 +72,7 @@ fn default_tolerance<T: RealScalar>() -> T {
 /// `O(n²)·ε·‖A‖_F` backward error the rotations commit, so accepting it costs
 /// no accuracy the solver had.
 fn symmetry_bound<T: RealScalar>(norm: T, n: usize) -> T {
-    T::from_usize(n + 2).mul(machine_epsilon::<T>()).mul(norm)
+    T::from_count(n + 2).mul(machine_epsilon::<T>()).mul(norm)
 }
 
 /// Compute the eigendecomposition of a real symmetric matrix with Jacobi rotations.

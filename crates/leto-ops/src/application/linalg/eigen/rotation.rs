@@ -123,7 +123,7 @@ where
         return;
     }
 
-    let two = T::from_usize(2);
+    let two = T::from_count(2);
     let half = T::ONE.div(two);
     // theta = 0.5 * atan2(2*apq, aqq - app)
     let theta = half.mul(two.mul(apq).atan2(aqq.sub(app)));
