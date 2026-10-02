@@ -74,7 +74,7 @@ fn forward_backward_contract<T: RealScalar + RealField>() {
     );
 
     let mut gradient = array([2, 3], vec![<T as NumericElement>::ZERO; 6]);
-    let output_gradient = array([1], vec![T::from_usize(2)]);
+    let output_gradient = array([1], vec![T::from_count(2)]);
     cross_entropy_backward_accumulate(
         &output_gradient.view(),
         &probabilities.view(),

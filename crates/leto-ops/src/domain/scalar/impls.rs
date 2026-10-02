@@ -11,17 +11,10 @@ use super::fallback::{
 use super::Scalar;
 
 /// Routes every slice operation through [`SimdStrategy`] first, falling back
-/// to the scalar loop when the strategy declines. `$from_usize` is the
-/// type's index conversion: a primitive cast for the machine floats, the
-/// widening constructor for the reduced-precision types.
+/// to the scalar loop when the strategy declines.
 macro_rules! impl_scalar_simd {
-    ($t:ty, $from_usize:expr) => {
+    ($t:ty) => {
         impl Scalar for $t {
-            #[inline(always)]
-            fn from_usize(value: usize) -> Self {
-                ($from_usize)(value)
-            }
-
             #[inline]
             fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
                 assert_eq!(a.len(), b.len(), "add_slice: a.len() != b.len()");
@@ -239,22 +232,17 @@ macro_rules! impl_scalar_simd {
 
 macro_rules! impl_scalar_plain {
     ($t:ty) => {
-        impl Scalar for $t {
-            #[inline(always)]
-            fn from_usize(value: usize) -> Self {
-                value as $t
-            }
-        }
+        impl Scalar for $t {}
     };
 }
 
-impl_scalar_simd!(f32, |value: usize| value as f32);
-impl_scalar_simd!(f64, |value: usize| value as f64);
+impl_scalar_simd!(f32);
+impl_scalar_simd!(f64);
 // Hermes serves every routed operation at F16 and Bf16 (elementwise,
 // reductions, axpy, gemv, tiled GEMM), so both reduced-precision types take
 // the same path as the machine floats.
-impl_scalar_simd!(F16, |value: usize| F16::from_f32(value as f32));
-impl_scalar_simd!(Bf16, |value: usize| Bf16::from_f32(value as f32));
+impl_scalar_simd!(F16);
+impl_scalar_simd!(Bf16);
 
 /// Complex scalars participate in the operation contract through the same
 /// element-wise defaults as the plain real and integer types.
@@ -270,18 +258,7 @@ impl_scalar_simd!(Bf16, |value: usize| Bf16::from_f32(value as f32));
 /// Ordering-dependent surfaces stay real by construction: they are bound on
 /// [`RealScalar`](crate::domain::real::RealScalar), which complex does not
 /// implement because the complex field admits no total order.
-impl<T> Scalar for Complex<T>
-where
-    T: Scalar + CastFrom<i32> + core::ops::Neg<Output = T>,
-{
-    #[inline(always)]
-    fn from_usize(value: usize) -> Self {
-        Self::new(
-            <T as Scalar>::from_usize(value),
-            <T as NumericElement>::ZERO,
-        )
-    }
-}
+impl<T> Scalar for Complex<T> where T: Scalar + CastFrom<i32> + core::ops::Neg<Output = T> {}
 
 impl_scalar_plain!(i8);
 impl_scalar_plain!(u8);

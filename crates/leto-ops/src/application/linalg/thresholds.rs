@@ -5,9 +5,8 @@ use crate::domain::real::RealScalar;
 /// Denominator for the default rank and pivot relative threshold.
 ///
 /// The value is expressed as `f64` at the conversion boundary because the
-/// scalar contract's `from_usize` constructor cannot represent this value on a
-/// 32-bit target. The resulting threshold remains in the caller's native
-/// precision.
+/// count conversion cannot represent this value on a 32-bit target. The
+/// resulting threshold remains in the caller's native precision.
 const RANK_PIVOT_DENOMINATOR: f64 = 1_000_000_000_000.0;
 
 /// Return the default relative rank and pivot threshold (`1e-12`) in `T`.
@@ -23,7 +22,7 @@ pub(crate) fn rank_pivot_ratio<T: RealScalar>() -> T {
 /// computed through `T`'s own addition, so it is the epsilon of the arithmetic
 /// the kernels actually perform. `O(p)` for a `p`-bit significand.
 pub(crate) fn machine_epsilon<T: RealScalar>() -> T {
-    let half = T::ONE.div(T::from_usize(2));
+    let half = T::ONE.div(T::from_count(2));
     let mut epsilon = T::ONE;
     while T::ONE.add(epsilon.mul(half)) > T::ONE {
         epsilon = epsilon.mul(half);
@@ -44,7 +43,7 @@ pub(crate) fn machine_epsilon<T: RealScalar>() -> T {
 /// exponent-width constant). `O(p)` for a `p`-bit exponent range.
 pub(crate) fn safe_min<T: RealScalar>() -> T {
     let eps = machine_epsilon::<T>();
-    let two = T::from_usize(2);
+    let two = T::from_count(2);
     let mut candidate = T::ONE;
     loop {
         let halved = candidate.div(two);
@@ -60,7 +59,7 @@ pub(crate) fn safe_min<T: RealScalar>() -> T {
 /// two — computed through `T`'s own arithmetic like [`safe_min`]. (The scalar
 /// contract's `MAX_VALUE` is the reduction identity `+∞`, not this.)
 pub(crate) fn overflow_threshold<T: RealScalar>() -> T {
-    let two = T::from_usize(2);
+    let two = T::from_count(2);
     let mut power = T::ONE;
     loop {
         let next = power.mul(two);

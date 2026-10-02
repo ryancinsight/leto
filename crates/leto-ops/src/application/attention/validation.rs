@@ -184,7 +184,7 @@ fn validate_forward_arithmetic<T: RealScalar + RealField>(
                 let support_bound = active_keys
                     .checked_next_power_of_two()
                     .ok_or(AttentionError::WorkspaceOverflow)?;
-                if !NumericElement::is_finite(T::from_usize(support_bound)) {
+                if !NumericElement::is_finite(T::from_count(support_bound)) {
                     return Err(AttentionError::ArithmeticNonFinite {
                         operand: AttentionOperand::Weights,
                     });
@@ -199,8 +199,8 @@ fn validate_probability_weights<T: RealScalar + RealField>(
     weights: &ArrayView<'_, T, 3>,
     plan: AttentionPlan,
 ) -> AttentionResult<()> {
-    let width = T::from_usize(plan.key_len);
-    let tolerance = <T as RealField>::EPSILON * width * T::from_usize(4);
+    let width = T::from_count(plan.key_len);
+    let tolerance = <T as RealField>::EPSILON * width * T::from_count(4);
     if !NumericElement::is_finite(tolerance) || tolerance >= T::from_f64(0.5) {
         return Err(AttentionError::ArithmeticNonFinite {
             operand: AttentionOperand::Weights,

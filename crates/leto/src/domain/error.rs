@@ -67,6 +67,11 @@ pub enum LetoError {
         tol: f64,
     },
 
+    /// An element count does not fit the integer element type it was
+    /// converted to.
+    #[error("Element count conversion failed")]
+    CountRange(#[from] eunomia::CountRangeError),
+
     /// An invalid input or configuration was supplied to an operation or solver.
     #[error("Invalid input: {0}")]
     InvalidInput(String),

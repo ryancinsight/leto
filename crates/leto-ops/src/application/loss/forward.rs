@@ -87,7 +87,7 @@ pub fn cross_entropy_forward_into<T: RealScalar + RealField>(
             write(probabilities, [batch, class], probability);
         }
         let row_loss = FloatElement::ln(row_sum) + (row_max - read(logits, [batch, target]));
-        let row_count = T::from_usize(batch + 1);
+        let row_count = T::from_count(batch + 1);
         mean_loss += (row_loss - mean_loss) / row_count;
     }
 

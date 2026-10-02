@@ -33,7 +33,7 @@ impl<T: RealScalar> Deflation<T> {
     pub(super) fn new(d: &[T], e: &[T], k: usize) -> Self {
         let eps = thresholds::machine_epsilon::<T>();
         let eighth_root = T::ONE.div(eps).sqrt().sqrt().sqrt();
-        let (ten, hundred) = (T::from_usize(10), T::from_usize(100));
+        let (ten, hundred) = (T::from_count(10), T::from_count(100));
         let capped = if eighth_root < hundred {
             eighth_root
         } else {
@@ -52,7 +52,7 @@ impl<T: RealScalar> Deflation<T> {
                 sminoa = mu;
             }
         }
-        let sminoa = sminoa.div(T::from_usize(k).sqrt());
+        let sminoa = sminoa.div(T::from_count(k).sqrt());
         let relative = tol.mul(sminoa);
         let floor = deflation_floor::<T>();
         Self {
@@ -86,9 +86,9 @@ impl<T: RealScalar> Deflation<T> {
             }
         }
         let eps = thresholds::machine_epsilon::<T>();
-        let hundredth = self.tol.div(T::from_usize(100));
+        let hundredth = self.tol.div(T::from_count(100));
         let bound = if eps > hundredth { eps } else { hundredth };
-        T::from_usize(self.order)
+        T::from_count(self.order)
             .mul(self.tol)
             .mul(smallest.div(largest))
             <= bound

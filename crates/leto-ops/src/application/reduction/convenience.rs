@@ -4,6 +4,7 @@ use super::axis::{reduce_axis, reduce_axis_into};
 use super::strategies::{MaxAxis, MeanAxis, MinAxis, ProductAxis, SumAxis};
 use super::whole_array::reduce_all;
 use crate::domain::scalar::Scalar;
+use eunomia::FloatElement;
 use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
 
 /// Sum `input` along `axis`, keeping the reduced axis as length one.
@@ -46,7 +47,7 @@ pub fn product_axis<T: Scalar, const N: usize>(
 
 /// Mean-reduce `input` along `axis`, keeping the reduced axis as length one.
 #[inline]
-pub fn mean_axis_into<T: Scalar, const N: usize>(
+pub fn mean_axis_into<T: Scalar + FloatElement, const N: usize>(
     input: &ArrayView<'_, T, N>,
     axis: usize,
     output: &mut ArrayViewMut<'_, T, N>,
@@ -56,7 +57,7 @@ pub fn mean_axis_into<T: Scalar, const N: usize>(
 
 /// Mean-reduce `input` along `axis` into newly allocated C-contiguous output storage.
 #[inline]
-pub fn mean_axis<T: Scalar, const N: usize>(
+pub fn mean_axis<T: Scalar + FloatElement, const N: usize>(
     input: &ArrayView<'_, T, N>,
     axis: usize,
 ) -> Result<Array<T, VecStorage<T>, N>> {

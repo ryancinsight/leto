@@ -22,6 +22,10 @@ where
 {
 }
 
+fn scalar_count<T: leto_ops::Scalar>(count: usize) -> Result<T, eunomia::CountRangeError> {
+    T::try_from_count(count)
+}
+
 #[test]
 fn scalar_traits_are_eunomia_extensions() {
     assert_scalar_supertrait::<f32>();
@@ -38,16 +42,20 @@ fn scalar_traits_are_eunomia_extensions() {
     assert_real_supertrait::<eunomia::F16>();
     assert_real_supertrait::<eunomia::Bf16>();
 
-    assert_eq!(<f64 as leto_ops::Scalar>::from_usize(3), 3.0);
-    assert_eq!(<isize as leto_ops::Scalar>::from_usize(5), 5_isize);
-    assert_eq!(<usize as leto_ops::Scalar>::from_usize(6), 6_usize);
+    assert_eq!(scalar_count::<f64>(3), Ok(3.0));
+    assert_eq!(scalar_count::<isize>(5), Ok(5_isize));
+    assert_eq!(scalar_count::<usize>(6), Ok(6_usize));
     assert_eq!(
-        <eunomia::F16 as leto_ops::Scalar>::from_usize(4),
-        eunomia::F16::from_f32(4.0)
+        scalar_count::<eunomia::F16>(4),
+        Ok(eunomia::F16::from_f32(4.0))
     );
     assert_eq!(
-        <eunomia::Bf16 as leto_ops::Scalar>::from_usize(4),
-        eunomia::Bf16::from_f32(4.0)
+        scalar_count::<eunomia::Bf16>(4),
+        Ok(eunomia::Bf16::from_f32(4.0))
+    );
+    assert_eq!(
+        scalar_count::<i8>(128),
+        Err(eunomia::CountRangeError::new::<i8>(128))
     );
 }
 

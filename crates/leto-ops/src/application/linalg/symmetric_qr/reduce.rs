@@ -27,7 +27,7 @@ pub(super) fn tridiagonalize<T: RealScalar>(
 ) {
     scratch.clear();
     scratch.resize(n, T::ZERO);
-    let half = T::ONE.div(T::from_usize(2));
+    let half = T::ONE.div(T::from_count(2));
     for k in 0..n.saturating_sub(2) {
         diagonal[k] = a[k * n + k];
         let (head, trailing) = a.split_at_mut((k + 1) * n);

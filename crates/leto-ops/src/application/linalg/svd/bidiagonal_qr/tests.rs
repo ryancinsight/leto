@@ -322,20 +322,20 @@ fn largest_entry_reads_every_boundary_of_the_active_block<T: RealScalar>() {
     // Block is [1, 3] inside a length-5 array; outside entries (indices 0,
     // 4 and the e's at 0, 3) are four distinct decoys, each larger than
     // the in-block maximum of 5, so an over-scanning mutant is caught.
-    let (five, one, half) = (T::from_usize(5), T::ONE, T::ONE.div(T::from_usize(2)));
+    let (five, one, half) = (T::from_count(5), T::ONE, T::ONE.div(T::from_count(2)));
     let (d0, e0, e3, d4) = (
-        T::from_usize(101),
-        T::from_usize(103),
-        T::from_usize(107),
-        T::from_usize(109),
+        T::from_count(101),
+        T::from_count(103),
+        T::from_count(107),
+        T::from_count(109),
     );
 
     // d(p) = d(1) uniquely largest in-block.
     let mut d = vec![d0, five, one, half, d4];
     let mut e = vec![
         e0,
-        T::from_usize(2).div(T::from_usize(10)),
-        T::from_usize(3).div(T::from_usize(10)),
+        T::from_count(2).div(T::from_count(10)),
+        T::from_count(3).div(T::from_count(10)),
         e3,
     ];
     let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
@@ -345,17 +345,17 @@ fn largest_entry_reads_every_boundary_of_the_active_block<T: RealScalar>() {
     let mut d = vec![d0, half, one, five, d4];
     let mut e = vec![
         e0,
-        T::from_usize(2).div(T::from_usize(10)),
-        T::from_usize(3).div(T::from_usize(10)),
+        T::from_count(2).div(T::from_count(10)),
+        T::from_count(3).div(T::from_count(10)),
         e3,
     ];
     let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
     assert_eq!(block.largest_entry(), five, "d(q) must be read");
 
     // e(q-1) = e(2), the interior superdiagonal, uniquely largest in-block.
-    let seven_tenths = T::from_usize(7).div(T::from_usize(10));
+    let seven_tenths = T::from_count(7).div(T::from_count(10));
     let mut d = vec![d0, half, one, seven_tenths, d4];
-    let mut e = vec![e0, T::from_usize(2).div(T::from_usize(10)), five, e3];
+    let mut e = vec![e0, T::from_count(2).div(T::from_count(10)), five, e3];
     let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
     assert_eq!(block.largest_entry(), five, "e(q-1) must be read");
 }
@@ -396,7 +396,7 @@ fn zero_shift_test_scopes_smax_to_the_active_block<T: RealScalar>() {
     // `dbdsqr`'s tolmul/tol/bound, exactly as `Deflation::new` derives them.
     let eps = thresholds::machine_epsilon::<T>();
     let eighth_root = T::ONE.div(eps).sqrt().sqrt().sqrt();
-    let (ten, hundred) = (T::from_usize(10), T::from_usize(100));
+    let (ten, hundred) = (T::from_count(10), T::from_count(100));
     let capped = if eighth_root < hundred {
         eighth_root
     } else {
@@ -404,15 +404,15 @@ fn zero_shift_test_scopes_smax_to_the_active_block<T: RealScalar>() {
     };
     let tolmul = if capped > ten { capped } else { ten };
     let tol = tolmul.mul(eps);
-    let hundredth = tol.div(T::from_usize(100));
+    let hundredth = tol.div(T::from_count(100));
     let bound = if eps > hundredth { eps } else { hundredth };
 
     let n = 5usize;
-    let outside = T::from_usize(1000);
+    let outside = T::from_count(1000);
     // Block-scoped SMAX is 1: the zero-shift test fires when
     // `n·tol·x ≤ bound`, i.e. `x ≤ bound/(n·tol)`. Pick `x` at twice that
     // cutoff so the correctly-scoped test does not fire.
-    let cutoff = bound.div(T::from_usize(n).mul(tol));
+    let cutoff = bound.div(T::from_count(n).mul(tol));
     let x = cutoff.add(cutoff);
     assert!(
         x < T::ONE,
@@ -467,21 +467,21 @@ fn zero_shift_test_scopes_smax_to_the_active_block_across_scalar_types() {
 fn largest_entry_is_dominated_by_a_reachable_in_block_superdiagonal<T: RealScalar>() {
     use super::chase::{Down, Oriented};
 
-    let (outside_d0, outside_d4) = (T::from_usize(7), T::from_usize(9).neg());
+    let (outside_d0, outside_d4) = (T::from_count(7), T::from_count(9).neg());
     let one = T::ONE;
     let mut d = vec![outside_d0, one, one, one, outside_d4];
     // e[0] = e[3] = 0: block [1, 3] is genuinely severed from d[0]/d[4],
     // as a real split would leave it. e[2] dominates every in-block d.
     let mut e = vec![
         T::ZERO,
-        T::from_usize(2).div(T::from_usize(10)),
-        T::from_usize(5),
+        T::from_count(2).div(T::from_count(10)),
+        T::from_count(5),
         T::ZERO,
     ];
     let block = Oriented::<T, Down>::new(&mut d, &mut e, 1, 3);
     assert_eq!(
         block.largest_entry(),
-        T::from_usize(5),
+        T::from_count(5),
         "SMAX must be the in-block superdiagonal e[2], not the in-block d's"
     );
 }

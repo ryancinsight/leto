@@ -11,13 +11,11 @@ use super::fallback::{
 ///
 /// Eunomia owns the foundational numeric element contract: constants, primitive
 /// arithmetic traits, bit operations, finite/NaN predicates, and representation
-/// metadata. `Scalar` is the Leto operation extension over that SSOT. It keeps
-/// the slice-level CPU/SIMD hooks used by array kernels and the construction
-/// helper for dimension-derived scalar values.
+/// metadata, including the checked conversion from an element count
+/// ([`TryFromCount`](eunomia::TryFromCount)). `Scalar` is the Leto operation
+/// extension over that SSOT. It keeps the slice-level CPU/SIMD hooks used by
+/// array kernels.
 pub trait Scalar: NumericElement {
-    /// Construct a scalar from a non-negative element count.
-    fn from_usize(value: usize) -> Self;
-
     /// Element-wise slice addition: `out = a + b`.
     #[inline]
     fn add_slice(a: &[Self], b: &[Self], out: &mut [Self]) {
