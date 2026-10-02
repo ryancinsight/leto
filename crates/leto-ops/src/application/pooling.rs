@@ -87,7 +87,7 @@ pub fn pooling_forward_into<T: Scalar, const R: usize, const D: usize>(
                 if count == 0 {
                     T::ZERO
                 } else {
-                    sum / T::from_usize(count)
+                    sum / T::try_from_count(count)?
                 }
             }
         };
@@ -222,7 +222,7 @@ pub fn pooling_backward_accumulate<T: Scalar, const R: usize, const D: usize>(
                 if average_count == 0 {
                     continue;
                 }
-                let share = gradient / T::from_usize(average_count);
+                let share = gradient / T::try_from_count(average_count)?;
                 for flat_kernel in 0..geometry.kernel_volume {
                     let kernel_spatial = index_from_flat(flat_kernel, parameters.kernel());
                     let Some(input_spatial) = window_input_coordinate(
@@ -248,7 +248,8 @@ pub fn pooling_backward_accumulate<T: Scalar, const R: usize, const D: usize>(
 #[cfg(test)]
 mod tests {
     use super::{pooling_backward_accumulate, pooling_forward_into, PoolingMode};
-    use leto::{Array, WindowParameters};
+    use eunomia::CountRangeError;
+    use leto::{Array, LetoError, WindowParameters};
 
     fn parameters() -> WindowParameters<2> {
         WindowParameters::new([2, 2], [1, 1], [0, 0], [1, 1])
@@ -290,6 +291,33 @@ mod tests {
         assert_eq!(
             grad_input.view().iter().copied().collect::<Vec<_>>(),
             [0.25, 0.5, 0.25, 0.5, 1.0, 0.5, 0.25, 0.5, 0.25]
+        );
+    }
+
+    fn average_over_window(len: usize, fill: i8) -> leto::Result<i8> {
+        let input = Array::from_elem([1, 1, len], fill);
+        let mut output = Array::from_elem([1, 1, 1], 0_i8);
+        let window =
+            WindowParameters::new([len], [1], [0], [1]).expect("valid one-dimensional window");
+        pooling_forward_into(
+            &input.view(),
+            window,
+            PoolingMode::Average,
+            &mut output.view_mut(),
+        )?;
+        Ok(*output.view().iter().next().expect("one output element"))
+    }
+
+    #[test]
+    fn average_forward_divides_by_the_window_count_within_the_element_range() {
+        assert_eq!(average_over_window(127, 1), Ok(1));
+    }
+
+    #[test]
+    fn average_forward_rejects_a_window_count_outside_the_element_range() {
+        assert_eq!(
+            average_over_window(128, 0),
+            Err(LetoError::CountRange(CountRangeError::new::<i8>(128)))
         );
     }
 }

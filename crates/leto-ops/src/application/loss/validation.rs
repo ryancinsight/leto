@@ -75,14 +75,14 @@ fn plan<T: RealScalar + RealField>(
         return Err(CrossEntropyError::EmptyClasses);
     }
     validate_targets(targets, batch, classes)?;
-    let batch_scalar = T::from_usize(batch);
+    let batch_scalar = T::from_count(batch);
     if !NumericElement::is_finite(batch_scalar) {
         return Err(CrossEntropyError::ScalarExtent {
             dimension: "batch",
             extent: batch,
         });
     }
-    let class_scalar = T::from_usize(classes);
+    let class_scalar = T::from_count(classes);
     if !NumericElement::is_finite(class_scalar) {
         return Err(CrossEntropyError::ScalarExtent {
             dimension: "class",
@@ -93,7 +93,7 @@ fn plan<T: RealScalar + RealField>(
     // sums `classes` stored values. Higham's gamma bound for the latter is
     // gamma(k) = k*epsilon/(1-k*epsilon), k = classes - 1. The product below
     // composes the division and summation relative-error bounds.
-    let summation_steps = T::from_usize(classes.saturating_sub(1));
+    let summation_steps = T::from_count(classes.saturating_sub(1));
     let summation_error = <T as RealField>::EPSILON * summation_steps;
     if summation_error >= <T as NumericElement>::ONE {
         return Err(CrossEntropyError::ProbabilityResolution { classes });
@@ -118,7 +118,7 @@ fn validate_forward_values<T: RealScalar>(
     logits: &ArrayView<'_, T, 2>,
     plan: CrossEntropyPlan<T>,
 ) -> CrossEntropyResult<()> {
-    let class_log_bound = FloatElement::ln(T::from_usize(plan.classes));
+    let class_log_bound = FloatElement::ln(T::from_count(plan.classes));
     for batch in 0..plan.batch {
         let mut row_min = *logits
             .get([batch, 0])

@@ -67,5 +67,5 @@ pub fn matrix_rank<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<usize> {
 /// Conservative relative singular-value floor used by [`matrix_rank`].
 #[inline]
 fn default_rank_tolerance<T: RealScalar>() -> T {
-    T::ONE.div(T::from_usize(1_000_000_000))
+    T::ONE.div(T::from_count(1_000_000_000))
 }

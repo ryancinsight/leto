@@ -41,9 +41,9 @@ fn analytical<T: RealScalar>() {
         let state = CtcState::forward(&input.view(), &targets, &[1], &[targets.len()], 0)
             .expect("invariant: analytical fixture satisfies the operation boundary");
         assert_eq!(state.loss(), -half_log);
-        let mut gradient = array([1, 1, 2], vec![T::from_usize(3); 2]);
+        let mut gradient = array([1, 1, 2], vec![T::from_count(3); 2]);
         state
-            .backward_accumulate(T::from_usize(2), &mut gradient.view_mut())
+            .backward_accumulate(T::from_count(2), &mut gradient.view_mut())
             .expect("invariant: analytical fixture satisfies the operation boundary");
         for (&value, expected) in gradient.storage().as_slice().iter().zip(expected) {
             assert_eq!(value, T::from_f64(3.0 + expected));
@@ -82,7 +82,7 @@ fn normalization<T: RealScalar>() {
     // with its log weight equal to the batch divisor, so both ratios are
     // exactly one even when the reciprocal divisor is subnormal.
     let batch = 60_000;
-    let divisor = T::from_usize(batch);
+    let divisor = T::from_count(batch);
     let mut values = vec![T::ZERO; batch];
     values[0] = -divisor;
     let input = array([1, batch, 1], values);
@@ -113,7 +113,7 @@ fn separated_paths<T: RealScalar>() {
     // Pick A with spacing above ln(3), so a single scalar loses path counts.
     // All extra-emission paths are below exp(-A); A>=512 makes their aggregate
     // contribution smaller than unit roundoff even in the widest shipped type.
-    let mut magnitude = T::from_usize(512);
+    let mut magnitude = T::from_count(512);
     while magnitude + T::ONE != magnitude {
         magnitude += magnitude;
     }
@@ -128,7 +128,7 @@ fn separated_paths<T: RealScalar>() {
         );
         let state = CtcState::forward(&input.view(), &[1], &[frames], &[1], 0)
             .expect("invariant: separated paths have finite log likelihood");
-        let expected_loss = magnitude - FloatElement::ln(T::from_usize(frames));
+        let expected_loss = magnitude - FloatElement::ln(T::from_count(frames));
         assert_eq!(state.loss(), expected_loss);
         let mut gradient = array([frames, 1, 2], vec![T::ZERO; frames * 2]);
         state
@@ -229,7 +229,7 @@ fn enumerated<T: RealScalar>() {
         close(state.loss(), -total.ln() / normalization, 40);
         let mut gradient = array([frames, 1, classes], vec![T::ONE; 9]);
         state
-            .backward_accumulate(T::from_usize(2), &mut gradient.view_mut())
+            .backward_accumulate(T::from_count(2), &mut gradient.view_mut())
             .expect("invariant: analytical fixture satisfies the operation boundary");
         for (&actual, posterior) in gradient.storage().as_slice().iter().zip(occupancy) {
             // Forward and suffix recurrences, normalized posterior, class sum,
@@ -256,9 +256,9 @@ fn boundaries<T: RealScalar>() {
         (2.0_f64.ln() + (4.0_f64 / 3.0).ln()) / 2.0,
         20,
     );
-    let mut gradient = array([2, 2, 2], vec![T::from_usize(4); 8]);
+    let mut gradient = array([2, 2, 2], vec![T::from_count(4); 8]);
     state
-        .backward_accumulate(T::from_usize(2), &mut gradient.view_mut())
+        .backward_accumulate(T::from_count(2), &mut gradient.view_mut())
         .expect("invariant: analytical fixture satisfies the operation boundary");
     for (&actual, expected) in gradient.storage().as_slice().iter().zip([
         3.0,

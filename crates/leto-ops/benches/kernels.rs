@@ -356,14 +356,14 @@ fn bench_parallel_crossover(c: &mut Criterion) {
     group.finish();
 }
 
-fn crossover_rows<T: leto_ops::Scalar>(
+fn crossover_rows<T: leto_ops::Scalar + eunomia::FloatElement>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     scalar: &str,
 ) {
     // Exact in every scalar the gate serves, unlike a fractional factor, so the
     // f32 and f64 rows add identical values and differ only in width.
     let pinned = |len: usize, offset: usize| -> Vec<T> {
-        (0..len).map(|i| T::from_usize(i % 997 + offset)).collect()
+        (0..len).map(|i| T::from_count(i % 997 + offset)).collect()
     };
     for &n in &[
         524_288usize,

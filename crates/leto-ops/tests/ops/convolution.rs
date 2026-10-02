@@ -5,7 +5,7 @@
 
 use core::fmt::Debug;
 
-use eunomia::{Bf16, F16};
+use eunomia::{Bf16, FloatElement, F16};
 use leto::{Array, Layout, LetoError, Storage, VecStorage};
 use leto_ops::{
     convolution_backward_accumulate, convolution_forward_into,
@@ -26,11 +26,11 @@ fn array<T: Clone, const R: usize>(
 
 fn forward_contract<T>()
 where
-    T: Scalar + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement + Clone + Debug + PartialEq,
 {
-    let input = array([1, 1, 4], (1..=4).map(T::from_usize).collect::<Vec<_>>());
-    let weight = array([1, 1, 2], vec![T::from_usize(2), T::from_usize(1)]);
-    let bias = array([1], vec![T::from_usize(1)]);
+    let input = array([1, 1, 4], (1..=4).map(T::from_count).collect::<Vec<_>>());
+    let weight = array([1, 1, 2], vec![T::from_count(2), T::ONE]);
+    let bias = array([1], vec![T::ONE]);
     let mut output = array([1, 1, 3], vec![T::ZERO; 3]);
     let parameters = ConvolutionParameters::new([1], [0], [1]).unwrap();
 
@@ -45,17 +45,17 @@ where
 
     assert_eq!(
         output.storage().as_slice(),
-        &[T::from_usize(5), T::from_usize(8), T::from_usize(11)]
+        &[T::from_count(5), T::from_count(8), T::from_count(11)]
     );
 }
 
 fn backward_contract<T>()
 where
-    T: Scalar + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement + Clone + Debug + PartialEq,
 {
-    let input = array([1, 1, 3], (1..=3).map(T::from_usize).collect::<Vec<_>>());
-    let weight = array([1, 1, 2], vec![T::from_usize(2), T::from_usize(3)]);
-    let grad_output = array([1, 1, 2], vec![T::from_usize(5), T::from_usize(7)]);
+    let input = array([1, 1, 3], (1..=3).map(T::from_count).collect::<Vec<_>>());
+    let weight = array([1, 1, 2], vec![T::from_count(2), T::from_count(3)]);
+    let grad_output = array([1, 1, 2], vec![T::from_count(5), T::from_count(7)]);
     let mut grad_input = array([1, 1, 3], vec![T::ONE; 3]);
     let mut grad_weight = array([1, 1, 2], vec![T::ONE; 2]);
     let mut grad_bias = array([1], vec![T::ONE]);
@@ -74,21 +74,21 @@ where
 
     assert_eq!(
         grad_input.storage().as_slice(),
-        &[T::from_usize(11), T::from_usize(30), T::from_usize(22)]
+        &[T::from_count(11), T::from_count(30), T::from_count(22)]
     );
     assert_eq!(
         grad_weight.storage().as_slice(),
-        &[T::from_usize(20), T::from_usize(32)]
+        &[T::from_count(20), T::from_count(32)]
     );
-    assert_eq!(grad_bias.storage().as_slice(), &[T::from_usize(13)]);
+    assert_eq!(grad_bias.storage().as_slice(), &[T::from_count(13)]);
 }
 
 fn transposed_contract<T>()
 where
-    T: Scalar + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement + Clone + Debug + PartialEq,
 {
-    let input = array([1, 1, 2], vec![T::from_usize(1), T::from_usize(2)]);
-    let weight = array([1, 1, 2], vec![T::from_usize(3), T::from_usize(4)]);
+    let input = array([1, 1, 2], vec![T::ONE, T::from_count(2)]);
+    let weight = array([1, 1, 2], vec![T::from_count(3), T::from_count(4)]);
     let bias = array([1], vec![T::ONE]);
     let mut output = array([1, 1, 4], vec![T::ZERO; 4]);
     let parameters = TransposedConvolutionParameters::new([2], [0], [0], [1]).unwrap();
@@ -105,21 +105,21 @@ where
     assert_eq!(
         output.storage().as_slice(),
         &[
-            T::from_usize(4),
-            T::from_usize(5),
-            T::from_usize(7),
-            T::from_usize(9),
+            T::from_count(4),
+            T::from_count(5),
+            T::from_count(7),
+            T::from_count(9),
         ]
     );
 }
 
 fn transposed_backward_contract<T>()
 where
-    T: Scalar + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement + Clone + Debug + PartialEq,
 {
-    let input = array([1, 1, 2], vec![T::from_usize(1), T::from_usize(2)]);
-    let weight = array([1, 1, 2], vec![T::from_usize(3), T::from_usize(4)]);
-    let grad_output = array([1, 1, 4], (5..=8).map(T::from_usize).collect::<Vec<_>>());
+    let input = array([1, 1, 2], vec![T::ONE, T::from_count(2)]);
+    let weight = array([1, 1, 2], vec![T::from_count(3), T::from_count(4)]);
+    let grad_output = array([1, 1, 4], (5..=8).map(T::from_count).collect::<Vec<_>>());
     let mut grad_input = array([1, 1, 2], vec![T::ONE; 2]);
     let mut grad_weight = array([1, 1, 2], vec![T::ONE; 2]);
     let mut grad_bias = array([1], vec![T::ONE]);
@@ -140,13 +140,13 @@ where
 
     assert_eq!(
         grad_input.storage().as_slice(),
-        &[T::from_usize(40), T::from_usize(54)]
+        &[T::from_count(40), T::from_count(54)]
     );
     assert_eq!(
         grad_weight.storage().as_slice(),
-        &[T::from_usize(20), T::from_usize(23)]
+        &[T::from_count(20), T::from_count(23)]
     );
-    assert_eq!(grad_bias.storage().as_slice(), &[T::from_usize(27)]);
+    assert_eq!(grad_bias.storage().as_slice(), &[T::from_count(27)]);
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn transposed_backward_two_dimensional_scatter() {
 fn transposed_backward_three_dimensional_identity_kernel() {
     let input = array(
         [1, 1, 2, 2, 2],
-        (1..=8).map(f64::from_usize).collect::<Vec<_>>(),
+        (1..=8).map(f64::from_count).collect::<Vec<_>>(),
     );
     let weight = array([1, 1, 1, 1, 1], vec![2.0_f64]);
     let grad_output = array([1, 1, 2, 2, 2], vec![1.0_f64; 8]);
@@ -254,7 +254,7 @@ fn transposed_backward_three_dimensional_identity_kernel() {
 fn transposed_three_dimensional_identity_kernel() {
     let input = array(
         [1, 1, 2, 2, 2],
-        (1..=8).map(f32::from_usize).collect::<Vec<_>>(),
+        (1..=8).map(f32::from_count).collect::<Vec<_>>(),
     );
     let weight = array([1, 1, 1, 1, 1], vec![2.0_f32]);
     let mut output = array([1, 1, 2, 2, 2], vec![0.0_f32; 8]);
@@ -401,7 +401,7 @@ fn invalid_transposed_output_shape_preserves_output() {
 fn forward_two_dimensional_padding_and_dilation() {
     let input = array(
         [1, 1, 3, 3],
-        (1..=9).map(f32::from_usize).collect::<Vec<_>>(),
+        (1..=9).map(f32::from_count).collect::<Vec<_>>(),
     );
     let weight = array([1, 1, 2, 2], vec![1.0_f32, 2.0, 3.0, 4.0]);
     let mut output = array([1, 1, 3, 3], vec![0.0_f32; 9]);
@@ -426,7 +426,7 @@ fn forward_two_dimensional_padding_and_dilation() {
 fn forward_three_dimensional_identity_kernel() {
     let input = array(
         [1, 1, 2, 2, 2],
-        (1..=8).map(f64::from_usize).collect::<Vec<_>>(),
+        (1..=8).map(f64::from_count).collect::<Vec<_>>(),
     );
     let weight = array([1, 1, 1, 1, 1], vec![2.0_f64]);
     let mut output = array([1, 1, 2, 2, 2], vec![0.0_f64; 8]);

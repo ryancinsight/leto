@@ -35,17 +35,12 @@ pub struct AndersonConfig<T: RealField> {
     pub method: AndersonMethod,
 }
 
-#[inline]
-fn from_f64<T: FloatElement>(value: f64) -> T {
-    <T as FloatElement>::from_f64(value)
-}
-
 impl<T: RealField + FloatElement> Default for AndersonConfig<T> {
     fn default() -> Self {
         Self {
             history_depth: 5,
-            relaxation: from_f64(1.0),
-            drop_tolerance: from_f64(1e-12),
+            relaxation: T::ONE,
+            drop_tolerance: <T as FloatElement>::from_f64(1e-12),
             method: AndersonMethod::QR,
         }
     }

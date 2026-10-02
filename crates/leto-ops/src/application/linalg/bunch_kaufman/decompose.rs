@@ -65,7 +65,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
         }
     }
 
-    let sym_tol = scale.mul(T::ONE.div(T::from_usize(1_000_000_000)));
+    let sym_tol = scale.mul(T::ONE.div(T::from_count(1_000_000_000)));
     for i in 0..n {
         for j in (i + 1)..n {
             let diff = a[idx(i, j, n)].sub(a[idx(j, i, n)]).abs();
@@ -86,7 +86,7 @@ pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factor
     let mut two = vec![false; n];
 
     // alpha = (1 + sqrt(17)) / 8, the Bunch–Kaufman pivot-growth threshold.
-    let alpha = T::ONE.add(T::from_usize(17).sqrt()).div(T::from_usize(8));
+    let alpha = T::ONE.add(T::from_count(17).sqrt()).div(T::from_count(8));
 
     let mut k = 0usize;
     while k < n {
