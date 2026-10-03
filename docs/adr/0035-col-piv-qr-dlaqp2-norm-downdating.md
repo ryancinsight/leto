@@ -49,8 +49,9 @@ tail `S_j = Σ_{i ≥ k} R[i, j]²` of the returned `R` satisfies
 `S_j ≤ (1 + τ)·R[k, k]²`, with `τ` from the derivation below. Diagonal
 monotonicity is its `j = k + 1` instance. Alongside it hold `‖A·P − Q·R‖_F ≤
 η‖A‖_F` (`backward_error::col_piv_qr`) and the orthonormality bound below. `R`
-is upper triangular by construction (the sub-diagonal is zeroed), so that is
-not asserted. The order of columns with `S_j` within `τ` is unspecified. Where
+is upper triangular exactly: the sub-diagonal is zeroed explicitly, and the
+contract asserts the zeros, since the residual and dominance bounds absorb
+the rounding the reflectors leave there. The order of columns with `S_j` within `τ` is unspecified. Where
 a bound is vacuous (`≥ 1`) its clause is not asserted.
 
 **Orthonormality bound.** `Q̂` accumulates the `p` reflectors into `I` by

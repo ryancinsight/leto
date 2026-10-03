@@ -2,8 +2,8 @@
 //!
 //! The contract asserted on every factorization (`assert_contract`) is the one
 //! of ADR 0035: `A P = Q R` within the a-priori backward error, `Q`
-//! orthonormal within its accumulated reflector error, and each pivot
-//! dominating the exact tail norm of every later column up to
+//! orthonormal within its accumulated reflector error, `R` upper triangular,
+//! and each pivot dominating the exact tail norm of every later column up to
 //! the derived slack `τ` (`backward_error::col_piv_qr_pivot_slack`). The order
 //! of columns whose tail norms differ by less than `τ` is not asserted; an
 //! exact pivot sequence is asserted only where the norms are separated by more
@@ -75,6 +75,14 @@ fn assert_contract<T: Format>(matrix: &Array2<T>) -> (Vec<usize>, usize) {
         (0..columns).collect::<Vec<_>>(),
         "{name}"
     );
+    // The sub-diagonal is zeroed explicitly (`decompose.rs`); the reflectors
+    // leave rounding there, which the residual and dominance bounds absorb.
+    for row in 0..rows {
+        for column in 0..columns.min(row) {
+            assert_eq!(r[row * columns + column], 0.0, "{name}: R[{row},{column}]");
+        }
+    }
+
     // ‖A·P − Q·R‖_F ≤ η‖A‖_F, with Q·R evaluated as Q·I·(Rᵀ)ᵀ in f64.
     if let Some(eta) = informative(backward_error::col_piv_qr(rows, columns, eps)) {
         let mut permuted = vec![0.0; rows * columns];
@@ -300,7 +308,7 @@ fn col_piv_qr_recomputes_below_the_root_of_the_unit_roundoff() {
 ///
 /// No reflector fires, as above. Column 2 is `[1, a, d, 0]` with `a² = 1e-5`,
 /// `d = 1.0074e-6` (`d² = 1.0149e-12`); its reference is `1 + a² + d²`,
-/// rounded by up to `ε/2` absolutely. Step 0 removes the 1: the estimate
+/// rounded by up to `ε` absolutely (two additions). Step 0 removes the 1: the estimate
 /// `a² + d²` over the reference is 1e-5, above `√u = 1.05e-8`, so it is kept
 /// as the current key while the reference stays near 1. Step 1 removes `a`:
 /// the estimate is `d²` plus the carried rounding, `d²·(1 − 4.47e-5)`. Over the
