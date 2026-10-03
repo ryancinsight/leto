@@ -2,7 +2,7 @@
 //! for the integers, and the complex lift.
 
 use crate::domain::strategy::{SimdOperations, SimdStrategy};
-use eunomia::{Bf16, CastFrom, Complex, NumericElement, F16};
+use eunomia::{Bf16, Complex, NumericElement, F16};
 
 use super::fallback::{
     scalar_axpy_rows_batch_fallback, scalar_axpy_rows_fallback, scalar_gemv_strided_fallback,
@@ -258,7 +258,7 @@ impl_scalar_simd!(Bf16);
 /// Ordering-dependent surfaces stay real by construction: they are bound on
 /// [`RealScalar`](crate::domain::real::RealScalar), which complex does not
 /// implement because the complex field admits no total order.
-impl<T> Scalar for Complex<T> where T: Scalar + CastFrom<i32> + core::ops::Neg<Output = T> {}
+impl<T> Scalar for Complex<T> where T: Scalar + core::ops::Neg<Output = T> {}
 
 impl_scalar_plain!(i8);
 impl_scalar_plain!(u8);
