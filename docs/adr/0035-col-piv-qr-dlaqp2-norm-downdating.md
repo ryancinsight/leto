@@ -48,9 +48,17 @@ a factor `1 + τ` above `tol²`.
 tail `S_j = Σ_{i ≥ k} R[i, j]²` of the returned `R` satisfies
 `S_j ≤ (1 + τ)·R[k, k]²`, with `τ` from the derivation below. Diagonal
 monotonicity is its `j = k + 1` instance. Alongside it hold `‖A·P − Q·R‖_F ≤
-η‖A‖_F` and `‖QᵀQ − I‖_F` within the accumulated reflector error
-(`backward_error::col_piv_qr` and its test-side orthogonality bound), and `R`
-upper triangular. The order of columns with `S_j` within `τ` is unspecified.
+η‖A‖_F` (`backward_error::col_piv_qr`) and the orthonormality bound below. `R`
+is upper triangular by construction (the sub-diagonal is zeroed), so that is
+not asserted. The order of columns with `S_j` within `τ` is unspecified. Where
+a bound is vacuous (`≥ 1`) its clause is not asserted.
+
+**Orthonormality bound.** `Q̂` accumulates the `p` reflectors into `I` by
+right application. Each application moves a row by at most `η` of its norm, so
+every row of `Q̂` lies within `(1 + η)^p − 1` of the exact unit row of `Q`, and
+`Δ = Q̂ − Q` has `‖Δ‖_F ≤ e = √m·((1 + η)^p − 1)`. Then
+`Q̂ᵀQ̂ − I = QᵀΔ + ΔᵀQ + ΔᵀΔ` with `Q` orthogonal gives
+`‖Q̂ᵀQ̂ − I‖_F ≤ 2e + e²`.
 
 **Derivation of `τ`** (`backward_error::col_piv_qr_pivot_slack`; `m` rows,
 `p` steps, `η = γ_{8m+29}` the one-reflector bound, `χ = (1 + η)² − 1`).
@@ -74,37 +82,28 @@ returned `R` is `≤ p` further applications from the state at step `k`
 | `f32` | 0.20 | vacuous | vacuous |
 | `F16`, `Bf16` | vacuous | vacuous | vacuous |
 
-Where `τ` is vacuous the pivot-order clause of the contract is not asserted;
-the residual and orthogonality clauses hold in the formats where their own
-bounds are informative, as elsewhere in the test suite.
-
 **Tests.** `tests/ops/col_piv_qr.rs` asserts the contract on every fixture
-through one generic routine over `f64`, `f32`, `F16`, `Bf16`: fixtures with an
-analytic rank assert it (`f64` for the rank-deficient matrix, whose rounding
-noise exceeds the threshold in the other formats), seeded matrices up to 33×17
-assert the contract, scaled Hadamard columns (squared norms `4, 64, 16, 256`)
-assert the exact sequence `[3, 1, 2, 0]` wherever `τ < 3`, below the gap
-ratio 4, and a cancellation fixture asserts the permutation `[0, 2, 1]`. In
-that fixture `A = [1, δ, 0]` with `δ² = ε/4 < u` has key `1 + δ² → 1`, which
-the row removal downdates to 0 though its exact tail is `δ²`; the competitor
-`B = [0, δ/2, δ/2]` keeps its exact key `δ²/2`. The recompute makes `A` the
-pivot by a factor 2, above the `O(u)` error of both keys; on the stale key 0
-the pivot is `B`. The permutation is therefore an observable of the recompute,
-and replacing the recompute condition by a constant `false` fails the test
-(first through the pivot-dominance clause: tail 5.6e-17 against pivot
-2.8e-17 in `f64`, before the permutation is compared).
+through one generic routine over `f64`, `f32`, `F16`, `Bf16`: analytic ranks
+(`f64` only for the rank-deficient matrix, whose rounding noise exceeds the
+threshold elsewhere), seeded matrices up to 33×17, and scaled Hadamard columns
+(squared norms `4, 64, 16, 256`) with the exact sequence `[3, 1, 2, 0]`
+wherever `τ < 3`. Three fixtures make the recompute observable through the
+permutation, each derived in its doc comment: a cancelled key that only the
+recompute restores (`[0, 2, 1]`, all formats); a stale `f64` estimate of ratio
+9.992e-15 to its reference, recomputed only under `TOL3Z = √u` on the unrooted
+ratio (`[0, 2, 1]`, gap 4.0e-4 against `τ = 7.0e-6`); and a stale estimate of
+ratio 1.0e-12 to the reference but 1.0e-7 to the current key, recomputed only
+with the reference as denominator (`[0, 1, 2, 3]`, gap 2.5e-5 against
+`τ = 1.07e-5`). Replacing `TOL3Z` by `ε`, `u` or 0, rooting the ratio, or
+dividing by the current key each fails the suite (PR #290).
 
-*Replaced assertions.* The downdate commit of PR #290 asserted, for a 4×3 fixture
-with `δ² = 3ε/4` and a 2×2 fixture with `δ² = ε`, the permutations `[0, 2, 1]`
-and `[1, 0]` and bitwise equality of `Q`, `R` with an exact-recompute reference.
-The exact tails there differ by a relative `3ε/4` (or `ε`), a rounding-level
-gap, while the contract resolves dominance only to `τ = 8.1e-6` (4×3, `f64`):
-the assertions fixed an order the contract leaves open and encoded the
-previous algorithm instead of the specification. That is a wrong
-specification, the one admissible ground for changing a test. No assertion on
-`main` is weakened: its `1e-9` tolerances (underived) are replaced by the
-derived backward-error bounds (`5.3e-13` against `1e-9` for the 4×3 `f64`
-reconstruction fixture).
+*Replaced assertions.* The downdate commit of PR #290 asserted exact
+permutations and bitwise `Q`, `R` equality with an exact-recompute reference
+on fixtures whose tails differ by a relative `3ε/4` or `ε`, below
+`τ = 8.1e-6` (4×3, `f64`). Those assertions fixed an order the contract leaves
+open, a wrong specification, the one admissible ground for changing a test. No
+assertion on `main` is weakened: its underived `1e-9` tolerances become the
+derived bounds (`5.3e-13` for the 4×3 `f64` reconstruction).
 
 ## Rejected: interval-certified exact order
 

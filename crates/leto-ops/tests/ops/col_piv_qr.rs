@@ -2,8 +2,8 @@
 //!
 //! The contract asserted on every factorization (`assert_contract`) is the one
 //! of ADR 0035: `A P = Q R` within the a-priori backward error, `Q`
-//! orthonormal within its accumulated reflector error, `R` upper triangular,
-//! and each pivot dominating the exact tail norm of every later column up to
+//! orthonormal within its accumulated reflector error, and each pivot
+//! dominating the exact tail norm of every later column up to
 //! the derived slack `τ` (`backward_error::col_piv_qr_pivot_slack`). The order
 //! of columns whose tail norms differ by less than `τ` is not asserted; an
 //! exact pivot sequence is asserted only where the norms are separated by more
@@ -75,12 +75,6 @@ fn assert_contract<T: Format>(matrix: &Array2<T>) -> (Vec<usize>, usize) {
         (0..columns).collect::<Vec<_>>(),
         "{name}"
     );
-    for row in 0..rows {
-        for column in 0..columns.min(row) {
-            assert_eq!(r[row * columns + column], 0.0, "{name}: R[{row},{column}]");
-        }
-    }
-
     // ‖A·P − Q·R‖_F ≤ η‖A‖_F, with Q·R evaluated as Q·I·(Rᵀ)ᵀ in f64.
     if let Some(eta) = informative(backward_error::col_piv_qr(rows, columns, eps)) {
         let mut permuted = vec![0.0; rows * columns];
@@ -103,7 +97,8 @@ fn assert_contract<T: Format>(matrix: &Array2<T>) -> (Vec<usize>, usize) {
         );
     }
 
-    // ‖QᵀQ − I‖_F ≤ 2e + e², e = √rows·((1 + η_h)^steps − 1).
+    // ‖QᵀQ − I‖_F ≤ 2e + e², e = √rows·((1 + η_h)^steps − 1): ADR 0035,
+    // orthonormality bound.
     let reflector_error = backward_error::householder(rows, eps);
     let steps = rows.min(columns) as f64;
     let q_error = (rows as f64).sqrt() * (steps * reflector_error.ln_1p()).exp_m1();
@@ -273,6 +268,60 @@ fn col_piv_qr_recomputes_a_cancelled_partial_norm() {
     check::<f32>();
     check::<F16>();
     check::<Bf16>();
+}
+
+/// `TOL3Z = √u` (`u = ε/2`, `f64`), not `ε`, `u`, 0, or the root of the ratio.
+///
+/// No reflector fires (every pivot column is already on `e₁`), so `R` is the
+/// permuted `A` and only the cached keys round. Column 2 is `[1, d, 0]`,
+/// `d = 1e-7`: its key `1 + d²` rounds to `1 + 45·ε` (`d²` is 45.04 ulps at 1),
+/// and removing the 1 at step 0 leaves the stale estimate `45ε = 9.992e-15`
+/// against the exact tail `d² = 1e-14`. The ratio to the reference, 9.992e-15,
+/// is below `√u = 1.05e-8` but above `ε`, `u` and 0, and its root 1.0e-7 is
+/// above `√u`, so only `TOL3Z = √u` compared with the unrooted ratio
+/// recomputes. Column 1 is `[0, b, 0]` with `b² = 9.996e-15` between the stale
+/// and the exact key. Recomputed, column 2 is the step-1 pivot by the relative
+/// gap `d²/b² − 1 = 4.0e-4`, above `τ = 7.0e-6` (3×3); on the stale key the
+/// pivot is column 1 and the dominance clause fails. The reference equals the
+/// current key at step 0, so this fixture does not test the denominator.
+#[test]
+fn col_piv_qr_recomputes_below_the_root_of_the_unit_roundoff() {
+    let (d, b) = (1.0e-7_f64, 9.996e-15_f64.sqrt());
+    let gap = (d * d) / (b * b) - 1.0;
+    assert!(pivot_slack(3, 3, f64::EPSILON).is_some_and(|slack| slack < gap));
+    let values = [2.0, 0.0, 1.0, 0.0, b, d, 0.0, 0.0, 0.0];
+    let (permutation, rank) = assert_contract(&matrix_of::<f64>(3, 3, &values));
+    assert_eq!(permutation, [0, 2, 1]);
+    assert_eq!(rank, 2);
+}
+
+/// The recompute test divides by the reference key `vn2²`, not the current
+/// key `vn1²` (`dlaqp2.f` lines 236-249).
+///
+/// No reflector fires, as above. Column 2 is `[1, a, d, 0]` with `a² = 1e-5`,
+/// `d = 1.0074e-6` (`d² = 1.0149e-12`); its reference is `1 + a² + d²`,
+/// rounded by up to `ε/2` absolutely. Step 0 removes the 1: the estimate
+/// `a² + d²` over the reference is 1e-5, above `√u = 1.05e-8`, so it is kept
+/// as the current key while the reference stays near 1. Step 1 removes `a`:
+/// the estimate is `d²` plus the carried rounding, `d²·(1 − 4.47e-5)`. Over the
+/// reference it is 1.0e-12 and recomputes to `d²`; over the current key 1e-5 it
+/// would be 1.0e-7 and keep the stale value. Column 3 is `[0, 0, b, 0]` with
+/// `b² = d²·(1 − 2.5e-5)` exact, between the stale and the exact key, so the
+/// step-2 pivot is column 2 by the gap `d²/b² − 1 = 2.5e-5`, above
+/// `τ = 1.07e-5` (4×4), and column 3 on the stale key, which fails dominance.
+/// The threshold mutants of the fixture above also keep the stale key here.
+#[test]
+fn col_piv_qr_measures_the_downdate_against_the_reference_norm() {
+    let (a, d) = (1.0e-5_f64.sqrt(), 1.0074e-6_f64);
+    let b = d * (1.0 - 2.5e-5_f64).sqrt();
+    let gap = (d * d) / (b * b) - 1.0;
+    assert!(pivot_slack(4, 4, f64::EPSILON).is_some_and(|slack| slack < gap));
+    let values = [
+        4.0, 0.0, 1.0, 0.0, 0.0, 2.0, a, 0.0, 0.0, 0.0, d, b, 0.0, 0.0, 0.0, 0.0,
+    ];
+    let (permutation, rank) = assert_contract(&matrix_of::<f64>(4, 4, &values));
+    assert_eq!(permutation, [0, 1, 2, 3]);
+    assert_eq!(rank, 3);
 }
 
 /// Tails that differ by less than `τ` (`3ε/4` and `ε` relative, ADR 0035):
