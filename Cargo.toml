@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.43.1"
+version = "0.44.0"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -17,8 +17,8 @@ readme = "README.md"
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──
-leto = { version = "0.43.1", path = "crates/leto" }
-leto-ops = { version = "0.43.1", path = "crates/leto-ops" }
+leto = { version = "0.44.0", path = "crates/leto" }
+leto-ops = { version = "0.44.0", path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
 # Mnemosyne main already follows Eunomia's merged provider source; the lockfile
@@ -26,11 +26,11 @@ leto-ops = { version = "0.43.1", path = "crates/leto-ops" }
 mnemosyne = { package = "mnemosyne-memory", version = "0.8.0", git = "https://github.com/ryancinsight/Mnemosyne", features = ["eunomia"] }
 # Moirai PR #256 merged to the default branch; the lockfile records its
 # resolved source identity without a temporary revision pin.
-moirai = { package = "moirai-runtime", version = "0.6.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+moirai = { package = "moirai-runtime", version = "0.6.1", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 # Hermes PR #155, Eunomia PR #87, and Aequitas PR #51 are merged;
 # default-branch resolution preserves their shared trait source identity.
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
-eunomia = { package = "eunomia", version = "0.8.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
+eunomia = { package = "eunomia", version = "0.8.1", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 aequitas = { package = "aequitas", version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
 themis = { package = "themis-topology", version = "0.11.0", git = "https://github.com/ryancinsight/themis", default-features = false }
 
