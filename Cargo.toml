@@ -30,7 +30,7 @@ moirai = { package = "moirai-runtime", version = "0.6.1", git = "https://github.
 # Hermes PR #155, Eunomia PR #87, and Aequitas PR #51 are merged;
 # default-branch resolution preserves their shared trait source identity.
 hermes-simd = { version = "0.7.0", git = "https://github.com/ryancinsight/hermes.git" }
-eunomia = { package = "eunomia", version = "0.8.1", git = "https://github.com/ryancinsight/eunomia", default-features = false }
+eunomia = { package = "eunomia", version = "0.9.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
 aequitas = { package = "aequitas", version = "0.2.0", git = "https://github.com/ryancinsight/aequitas", default-features = false }
 themis = { package = "themis-topology", version = "0.11.0", git = "https://github.com/ryancinsight/themis", default-features = false }
 
