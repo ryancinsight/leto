@@ -1,17 +1,25 @@
-//! Cached squared column norms and conservative pivot intervals.
+//! Cached squared column norms with LAPACK's downdating safeguard.
 //!
-//! The partial-norm downdate and its exact-recompute safeguard follow LAPACK
-//! 3.12.0 `DLAQP2` (`TOL3Z` at line 187, the update at lines 236-249 of
-//! <https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f>),
-//! which cites LAPACK Working Note 176 for the update. The state is
-//! kept as squared norms, so `DLAQP2`'s test
-//! `(1 - (|a|/vn1)²)·(vn1/vn2)² ≤ TOL3Z` reduces to the estimated remaining
-//! squared norm over the reference squared norm.
+//! The pivot rule and the partial-norm update follow LAPACK 3.12.0 `DLAQP2`
+//! (<https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f>):
+//! the pivot is the first maximum of the cached norms (`IDAMAX`, line 197), the
+//! reliability threshold is `TOL3Z = √DLAMCH('Epsilon')` (line 187), and each
+//! cached norm is downdated by the removed row or recomputed exactly when the
+//! downdate is no longer trustworthy (lines 236-249; the analysis is LAPACK
+//! Working Note 176).
+//!
+//! The state is kept as squared norms, `vn1² = current`, `vn2² = reference`.
+//! `DLAQP2`'s test `(1 − (|a|/vn1)²)·(vn1/vn2)² ≤ TOL3Z` equals
+//! `(vn1² − a²)/vn2² ≤ TOL3Z`, the downdated squared norm over the reference
+//! squared norm, so no square root or per-column division by `vn1` is needed.
+//!
+//! The cached norms carry the rounding of the downdate. Columns whose exact tail
+//! norms differ by less than the tolerance derived in ADR 0035 may therefore be
+//! ordered either way, as in LAPACK.
 
-use super::norm_bounds::{Arithmetic, TailBounds};
-use crate::application::linalg::householder::Reflector;
 use crate::application::linalg::thresholds::machine_epsilon;
 use crate::domain::real::RealScalar;
+
 /// Squared Euclidean norm of column `j` over rows `[r0 .. m)`.
 pub(super) fn tail_norm_sq<T: RealScalar>(r: &[T], n: usize, m: usize, j: usize, r0: usize) -> T {
     let mut acc = T::ZERO;
@@ -22,240 +30,100 @@ pub(super) fn tail_norm_sq<T: RealScalar>(r: &[T], n: usize, m: usize, j: usize,
     acc
 }
 
-pub(super) trait ColumnNorms<T: RealScalar> {
-    fn new(r: &[T], n: usize, m: usize) -> Self;
-
-    fn squared_norm(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T;
-
-    fn refresh_remaining(&mut self, r: &[T], n: usize, m: usize, first_row: usize);
-
-    fn certified_pivot(&self, first_column: usize, n: usize, tail_len: usize) -> Option<usize>;
-
-    fn swap(&mut self, lhs: usize, rhs: usize);
-
-    fn remove_row(
-        &mut self,
-        r: &[T],
-        n: usize,
-        m: usize,
-        row: usize,
-        reflector: Option<&Reflector<T>>,
-    );
-
-    #[cfg(test)]
-    fn assert_bounds_cover_exact_keys(&self, r: &[T], n: usize, m: usize, first_row: usize);
-}
-
-pub(super) struct PartialColumnNorms<T> {
-    pub(super) current_squared: Box<[T]>,
+/// Per-column squared tail norms: the downdated value used as the pivot key and
+/// the value at the last exact computation used as the reliability reference.
+pub(super) struct ColumnNorms<T> {
+    current_squared: Box<[T]>,
     reference_squared: Box<[T]>,
-    bounds: Box<[Option<TailBounds<T>>]>,
-    arithmetic: Option<Arithmetic<T>>,
     recompute_threshold: T,
 }
 
-impl<T: RealScalar> ColumnNorms<T> for PartialColumnNorms<T> {
-    fn new(r: &[T], n: usize, m: usize) -> Self {
+impl<T: RealScalar> ColumnNorms<T> {
+    /// Exact squared norms of the `n` columns of the row-major `m × n` matrix `r`.
+    pub(super) fn new(r: &[T], n: usize, m: usize) -> Self {
         let current_squared: Box<[T]> = (0..n)
             .map(|column| tail_norm_sq(r, n, m, column, 0))
             .collect();
-        let reference_squared = current_squared.clone();
-        let arithmetic = Arithmetic::<T>::new();
-        let bounds: Box<[Option<TailBounds<T>>]> = current_squared
-            .iter()
-            .map(|&norm| arithmetic.and_then(|ops| ops.enclose_squared_sum(norm, m)))
-            .collect();
         Self {
+            reference_squared: current_squared.clone(),
             current_squared,
-            reference_squared,
-            bounds,
-            arithmetic,
-            // LAPACK 3.12.0 DLAQP2 sets TOL3Z to √(DLAMCH('Epsilon')).
-            // This crate's machine_epsilon is the spacing above one, while
-            // DLAMCH('Epsilon') is the unit roundoff (half that spacing).
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L187
+            // `TOL3Z` is `√DLAMCH('Epsilon')` (dlaqp2.f line 187), and
+            // `DLAMCH('Epsilon')` is the unit roundoff, half the spacing above
+            // one that `machine_epsilon` returns.
             recompute_threshold: machine_epsilon::<T>().div(T::from_count(2)).sqrt(),
         }
     }
 
-    #[inline]
-    fn squared_norm(&self, _r: &[T], _n: usize, _m: usize, column: usize, _first_row: usize) -> T {
-        self.current_squared[column]
+    /// Largest cached squared norm: the exact squared norm of the largest column
+    /// before any downdate.
+    pub(super) fn largest_squared(&self) -> T {
+        self.current_squared.iter().fold(
+            T::ZERO,
+            |largest, &norm| {
+                if norm > largest {
+                    norm
+                } else {
+                    largest
+                }
+            },
+        )
     }
 
-    fn refresh_remaining(&mut self, r: &[T], n: usize, m: usize, first_row: usize) {
-        for column in first_row..n {
-            let recomputed = tail_norm_sq(r, n, m, column, first_row);
-            self.current_squared[column] = recomputed;
-            self.reference_squared[column] = recomputed;
-            self.bounds[column] = self
-                .arithmetic
-                .and_then(|ops| ops.enclose_squared_sum(recomputed, m - first_row));
-        }
-    }
-
-    fn certified_pivot(&self, first_column: usize, n: usize, tail_len: usize) -> Option<usize> {
-        if first_column + 1 == n {
-            return Some(first_column);
-        }
-        let arithmetic = self.arithmetic?;
-        let mut best_column = first_column;
-        let mut best_lower = T::ZERO;
-        let mut largest_upper_column = first_column;
-        let mut largest_upper = T::ZERO;
-        let mut second_upper = T::ZERO;
-
-        for column in first_column..n {
-            let norm = self.bounds[column]?;
-            let key = arithmetic.pivot_key(norm, tail_len)?;
-            if column == first_column || key.lower > best_lower {
-                best_lower = key.lower;
-                best_column = column;
-            }
-            if column == first_column || key.upper > largest_upper {
-                second_upper = largest_upper;
-                largest_upper = key.upper;
-                largest_upper_column = column;
-            } else if key.upper > second_upper {
-                second_upper = key.upper;
+    /// Pivot among columns `first_column..`: the first maximum of the cached
+    /// squared norms (dlaqp2.f line 197, `IDAMAX`). Squared norms are compared
+    /// because rounding the root can merge keys that differ in the square.
+    pub(super) fn pivot(&self, first_column: usize) -> usize {
+        let mut best = first_column;
+        let mut best_squared = self.current_squared[first_column];
+        for column in (first_column + 1)..self.current_squared.len() {
+            let squared = self.current_squared[column];
+            if squared > best_squared {
+                best_squared = squared;
+                best = column;
             }
         }
-
-        (best_column == largest_upper_column && best_lower > second_upper).then_some(best_column)
+        best
     }
 
+    /// Exchange the state of two columns together with the columns themselves
+    /// (dlaqp2.f lines 204-205).
     #[inline]
-    fn swap(&mut self, lhs: usize, rhs: usize) {
+    pub(super) fn swap(&mut self, lhs: usize, rhs: usize) {
         self.current_squared.swap(lhs, rhs);
         self.reference_squared.swap(lhs, rhs);
-        self.bounds.swap(lhs, rhs);
     }
 
-    fn remove_row(
-        &mut self,
-        r: &[T],
-        n: usize,
-        m: usize,
-        row: usize,
-        reflector: Option<&Reflector<T>>,
-    ) {
-        let mut reflector_error = None;
-        let mut reflector_error_computed = false;
+    /// Downdate the columns right of `row` after the reflector of step `row`
+    /// has been applied: the removed entry is `r[row, column]` (dlaqp2.f lines
+    /// 236-249).
+    ///
+    /// The estimate `current − a²` is clamped at zero. When it falls to
+    /// `TOL3Z` of the reference the cached norm is recomputed from the rows
+    /// `row + 1..m` and becomes the new reference. A cached zero stays zero
+    /// (line 231).
+    pub(super) fn remove_row(&mut self, r: &[T], n: usize, m: usize, row: usize) {
         for column in (row + 1)..n {
             let current_squared = self.current_squared[column];
-            // Keep the squared sum as the pivot key. Taking its square root
-            // first can round distinct column tails to the same norm and
-            // change the pivot selected by the exact-recompute algorithm.
-            let removed_squared = r[row * n + column].mul(r[row * n + column]);
-            let difference = current_squared.sub(removed_squared);
+            if current_squared == T::ZERO {
+                continue;
+            }
+            let removed = r[row * n + column];
+            let difference = current_squared.sub(removed.mul(removed));
             let estimate = if difference > T::ZERO {
                 difference
             } else {
                 T::ZERO
             };
-
-            // DLAQP2's cancellation test is
-            // (1 - (|a|/current_norm)^2) * (current_norm/reference_norm)^2.
-            // In squared-norm state this reduces algebraically to the
-            // estimated remaining squared norm over the reference squared
-            // norm. Recompute exactly when that ratio falls below TOL3Z.
-            // https://github.com/Reference-LAPACK/lapack/blob/v3.12.0/SRC/dlaqp2.f#L236-L249
             let reference_squared = self.reference_squared[column];
-            let reliability = if reference_squared > T::ZERO {
-                estimate.div(reference_squared)
-            } else {
-                T::ZERO
-            };
-            if !estimate.is_finite()
-                || !reference_squared.is_finite()
-                || reliability <= self.recompute_threshold
-            {
+            if estimate.div(reference_squared) <= self.recompute_threshold {
                 let recomputed = tail_norm_sq(r, n, m, column, row + 1);
                 self.current_squared[column] = recomputed;
                 self.reference_squared[column] = recomputed;
-                self.bounds[column] = self
-                    .arithmetic
-                    .and_then(|ops| ops.enclose_squared_sum(recomputed, m - row - 1));
             } else {
                 self.current_squared[column] = estimate;
-                if !reflector_error_computed {
-                    reflector_error = self
-                        .arithmetic
-                        .zip(reflector)
-                        .and_then(|(ops, reflector)| ops.reflector_error(reflector));
-                    reflector_error_computed = true;
-                }
-                self.bounds[column] = match (self.arithmetic, self.bounds[column], reflector) {
-                    (Some(ops), Some(bounds), Some(_)) => reflector_error.and_then(|effect| {
-                        ops.after_reflector(bounds, effect, r[row * n + column])
-                    }),
-                    (Some(ops), Some(bounds), None) => {
-                        ops.remove_entry(bounds, r[row * n + column])
-                    }
-                    _ => None,
-                };
             }
         }
     }
-
-    #[cfg(test)]
-    fn assert_bounds_cover_exact_keys(&self, r: &[T], n: usize, m: usize, first_row: usize) {
-        let Some(arithmetic) = self.arithmetic else {
-            return;
-        };
-        for column in first_row..n {
-            let Some(bounds) = self.bounds[column] else {
-                continue;
-            };
-            let exact_key = tail_norm_sq(r, n, m, column, first_row);
-            if exact_key.is_finite() {
-                let key_bounds = arithmetic
-                    .pivot_key(bounds, m - first_row)
-                    .expect("finite norm bounds produce a finite pivot key");
-                assert!(
-                    key_bounds.contains(exact_key),
-                    "column {column}: exact key {exact_key:?} outside [{:?}, {:?}]",
-                    key_bounds.lower,
-                    key_bounds.upper
-                );
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-pub(super) struct RecomputedColumnNorms;
-
-#[cfg(test)]
-impl<T: RealScalar> ColumnNorms<T> for RecomputedColumnNorms {
-    fn new(_r: &[T], _n: usize, _m: usize) -> Self {
-        Self
-    }
-
-    fn squared_norm(&self, r: &[T], n: usize, m: usize, column: usize, first_row: usize) -> T {
-        tail_norm_sq(r, n, m, column, first_row)
-    }
-
-    fn refresh_remaining(&mut self, _r: &[T], _n: usize, _m: usize, _first_row: usize) {}
-
-    fn certified_pivot(&self, _first_column: usize, _n: usize, _tail_len: usize) -> Option<usize> {
-        None
-    }
-
-    fn swap(&mut self, _lhs: usize, _rhs: usize) {}
-
-    fn remove_row(
-        &mut self,
-        _r: &[T],
-        _n: usize,
-        _m: usize,
-        _row: usize,
-        _reflector: Option<&Reflector<T>>,
-    ) {
-    }
-
-    #[cfg(test)]
-    fn assert_bounds_cover_exact_keys(&self, _r: &[T], _n: usize, _m: usize, _first_row: usize) {}
 }
 
 #[cfg(test)]

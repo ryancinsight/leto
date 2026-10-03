@@ -1,11 +1,8 @@
 //! Householder QR with column pivoting: `A P = Q R`.
 
 mod column_norms;
-mod norm_bounds;
-#[cfg(test)]
-mod tests;
 
-use self::column_norms::{tail_norm_sq, ColumnNorms, PartialColumnNorms};
+use self::column_norms::{tail_norm_sq, ColumnNorms};
 
 use crate::application::linalg::householder::{apply_left, apply_right, reflector};
 use crate::application::linalg::thresholds::rank_pivot_ratio;
@@ -30,13 +27,13 @@ pub(super) struct Factored<T> {
 /// position `k`, then a Householder reflector zeroes the sub-column below the
 /// diagonal. Pivoting makes `|R₀₀| ≥ |R₁₁| ≥ …`, so the first diagonal entry
 /// that drops below a relative threshold reveals the rank.
+///
+/// The pivot is the first maximum of squared tail norms downdated as in LAPACK
+/// `DLAQP2` ([`ColumnNorms`]), so the order of columns whose exact tail norms
+/// differ by less than the tolerance of ADR 0035 is unspecified. The rank test
+/// compares the exact tail norm of the selected column, which costs `O(m - k)`
+/// per step and keeps the decision independent of the cached norm's rounding.
 pub(super) fn factor<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<Factored<T>> {
-    factor_with_norms::<T, PartialColumnNorms<T>>(matrix)
-}
-
-fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
-    matrix: &ArrayView2<'_, T>,
-) -> Result<Factored<T>> {
     let [m, n] = matrix.shape();
 
     let mut r = if let Some(slice) = matrix.as_slice() {
@@ -60,46 +57,18 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
     let mut perm: Vec<usize> = (0..n).collect();
 
     let p = m.min(n);
-    let mut norms = N::new(&r, n, m);
+    let mut norms = ColumnNorms::new(&r, n, m);
     // Relative threshold from the largest initial full column norm.
-    let mut ref_norm_sq = T::ZERO;
-    for j in 0..n {
-        let norm_squared = norms.squared_norm(&r, n, m, j, 0);
-        if norm_squared > ref_norm_sq {
-            ref_norm_sq = norm_squared;
-        }
-    }
-    let tol = ref_norm_sq.sqrt().mul(rank_pivot_ratio::<T>());
+    let tol = norms.largest_squared().sqrt().mul(rank_pivot_ratio::<T>());
     let mut rank = p;
 
     let mut alw: Vec<T> = Vec::with_capacity(n);
     let mut col_stack = [T::ZERO; 128];
     let mut col_vec: Vec<T> = Vec::new();
     for k in 0..p {
-        // Pivot: column with the largest tail norm among k..n.
-        #[cfg(test)]
-        norms.assert_bounds_cover_exact_keys(&r, n, m, k);
-        let certified = norms.certified_pivot(k, n, m - k);
-        let best = if let Some(best) = certified {
-            best
-        } else {
-            norms.refresh_remaining(&r, n, m, k);
-            let mut best = k;
-            let mut best_norm_sq = norms.squared_norm(&r, n, m, k, k);
-            for j in (k + 1)..n {
-                let norm_squared = norms.squared_norm(&r, n, m, j, k);
-                if norm_squared > best_norm_sq {
-                    best_norm_sq = norm_squared;
-                    best = j;
-                }
-            }
-            best
-        };
-        // The baseline rank contract compares the selected column's exact
-        // native-precision tail sum, even when interval separation certified
-        // its pivot without recomputing every competing column.
-        let best_norm_sq = tail_norm_sq(&r, n, m, best, k);
-        if best_norm_sq.sqrt() <= tol {
+        // Pivot: column with the largest cached tail norm among k..n.
+        let best = norms.pivot(k);
+        if tail_norm_sq(&r, n, m, best, k).sqrt() <= tol {
             rank = k;
             break;
         }
@@ -130,10 +99,8 @@ fn factor_with_norms<T: RealScalar, N: ColumnNorms<T>>(
         if let Some((refl, _alpha)) = reflector(col) {
             apply_left(&refl, &mut r, n, k, k, n, &mut alw); // rows k..m, cols k..n
             apply_right(&refl, &mut q, m, k, 0, m); // Q ← Q Hₖ
-            norms.remove_row(&r, n, m, k, Some(&refl));
-        } else {
-            norms.remove_row(&r, n, m, k, None);
         }
+        norms.remove_row(&r, n, m, k);
     }
 
     // Present the exact upper-triangular R (zero the reflector tails below the diagonal).

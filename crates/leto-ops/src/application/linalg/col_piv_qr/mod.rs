@@ -18,11 +18,15 @@
 //! diagonal means the first negligible one reveals the rank — more reliably than
 //! a Gram-spectrum count for borderline cases.
 //!
-//! In finite precision, partial squared-norm updates use LAPACK DLAQP2's
-//! cancellation safeguard. A conservative error interval certifies a pivot
-//! only when its rounded native-precision key is strictly separated from all
-//! competitors; otherwise all remaining keys are recomputed in the baseline
-//! order, preserving strict-greater tie handling.
+//! # Finite precision
+//! The pivot key of each remaining column is its squared tail norm, downdated by
+//! the removed row and recomputed exactly when the downdate cancels, as in
+//! LAPACK 3.12.0 `DLAQP2` (`TOL3Z`, `dlaqp2.f` line 187; the update, lines
+//! 236-249). The cached key differs from the exact tail norm by rounding, so
+//! the pivot dominates the exact tail norm of every later column only up to the
+//! relative tolerance derived in ADR 0035, and columns whose tail norms differ
+//! by less than it may be ordered either way. The rank test uses the exact tail
+//! norm of the selected column.
 //!
 //! Leaf modules: `decompose` (the pivoted reduction, on the shared
 //! `householder` primitive) and the solve logic here.
@@ -159,9 +163,9 @@ pub fn col_piv_qr<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<ColPivQrD
     // norm); `R` scales.
     //
     // Matrix-tier gate, degree 2, bound `2^⌈log₂ rows⌉`: pivot selection
-    // compares `tail_norm_sq` (`decompose.rs`), a raw `Σrᵢ²` over the `rows`
-    // entries of a trailing column, whose 2-norm the reflectors preserve —
-    // so `Σrᵢ² ≤ rows·‖A‖_max²`.
+    // compares cached squared tail norms (`decompose/column_norms.rs`), each a
+    // raw `Σrᵢ²` over at most `rows` entries of a trailing column, whose 2-norm
+    // the reflectors preserve — so `Σrᵢ² ≤ rows·‖A‖_max²`.
     let rows = matrix.shape()[0];
     let f = match scaling::balanced(matrix, 2, |_, _| {
         GateBound::factor(thresholds::ceil_log2_count(rows))

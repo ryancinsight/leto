@@ -1,66 +1,24 @@
-use super::{tail_norm_sq, ColumnNorms, PartialColumnNorms};
-use crate::application::linalg::householder::{apply_left, reflector};
+use super::{tail_norm_sq, ColumnNorms};
 use crate::application::linalg::thresholds::machine_epsilon;
 use crate::domain::real::RealScalar;
+use eunomia::{Bf16, F16};
 
-fn assert_encloses_exact<T: RealScalar>(
-    bounds: super::super::norm_bounds::TailBounds<T>,
-    exact: f64,
-) {
-    assert!(
-        bounds.lower.to_f64() <= exact && exact <= bounds.upper.to_f64(),
-        "exact squared tail {exact} outside [{:?}, {:?}] for {}",
-        bounds.lower,
-        bounds.upper,
-        core::any::type_name::<T>()
-    );
+fn downdate_keeps_the_estimate_and_the_reference<T: RealScalar>() {
+    // Columns [·, 1, 2] and the removed row [·, 1]: the estimate 5 - 1 = 4 is
+    // 4/5 of the reference, above every format's TOL3Z = sqrt(eps/2) < 0.1.
+    let r = vec![T::ZERO, T::ONE, T::ZERO, T::from_count(2)];
+    let mut norms = ColumnNorms::new(&r, 2, 2);
+
+    norms.remove_row(&r, 2, 2, 0);
+
+    assert_eq!(norms.current_squared[1], T::from_count(4));
+    assert_eq!(norms.reference_squared[1], T::from_count(5));
 }
 
-fn householder_downdate_pivot_certification<T: RealScalar>(expect_certified: bool) {
-    let four = T::from_count(4);
-    let two = T::from_count(2);
-    let mut r = vec![T::ZERO, four, T::ZERO, T::ONE, T::ONE, two];
-    let mut norms = PartialColumnNorms::new(&r, 3, 2);
-    let reflection = reflector(&[T::ZERO, T::ONE]).expect("nonzero reflector tail");
-    let mut scratch = Vec::new();
-
-    apply_left(&reflection.0, &mut r, 3, 0, 1, 3, &mut scratch);
-    norms.remove_row(&r, 3, 2, 0, Some(&reflection.0));
-
-    assert_eq!(r[1], T::ZERO.sub(T::ONE));
-    assert_eq!(r[4], T::ZERO.sub(four));
-    assert_eq!(r[2], T::ZERO.sub(two));
-    assert_eq!(r[5], T::ZERO);
-    assert_eq!(norms.current_squared[1], T::from_count(16));
-    assert_eq!(norms.reference_squared[1], T::from_count(17));
-    assert_eq!(norms.current_squared[2], T::ZERO);
-    assert_eq!(norms.reference_squared[2], T::ZERO);
-
-    let exact_first_tail = r[4].to_f64() * r[4].to_f64();
-    let exact_second_tail = r[5].to_f64() * r[5].to_f64();
-    assert_encloses_exact(
-        norms.bounds[1].expect("non-cancelling reflector downdate keeps a certificate"),
-        exact_first_tail,
-    );
-    assert_encloses_exact(
-        norms.bounds[2].expect("cancelling reflector downdate recomputes a certificate"),
-        exact_second_tail,
-    );
-    // The reflector drift bound scales with the format's unit gap. Bf16's 2⁻⁷
-    // gap widens the first column's interval to [0, 64.5], so it cannot
-    // separate from the cancelled column and certification fails closed;
-    // exact recomputation then selects the pivot.
-    let certified = norms.certified_pivot(1, 3, 1);
-    if expect_certified {
-        assert_eq!(certified, Some(1), "{}", core::any::type_name::<T>());
-    } else {
-        assert_eq!(certified, None, "{}", core::any::type_name::<T>());
-    }
-}
-
-fn cancellation_downdate_recomputes_exact_tail<T: RealScalar>() {
-    // δ² = ε/4 is below the downdate's reliability threshold √(ε/2) in every
-    // format, so removing the leading row forces an exact recompute.
+fn cancellation_recomputes_the_exact_tail<T: RealScalar>() {
+    // delta^2 = eps/4 is below the unit roundoff eps/2, so the squared norm of
+    // [1, delta] rounds to 1. Removing the leading 1 estimates 0, which is
+    // below TOL3Z of the reference in every format, so the tail is recomputed.
     let delta = machine_epsilon::<T>().sqrt().div(T::from_count(2));
     let r = vec![
         T::ZERO,
@@ -73,41 +31,46 @@ fn cancellation_downdate_recomputes_exact_tail<T: RealScalar>() {
         T::ZERO,
         T::ONE,
     ];
-    let mut norms = PartialColumnNorms::new(&r, 3, 3);
+    let mut norms = ColumnNorms::new(&r, 3, 3);
+    assert_eq!(norms.current_squared[1], T::ONE);
 
-    norms.remove_row(&r, 3, 3, 0, None);
+    norms.remove_row(&r, 3, 3, 0);
 
-    let recomputed = tail_norm_sq(&r, 3, 3, 1, 1);
-    assert_eq!(norms.current_squared[1], recomputed);
-    assert_eq!(norms.reference_squared[1], recomputed);
-    let exact_small_tail = delta.to_f64() * delta.to_f64();
-    assert_encloses_exact(
-        norms.bounds[1].expect("cancellation recompute creates a fresh certificate"),
-        exact_small_tail,
-    );
-    assert_encloses_exact(
-        norms.bounds[2].expect("the separated reference column keeps a certificate"),
-        1.0,
-    );
-    assert_eq!(norms.certified_pivot(1, 3, 1), Some(2));
+    let exact_tail = tail_norm_sq(&r, 3, 3, 1, 1);
+    assert_eq!(exact_tail, delta.mul(delta));
+    assert_eq!(norms.current_squared[1], exact_tail);
+    assert_eq!(norms.reference_squared[1], exact_tail);
+    // The unit column has nothing removed and keeps its estimate.
+    assert_eq!(norms.current_squared[2], T::ONE);
+    assert_eq!(norms.reference_squared[2], T::ONE);
+}
+
+fn pivot_is_the_first_maximum<T: RealScalar>() {
+    let r = vec![T::ONE, T::from_count(3), T::from_count(3)];
+    let norms = ColumnNorms::new(&r, 3, 1);
+
+    assert_eq!(norms.largest_squared(), T::from_count(9));
+    assert_eq!(norms.pivot(0), 1);
+    assert_eq!(norms.pivot(2), 2);
 }
 
 #[test]
-fn reflector_downdates_enclose_exact_tails_and_certify_pivots() {
-    use eunomia::{Bf16, F16};
+fn downdates_follow_dlaqp2_across_scalar_types() {
+    downdate_keeps_the_estimate_and_the_reference::<f64>();
+    downdate_keeps_the_estimate_and_the_reference::<f32>();
+    downdate_keeps_the_estimate_and_the_reference::<F16>();
+    downdate_keeps_the_estimate_and_the_reference::<Bf16>();
 
-    householder_downdate_pivot_certification::<f64>(true);
-    householder_downdate_pivot_certification::<f32>(true);
-    householder_downdate_pivot_certification::<F16>(true);
-    householder_downdate_pivot_certification::<Bf16>(false);
+    cancellation_recomputes_the_exact_tail::<f64>();
+    cancellation_recomputes_the_exact_tail::<f32>();
+    cancellation_recomputes_the_exact_tail::<F16>();
+    cancellation_recomputes_the_exact_tail::<Bf16>();
 }
 
 #[test]
-fn cancellation_downdates_recompute_and_enclose_exact_tails() {
-    use eunomia::{Bf16, F16};
-
-    cancellation_downdate_recomputes_exact_tail::<f64>();
-    cancellation_downdate_recomputes_exact_tail::<f32>();
-    cancellation_downdate_recomputes_exact_tail::<F16>();
-    cancellation_downdate_recomputes_exact_tail::<Bf16>();
+fn pivot_breaks_ties_toward_the_lowest_column_across_scalar_types() {
+    pivot_is_the_first_maximum::<f64>();
+    pivot_is_the_first_maximum::<f32>();
+    pivot_is_the_first_maximum::<F16>();
+    pivot_is_the_first_maximum::<Bf16>();
 }
