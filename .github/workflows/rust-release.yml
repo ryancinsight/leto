@@ -27,14 +27,8 @@ concurrency:
 
 jobs:
   # A public-surface break the manifest version does not cover
-  # stops the release here. The baseline is the previous release tag:
-  # leto-ops' first-party dependencies are git sources, so the registry
-  # baseline's manifest leaves them floating and every upstream release
-  # since 0.42 rebuilds that baseline's rustdoc against code it was
-  # never written for (the E0599/E0277 failures in the release runs of
-  # 2026-10-04/05). The tag baseline carries its committed lock, which
-  # pins the exact revisions the release built against, so the baseline
-  # compiles as it did when it shipped.
+  # stops the release here. The baseline is the latest published
+  # version, so the list is the crates the registry carries.
   # Atlas ATLAS-SEMVER-GATE-FLEETWIDE-2026-08-28.
   semver:
     name: SemVer gate (release)
@@ -46,7 +40,6 @@ jobs:
       release-gate: true
       package: leto,leto-ops
       rust-toolchain: 1.97.0
-      baseline-source: tag
     permissions:
       contents: read
 
