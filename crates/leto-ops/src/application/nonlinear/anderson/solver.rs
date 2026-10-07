@@ -35,7 +35,7 @@ pub struct AndersonConfig<T: RealField> {
     pub method: AndersonMethod,
 }
 
-impl<T: RealField + FloatElement> Default for AndersonConfig<T> {
+impl<T: RealField> Default for AndersonConfig<T> {
     fn default() -> Self {
         Self {
             history_depth: 5,
@@ -55,7 +55,7 @@ impl<T: RealField + FloatElement> Default for AndersonConfig<T> {
 /// Columns are appended when new history arrives and dropped (oldest first)
 /// to maintain `history_depth` limit — using a simple shift on the small (m≤10) R.
 #[derive(Debug)]
-pub(super) struct QrState<T: RealField + Copy> {
+pub(super) struct QrState<T: RealField> {
     /// Orthonormal columns of Q (N-dimensional), bounded to `m` entries.
     pub(super) q_cols: VecDeque<Array1<T>>,
     /// Upper-triangular R stored as dense column-major m×m.
@@ -67,7 +67,7 @@ pub(super) struct QrState<T: RealField + Copy> {
     drop_tol: T,
 }
 
-impl<T: RealField + Copy + FloatElement + std::fmt::Debug> QrState<T> {
+impl<T: RealField + std::fmt::Debug> QrState<T> {
     fn new(max_depth: usize, drop_tol: T) -> Self {
         Self {
             q_cols: VecDeque::with_capacity(max_depth + 1),
@@ -203,7 +203,7 @@ impl<T: RealField + Copy + FloatElement + std::fmt::Debug> QrState<T> {
 /// - `QR` (default): incremental MGS-QR, condition number κ(ΔF)
 /// - `NormalEquations`: pivoted normal equations solve, condition number κ(ΔF)²
 #[derive(Debug)]
-pub struct AndersonAccelerator<T: RealField + Copy> {
+pub struct AndersonAccelerator<T: RealField> {
     config: AndersonConfig<T>,
 
     /// Previous state vector $x_{k-1}$
@@ -222,7 +222,7 @@ pub struct AndersonAccelerator<T: RealField + Copy> {
     pub(super) qr_state: Option<QrState<T>>,
 }
 
-impl<T: RealField + Copy + FloatElement + std::fmt::Debug> AndersonAccelerator<T> {
+impl<T: RealField + std::fmt::Debug> AndersonAccelerator<T> {
     /// Create a new Anderson Acceleration context.
     #[must_use]
     pub fn new(config: AndersonConfig<T>) -> Self {
@@ -374,7 +374,7 @@ impl<T: RealField + Copy + FloatElement + std::fmt::Debug> AndersonAccelerator<T
     }
 }
 
-fn solve_dense_pivoted<T: RealField + Copy + FloatElement + std::fmt::Debug>(
+fn solve_dense_pivoted<T: RealField + std::fmt::Debug>(
     mut matrix: Array2<T>,
     mut rhs: Array1<T>,
     drop_tolerance: T,

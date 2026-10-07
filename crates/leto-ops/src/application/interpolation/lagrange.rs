@@ -14,19 +14,19 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
 use super::{check_bounds, validate_nodes, Interpolation1D};
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{LetoError, Result};
 
 /// Barycentric Lagrange interpolation.
 #[derive(Debug, Clone)]
-pub struct LagrangeInterpolation<T: RealField + Copy> {
+pub struct LagrangeInterpolation<T: RealField> {
     x_data: Vec<T>,
     y_data: Vec<T>,
     /// Barycentric weights: w[i] = 1 / ∏_{j≠i}(x[i] − x[j])
     weights: Vec<T>,
 }
 
-impl<T: RealField + FloatElement + Copy> LagrangeInterpolation<T> {
+impl<T: RealField> LagrangeInterpolation<T> {
     /// Construct from node data.  Computes barycentric weights in O(n²).
     ///
     /// # Errors
@@ -47,7 +47,7 @@ impl<T: RealField + FloatElement + Copy> LagrangeInterpolation<T> {
     }
 }
 
-fn barycentric_weights<T: RealField + FloatElement + Copy>(x: &[T]) -> Vec<T> {
+fn barycentric_weights<T: RealField>(x: &[T]) -> Vec<T> {
     let n = x.len();
     let mut w = vec![T::from_f64(1.0); n];
     for i in 0..n {
@@ -61,7 +61,7 @@ fn barycentric_weights<T: RealField + FloatElement + Copy>(x: &[T]) -> Vec<T> {
     w
 }
 
-impl<T: RealField + FloatElement + Copy> Interpolation1D<T> for LagrangeInterpolation<T> {
+impl<T: RealField> Interpolation1D<T> for LagrangeInterpolation<T> {
     fn interpolate(&self, x: T) -> Result<T> {
         let n = self.x_data.len();
         check_bounds(x, self.x_data[0], self.x_data[n - 1])?;

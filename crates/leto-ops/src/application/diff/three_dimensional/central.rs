@@ -1,7 +1,7 @@
 //! Second- and sixth-order central-difference kernels with boundary
 //! fall-back behind [`super::FiniteDifference3D`]; the fourth order lives in
 //! [`super::fourth_order`].
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use crate::application::zip::zip_mut_with;
@@ -19,7 +19,7 @@ pub(super) fn central2_x_into<T>(
     hx: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nx < 3 {
         return Err(LetoError::InvalidInput(
@@ -73,7 +73,7 @@ pub(super) fn central2_y_into<T>(
     hy: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if ny < 3 {
         return Err(LetoError::InvalidInput(
@@ -124,7 +124,7 @@ pub(super) fn central2_z_into<T>(
     hz: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nz < 3 {
         return Err(LetoError::InvalidInput(
@@ -177,7 +177,7 @@ pub(super) fn central6_x_into<T>(
     hx: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nx < 7 {
         return Err(LetoError::InvalidInput(
@@ -245,7 +245,7 @@ pub(super) fn central6_y_into<T>(
     hy: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if ny < 7 {
         return Err(LetoError::InvalidInput(
@@ -306,7 +306,7 @@ pub(super) fn central6_z_into<T>(
     hz: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nz < 7 {
         return Err(LetoError::InvalidInput(

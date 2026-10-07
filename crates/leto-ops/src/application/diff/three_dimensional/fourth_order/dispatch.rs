@@ -4,7 +4,7 @@
 
 use core::ops::Range;
 
-use eunomia::{FloatElement, RealField};
+use eunomia::RealField;
 use leto::{ArrayView3, ArrayViewMut3, Result};
 
 use super::super::window::{PlaneWindow, PlaneWindowMut};
@@ -24,7 +24,7 @@ pub(in super::super) fn central4_into<T>(
     h: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     let shape = field.shape();
     let scales = Scales::new(h);
@@ -45,7 +45,7 @@ pub(in super::super) fn central4_divergence_into<T>(
     spacing: [T; 3],
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     let shape = fields[0].shape();
     let scales = spacing.map(Scales::new);
@@ -83,7 +83,7 @@ pub(in super::super) fn central4_map_into<T, const N: usize, const M: usize, con
     combine: F,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
     F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
 {
     let Some(first) = dst.first() else {

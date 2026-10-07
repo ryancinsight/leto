@@ -48,7 +48,7 @@ mod map;
 #[cfg(test)]
 mod tests;
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use super::coefficients::{staggered_first_derivative_coefficients, TapCoefficients};
@@ -106,7 +106,7 @@ pub struct StaggeredLeapfrog3D<T> {
     inverse_spacing: [T; 3],
 }
 
-impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
+impl<T: RealField> StaggeredLeapfrog3D<T> {
     /// Build the pair for an even accuracy `order` on a grid of the given
     /// spacings.
     ///
@@ -259,10 +259,7 @@ impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
 
 /// Reject a spacing triple unless every value is finite and positive; a
 /// `NaN` passes a bare `<= 0` test and would poison every swept value.
-fn require_finite_positive<T: RealField + FloatElement + Copy>(
-    values: [T; 3],
-    names: &str,
-) -> Result<()> {
+fn require_finite_positive<T: RealField>(values: [T; 3], names: &str) -> Result<()> {
     let zero = <T as NumericElement>::ZERO;
     if values
         .iter()

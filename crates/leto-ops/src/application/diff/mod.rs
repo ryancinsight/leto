@@ -1,7 +1,7 @@
 //! Finite-difference differentiation schemes for 1-D arrays.
 //!
 //! SSOT for generic scalar finite-difference operators in the Atlas stack.
-//! All operators are generic over `T: RealField + FloatElement + Copy`.
+//! All operators are generic over `T: RealField`.
 //!
 //! ## Schemes
 //!

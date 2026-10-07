@@ -5,10 +5,10 @@
 use super::super::{Axis, StaggeredLeapfrog3D};
 use super::{reflect, window_sum};
 use crate::infrastructure::parallel::for_each_plane_mut;
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3};
 
-pub(crate) fn gradient<T: RealField + FloatElement + Copy>(
+pub(crate) fn gradient<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     axis: Axis,
     field: ArrayView3<'_, T>,
@@ -40,10 +40,7 @@ pub(crate) fn gradient<T: RealField + FloatElement + Copy>(
 /// Source elements a gradient plane along axis `index` reads per output
 /// element: along the outer axis each face reads 2·halo whole source planes
 /// and itself; along the inner two, its own plane twice.
-pub(crate) fn plane_reads<T: RealField + FloatElement + Copy>(
-    op: &StaggeredLeapfrog3D<T>,
-    index: usize,
-) -> usize {
+pub(crate) fn plane_reads<T: RealField>(op: &StaggeredLeapfrog3D<T>, index: usize) -> usize {
     if index == 0 {
         1 + 2 * op.halo_width()
     } else {
@@ -57,7 +54,7 @@ pub(crate) fn plane_reads<T: RealField + FloatElement + Copy>(
 /// Row-major: the array is `shape[0]` planes of `shape[1] * shape[2]` cells,
 /// each plane `shape[1]` rows of `shape[2]`; the chunk sizes divide the length
 /// exactly, so no remainder exists to handle.
-fn gradient_plane<T: RealField + FloatElement + Copy>(
+fn gradient_plane<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     axis: Axis,
     source: &[T],
@@ -83,7 +80,7 @@ fn gradient_plane<T: RealField + FloatElement + Copy>(
 /// Gradient along a non-contiguous axis: every output block of `block`
 /// contiguous cells reads whole source blocks, so the taps zip across the
 /// faster axes and reflection selects blocks, never cells.
-fn gradient_blocks<T: RealField + FloatElement + Copy>(
+fn gradient_blocks<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     source: &[T],
     target: &mut [T],
@@ -98,7 +95,7 @@ fn gradient_blocks<T: RealField + FloatElement + Copy>(
 
 /// One output block of [`gradient_blocks`]: face `here` of an axis of `extent`
 /// blocks of `out.len()` cells, read from whole source blocks.
-fn gradient_block<T: RealField + FloatElement + Copy>(
+fn gradient_block<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     source: &[T],
     out: &mut [T],
@@ -115,7 +112,7 @@ fn gradient_block<T: RealField + FloatElement + Copy>(
 /// Face `here` of an axis of `extent` lanes, each as long as `out`, where
 /// `lane(i)` is lane `i` of the source: the taps summed across whole lanes
 /// in coefficient order, then scaled.
-fn gradient_taps<'a, T: RealField + FloatElement + Copy + 'a>(
+fn gradient_taps<'a, T: RealField + 'a>(
     op: &StaggeredLeapfrog3D<T>,
     out: &mut [T],
     here: usize,
@@ -141,7 +138,7 @@ fn gradient_taps<'a, T: RealField + FloatElement + Copy + 'a>(
 /// The gradient along `axis` at row `y` of x-plane `x` of a C-contiguous
 /// `source` of `shape`, written into the row `out`: the value
 /// [`gradient_plane`] writes there, by the same sums in the same order.
-pub(crate) fn gradient_row<T: RealField + FloatElement + Copy>(
+pub(crate) fn gradient_row<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     axis: Axis,
     source: &[T],
@@ -165,7 +162,7 @@ pub(crate) fn gradient_row<T: RealField + FloatElement + Copy>(
 
 /// Gradient along the contiguous axis: interior cells read sliding windows, the
 /// `halo − 1` leading and `halo` trailing cells reflect.
-fn gradient_line<T: RealField + FloatElement + Copy>(
+fn gradient_line<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     source: &[T],
     target: &mut [T],
@@ -198,7 +195,7 @@ fn gradient_line<T: RealField + FloatElement + Copy>(
 }
 
 /// Gradient via three-index addressing, for arrays that are not contiguous.
-fn gradient_indexed<T: RealField + FloatElement + Copy>(
+fn gradient_indexed<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     index: usize,
     extent: isize,

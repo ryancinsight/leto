@@ -9,14 +9,14 @@
 //! there in the same task. A plane-sized buffer measured slower than the
 //! separate passes at 64 cubed: a fresh 32 KB allocation per task per call.
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{Array3, ArrayView3, ArrayViewMut3, Result};
 
 use super::kernels::{divergence, divergence_row, gradient, gradient_row, plane_reads};
 use super::{assert_grid_shaped, Axis, StaggeredLeapfrog3D};
 use crate::infrastructure::parallel::for_each_plane_mut_many_with;
 
-impl<T: RealField + FloatElement + Copy> StaggeredLeapfrog3D<T> {
+impl<T: RealField> StaggeredLeapfrog3D<T> {
     /// The gradient along `axis` combined, face by face, into `dst`:
     /// `dst[i] = combine(g[i], values, dst[i])`, where `g` is what
     /// [`Self::gradient_into`] would write, `values[k]` is `pointwise[k]` at
@@ -127,7 +127,7 @@ fn map_divergence_dense<T, const M: usize, F>(
     shape: [usize; 3],
     combine: &F,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
     F: Fn([T; 3], [T; M], T) -> T + Send + Sync,
 {
     let [_, ny, nz] = shape;
@@ -183,7 +183,7 @@ fn map_divergence_logical<T, const M: usize, F>(
     shape: [usize; 3],
     combine: &F,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
     F: Fn([T; 3], [T; M], T) -> T + Send + Sync,
 {
     let swept = COMPONENT_AXES.map(|axis| {
@@ -217,7 +217,7 @@ fn map_dense<T, const M: usize, F>(
     shape: [usize; 3],
     combine: &F,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
     F: Fn(T, [T; M], T) -> T + Send + Sync,
 {
     let [_, ny, nz] = shape;
@@ -257,7 +257,7 @@ fn map_logical<T, const M: usize, F>(
     shape: [usize; 3],
     combine: &F,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
     F: Fn(T, [T; M], T) -> T + Send + Sync,
 {
     let mut swept = Array3::from_elem(shape, <T as NumericElement>::ZERO);

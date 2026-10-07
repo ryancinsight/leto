@@ -16,7 +16,7 @@
 //! singleton axis has no variation along it. Each stencil is written as one
 //! arithmetic chain shared by both traversals, so they agree bit for bit.
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 
 use super::super::f;
 
@@ -33,7 +33,7 @@ pub(super) struct Scales<T> {
     eight: T,
 }
 
-impl<T: RealField + FloatElement + Copy> Scales<T> {
+impl<T: RealField> Scales<T> {
     pub(super) fn new(h: T) -> Self {
         Self {
             inv_12h: <T as NumericElement>::ONE / (f::<T>(12.0) * h),
@@ -88,11 +88,7 @@ impl Stencil {
     /// The derivative at a point whose neighbour at signed offset `o` along
     /// the axis is `at(o)`; only the offsets the stencil reads are asked for.
     #[inline]
-    pub(super) fn apply<T: RealField + FloatElement + Copy>(
-        self,
-        scales: Scales<T>,
-        at: impl Fn(isize) -> T,
-    ) -> T {
+    pub(super) fn apply<T: RealField>(self, scales: Scales<T>, at: impl Fn(isize) -> T) -> T {
         match self {
             Self::Flat => <T as NumericElement>::ZERO,
             Self::Forward => scales.first(at(0), at(1)),
@@ -104,7 +100,7 @@ impl Stencil {
 
     /// The derivative along a whole lane, added to what `out` already holds.
     #[inline]
-    pub(super) fn add_lane<'a, T: RealField + FloatElement + Copy + 'a>(
+    pub(super) fn add_lane<'a, T: RealField + 'a>(
         self,
         scales: Scales<T>,
         out: &mut [T],
@@ -139,7 +135,7 @@ impl Stencil {
     /// The derivative along a whole lane whose neighbour lane at signed
     /// offset `o` is `lane(o)`, each as long as `out`.
     #[inline]
-    pub(super) fn apply_lane<'a, T: RealField + FloatElement + Copy + 'a>(
+    pub(super) fn apply_lane<'a, T: RealField + 'a>(
         self,
         scales: Scales<T>,
         out: &mut [T],

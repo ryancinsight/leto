@@ -3,8 +3,6 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use core::fmt::Debug;
-
 use eunomia::{Bf16, FloatElement, F16};
 use leto::{Array, Layout, LetoError, Storage, VecStorage};
 use leto_ops::{
@@ -550,4 +548,3 @@ fn invalid_transposed_backward_target_preserves_all_gradients() {
     assert_eq!(grad_weight.storage().as_slice(), &[19.0; 3]);
     assert_eq!(grad_bias.storage().as_slice(), &[23.0]);
 }
-

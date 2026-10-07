@@ -17,7 +17,7 @@ pub(super) use divergence::{divergence, divergence_row};
 pub(super) use gradient::{gradient, gradient_row, plane_reads};
 
 use super::StaggeredLeapfrog3D;
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 
 /// One window of `2·halo` source cells split at `halo` feeds one output cell of
 /// either operator: `Σ_n c_n (hi[n−1] − lo[halo−n])`. The gradient's window for
@@ -25,10 +25,7 @@ use eunomia::{FloatElement, NumericElement, RealField};
 /// at `j−halo` — the transpose shifts the output by one cell and changes
 /// nothing else. Taps accumulate in ascending `n`, the order the indexed
 /// reference uses, so the two agree bit for bit.
-pub(super) fn window_sum<T: RealField + FloatElement + Copy>(
-    op: &StaggeredLeapfrog3D<T>,
-    window: &[T],
-) -> T {
+pub(super) fn window_sum<T: RealField>(op: &StaggeredLeapfrog3D<T>, window: &[T]) -> T {
     let taps = op.coefficients().taps();
     let (lo, hi) = window.split_at(taps.len());
     taps.iter()

@@ -1,6 +1,6 @@
 //! Yee staggered stencil kernels (forward and backward) behind
 //! [`super::FiniteDifference3D`].
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use crate::application::zip::zip_mut_with;
@@ -16,7 +16,7 @@ pub(super) fn staggered_forward_x_into<T>(
     hx: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nx < 2 {
         return Err(LetoError::InvalidInput(
@@ -44,7 +44,7 @@ pub(super) fn staggered_forward_y_into<T>(
     hy: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if ny < 2 {
         return Err(LetoError::InvalidInput(
@@ -72,7 +72,7 @@ pub(super) fn staggered_forward_z_into<T>(
     hz: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nz < 2 {
         return Err(LetoError::InvalidInput(
@@ -102,7 +102,7 @@ pub(super) fn staggered_backward_x_into<T>(
     hx: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nx < 2 {
         return Err(LetoError::InvalidInput(
@@ -143,7 +143,7 @@ pub(super) fn staggered_backward_y_into<T>(
     hy: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if ny < 2 {
         return Err(LetoError::InvalidInput(
@@ -182,7 +182,7 @@ pub(super) fn staggered_backward_z_into<T>(
     hz: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if nz < 2 {
         return Err(LetoError::InvalidInput(

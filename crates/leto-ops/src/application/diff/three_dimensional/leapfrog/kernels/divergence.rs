@@ -6,10 +6,10 @@
 use super::super::{Axis, StaggeredLeapfrog3D};
 use super::{reflect, window_sum};
 use crate::infrastructure::parallel::for_each_plane_mut;
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3};
 
-pub(crate) fn divergence<T: RealField + FloatElement + Copy>(
+pub(crate) fn divergence<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     axis: Axis,
     field: ArrayView3<'_, T>,
@@ -70,7 +70,7 @@ pub(crate) fn divergence<T: RealField + FloatElement + Copy>(
 /// Transpose along a non-contiguous axis: each source block scatters into the
 /// two reflected target blocks per tap, in the reference's order, so every cell
 /// accumulates the same terms in the same sequence.
-fn divergence_blocks<T: RealField + FloatElement + Copy>(
+fn divergence_blocks<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     source: &[T],
     target: &mut [T],
@@ -102,7 +102,7 @@ fn divergence_blocks<T: RealField + FloatElement + Copy>(
 /// same sequence and applies only the writes that land on `here`, so every cell
 /// accumulates the same terms in the same order and matches the scatter to the
 /// bit; target blocks no longer share writes and can run on separate tasks.
-fn divergence_block_gather<T: RealField + FloatElement + Copy>(
+fn divergence_block_gather<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     source: &[T],
     out: &mut [T],
@@ -118,7 +118,7 @@ fn divergence_block_gather<T: RealField + FloatElement + Copy>(
 
 /// Lane `here` of an axis of `extent` lanes, each as long as `out`, gathered
 /// in the scatter's order from `lane(i)`, lane `i` of the source.
-fn divergence_gather<'a, T: RealField + FloatElement + Copy + 'a>(
+fn divergence_gather<'a, T: RealField + 'a>(
     op: &StaggeredLeapfrog3D<T>,
     out: &mut [T],
     here: usize,
@@ -158,7 +158,7 @@ fn divergence_gather<'a, T: RealField + FloatElement + Copy + 'a>(
 /// The divergence along `axis` at row `y` of x-plane `x` of a C-contiguous
 /// `source` of `shape`, written into the row `out`: the value [`divergence`]
 /// writes there, by the same terms in the same order.
-pub(crate) fn divergence_row<T: RealField + FloatElement + Copy>(
+pub(crate) fn divergence_row<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     axis: Axis,
     source: &[T],
@@ -190,7 +190,7 @@ pub(crate) fn divergence_row<T: RealField + FloatElement + Copy>(
 /// gradient, shifted by one cell. Wall cells keep the scatter: only sources
 /// within `2·halo` of a wall reach them, and the interior guard stops those
 /// sources from double-counting into gathered cells.
-fn divergence_line<T: RealField + FloatElement + Copy>(
+fn divergence_line<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     source: &[T],
     target: &mut [T],
@@ -228,7 +228,7 @@ fn divergence_line<T: RealField + FloatElement + Copy>(
 }
 
 /// Divergence via three-index addressing, for arrays that are not contiguous.
-fn divergence_indexed<T: RealField + FloatElement + Copy>(
+fn divergence_indexed<T: RealField>(
     op: &StaggeredLeapfrog3D<T>,
     index: usize,
     extent: isize,
