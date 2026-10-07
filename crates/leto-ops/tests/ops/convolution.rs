@@ -26,7 +26,7 @@ fn array<T: Clone, const R: usize>(
 
 fn forward_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 4], (1..=4).map(T::from_count).collect::<Vec<_>>());
     let weight = array([1, 1, 2], vec![T::from_count(2), T::ONE]);
@@ -51,7 +51,7 @@ where
 
 fn backward_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 3], (1..=3).map(T::from_count).collect::<Vec<_>>());
     let weight = array([1, 1, 2], vec![T::from_count(2), T::from_count(3)]);
@@ -85,7 +85,7 @@ where
 
 fn transposed_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 2], vec![T::ONE, T::from_count(2)]);
     let weight = array([1, 1, 2], vec![T::from_count(3), T::from_count(4)]);
@@ -115,7 +115,7 @@ where
 
 fn transposed_backward_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 2], vec![T::ONE, T::from_count(2)]);
     let weight = array([1, 1, 2], vec![T::from_count(3), T::from_count(4)]);
@@ -550,3 +550,4 @@ fn invalid_transposed_backward_target_preserves_all_gradients() {
     assert_eq!(grad_weight.storage().as_slice(), &[19.0; 3]);
     assert_eq!(grad_bias.storage().as_slice(), &[23.0]);
 }
+
