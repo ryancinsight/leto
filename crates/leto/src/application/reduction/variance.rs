@@ -155,7 +155,7 @@ pub(crate) fn degrees_of_freedom<T: FloatElement>(count: usize, ddof: T) -> Resu
             reason: "variance degrees of freedom must be finite".to_string(),
         });
     }
-    let count = T::from_f64((count) as f64);
+    let count = T::from_count(count);
     let denom = count - ddof;
     if denom <= T::ZERO {
         return Err(LetoError::StorageError {

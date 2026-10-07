@@ -41,7 +41,7 @@ where
         });
     }
     let denom = degrees_of_freedom(n, ddof)?;
-    let nf = T::from_f64((n) as f64);
+    let nf = T::from_count(n);
 
     let view = arr.view();
     let layout = view.layout();

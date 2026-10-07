@@ -191,7 +191,7 @@ fn quantile_of_slice<T: FloatElement>(values: &mut [T], q: T, method: Interpolat
     if n == 1 {
         return Ok(values[0]);
     }
-    let len_minus_one = T::from_f64((n - 1) as f64);
+    let len_minus_one = T::from_count(n - 1);
     let h = q * len_minus_one;
     let lo = h.floor();
     // `lo` is floor-valued, so the conversion is exact for any in-range index.
