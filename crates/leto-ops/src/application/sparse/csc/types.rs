@@ -4,6 +4,9 @@
 //! `application::sparse::csc` constructs or destructures them directly, but
 //! nothing outside this module may.
 
+use super::construction::validate_csc_parts;
+use leto::Result;
+
 /// Compressed Sparse Column matrix: stores only the `nnz` nonzero entries
 /// in column-major order.
 ///
@@ -48,5 +51,83 @@ impl<'a, T> CscColumn<'a, T> {
     #[inline]
     pub fn nnz(&self) -> usize {
         self.values.len()
+    }
+}
+
+/// Borrowed CSC matrix view: the validated [`CscMatrix`] triple without owning it.
+///
+/// Construct with [`CscView::from_slices`] (validates the [`CscMatrix`]
+/// invariants over borrowed slices — zero-copy, the view aliases its inputs)
+/// or reborrow an owned matrix with [`CscMatrix::as_view`]. The CSC SpMV
+/// kernel consumes the view
+/// ([`csc_spmv_view_into`](super::super::csc_spmv_view_into)); the
+/// owned-matrix entry keeps its signature and delegates through
+/// [`CscMatrix::as_view`]. Structural and mutating operations stay on
+/// [`CscMatrix`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CscView<'a, T> {
+    pub(super) values: &'a [T],
+    pub(super) row_indices: &'a [usize],
+    pub(super) col_ptr: &'a [usize],
+    pub(super) nrows: usize,
+    pub(super) ncols: usize,
+}
+
+impl<'a, T> CscView<'a, T> {
+    /// Borrow CSC parts after validating the [`CscMatrix`] invariants.
+    ///
+    /// # Errors
+    /// [`LetoError::StorageError`](leto::LetoError::StorageError) on the same
+    /// conditions as [`CscMatrix::from_parts`] (shared validator).
+    pub fn from_slices(
+        values: &'a [T],
+        row_indices: &'a [usize],
+        col_ptr: &'a [usize],
+        nrows: usize,
+        ncols: usize,
+    ) -> Result<Self> {
+        validate_csc_parts(values.len(), row_indices, col_ptr, nrows, ncols)?;
+        Ok(Self {
+            values,
+            row_indices,
+            col_ptr,
+            nrows,
+            ncols,
+        })
+    }
+
+    /// `(nrows, ncols)`.
+    #[must_use]
+    #[inline]
+    pub fn shape(&self) -> (usize, usize) {
+        (self.nrows, self.ncols)
+    }
+
+    /// Number of stored nonzero entries.
+    #[must_use]
+    #[inline]
+    pub fn nnz(&self) -> usize {
+        self.values.len()
+    }
+
+    /// Number of rows.
+    #[must_use]
+    #[inline]
+    pub fn nrows(&self) -> usize {
+        self.nrows
+    }
+
+    /// Number of columns.
+    #[must_use]
+    #[inline]
+    pub fn ncols(&self) -> usize {
+        self.ncols
+    }
+
+    /// Borrowed CSC arrays `(values, row_indices, col_ptr)` for kernels.
+    #[must_use]
+    #[inline]
+    pub fn as_parts(&self) -> (&[T], &[usize], &[usize]) {
+        (self.values, self.row_indices, self.col_ptr)
     }
 }

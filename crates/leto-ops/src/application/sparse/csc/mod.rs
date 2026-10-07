@@ -20,7 +20,7 @@ mod mutation;
 mod properties;
 mod types;
 
-pub use types::{CscColumn, CscMatrix};
+pub use types::{CscColumn, CscMatrix, CscView};
 
 #[cfg(test)]
 mod tests;
