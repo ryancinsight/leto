@@ -6,6 +6,53 @@ use crate::application::sparse::CsrMatrix;
 use crate::domain::scalar::Scalar;
 use leto::{ArrayView2, LetoError, Result};
 
+/// Validate CSC parts against the [`CscMatrix`] invariants.
+///
+/// Shared SSOT of [`CscMatrix::from_parts`] and
+/// [`CscView`](super::types::CscView) construction: identical triples
+/// accept/reject identically with identical messages. Slice-only, so owned
+/// and borrowed construction validate the same way.
+pub(super) fn validate_csc_parts(
+    nnz: usize,
+    row_indices: &[usize],
+    col_ptr: &[usize],
+    nrows: usize,
+    ncols: usize,
+) -> Result<()> {
+    let bad = |reason: &str| LetoError::StorageError {
+        reason: format!("invalid CSC: {reason}"),
+    };
+    let expected_col_ptr_len = ncols
+        .checked_add(1)
+        .ok_or_else(|| LetoError::StorageError {
+            reason: "invalid CSC: ncols + 1 overflows usize".to_string(),
+        })?;
+    if col_ptr.len() != expected_col_ptr_len {
+        return Err(bad("col_ptr length must be ncols + 1"));
+    }
+    if row_indices.len() != nnz {
+        return Err(bad("row_indices and values lengths differ"));
+    }
+    if col_ptr[0] != 0 || *col_ptr.last().expect("ncols+1 >= 1") != nnz {
+        return Err(bad("col_ptr must start at 0 and end at nnz"));
+    }
+    if col_ptr.windows(2).any(|w| w[0] > w[1]) {
+        return Err(bad("col_ptr must be non-decreasing"));
+    }
+    if row_indices.iter().any(|&i| i >= nrows) {
+        return Err(bad("row index out of range"));
+    }
+    for window in col_ptr.windows(2) {
+        let col_rows = &row_indices[window[0]..window[1]];
+        if col_rows.windows(2).any(|rows| rows[0] >= rows[1]) {
+            return Err(bad(
+                "row indices in each column must be strictly increasing",
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl<T: Scalar> CscMatrix<T> {
     /// Compress a dense matrix view into CSC, dropping every exact-zero entry.
     #[must_use = "from_dense returns the compressed matrix"]
@@ -71,37 +118,7 @@ impl<T: Scalar> CscMatrix<T> {
         nrows: usize,
         ncols: usize,
     ) -> Result<Self> {
-        let bad = |reason: &str| LetoError::StorageError {
-            reason: format!("invalid CSC: {reason}"),
-        };
-        let expected_col_ptr_len = ncols
-            .checked_add(1)
-            .ok_or_else(|| LetoError::StorageError {
-                reason: "invalid CSC: ncols + 1 overflows usize".to_string(),
-            })?;
-        if col_ptr.len() != expected_col_ptr_len {
-            return Err(bad("col_ptr length must be ncols + 1"));
-        }
-        if row_indices.len() != values.len() {
-            return Err(bad("row_indices and values lengths differ"));
-        }
-        if col_ptr[0] != 0 || *col_ptr.last().expect("ncols+1 >= 1") != values.len() {
-            return Err(bad("col_ptr must start at 0 and end at nnz"));
-        }
-        if col_ptr.windows(2).any(|w| w[0] > w[1]) {
-            return Err(bad("col_ptr must be non-decreasing"));
-        }
-        if row_indices.iter().any(|&i| i >= nrows) {
-            return Err(bad("row index out of range"));
-        }
-        for window in col_ptr.windows(2) {
-            let col_rows = &row_indices[window[0]..window[1]];
-            if col_rows.windows(2).any(|rows| rows[0] >= rows[1]) {
-                return Err(bad(
-                    "row indices in each column must be strictly increasing",
-                ));
-            }
-        }
+        validate_csc_parts(values.len(), &row_indices, &col_ptr, nrows, ncols)?;
         Ok(Self {
             values,
             row_indices,

@@ -1,7 +1,7 @@
 //! Shape, storage-array, column-view, and diagonal accessors for
 //! [`CscMatrix`](super::CscMatrix).
 
-use super::types::{CscColumn, CscMatrix};
+use super::types::{CscColumn, CscMatrix, CscView};
 use crate::domain::scalar::Scalar;
 
 impl<T: Scalar> CscMatrix<T> {
@@ -50,6 +50,22 @@ impl<T: Scalar> CscMatrix<T> {
     #[inline]
     pub fn as_parts(&self) -> (&[T], &[usize], &[usize]) {
         (&self.values, &self.row_indices, &self.col_ptr)
+    }
+
+    /// Reborrow as a [`CscView`]: zero-cost, aliases the owned arrays.
+    ///
+    /// Infallible: every constructor establishes the [`CscView::from_slices`]
+    /// invariants, so no re-validation is needed.
+    #[must_use]
+    #[inline]
+    pub fn as_view(&self) -> CscView<'_, T> {
+        CscView {
+            values: &self.values,
+            row_indices: &self.row_indices,
+            col_ptr: &self.col_ptr,
+            nrows: self.nrows,
+            ncols: self.ncols,
+        }
     }
 
     /// CSC column-pointer array.

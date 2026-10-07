@@ -7,18 +7,21 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
-use super::CscMatrix;
+use super::{CscMatrix, CscView};
 use crate::domain::scalar::Scalar;
 use leto::{Array1, ArrayView1, LetoError, Result};
 
 /// Compute `y = A · x` into the caller-owned slice `y` (length `nrows`),
 /// overwriting it. One pass over the stored nonzeros (`O(nnz)`).
+/// Borrowed-CSC SSOT: [`csc_spmv_into`] delegates here through
+/// [`CscMatrix::as_view`], so owned and borrowed matrices share one kernel
+/// with zero copies either way.
 ///
 /// # Errors
 /// [`LetoError::ShapeMismatch`] if `x` is not length `ncols` or `y` is not
 /// length `nrows`.
-pub fn csc_spmv_into<T: Scalar>(
-    a: &CscMatrix<T>,
+pub fn csc_spmv_view_into<T: Scalar>(
+    a: &CscView<T>,
     x: &ArrayView1<'_, T>,
     y: &mut [T],
 ) -> Result<()> {
@@ -70,6 +73,20 @@ pub fn csc_spmv_into<T: Scalar>(
     }
 
     Ok(())
+}
+
+/// Compute `y = A · x` over an owned matrix. Thin wrapper over
+/// [`csc_spmv_view_into`] (SSOT) through [`CscMatrix::as_view`] (zero-copy).
+///
+/// # Errors
+/// [`LetoError::ShapeMismatch`] if `x` is not length `ncols` or `y` is not
+/// length `nrows`.
+pub fn csc_spmv_into<T: Scalar>(
+    a: &CscMatrix<T>,
+    x: &ArrayView1<'_, T>,
+    y: &mut [T],
+) -> Result<()> {
+    csc_spmv_view_into(&a.as_view(), x, y)
 }
 
 /// Compute `y = A · x`, allocating the length-`nrows` result. Thin wrapper over

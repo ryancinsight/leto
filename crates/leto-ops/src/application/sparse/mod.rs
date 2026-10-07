@@ -63,8 +63,8 @@ mod spmv;
 
 pub use amd::amd_order;
 pub use coo::CooMatrix;
-pub use csc::{CscColumn, CscMatrix};
-pub use csc_spmv::{csc_spmv, csc_spmv_into};
+pub use csc::{CscColumn, CscMatrix, CscView};
+pub use csc_spmv::{csc_spmv, csc_spmv_into, csc_spmv_view_into};
 pub use csr::{CsrMatrix, CsrRow, CsrView};
 pub use lu_numeric::{factor_numeric, NumericLu};
 pub use lu_sparse::{
