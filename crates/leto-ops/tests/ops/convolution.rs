@@ -550,4 +550,3 @@ fn invalid_transposed_backward_target_preserves_all_gradients() {
     assert_eq!(grad_weight.storage().as_slice(), &[19.0; 3]);
     assert_eq!(grad_bias.storage().as_slice(), &[23.0]);
 }
-
