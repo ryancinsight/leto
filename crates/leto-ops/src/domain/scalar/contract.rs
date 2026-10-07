@@ -56,6 +56,14 @@ pub trait Scalar: NumericElement {
         }
     }
 
+    /// In-place slice scaling: `data[i] *= scalar`.
+    #[inline]
+    fn scale_slice(data: &mut [Self], scalar: Self) {
+        for x in data.iter_mut() {
+            *x *= scalar;
+        }
+    }
+
     /// Sum reduction over a slice.
     #[inline]
     fn sum_slice(s: &[Self]) -> Self {

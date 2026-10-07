@@ -64,6 +64,16 @@ macro_rules! impl_scalar_simd {
             }
 
             #[inline]
+            fn scale_slice(data: &mut [Self], scalar: Self) {
+                if <SimdStrategy as SimdOperations<Self>>::scale_slice(data, scalar).is_ok() {
+                    return;
+                }
+                for x in data.iter_mut() {
+                    *x *= scalar;
+                }
+            }
+
+            #[inline]
             fn sum_slice(s: &[Self]) -> Self {
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::sum_slice(s) {
                     res
