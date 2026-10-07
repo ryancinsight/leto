@@ -172,6 +172,13 @@ impl<'a, T> CsrView<'a, T> {
         self.ncols
     }
 
+    /// Borrow the column indices.
+    #[must_use]
+    #[inline]
+    pub fn col_indices(&self) -> &'a [usize] {
+        self.col_indices
+    }
+
     /// Borrowed CSR arrays `(values, col_indices, row_ptr)` for kernels.
     #[must_use]
     #[inline]

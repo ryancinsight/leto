@@ -268,7 +268,7 @@ fn owned_factor_reuses_symbolic_across_value_changes() {
     let n = 64usize;
     let solver = SparseLuSolver::default();
     let a1 = tridiagonal_csr(n, 2.0);
-    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a1));
+    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a1.as_view()));
     let b: Vec<f64> = (1..=n).map(|k| k as f64).collect();
     let b_arr = Array1::from_shape_vec([n], b.clone()).expect("b shape");
 
@@ -298,7 +298,7 @@ fn owned_factor_matches_solve_view() {
     let b: Vec<f64> = (0..n).map(|k| (k as f64) * 0.25 - 3.0).collect();
     let b_arr = Array1::from_shape_vec([n], b).expect("b shape");
 
-    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a.as_view()));
     let factor = solver
         .factor_sparse_with_symbolic(&a, &symbolic)
         .expect("factor");
@@ -339,7 +339,7 @@ fn owned_factor_falls_back_to_dense_when_pivoting_required() {
             *rhs += value * x_known[col];
         }
     }
-    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a.as_view()));
     let factor = solver
         .factor_sparse_with_symbolic(&a, &symbolic)
         .expect("dense fallback factors the pivot-requiring matrix");
@@ -356,7 +356,7 @@ fn owned_factor_small_matrix_routes_dense() {
     // n=2 ≤ small_switch: dispatch takes the dense arm outright.
     let a = make_csr(2, 2, &[(0, 0, 3.0), (0, 1, 1.0), (1, 0, 1.0), (1, 1, 2.0)]);
     let solver = SparseLuSolver::default();
-    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a.as_view()));
     let factor = solver
         .factor_sparse_with_symbolic(&a, &symbolic)
         .expect("dense-arm factor");
@@ -371,7 +371,7 @@ fn owned_factor_solve_into_rejects_wrong_lengths() {
     let n = 64usize;
     let a = tridiagonal_csr(n, 2.0);
     let solver = SparseLuSolver::default();
-    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a));
+    let symbolic = factor_symbolic(&CscMatrix::from_csr(&a.as_view()));
     let factor = solver
         .factor_sparse_with_symbolic(&a, &symbolic)
         .expect("factor");
@@ -394,7 +394,7 @@ fn owned_factor_solve_into_rejects_wrong_lengths() {
 #[test]
 fn owned_factor_rejects_symbolic_order_mismatch() {
     let a = tridiagonal_csr(64, 2.0);
-    let wrong = factor_symbolic(&CscMatrix::from_csr(&tridiagonal_csr(32, 2.0)));
+    let wrong = factor_symbolic(&CscMatrix::from_csr(&tridiagonal_csr(32, 2.0).as_view()));
     let err = SparseLuSolver::default()
         .factor_sparse_with_symbolic(&a, &wrong)
         .expect_err("order mismatch must be rejected");

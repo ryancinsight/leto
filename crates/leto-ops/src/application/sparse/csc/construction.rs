@@ -2,7 +2,7 @@
 //! parts, CSR transposition, and the all-zero matrix.
 
 use super::types::CscMatrix;
-use crate::application::sparse::CsrMatrix;
+use crate::application::sparse::CsrView;
 use crate::domain::scalar::Scalar;
 use leto::{ArrayView2, LetoError, Result};
 
@@ -128,11 +128,14 @@ impl<T: Scalar> CscMatrix<T> {
         })
     }
 
-    /// Build CSC from CSR via transpose (O(nnz)).
+    /// Build CSC from a borrowed CSR view via transpose (O(nnz)).
     ///
-    /// CSR row i corresponds to CSC column i in A^T.
+    /// CSR row i corresponds to CSC column i in A^T. Takes the view so
+    /// borrowed CSR converts without an owned round-trip; pass
+    /// `&matrix.as_view()` for an owned
+    /// [`CsrMatrix`](crate::application::sparse::CsrMatrix).
     #[must_use = "from_csr returns the column-compressed matrix"]
-    pub fn from_csr(csr: &CsrMatrix<T>) -> Self {
+    pub fn from_csr(csr: &CsrView<'_, T>) -> Self {
         let nrows = csr.nrows();
         let ncols = csr.ncols();
         let mut col_counts = vec![0usize; ncols];

@@ -88,7 +88,7 @@ impl SparseLuSolver {
         matrix: &CsrMatrix<T>,
         rhs: &ArrayView1<'_, T>,
     ) -> Result<Array1<T>> {
-        let csc = CscMatrix::from_csr(matrix);
+        let csc = CscMatrix::from_csr(&matrix.as_view());
         let symbolic: SymbolicLu = factor_symbolic_with_ordering(&csc, self.ordering);
         // The numeric phase must operate on the same matrix the symbolic
         // was built for. For AMD that matrix is `A_perm = A[perm, perm]`,
@@ -221,7 +221,7 @@ impl SparseLuSolver {
     /// coo.push(1, 0, 1.0_f64);
     /// coo.push(1, 1, 3.0_f64);
     /// let csr = coo.to_csr();
-    /// let symbolic = factor_symbolic(&CscMatrix::from_csr(&csr));
+    /// let symbolic = factor_symbolic(&CscMatrix::from_csr(&csr.as_view()));
     /// let factor = SparseLuSolver::default()
     ///     .factor_sparse_with_symbolic(&csr, &symbolic)
     ///     .expect("2x2 SPD factors");
@@ -250,7 +250,7 @@ impl SparseLuSolver {
         // If the caller's symbolic was produced under a column-ordering
         // strategy, the numeric phase must operate on the same
         // permuted matrix. Otherwise we fall back to the natural input.
-        let csc = CscMatrix::from_csr(matrix);
+        let csc = CscMatrix::from_csr(&matrix.as_view());
         let (factor_input, col_perm_owned): (CscMatrix<T>, Vec<usize>) =
             match &symbolic.amd_col_perm {
                 Some(perm) => {
