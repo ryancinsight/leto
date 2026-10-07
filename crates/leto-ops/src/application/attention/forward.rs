@@ -1,7 +1,7 @@
 use super::validation::{mask_is_active, validate_forward};
 use super::{AttentionMask, AttentionResult};
 use crate::domain::real::RealScalar;
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{FloatElement, NumericElement};
 use leto::{ArrayView, ArrayViewMut};
 
 #[inline(always)]
@@ -74,7 +74,7 @@ fn convex_combine<T: RealScalar>(current: T, value: T, value_weight: T) -> T {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[allow(clippy::too_many_arguments)]
-pub fn scaled_dot_product_attention_into<T: RealScalar + RealField>(
+pub fn scaled_dot_product_attention_into<T: RealScalar>(
     query: &ArrayView<'_, T, 3>,
     key: &ArrayView<'_, T, 3>,
     value: &ArrayView<'_, T, 3>,
