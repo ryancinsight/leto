@@ -84,7 +84,7 @@ where
     T: FloatElement,
     S: Storage<T>,
 {
-    let half = T::from_f64(0.5);
+    let half = T::ONE / T::from_integer(2);
     quantile_all(arr, half, Interpolation::Linear)
 }
 
@@ -162,7 +162,7 @@ where
     S: Storage<T>,
     RankMarker<N>: RemoveAxis<N, SmallerShape = [usize; M], SmallerStrides = [isize; M]>,
 {
-    let half = T::from_f64(0.5);
+    let half = T::ONE / T::from_integer(2);
     quantile_axis(arr, axis, half, Interpolation::Linear)
 }
 
@@ -202,7 +202,7 @@ fn quantile_of_slice<T: FloatElement>(values: &mut [T], q: T, method: Interpolat
         Interpolation::Lower => values[lo_idx],
         Interpolation::Higher => values[ceil_idx(lo_idx, g, n)],
         Interpolation::Nearest => {
-            let half = T::from_f64(0.5);
+            let half = T::ONE / T::from_integer(2);
             if g > half || (g == half && lo_idx % 2 == 1) {
                 values[ceil_idx(lo_idx, g, n)]
             } else {
@@ -211,8 +211,7 @@ fn quantile_of_slice<T: FloatElement>(values: &mut [T], q: T, method: Interpolat
         }
         Interpolation::Midpoint => {
             let hi = values[ceil_idx(lo_idx, g, n)];
-            let two = T::from_f64(2.0);
-            (values[lo_idx] + hi) / two
+            (values[lo_idx] + hi) / T::from_integer(2)
         }
         Interpolation::Linear => {
             if g == T::ZERO {
