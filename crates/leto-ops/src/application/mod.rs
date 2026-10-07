@@ -83,7 +83,9 @@ pub use reduction::{
 pub use scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
 };
-pub use sparse::{spgemm, spmm, spmm_into, spmv, spmv_into, CsrMatrix};
+pub use sparse::{
+    spgemm, spmm, spmm_into, spmm_view_into, spmv, spmv_into, spmv_view_into, CsrMatrix, CsrView,
+};
 pub use statistics::{
     normalized_rmse, nrmse, pearson, percentile_range, phase_error_degrees_for_correlation,
     phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,

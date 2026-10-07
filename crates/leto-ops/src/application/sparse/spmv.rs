@@ -1,17 +1,19 @@
 //! Sparse matrix–vector product `y = A · x` over CSR, in `O(nnz)` time.
 
-use super::CsrMatrix;
+use super::{CsrMatrix, CsrView};
 use crate::domain::scalar::Scalar;
 use leto::{Array1, ArrayView1, LetoError, Result, Storage};
 
 /// Compute `y = A · x` into the caller-owned slice `y` (length `nrows`),
 /// overwriting it. One pass over the stored nonzeros (`O(nnz)`); see the module
-/// theorem for correctness and complexity.
+/// theorem for correctness and complexity. Borrowed-CSR SSOT: [`spmv_into`]
+/// delegates here through [`CsrMatrix::as_view`], so owned and borrowed
+/// matrices share one kernel with zero copies either way.
 ///
 /// # Errors
 /// [`LetoError::ShapeMismatch`] if `x` is not length `ncols` or `y` is not
 /// length `nrows`.
-pub fn spmv_into<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>, y: &mut [T]) -> Result<()> {
+pub fn spmv_view_into<T: Scalar>(a: &CsrView<T>, x: &ArrayView1<'_, T>, y: &mut [T]) -> Result<()> {
     let (nrows, ncols) = a.shape();
     if x.shape() != [ncols] {
         return Err(LetoError::ShapeMismatch {
@@ -36,7 +38,17 @@ pub fn spmv_into<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>, y: &mut [T]
     spmv_slice_into(a, x_contiguous.storage().as_slice(), y)
 }
 
-fn spmv_slice_into<T: Scalar>(a: &CsrMatrix<T>, xs: &[T], y: &mut [T]) -> Result<()> {
+/// Compute `y = A · x` over an owned matrix. Thin wrapper over
+/// [`spmv_view_into`] (SSOT) through [`CsrMatrix::as_view`] (zero-copy).
+///
+/// # Errors
+/// [`LetoError::ShapeMismatch`] if `x` is not length `ncols` or `y` is not
+/// length `nrows`.
+pub fn spmv_into<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>, y: &mut [T]) -> Result<()> {
+    spmv_view_into(&a.as_view(), x, y)
+}
+
+fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<()> {
     let (values, col_indices, row_ptr) = a.as_parts();
 
     // Iterate rows through `row_ptr.windows(2)` zipped with `y` — eliding the

@@ -65,7 +65,7 @@ pub use amd::amd_order;
 pub use coo::CooMatrix;
 pub use csc::{CscColumn, CscMatrix};
 pub use csc_spmv::{csc_spmv, csc_spmv_into};
-pub use csr::{CsrMatrix, CsrRow};
+pub use csr::{CsrMatrix, CsrRow, CsrView};
 pub use lu_numeric::{factor_numeric, NumericLu};
 pub use lu_sparse::{
     csr_to_dense, sparse_lu_solve, OrderingStrategy, OwnedNumericLu, SparseLuSolver,
@@ -73,5 +73,5 @@ pub use lu_sparse::{
 };
 pub use lu_symbolic::{factor_symbolic, factor_symbolic_with_ordering, SymbolicLu};
 pub use spgemm::spgemm;
-pub use spmm::{spmm, spmm_into};
-pub use spmv::{spmv, spmv_into};
+pub use spmm::{spmm, spmm_into, spmm_view_into};
+pub use spmv::{spmv, spmv_into, spmv_view_into};
