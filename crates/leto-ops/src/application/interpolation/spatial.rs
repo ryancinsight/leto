@@ -162,9 +162,17 @@ fn axis_index_and_frac<T: FloatElement + Copy>(v: T, n: usize) -> (usize, T) {
         return (0, T::ZERO);
     }
     let max_idx = n - 2; // largest floor index that keeps idx + 1 in bounds
-    let clamped = v.to_f64().clamp(0.0, (n - 1) as f64);
-    let idx = (clamped.floor() as usize).min(max_idx);
-    let frac = T::from_f64((clamped - idx as f64).clamp(0.0, 1.0));
+                         // Clamp in T (avoids a f64 round-trip for f32 callers).
+    let clamped = v.max_scalar(T::ZERO).min_scalar(T::from_count(n - 1));
+    let fl = clamped.floor();
+    // Index extraction requires usize; a floored, non-negative T widens exactly.
+    // Clamp to max_idx ensures idx+1 stays in bounds.
+    let idx = (fl.to_f64() as usize).min(max_idx);
+    // Fractional part relative to the (possibly clamped) floor index.
+    // Clamp guards against float rounding at the upper boundary.
+    let frac = (clamped - T::from_count(idx))
+        .max_scalar(T::ZERO)
+        .min_scalar(T::ONE);
     (idx, frac)
 }
 
