@@ -49,14 +49,14 @@ impl<T: RealField> LagrangeInterpolation<T> {
 
 fn barycentric_weights<T: RealField>(x: &[T]) -> Vec<T> {
     let n = x.len();
-    let mut w = vec![T::from_f64(1.0); n];
+    let mut w = vec![T::ONE; n];
     for i in 0..n {
         for j in 0..n {
             if i != j {
                 w[i] *= x[i] - x[j];
             }
         }
-        w[i] = T::from_f64(1.0) / w[i];
+        w[i] = T::ONE / w[i];
     }
     w
 }
