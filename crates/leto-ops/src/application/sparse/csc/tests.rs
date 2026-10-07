@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, reason = "test scope")]
 
 use super::CscMatrix;
-use crate::application::sparse::CsrMatrix;
+use crate::application::sparse::{CsrMatrix, CsrView};
 
 #[test]
 fn from_dense_round_trips() {
@@ -56,8 +56,28 @@ fn csc_from_csr_round_trips() {
         leto::Array2::from_shape_vec([3, 3], vec![1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0, 5.0])
             .unwrap();
     let csr = CsrMatrix::from_dense(&dense.view());
-    let csc = CscMatrix::from_csr(&csr);
+    let csc = CscMatrix::from_csr(&csr.as_view());
     assert_eq!(csc.to_dense(), dense);
+}
+
+#[test]
+fn csc_from_csr_accepts_borrowed_view() {
+    let dense =
+        leto::Array2::from_shape_vec([3, 3], vec![1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0, 5.0])
+            .unwrap();
+    let owned = CsrMatrix::from_dense(&dense.view());
+    let view = CsrView::from_slices(
+        &[1.0, 2.0, 3.0, 4.0, 5.0],
+        &[0, 2, 1, 0, 2],
+        &[0, 2, 3, 5],
+        3,
+        3,
+    )
+    .unwrap();
+    assert_eq!(
+        CscMatrix::from_csr(&view),
+        CscMatrix::from_csr(&owned.as_view())
+    );
 }
 
 #[test]
