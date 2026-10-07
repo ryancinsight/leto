@@ -38,11 +38,15 @@ path may trade thread parallelism for SIMD (benchmark question, below).
    bitwise over same-width integers, and any negative index becomes huge and
    is rejected by the column-range check. The proof obligation lives in a code
    comment at the cast site.
-4. Tighten the forward bounds from `B: Backend` to `B: CpuBackend` — the
-   established idiom of every other wired op
-   (elementwise/matmul/attention/ctc/finite-difference). It makes CPU-only-ness
-   explicit and breaks zero callers (only Sequential/Moirai qualify today and
-   both implement `CpuBackend`).
+4. Keep the `B: Backend` + `CpuAddressableStorage(Mut)` bounds as-is — do
+   NOT tighten to `CpuBackend`. The sparse entries are free functions, not
+   `BackendOps` trait methods, so there is no per-backend impl selection to
+   branch on; tightening would only ripple `CpuBackend` into
+   `coeus-autograd`'s generic sparse nodes for an identical exclusion set (no
+   device backend satisfies the storage bounds today — device exclusion stays
+   exactly as strong as it is). Revisit via `BackendOps` trait-ification if a
+   device sparse path ever exists. `T` gains `+ leto_ops::Scalar` (additive,
+   the standard DIP cost; the autograd sparse bounds move in the same slice).
 5. Backward (`spmm_backward_values/dense`) stays in coeus untouched:
    autodiff-owned, and leto has no backward concept.
 6. Gate: the existing differential suites (sequential + moirai vs reference)
@@ -64,10 +68,13 @@ path may trade thread parallelism for SIMD (benchmark question, below).
 - Migrate `CsrTensor` to usize indices: rejected for this slice — breaking
   storage change across tensor/autograd/serde; revisit if the transmute ever
   bites.
-- Generic `B: Backend` with a runtime branch: rejected — no device caller can
-  satisfy CPU-addressable bounds today; the explicit `CpuBackend` bound says
-  what it means, and device kernels get their own entries when a device caller
-  exists.
+- Tighten to `B: CpuBackend` now: rejected — for free functions (no
+  per-backend impls) it buys only a different compile error while rippling
+  into autograd's generic bounds; the storage bounds already exclude devices.
+- Generic `B: Backend` with a runtime branch: rejected — impossible without
+  specialization, and unnecessary: the storage bounds are the compile-time
+  branch. Device kernels get their own entries (plus trait-ification) when a
+  device caller exists.
 - Chunked parallel dispatch now: rejected — needs kernel row-range parameters;
   benchmark first per (7).
 
@@ -77,5 +84,6 @@ path may trade thread parallelism for SIMD (benchmark question, below).
   traversal loops and the dead bridge module are deleted (net negative lines).
 - Autograd sparse linalg and the differential suites are the acceptance gate
   and must pass unmodified.
-- A future device sparse path starts from explicit `CpuBackend`-vs-device
-  entries instead of aspirational genericity.
+- A future device sparse path starts from new entries (plus `BackendOps`
+  trait-ification) instead of aspirational genericity; the storage bounds
+  remain the compile-time CPU/device branch until then.
