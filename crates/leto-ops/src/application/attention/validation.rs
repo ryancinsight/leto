@@ -151,7 +151,7 @@ pub(super) fn mask_is_active<T: RealScalar>(
     read(&mask_view, index) != <T as NumericElement>::ZERO
 }
 
-fn validate_forward_arithmetic<T: RealScalar + RealField>(
+fn validate_forward_arithmetic<T: RealScalar>(
     query: &ArrayView<'_, T, 3>,
     key: &ArrayView<'_, T, 3>,
     mask: AttentionMask<'_, T>,
@@ -226,7 +226,7 @@ fn validate_probability_weights<T: RealScalar + RealField>(
     Ok(())
 }
 
-pub(super) fn validate_forward<T: RealScalar + RealField>(
+pub(super) fn validate_forward<T: RealScalar>(
     query: &ArrayView<'_, T, 3>,
     key: &ArrayView<'_, T, 3>,
     value: &ArrayView<'_, T, 3>,

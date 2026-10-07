@@ -22,7 +22,9 @@ Layer boundary: Leto owns layout, storage, views, slicing, broadcasting,
 elementwise math, reductions, matmul, shape ops, dense linear algebra, scaled
 dot-product attention on CPU, and the narrow CPU CSR sparse-dense parity
 kernels. Coeus owns autodiff graphs, NN orchestration, optimizers, and backend
-selection; accelerator attention kernels belong to Hephaestus. Apollo owns
+selection; accelerator attention kernels belong to Hephaestus. Leto's
+`stateful_update` optimizer rules are the CPU oracle for Hephaestus
+conformance (ADR 0022), not production optimizer ownership. Apollo owns
 Fourier, spectral, and transform kernels. `themis` and `melinoe` are consumed
 indirectly via `mnemosyne`/`moirai`, not as direct leto dependencies.
 
