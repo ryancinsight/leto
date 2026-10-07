@@ -1,12 +1,14 @@
 //! Sparse–dense matrix product `C = A · B` (CSR `A`, dense `B`) in `O(nnz·k)`.
 
-use super::CsrMatrix;
+use super::{CsrMatrix, CsrView};
 use crate::domain::scalar::Scalar;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
 /// Compute `C = A · B` into the caller-owned row-major slice `c`
 /// (`nrows × bcols`), overwriting it. `A` is `nrows × ncols` (CSR), `B` is
-/// `ncols × bcols` (dense).
+/// `ncols × bcols` (dense). Borrowed-CSR SSOT: [`spmm_into`] delegates here
+/// through [`CsrMatrix::as_view`], so owned and borrowed matrices share one
+/// kernel with zero copies either way.
 ///
 /// # Theorem (correctness and complexity)
 /// `C[i, :] = Σ_j A[i,j] · B[j, :] = Σ_{p ∈ row i} values[p] · B[col_indices[p], :]`
@@ -22,7 +24,7 @@ use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 /// # Errors
 /// [`LetoError::ShapeMismatch`] if `B`'s row count `≠ ncols`, or `c.len() ≠
 /// nrows·bcols`.
-pub fn spmm_into<T: Scalar>(a: &CsrMatrix<T>, b: &ArrayView2<'_, T>, c: &mut [T]) -> Result<()> {
+pub fn spmm_view_into<T: Scalar>(a: &CsrView<T>, b: &ArrayView2<'_, T>, c: &mut [T]) -> Result<()> {
     let (nrows, ncols) = a.shape();
     let [b_rows, bcols] = b.shape();
     if b_rows != ncols {
@@ -53,7 +55,17 @@ pub fn spmm_into<T: Scalar>(a: &CsrMatrix<T>, b: &ArrayView2<'_, T>, c: &mut [T]
     spmm_slice_into(a, bcols, b_contiguous.storage().as_slice(), c)
 }
 
-fn spmm_slice_into<T: Scalar>(a: &CsrMatrix<T>, bcols: usize, bs: &[T], c: &mut [T]) -> Result<()> {
+/// Compute `C = A · B` over an owned matrix. Thin wrapper over
+/// [`spmm_view_into`] (SSOT) through [`CsrMatrix::as_view`] (zero-copy).
+///
+/// # Errors
+/// [`LetoError::ShapeMismatch`] if `B`'s row count `≠ ncols`, or `c.len() ≠
+/// nrows·bcols`.
+pub fn spmm_into<T: Scalar>(a: &CsrMatrix<T>, b: &ArrayView2<'_, T>, c: &mut [T]) -> Result<()> {
+    spmm_view_into(&a.as_view(), b, c)
+}
+
+fn spmm_slice_into<T: Scalar>(a: &CsrView<T>, bcols: usize, bs: &[T], c: &mut [T]) -> Result<()> {
     let (nrows, _) = a.shape();
     let (values, col_indices, row_ptr) = a.as_parts();
 
