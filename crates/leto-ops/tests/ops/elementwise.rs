@@ -619,6 +619,20 @@ where
             );
         }
     }
+    let factor = b[7];
+    let mut scaled = a.clone();
+    <SimdStrategy as SimdOperations<T>>::scale_slice(&mut scaled, factor)
+        .unwrap_or_else(|e| panic!("scale: reduced precision declined: {e}"));
+    for (i, (&x, &got)) in a.iter().zip(&scaled).enumerate() {
+        let want = x * factor;
+        assert_eq!(
+            T::to_test_bits(got),
+            T::to_test_bits(want),
+            "scale[{i}]: hermes {} vs scalar {}",
+            T::to_test_f32(got),
+            T::to_test_f32(want)
+        );
+    }
     let sum =
         <SimdStrategy as SimdOperations<T>>::sum_slice(&a).expect("reduced-precision sum routed");
     let dot = <SimdStrategy as SimdOperations<T>>::dot_slice(&a, &b)
@@ -692,6 +706,36 @@ fn f16_slice_operations_route_through_hermes_and_match_scalar_semantics() {
 #[test]
 fn bf16_slice_operations_route_through_hermes_and_match_scalar_semantics() {
     assert_reduced_precision_slice_operations::<eunomia::Bf16>();
+}
+
+#[test]
+fn scalar_scale_slice_matches_scalar_reference_bitwise() {
+    // f32/f64 route through the SIMD strategy; i32 takes the scalar default.
+    // Length 259 covers SIMD tails; length 3 covers the sub-lane path.
+    for len in [3usize, 259] {
+        let data: Vec<f32> = (0..len)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 8.0)
+            .collect();
+        let mut got = data.clone();
+        leto_ops::Scalar::scale_slice(&mut got, 1.5);
+        for (i, (&x, &g)) in data.iter().zip(&got).enumerate() {
+            assert_eq!(g.to_bits(), (x * 1.5f32).to_bits(), "f32[{len}][{i}]");
+        }
+        let data: Vec<f64> = (0..len)
+            .map(|i| ((i * 37 % 101) as f64 - 50.0) / 8.0)
+            .collect();
+        let mut got = data.clone();
+        leto_ops::Scalar::scale_slice(&mut got, 1.5);
+        for (i, (&x, &g)) in data.iter().zip(&got).enumerate() {
+            assert_eq!(g.to_bits(), (x * 1.5f64).to_bits(), "f64[{len}][{i}]");
+        }
+        let data: Vec<i32> = (0..len as i32).map(|i| (i * 37 % 101) - 50).collect();
+        let mut got = data.clone();
+        leto_ops::Scalar::scale_slice(&mut got, 3);
+        for (i, (&x, &g)) in data.iter().zip(&got).enumerate() {
+            assert_eq!(g, x * 3, "i32[{len}][{i}]");
+        }
+    }
 }
 
 /// Values `0.5, 1.0, 1.5, …`, built without a cast so the test carries no

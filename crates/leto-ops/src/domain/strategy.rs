@@ -34,6 +34,8 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn mul_slice(a: &[T], b: &[T], out: &mut [T]) -> Result<(), &'static str>;
     /// Vectorized slice division.
     fn div_slice(a: &[T], b: &[T], out: &mut [T]) -> Result<(), &'static str>;
+    /// Vectorized in-place slice scaling: `data[i] *= scalar`.
+    fn scale_slice(data: &mut [T], scalar: T) -> Result<(), &'static str>;
     /// Vectorized sum reduction.
     fn sum_slice(s: &[T]) -> Option<T>;
     /// Vectorized dot product reduction.
@@ -121,6 +123,11 @@ macro_rules! impl_simd_ops_native {
             #[inline(always)]
             fn div_slice(a: &[$t], b: &[$t], out: &mut [$t]) -> Result<(), &'static str> {
                 hermes_simd::elementwise_div::<$t>(a, b, out).map_err(|_| "simd div failed")
+            }
+            #[inline(always)]
+            fn scale_slice(data: &mut [$t], scalar: $t) -> Result<(), &'static str> {
+                hermes_simd::scale::<$t>(data, scalar);
+                Ok(())
             }
             #[inline(always)]
             fn sum_slice(s: &[$t]) -> Option<$t> {
