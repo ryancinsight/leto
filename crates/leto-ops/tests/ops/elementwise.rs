@@ -59,6 +59,64 @@ fn scalar_traits_are_eunomia_extensions() {
     );
 }
 
+/// `Scalar::scale_slice` matches the scalar loop bitwise: the operation is
+/// lane-independent, so the SIMD route and the scalar default agree exactly.
+fn assert_scale_slice_matches_scalar_loop<T>(values: Vec<T>, scalar: T, bits: fn(T) -> u64)
+where
+    T: leto_ops::Scalar + Copy + std::ops::Mul<Output = T>,
+{
+    let mut got = values.clone();
+    <T as leto_ops::Scalar>::scale_slice(&mut got, scalar);
+    for (i, (&g, &x)) in got.iter().zip(&values).enumerate() {
+        assert_eq!(bits(g), bits(x * scalar), "scale[{i}]");
+    }
+}
+
+#[test]
+fn scale_slice_scales_in_place_on_every_route() {
+    // Long enough to leave any SIMD scalar tail (259, like the
+    // reduced-precision harness).
+    let n = 259usize;
+    let f32_values: Vec<f32> = (0..n)
+        .map(|i| ((i * 37 % 101) as f32 - 50.0) / 8.0)
+        .collect();
+    assert_scale_slice_matches_scalar_loop(f32_values, 2.5, |x| u64::from(x.to_bits()));
+
+    let f64_values: Vec<f64> = (0..n)
+        .map(|i| ((i * 37 % 101) as f64 - 50.0) / 8.0)
+        .collect();
+    assert_scale_slice_matches_scalar_loop(f64_values, 2.5, |x| x.to_bits());
+
+    let f16_values: Vec<eunomia::F16> = (0..n)
+        .map(|i| eunomia::F16::from_f32(((i * 37 % 101) as f32 - 50.0) / 8.0))
+        .collect();
+    assert_scale_slice_matches_scalar_loop(f16_values, eunomia::F16::from_f32(2.5), |x| {
+        u64::from(x.to_bits())
+    });
+
+    let bf16_values: Vec<eunomia::Bf16> = (0..n)
+        .map(|i| eunomia::Bf16::from_f32(((i * 37 % 101) as f32 - 50.0) / 8.0))
+        .collect();
+    assert_scale_slice_matches_scalar_loop(bf16_values, eunomia::Bf16::from_f32(2.5), |x| {
+        u64::from(x.to_bits())
+    });
+
+    // The scalar default route (plain `Scalar` impls): exact integers.
+    let mut ints = vec![1i32, -2, 0, 1_000_000];
+    <i32 as leto_ops::Scalar>::scale_slice(&mut ints, -3);
+    assert_eq!(ints, vec![-3, 6, 0, -3_000_000]);
+
+    // The strategy route is taken, not declined.
+    let mut direct = vec![1.0f32, 2.0, 3.0];
+    <SimdStrategy as SimdOperations<f32>>::scale_slice(&mut direct, 4.0).expect("f32 scale routed");
+    assert_eq!(direct, vec![4.0, 8.0, 12.0]);
+
+    // Empty input is a no-op on every route.
+    let mut empty: Vec<f64> = vec![];
+    <f64 as leto_ops::Scalar>::scale_slice(&mut empty, 2.5);
+    assert!(empty.is_empty());
+}
+
 #[test]
 fn test_elementwise_binary_ops() {
     let layout = Layout::c_contiguous([2, 3]).unwrap();

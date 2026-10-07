@@ -83,6 +83,17 @@ pub trait Scalar: NumericElement {
         }
     }
 
+    /// In-place scaling: `data[i] *= scalar` for every element.
+    ///
+    /// The operation is lane-independent, so SIMD overrides stay
+    /// bitwise-identical to this scalar default for ordinary IEEE operands.
+    #[inline]
+    fn scale_slice(data: &mut [Self], scalar: Self) {
+        for value in data {
+            *value *= scalar;
+        }
+    }
+
     /// Fused multi-row update: `out[row, i] += alphas[row] * x[i]`.
     #[inline]
     fn axpy_rows(

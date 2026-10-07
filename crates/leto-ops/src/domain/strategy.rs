@@ -40,6 +40,8 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn dot_slice(a: &[T], b: &[T]) -> Option<T>;
     /// Vectorized fused row update: `out[i] += alpha * x[i]`.
     fn axpy_slice(alpha: T, x: &[T], out: &mut [T]) -> Result<(), &'static str>;
+    /// Vectorized in-place scaling: `data[i] *= scalar`.
+    fn scale_slice(data: &mut [T], scalar: T) -> Result<(), &'static str>;
     /// Vectorized fused multi-row update: `out[row, i] += alphas[row] * x[i]`.
     fn axpy_rows(
         alphas: &[T],
@@ -133,6 +135,11 @@ macro_rules! impl_simd_ops_native {
             #[inline(always)]
             fn axpy_slice(alpha: $t, x: &[$t], out: &mut [$t]) -> Result<(), &'static str> {
                 hermes_simd::axpy::<$t>(alpha, x, out).map_err(|_| "simd axpy failed")
+            }
+            #[inline(always)]
+            fn scale_slice(data: &mut [$t], scalar: $t) -> Result<(), &'static str> {
+                hermes_simd::scale::<$t>(data, scalar);
+                Ok(())
             }
             #[inline(always)]
             fn axpy_rows(

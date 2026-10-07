@@ -99,6 +99,16 @@ macro_rules! impl_scalar_simd {
             }
 
             #[inline]
+            fn scale_slice(data: &mut [Self], scalar: Self) {
+                if <SimdStrategy as SimdOperations<Self>>::scale_slice(data, scalar).is_ok() {
+                    return;
+                }
+                for value in data {
+                    *value *= scalar;
+                }
+            }
+
+            #[inline]
             fn axpy_rows(
                 alphas: &[Self],
                 x: &[Self],
