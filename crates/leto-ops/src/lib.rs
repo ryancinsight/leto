@@ -163,8 +163,8 @@ pub use application::stencil::laplacian_2d_into;
 pub use application::triangular::{triangular, triangular_into, triangular_keeps, TriangularMode};
 pub use application::unary::{
     map, map_inplace, map_into, map_into_with_cache_geometry, mapv, unary_map, unary_map_into,
-    AbsOp, CosOp, ErfOp, ErfcOp, ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp,
-    UnaryOp,
+    AbsOp, CosOp, ErfOp, ErfcOp, ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SincOp,
+    SqrtOp, UnaryOp,
 };
 pub use application::vector::{cross_into, dot, hamming_distance, jaccard_distance, matvec};
 pub use application::volume::{ray_line_integrals, ray_line_integrals_into, RAY_STRIDE};

@@ -3,6 +3,7 @@ use crate::domain::RealScalar;
 use crate::infrastructure::cache::{cached_cache_geometry, CacheGeometry};
 #[cfg(feature = "parallel")]
 use crate::infrastructure::parallel::{parallelize_bandwidth_bound, parallelize_compute_bound};
+use eunomia::NumericElement;
 use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 
 #[inline]
@@ -404,6 +405,28 @@ impl<T: RealScalar> UnaryOp<T> for PowfOp<T> {
     #[inline(always)]
     fn apply(&self, x: T) -> T {
         x.powf(self.exponent)
+    }
+}
+
+/// Unnormalized `sinc` operation marker: `sin(x)/x` with `sinc(0) = 1`.
+///
+/// Zero-sized: monomorphizes to a direct `sin`/divide pair per element. The
+/// removable singularity branches on exact zero (including `-0.0`, which
+/// compares equal), so no per-precision epsilon literal is needed; NaN
+/// propagates through the division. This is the elementwise counterpart of
+/// [`sinc`](crate::application::special::sinc), which keeps its epsilon band
+/// for direct scalar calls.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SincOp;
+
+impl<T: RealScalar> UnaryOp<T> for SincOp {
+    #[inline(always)]
+    fn apply(&self, x: T) -> T {
+        if x == <T as NumericElement>::ZERO {
+            <T as NumericElement>::ONE
+        } else {
+            x.sin() / x
+        }
     }
 }
 
