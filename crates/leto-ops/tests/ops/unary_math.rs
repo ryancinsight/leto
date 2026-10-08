@@ -5,9 +5,9 @@
 
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
-    dot, hamming_distance, j0, j1, jaccard_distance, l2_normalize_into, map_inplace, scalar_map,
-    scalar_map_into, sinc, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, J0Op, J1Op, MulOp,
-    NegOp, PowfOp, SincOp, SqrtOp,
+    bessel_k0, dot, hamming_distance, j0, j1, jaccard_distance, l2_normalize_into, map_inplace,
+    scalar_map, scalar_map_into, sinc, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, J0Op, J1Op,
+    K0Op, MulOp, NegOp, PowfOp, SincOp, SqrtOp,
 };
 
 const EPS: f64 = 1e-12;
@@ -265,6 +265,56 @@ fn test_bessel_ops_f32_within_lane_precision() {
         assert!(
             (got - expected).abs() <= 1e-5,
             "j1({x}): got {got} expected {expected}"
+        );
+    }
+}
+
+#[test]
+fn test_k0_op_matches_scalar_oracle_both_branches() {
+    // Values span the 9.8.5 branch, the x = 2 crossover, and the 9.8.6
+    // branch; the reference values are DLMF 10.32 / A&S Table 9.8 via the
+    // scalar oracle.
+    let values = vec![0.1f64, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0];
+    let layout = Layout::c_contiguous([values.len()]).unwrap();
+    let array = Array::new(layout, VecStorage::new(values.clone())).unwrap();
+
+    let out = unary_map(K0Op, &array.view()).unwrap();
+    let expected: Vec<f64> = values.iter().map(|&x| bessel_k0(x)).collect();
+    assert_close_slice(out.storage().as_slice(), &expected);
+}
+
+#[test]
+fn test_k0_op_rejects_nonpositive_and_nonfinite() {
+    let values = vec![
+        0.0f64,
+        -0.0,
+        -1.0,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    let layout = Layout::c_contiguous([values.len()]).unwrap();
+    let array = Array::new(layout, VecStorage::new(values)).unwrap();
+
+    let mut out = Array::new(layout, VecStorage::fill(6, 0.0f64)).unwrap();
+    unary_map_into(K0Op, &array.view(), &mut out.view_mut()).unwrap();
+    for got in out.storage().as_slice() {
+        assert!(got.is_nan(), "K0 outside (0, +inf) must be NaN");
+    }
+}
+
+#[test]
+fn test_k0_op_f32_within_lane_precision() {
+    let values = vec![0.1f32, 1.0, 2.0, 5.0];
+    let layout = Layout::c_contiguous([values.len()]).unwrap();
+    let array = Array::new(layout, VecStorage::new(values.clone())).unwrap();
+
+    let out = unary_map(K0Op, &array.view()).unwrap();
+    for (got, &x) in out.storage().as_slice().iter().zip(&values) {
+        let expected = bessel_k0(x as f64) as f32;
+        assert!(
+            (got - expected).abs() <= 1e-5,
+            "k0({x}): got {got} expected {expected}"
         );
     }
 }
