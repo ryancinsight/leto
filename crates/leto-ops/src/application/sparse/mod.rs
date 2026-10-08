@@ -54,6 +54,7 @@ mod coo;
 mod csc;
 mod csc_spmv;
 mod csr;
+mod dense_bridge;
 mod lu_numeric;
 mod lu_sparse;
 mod lu_symbolic;
@@ -66,6 +67,7 @@ pub use coo::CooMatrix;
 pub use csc::{CscColumn, CscMatrix, CscView};
 pub use csc_spmv::{csc_spmv, csc_spmv_into, csc_spmv_view_into};
 pub use csr::{CsrMatrix, CsrRow, CsrView};
+pub use dense_bridge::solve_csr_via_dense_lu;
 pub use lu_numeric::{factor_numeric, NumericLu};
 pub use lu_sparse::{
     csr_to_dense, sparse_lu_solve, OrderingStrategy, OwnedNumericLu, SparseLuSolver,
