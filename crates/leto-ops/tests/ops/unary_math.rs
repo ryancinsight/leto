@@ -5,9 +5,9 @@
 
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
-    dot, hamming_distance, jaccard_distance, l2_normalize_into, map_inplace, scalar_map,
-    scalar_map_into, sinc, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, MulOp, NegOp, PowfOp,
-    SincOp, SqrtOp,
+    dot, hamming_distance, j0, j1, jaccard_distance, l2_normalize_into, map_inplace, scalar_map,
+    scalar_map_into, sinc, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, J0Op, J1Op, MulOp,
+    NegOp, PowfOp, SincOp, SqrtOp,
 };
 
 const EPS: f64 = 1e-12;
@@ -225,4 +225,46 @@ fn test_sinc_op_f32_and_nan() {
     assert!((got[1] - 1.0f32.sin()).abs() <= 1e-6);
     assert!((got[2] - (-2.0f32).sin() / -2.0).abs() <= 1e-6);
     assert!(got[3].is_nan());
+}
+
+#[test]
+fn test_bessel_ops_match_scalar_oracle_both_branches() {
+    // Values span the rational branch, the |x| = 8 crossover, the Hankel
+    // branch, and negative arguments (J0 even, J1 odd).
+    let values = vec![0.0f64, 0.5, 1.0, 2.0, 5.0, 7.999, 8.0, 9.0, 12.0, -3.0];
+    let layout = Layout::c_contiguous([values.len()]).unwrap();
+    let array = Array::new(layout, VecStorage::new(values.clone())).unwrap();
+
+    let j0_out = unary_map(J0Op, &array.view()).unwrap();
+    let expected_j0: Vec<f64> = values.iter().map(|&x| j0(x)).collect();
+    assert_close_slice(j0_out.storage().as_slice(), &expected_j0);
+
+    let mut j1_out = Array::new(layout, VecStorage::fill(values.len(), 0.0f64)).unwrap();
+    unary_map_into(J1Op, &array.view(), &mut j1_out.view_mut()).unwrap();
+    let expected_j1: Vec<f64> = values.iter().map(|&x| j1(x)).collect();
+    assert_close_slice(j1_out.storage().as_slice(), &expected_j1);
+}
+
+#[test]
+fn test_bessel_ops_f32_within_lane_precision() {
+    let values = vec![0.0f32, 1.0, 4.0, 9.0];
+    let layout = Layout::c_contiguous([values.len()]).unwrap();
+    let array = Array::new(layout, VecStorage::new(values.clone())).unwrap();
+
+    let j0_out = unary_map(J0Op, &array.view()).unwrap();
+    for (got, &x) in j0_out.storage().as_slice().iter().zip(&values) {
+        let expected = j0(x as f64) as f32;
+        assert!(
+            (got - expected).abs() <= 1e-5,
+            "j0({x}): got {got} expected {expected}"
+        );
+    }
+    let j1_out = unary_map(J1Op, &array.view()).unwrap();
+    for (got, &x) in j1_out.storage().as_slice().iter().zip(&values) {
+        let expected = j1(x as f64) as f32;
+        assert!(
+            (got - expected).abs() <= 1e-5,
+            "j1({x}): got {got} expected {expected}"
+        );
+    }
 }
