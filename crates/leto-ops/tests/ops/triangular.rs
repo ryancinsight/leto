@@ -83,6 +83,43 @@ fn triangular_serves_strided_views() {
 }
 
 #[test]
+fn contiguous_and_strided_paths_agree_on_diagonal_extremes() {
+    // The contiguous fast path must compute the same mask as the
+    // per-element strided path for every mode and diagonal, including the
+    // extremes where the split point saturates to an empty or full row.
+    let input = Array::from_shape_vec([4, 5], (1..=20).collect::<Vec<_>>()).unwrap();
+    for mode in [TriangularMode::Lower, TriangularMode::Upper] {
+        for diagonal in [i64::MIN, -100, -5, -1, 0, 1, 5, 100, i64::MAX] {
+            let layout = Layout::c_contiguous([4, 5]).unwrap();
+            let mut dense = Array::new(layout, VecStorage::fill(20, 0)).unwrap();
+            triangular_into(&input.view(), mode, diagonal, &mut dense.view_mut()).unwrap();
+            let mut backing = Array::from_shape_vec([4, 10], vec![0; 40]).unwrap();
+            let mut stepped = backing
+                .slice_with_mut::<2>(&[SliceArg::All, SliceArg::range(Some(0), None, 2)])
+                .unwrap();
+            triangular_into(&input.view(), mode, diagonal, &mut stepped).unwrap();
+            let stepped_dense: Vec<_> = backing
+                .storage()
+                .as_slice()
+                .chunks_exact(10)
+                .flat_map(|row| [row[0], row[2], row[4], row[6], row[8]])
+                .collect();
+            assert_eq!(
+                dense.storage().as_slice(),
+                stepped_dense.as_slice(),
+                "mode={mode:?} diagonal={diagonal}"
+            );
+        }
+    }
+}
+
+// The predicate evaluates at compile time.
+const _: () = {
+    assert!(triangular_keeps(TriangularMode::Lower, 1, 0, 0));
+    assert!(!triangular_keeps(TriangularMode::Upper, 1, 0, 0));
+};
+
+#[test]
 fn triangular_rejects_shape_mismatch() {
     let input = Array::from_shape_vec([2, 3], vec![1, 2, 3, 4, 5, 6]).unwrap();
     let bad = Layout::c_contiguous([3, 2]).unwrap();

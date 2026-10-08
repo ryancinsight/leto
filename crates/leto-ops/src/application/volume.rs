@@ -56,6 +56,7 @@ fn chord(
 }
 
 /// Number of march segments for a chord, as the kernels count them.
+#[inline]
 fn segment_count(length: f32, step: f32) -> Result<u32> {
     let segments = (length / step).ceil().max(1.0);
     // `u32::MAX as f32` rounds up to 2^32, so the bound is strict: every

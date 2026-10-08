@@ -32,38 +32,66 @@ pub enum TriangularMode {
 ///
 /// Verbatim port of the `TriangularOps` seam predicate: the difference is
 /// measured in `u128` so `usize::MAX` coordinates and `i64::MIN`/`MAX`
-/// diagonals compare mathematically, without clamping.
+/// diagonals compare mathematically, without clamping. `const`: the widening
+/// casts are lossless (`usize`/`u64` magnitudes always fit `u128`), and the
+/// sign-extending `diagonal as u128` only evaluates under a `diagonal >= 0`
+/// guard, where it is exact.
+#[inline]
 #[must_use]
-pub fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diagonal: i64) -> bool {
+pub const fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diagonal: i64) -> bool {
     let difference = if col >= row {
-        (
-            true,
-            u128::try_from(col - row).expect("invariant: usize fits u128"),
-        )
+        (true, (col - row) as u128)
     } else {
-        (
-            false,
-            u128::try_from(row - col).expect("invariant: usize fits u128"),
-        )
+        (false, (row - col) as u128)
     };
-    let diagonal_magnitude = u128::from(diagonal.unsigned_abs());
+    let diagonal_magnitude = diagonal.unsigned_abs() as u128;
     match mode {
         TriangularMode::Lower => match difference {
-            (true, magnitude) => {
-                diagonal >= 0
-                    && magnitude
-                        <= u128::try_from(diagonal).expect("invariant: nonnegative diagonal")
-            }
+            (true, magnitude) => diagonal >= 0 && magnitude <= diagonal as u128,
             (false, magnitude) => diagonal >= 0 || magnitude >= diagonal_magnitude,
         },
         TriangularMode::Upper => match difference {
-            (true, magnitude) => {
-                diagonal < 0
-                    || magnitude
-                        >= u128::try_from(diagonal).expect("invariant: nonnegative diagonal")
-            }
+            (true, magnitude) => diagonal < 0 || magnitude >= diagonal as u128,
             (false, magnitude) => diagonal < 0 && magnitude <= diagonal_magnitude,
         },
+    }
+}
+
+/// Row-granular masking for C-contiguous operands: each row copies its kept
+/// run and fills the masked remainder, replacing the per-element branch with
+/// vectorized slice operations. The split point derives from the same
+/// `col <= row + diagonal` / `col >= row + diagonal` boundary
+/// [`triangular_keeps`] tests, computed in `i128` so `usize` rows and any
+/// `i64` diagonal combine without overflow or clamping.
+fn triangular_contiguous<T: Scalar>(
+    input: &[T],
+    output: &mut [T],
+    rows: usize,
+    cols: usize,
+    mode: TriangularMode,
+    diagonal: i64,
+) {
+    for row in 0..rows {
+        let base = row * cols;
+        let bound = row as i128 + diagonal as i128;
+        let split = match mode {
+            // Lower keeps `col <= row + diagonal`: the kept prefix length.
+            TriangularMode::Lower => (bound + 1).clamp(0, cols as i128) as usize,
+            // Upper keeps `col >= row + diagonal`: the masked prefix length.
+            TriangularMode::Upper => bound.clamp(0, cols as i128) as usize,
+        };
+        let (out_head, out_tail) = output[base..base + cols].split_at_mut(split);
+        let (in_head, in_tail) = input[base..base + cols].split_at(split);
+        match mode {
+            TriangularMode::Lower => {
+                out_head.copy_from_slice(in_head);
+                out_tail.fill(T::ZERO);
+            }
+            TriangularMode::Upper => {
+                out_head.fill(T::ZERO);
+                out_tail.copy_from_slice(in_tail);
+            }
+        }
     }
 }
 
@@ -71,7 +99,8 @@ pub fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diagonal: 
 /// equal `input`'s exactly.
 ///
 /// Strided and offset views are served on both operands; the output must be
-/// injective.
+/// injective. C-contiguous operands take a row-granular copy/fill fast path
+/// instead of the per-element branch.
 ///
 /// # Errors
 ///
@@ -94,6 +123,11 @@ pub fn triangular_into<T: Scalar>(
     validate_mutable_output(output, "triangular output")?;
 
     let [rows, cols] = input.shape();
+    if let (Some(input_slice), Some(output_slice)) = (input.as_slice(), output.as_mut_slice()) {
+        triangular_contiguous(input_slice, output_slice, rows, cols, mode, diagonal);
+        return Ok(());
+    }
+
     let input_layout = input.layout();
     let output_layout = output.layout();
     let input_data = input.data();
