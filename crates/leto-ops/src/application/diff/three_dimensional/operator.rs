@@ -389,6 +389,47 @@ impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
             }
         }
     }
+
+    /// Apply the transpose of ∂/∂x into a pre-allocated destination.
+    ///
+    /// For a forward sweep `y = A f`, this maps an upstream lane `u` shaped
+    /// like `y` to `v = Aᵀ u` shaped like `f`: the gradient of `⟨u, A f⟩`
+    /// with respect to `f`, which is what an autograd backward pass needs.
+    /// A forward sweep shrinks the grid, so its adjoint fans back out.
+    ///
+    /// # Errors
+    /// - [`LetoError::InvalidInput`] when the diff axis has fewer than the
+    ///   minimum required points for the chosen scheme, or when the upstream
+    ///   shape does not match the scheme's forward output shape.
+    pub fn adjoint_x_into(
+        &self,
+        upstream: ArrayView3<T>,
+        grad: &mut ArrayViewMut3<'_, T>,
+    ) -> Result<()> {
+        super::adjoint::adjoint_into(self.scheme, Axis::X, upstream, grad, self.dx)
+    }
+
+    /// Apply the transpose of ∂/∂y into a pre-allocated destination.
+    /// # Errors
+    /// See [`Self::adjoint_x_into`].
+    pub fn adjoint_y_into(
+        &self,
+        upstream: ArrayView3<T>,
+        grad: &mut ArrayViewMut3<'_, T>,
+    ) -> Result<()> {
+        super::adjoint::adjoint_into(self.scheme, Axis::Y, upstream, grad, self.dy)
+    }
+
+    /// Apply the transpose of ∂/∂z into a pre-allocated destination.
+    /// # Errors
+    /// See [`Self::adjoint_x_into`].
+    pub fn adjoint_z_into(
+        &self,
+        upstream: ArrayView3<T>,
+        grad: &mut ArrayViewMut3<'_, T>,
+    ) -> Result<()> {
+        super::adjoint::adjoint_into(self.scheme, Axis::Z, upstream, grad, self.dz)
+    }
 }
 
 /// Runtime dst-shape check (errors on mismatch, not debug-only).

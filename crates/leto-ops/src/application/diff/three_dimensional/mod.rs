@@ -28,6 +28,7 @@
 
 use eunomia::FloatElement;
 
+mod adjoint;
 mod central;
 mod coefficients;
 mod fourth_order;
@@ -59,7 +60,7 @@ pub enum FiniteDifference3DScheme {
     /// Fourth-order central `dst = (−f[i+2] + 8f[i+1] − 8f[i−1] + f[i−2]) / (12Δ)`.
     CentralFourthOrder,
     /// Sixth-order central:
-    /// `dst = (−f[i+3] + 9f[i+2] − 45f[i+1] + 45f[i−1] − 9f[i−2] + f[i−3]) / (60Δ)`.
+    /// `dst = (−f[i−3] + 9f[i−2] − 45f[i−1] + 45f[i+1] − 9f[i+2] + f[i+3]) / (60Δ)`.
     CentralSixthOrder,
     /// Yee staggered forward face derivative:
     /// `dst[i,j,k] = (f[i+1,j,k] − f[i,j,k]) / Δ`. `dst` has one fewer cell on
