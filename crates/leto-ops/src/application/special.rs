@@ -128,6 +128,11 @@ pub fn j1(x: f64) -> f64 {
 /// Delegates to [`j0`]/[`j1`] for n ∈ {0, 1}; uses Miller downward recurrence
 /// with two-buffer normalisation for n ≥ 2 (accurate to ≲1e-9 for |x| ≤ 50,
 /// n ≤ 20). Returns exact 0 for n ≥ 1 at x = 0.
+///
+/// Miller's loop has a runtime trip count, so `jn` has no straight-line
+/// device expression and no GPU counterpart (principled asymmetry shared with
+/// the Legendre recurrences: batch evaluation maps this scalar over host
+/// lanes; no fleet caller needs it on device).
 #[must_use]
 pub fn jn(n: usize, x: f64) -> f64 {
     match n {

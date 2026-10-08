@@ -6,6 +6,11 @@
 //! dense Hessian. It is the standard refinement step for full-waveform inversion
 //! and PINN training (Inverse Problems §9.1).
 //!
+//! The driver loop is host-side by design: line search, history updates, and
+//! convergence tests are sequential. A GPU path composes the inner vector
+//! operations from existing device operators rather than a dedicated solver
+//! trait, so L-BFGS has no GPU counterpart of its own.
+//!
 //! # References
 //! - Nocedal, J. (1980). "Updating quasi-Newton matrices with limited storage."
 //!   *Math. Comp.*, 35(151), 773–782.

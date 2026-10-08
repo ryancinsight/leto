@@ -6,6 +6,11 @@
 //! Gauss–Lobatto nodes).
 //!
 //! Reference: Abramowitz & Stegun (1964) §8; DLMF 14.
+//!
+//! The recurrences are iterative with runtime trip counts, so this module has
+//! no straight-line device expression and no GPU counterpart (principled
+//! asymmetry shared with jn: batch evaluation maps these scalars over host
+//! lanes; no fleet caller needs them on device).
 
 /// Legendre polynomial Pₙ(x) via the three-term recurrence.
 #[must_use]

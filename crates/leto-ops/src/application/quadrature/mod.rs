@@ -23,6 +23,10 @@
 //! Weights satisfy `∑ wᵢ = 2` and are exact for polynomials up to degree 2n−1.
 //! [`GaussLegendreN`](crate::application::quadrature::GaussLegendreN) wraps these as a
 //! `Quadrature<f64>` rule.
+//!
+//! Rules integrate caller closures, which cannot cross to device kernels,
+//! so quadrature is host-side by design with no GPU counterpart (principled
+//! asymmetry).
 
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 

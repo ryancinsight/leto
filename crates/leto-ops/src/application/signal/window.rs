@@ -6,6 +6,9 @@
 //! Hosting these here (the `leto-ops` foundation layer) lets all Atlas consumers
 //! (kwavers, helios, CFDrs) evaluate identical formulas without duplication.
 //!
+//! Window vectors are one-time host-side setup (mapped over indices, uploaded
+//! once), so these scalars have no GPU counterpart by design.
+//!
 //! # References
 //! - Harris, F.J. (1978). "On the Use of Windows for Harmonic Analysis with the
 //!   Discrete Fourier Transform". *Proc. IEEE* 66(1):51–83.
