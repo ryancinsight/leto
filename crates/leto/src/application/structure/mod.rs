@@ -11,6 +11,6 @@ mod split;
 mod stack;
 
 pub use concat::concat;
-pub use pad::{pad, PadWidth};
+pub use pad::{pad, pad_into, padded_shape, PadWidth};
 pub use split::split;
 pub use stack::stack;

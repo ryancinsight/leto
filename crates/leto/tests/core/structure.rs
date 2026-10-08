@@ -3,7 +3,7 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use leto::{concat, pad, split, stack, Array, Layout, Storage, VecStorage};
+use leto::{concat, pad, pad_into, padded_shape, split, stack, Array, Layout, Storage, VecStorage};
 
 fn array2(rows: usize, cols: usize, data: Vec<i32>) -> Array<i32, VecStorage<i32>, 2> {
     Array::new(
@@ -62,6 +62,83 @@ fn test_pad_constant() {
         out.storage().as_slice(),
         &[0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0]
     );
+}
+
+#[test]
+fn test_pad_into_strided_output() {
+    // Column-major output: writes must follow logical indices, not memory order.
+    let a = array2(2, 2, vec![1, 2, 3, 4]);
+    let mut out = Array::new(
+        Layout::f_contiguous([3, 3]).unwrap(),
+        VecStorage::fill(9, -1),
+    )
+    .unwrap();
+    pad_into(&a.view(), [(1, 0), (0, 1)], 0, &mut out.view_mut()).unwrap();
+    let logical: Vec<i32> = out.view().indexed_iter().map(|(_, &v)| v).collect();
+    assert_eq!(logical, vec![0, 0, 0, 1, 2, 0, 3, 4, 0]);
+}
+
+#[test]
+fn test_pad_into_matches_allocating_pad() {
+    let a = array2(2, 3, vec![1, 2, 3, 4, 5, 6]);
+    let width = [(1, 2), (2, 1)];
+    let expected = pad(&a.view(), width, 0).unwrap();
+    let mut out = Array::new(
+        Layout::c_contiguous(expected.shape()).unwrap(),
+        VecStorage::fill(expected.shape().iter().product(), -1),
+    )
+    .unwrap();
+    pad_into(&a.view(), width, 0, &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), expected.storage().as_slice());
+}
+
+#[test]
+fn test_pad_into_zero_width_copies_logical_order() {
+    // Zero widths through a transposed input: identity copy in logical order.
+    let a = array2(2, 3, vec![1, 2, 3, 4, 5, 6]);
+    let at = a.transpose([1, 0]).unwrap(); // logical [[1,4],[2,5],[3,6]]
+    let mut out = Array::new(
+        Layout::c_contiguous(at.shape()).unwrap(),
+        VecStorage::fill(6, 0),
+    )
+    .unwrap();
+    pad_into(&at, [(0, 0), (0, 0)], 9, &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), &[1, 4, 2, 5, 3, 6]);
+}
+
+#[test]
+fn test_pad_into_rejects_shape_mismatch() {
+    let a = array2(1, 2, vec![1, 2]);
+    let mut out = Array::new(
+        Layout::c_contiguous([3, 3]).unwrap(),
+        VecStorage::fill(9, 0),
+    )
+    .unwrap();
+    let err = pad_into(&a.view(), [(1, 1), (2, 0)], 0, &mut out.view_mut())
+        .expect_err("missing pad margin");
+    assert!(
+        matches!(err, leto::LetoError::ShapeMismatch { .. }),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[test]
+fn test_pad_rejects_overflowing_width() {
+    // before + extent + after overflows: typed rejection, never a panic.
+    let a = array2(1, 1, vec![1]);
+    let err = pad(&a.view(), [(usize::MAX, 0), (0, 0)], 0).expect_err("overflowing width");
+    assert!(
+        matches!(err, leto::LetoError::Overflow { .. }),
+        "unexpected error: {err:?}"
+    );
+    let mut out = array2(1, 1, vec![0]);
+    let err = pad_into(&a.view(), [(usize::MAX, 0), (0, 0)], 0, &mut out.view_mut())
+        .expect_err("overflowing width");
+    assert!(
+        matches!(err, leto::LetoError::Overflow { .. }),
+        "unexpected error: {err:?}"
+    );
+    assert_eq!(padded_shape([3, 4], [(1, 2), (0, 1)]).unwrap(), [6, 5]);
 }
 
 #[test]
