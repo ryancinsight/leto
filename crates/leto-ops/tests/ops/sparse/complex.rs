@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "test scope: failed precondition = test failure"
-)]
-
 use eunomia::Complex64;
 use leto::Array1;
 use leto_ops::{spgemm, spmv, CooMatrix};
