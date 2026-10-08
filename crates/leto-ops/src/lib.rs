@@ -167,6 +167,7 @@ pub use application::unary::{
     UnaryOp,
 };
 pub use application::vector::{cross_into, dot, hamming_distance, jaccard_distance, matvec};
+pub use application::volume::{ray_line_integrals, ray_line_integrals_into, RAY_STRIDE};
 pub use application::zip::{
     coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold,
     indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip_mut_with,

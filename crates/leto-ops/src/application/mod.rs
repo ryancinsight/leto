@@ -57,6 +57,8 @@ pub mod triangular;
 pub mod unary;
 /// Rank-1 vector operations.
 pub mod vector;
+/// Volume ray line integrals.
+pub mod volume;
 mod window;
 /// Mutable zip-map operations.
 pub mod zip;

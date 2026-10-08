@@ -41,3 +41,4 @@ pub mod triangular;
 pub mod udu;
 pub mod unary_math;
 pub mod vector;
+pub mod volume;
