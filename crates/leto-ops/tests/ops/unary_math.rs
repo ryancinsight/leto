@@ -6,7 +6,8 @@
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
     dot, hamming_distance, jaccard_distance, l2_normalize_into, map_inplace, scalar_map,
-    scalar_map_into, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, MulOp, NegOp, PowfOp, SqrtOp,
+    scalar_map_into, sinc, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, MulOp, NegOp, PowfOp,
+    SincOp, SqrtOp,
 };
 
 const EPS: f64 = 1e-12;
@@ -187,4 +188,41 @@ fn test_hamming_distance() {
     .unwrap();
     let dist = hamming_distance(&a.view(), &b.view()).unwrap();
     assert_eq!(dist, 4);
+}
+
+#[test]
+fn test_sinc_op_zero_is_exactly_one() {
+    let layout = Layout::c_contiguous([3]).unwrap();
+    let array = Array::new(layout, VecStorage::new(vec![0.0f64, -0.0, 1.0])).unwrap();
+
+    let mut out = Array::new(layout, VecStorage::fill(3, 0.0f64)).unwrap();
+    unary_map_into(SincOp, &array.view(), &mut out.view_mut()).unwrap();
+    let got = out.storage().as_slice();
+    assert_eq!(got[0], 1.0);
+    assert_eq!(got[1], 1.0);
+    assert!((got[2] - 1.0f64.sin()).abs() <= EPS);
+}
+
+#[test]
+fn test_sinc_op_matches_scalar_oracle() {
+    let layout = Layout::c_contiguous([5]).unwrap();
+    let values = vec![0.5f64, 1.0, -1.0, 2.0, core::f64::consts::PI];
+    let array = Array::new(layout, VecStorage::new(values.clone())).unwrap();
+
+    let out = unary_map(SincOp, &array.view()).unwrap();
+    let expected: Vec<f64> = values.iter().map(|&x| sinc(x)).collect();
+    assert_close_slice(out.storage().as_slice(), &expected);
+}
+
+#[test]
+fn test_sinc_op_f32_and_nan() {
+    let layout = Layout::c_contiguous([4]).unwrap();
+    let array = Array::new(layout, VecStorage::new(vec![0.0f32, 1.0, -2.0, f32::NAN])).unwrap();
+
+    let out = unary_map(SincOp, &array.view()).unwrap();
+    let got = out.storage().as_slice();
+    assert_eq!(got[0], 1.0);
+    assert!((got[1] - 1.0f32.sin()).abs() <= 1e-6);
+    assert!((got[2] - (-2.0f32).sin() / -2.0).abs() <= 1e-6);
+    assert!(got[3].is_nan());
 }
