@@ -4,6 +4,8 @@ pub mod attention;
 pub mod convolution;
 /// 1-D finite-difference differentiation operators.
 pub mod diff;
+/// Embedding-table row gather.
+pub mod embedding;
 /// Shared logical-index conversion helpers.
 pub(crate) mod index;
 /// 1-D interpolation (linear, cubic spline, Lagrange).

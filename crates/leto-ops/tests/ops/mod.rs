@@ -9,6 +9,7 @@ pub mod differential;
 pub mod eigen;
 pub mod eigenvalues;
 pub mod elementwise;
+pub mod embedding;
 pub mod format;
 pub mod full_piv_lu;
 pub mod graded_scan;

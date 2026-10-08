@@ -34,6 +34,7 @@ pub use application::convolution::{
     convolution_transposed_backward_accumulate, convolution_transposed_forward_into,
     ConvolutionParameters, TransposedConvolutionGradients, TransposedConvolutionParameters,
 };
+pub use application::embedding::{embedding_gather, embedding_gather_into};
 pub use application::linalg::{
     bidiagonalize,
     bunch_kaufman,
