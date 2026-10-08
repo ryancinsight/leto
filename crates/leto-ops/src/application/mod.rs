@@ -49,6 +49,8 @@ pub mod statistics;
 pub mod stencil;
 /// Shared strided elementwise traversal for the map kernels.
 pub(crate) mod strided;
+/// Rank-2 triangular masking.
+pub mod triangular;
 /// Unary map operations.
 pub mod unary;
 /// Rank-1 vector operations.
