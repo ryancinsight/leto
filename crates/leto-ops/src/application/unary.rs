@@ -392,6 +392,78 @@ define_unary_op!(/// Additive-inverse operation marker.
     NegOp => neg, false);
 define_unary_op!(/// Reciprocal operation marker.
     RecipOp => recip);
+define_unary_op!(/// Tangent operation marker.
+    TanOp => tan);
+define_unary_op!(/// Arcsine operation marker.
+    AsinOp => asin);
+define_unary_op!(/// Arccosine operation marker.
+    AcosOp => acos);
+define_unary_op!(/// Arctangent operation marker.
+    AtanOp => atan);
+define_unary_op!(/// Hyperbolic sine operation marker.
+    SinhOp => sinh);
+define_unary_op!(/// Hyperbolic cosine operation marker.
+    CoshOp => cosh);
+define_unary_op!(/// Hyperbolic tangent operation marker.
+    TanhOp => tanh);
+define_unary_op!(/// Base-2 logarithm operation marker.
+    Log2Op => log2);
+define_unary_op!(/// Base-10 logarithm operation marker.
+    Log10Op => log10);
+define_unary_op!(/// Base-2 exponential operation marker.
+    Exp2Op => exp2);
+define_unary_op!(/// Inverse hyperbolic tangent operation marker.
+    AtanhOp => atanh);
+define_unary_op!(/// Inverse hyperbolic sine operation marker.
+    AsinhOp => asinh);
+define_unary_op!(/// Inverse hyperbolic cosine operation marker.
+    AcoshOp => acosh);
+define_unary_op!(/// `e^x - 1` operation marker, accurate near zero.
+    Expm1Op => exp_m1);
+define_unary_op!(/// `ln(1 + x)` operation marker, accurate near zero.
+    Log1pOp => ln_1p);
+define_unary_op!(/// Floor operation marker.
+    FloorOp => floor, false);
+define_unary_op!(/// Ceiling operation marker.
+    CeilOp => ceil, false);
+define_unary_op!(/// Round-to-nearest operation marker.
+    RoundOp => round, false);
+define_unary_op!(/// Truncation operation marker.
+    TruncOp => trunc, false);
+
+/// Negated exponential `e^-x` operation marker, matching hephaestus `ExpNegOp`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ExpNegOp;
+
+impl<T: RealScalar> UnaryOp<T> for ExpNegOp {
+    #[inline(always)]
+    fn apply(&self, x: T) -> T {
+        (-x).exp()
+    }
+}
+
+/// Sign operation marker: `0` for `±0` and `NaN`, `1`/`-1` otherwise.
+///
+/// Matches hephaestus `SignOp` (ADR 0061 Decision 7), NOT eunomia's `signum`:
+/// the GPU renderings cannot propagate NaN, so NaN reads back as zero.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SignOp;
+
+impl<T: RealScalar> UnaryOp<T> for SignOp {
+    const COMPUTE_BOUND: bool = false;
+    #[inline(always)]
+    fn apply(&self, x: T) -> T {
+        if x.is_nan() {
+            <T as NumericElement>::ZERO
+        } else if x > <T as NumericElement>::ZERO {
+            <T as NumericElement>::ONE
+        } else if x < <T as NumericElement>::ZERO {
+            -<T as NumericElement>::ONE
+        } else {
+            <T as NumericElement>::ZERO
+        }
+    }
+}
 
 /// Power operation carrying its exponent. Zero-cost: monomorphizes to a direct
 /// `powf` call with the captured exponent.

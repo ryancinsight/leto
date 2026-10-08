@@ -6,8 +6,10 @@
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{
     bessel_k0, dot, hamming_distance, j0, j1, jaccard_distance, l2_normalize_into, map_inplace,
-    scalar_map, scalar_map_into, sinc, unary_map, unary_map_into, AbsOp, AddOp, ExpOp, J0Op, J1Op,
-    K0Op, MulOp, NegOp, PowfOp, SincOp, SqrtOp,
+    scalar_map, scalar_map_into, sinc, unary_map, unary_map_into, AbsOp, AcosOp, AcoshOp, AddOp,
+    AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CoshOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp,
+    J0Op, J1Op, K0Op, Log10Op, Log1pOp, Log2Op, MulOp, NegOp, PowfOp, RoundOp, SignOp, SincOp,
+    SinhOp, SqrtOp, TanOp, TanhOp, TruncOp,
 };
 
 const EPS: f64 = 1e-12;
@@ -317,4 +319,87 @@ fn test_k0_op_f32_within_lane_precision() {
             "k0({x}): got {got} expected {expected}"
         );
     }
+}
+
+/// PARITY-9 sweep: every method-routed math marker evaluates its scalar
+/// oracle. One row per marker with domain-safe probes (inverse trig inside
+/// (-1, 1), acosh >= 1, logs > 0, atanh inside (-1, 1)); expm1/log1p probe
+/// near zero where the fused forms keep precision the naive forms lose.
+#[test]
+fn test_unary_math_markers_match_scalar_oracles() {
+    macro_rules! check {
+        ($op:expr, $oracle:expr, [$($x:expr),+]) => {{
+            let oracle: fn(f64) -> f64 = $oracle;
+            let points = [$($x),+];
+            let layout = Layout::c_contiguous([points.len()]).unwrap();
+            let array = Array::new(layout, VecStorage::new(points.to_vec())).unwrap();
+            let out = unary_map($op, &array.view()).unwrap();
+            for (lane, (&got, &x)) in
+                out.storage().as_slice().iter().zip(&points).enumerate()
+            {
+                let expected = oracle(x);
+                assert!(
+                    (got - expected).abs() <= EPS,
+                    "{} lane {lane} (x = {x}): got {got}, oracle {expected}",
+                    stringify!($op)
+                );
+            }
+        }};
+    }
+
+    check!(TanOp, f64::tan, [0.0f64, 0.5, -0.5, 1.0, 3.0]);
+    check!(AsinOp, f64::asin, [-0.9f64, -0.5, 0.0, 0.5, 0.9]);
+    check!(AcosOp, f64::acos, [-0.9f64, -0.5, 0.0, 0.5, 0.9]);
+    check!(AtanOp, f64::atan, [-3.0f64, -1.0, 0.0, 1.0, 3.0]);
+    check!(SinhOp, f64::sinh, [-2.0f64, -1.0, 0.0, 1.0, 2.0]);
+    check!(CoshOp, f64::cosh, [-2.0f64, -1.0, 0.0, 1.0, 2.0]);
+    check!(TanhOp, f64::tanh, [-2.0f64, -1.0, 0.0, 1.0, 2.0]);
+    check!(Log2Op, f64::log2, [0.25f64, 0.5, 1.0, 2.0, 8.0]);
+    check!(Log10Op, f64::log10, [0.25f64, 0.5, 1.0, 2.0, 8.0]);
+    check!(Exp2Op, f64::exp2, [-2.0f64, -1.0, 0.0, 1.0, 3.0]);
+    check!(AtanhOp, f64::atanh, [-0.9f64, -0.5, 0.0, 0.5, 0.9]);
+    check!(AsinhOp, f64::asinh, [-3.0f64, -1.0, 0.0, 1.0, 3.0]);
+    check!(AcoshOp, f64::acosh, [1.0f64, 1.5, 2.0, 3.0, 5.0]);
+    check!(Expm1Op, f64::exp_m1, [-1.0f64, -1e-10, 0.0, 1e-10, 1.0]);
+    check!(Log1pOp, f64::ln_1p, [-0.5f64, -1e-10, 0.0, 1e-10, 2.0]);
+    check!(FloorOp, f64::floor, [-2.7f64, -0.5, 0.5, 2.5, 2.7]);
+    check!(CeilOp, f64::ceil, [-2.7f64, -0.5, 0.5, 2.5, 2.7]);
+    check!(RoundOp, f64::round, [-2.7f64, -2.5, 0.5, 2.5, 2.7]);
+    check!(TruncOp, f64::trunc, [-2.7f64, -0.5, 0.5, 2.5, 2.7]);
+    check!(
+        ExpNegOp,
+        (|x: f64| (-x).exp()) as fn(f64) -> f64,
+        [-1.0f64, 0.0, 1.0, 2.0]
+    );
+}
+
+/// Sign follows ADR 0061 (hephaestus `SignOp`): `0` for `±0` and NaN,
+/// `±1` otherwise — not `signum`, which signs zero and propagates NaN.
+#[test]
+fn test_sign_op_matches_hephaestus_special_cases() {
+    let points = [3.5f64, -3.5, 0.0, -0.0, f64::NAN];
+    let layout = Layout::c_contiguous([points.len()]).unwrap();
+    let array = Array::new(layout, VecStorage::new(points.to_vec())).unwrap();
+
+    let out = unary_map(SignOp, &array.view()).unwrap();
+    assert_eq!(
+        out.storage().as_slice(),
+        &[1.0, -1.0, 0.0, 0.0, 0.0],
+        "sign special cases"
+    );
+}
+
+/// Trivial per-element ops stay bandwidth-bound (no parallel slowdown on
+/// cache-resident data), matching the abs/neg precedent. Pinned at compile
+/// time: a routing change that flips a flag breaks the build, not a test.
+#[test]
+fn test_trivial_math_markers_are_not_compute_bound() {
+    use leto_ops::UnaryOp;
+    const _: () = assert!(!<FloorOp as UnaryOp<f64>>::COMPUTE_BOUND);
+    const _: () = assert!(!<CeilOp as UnaryOp<f64>>::COMPUTE_BOUND);
+    const _: () = assert!(!<RoundOp as UnaryOp<f64>>::COMPUTE_BOUND);
+    const _: () = assert!(!<TruncOp as UnaryOp<f64>>::COMPUTE_BOUND);
+    const _: () = assert!(!<SignOp as UnaryOp<f64>>::COMPUTE_BOUND);
+    const _: () = assert!(<TanOp as UnaryOp<f64>>::COMPUTE_BOUND);
+    const _: () = assert!(<Expm1Op as UnaryOp<f64>>::COMPUTE_BOUND);
 }
