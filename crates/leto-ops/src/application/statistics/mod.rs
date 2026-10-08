@@ -2,6 +2,10 @@
 //!
 //! Pure functions with no domain dependencies. Both solver and clinical layers
 //! import from here; neither depends on the other.
+//!
+//! These are host-side quality metrics over gathered results, so the module
+//! has no GPU trait by design. Live device paths compose the same quantities
+//! from elementwise and reduction operators directly.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 

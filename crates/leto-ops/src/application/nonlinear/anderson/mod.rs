@@ -41,6 +41,12 @@
 //! `VecDeque::pop_front()` is O(1) (pointer rotation on ring buffer).
 //! For history depth m=5 and 10³ outer iterations, total shift cost drops from
 //! O(5 × 10³) = 5000 ops to O(10³) = 1000 ops in pointer increments.
+//!
+//! # Execution shape
+//!
+//! The outer iteration is host-driven by design; the inner least-squares and
+//! vector updates compose existing device operators rather than a dedicated
+//! solver trait, so Anderson has no GPU counterpart of its own.
 
 mod solver;
 
