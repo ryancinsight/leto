@@ -21,7 +21,7 @@ fn f64_as<T: FloatElement>(v: f64) -> T {
 
 /// Natural cubic spline interpolation.
 #[derive(Debug, Clone)]
-pub struct CubicSplineInterpolation<T: RealField + Copy> {
+pub struct CubicSplineInterpolation<T: RealField> {
     x_data: Vec<T>,
     a: Vec<T>, // y values at nodes
     b: Vec<T>, // first-derivative coefficients
@@ -29,7 +29,7 @@ pub struct CubicSplineInterpolation<T: RealField + Copy> {
     d: Vec<T>, // third-derivative / 6
 }
 
-impl<T: RealField + FloatElement + Copy> CubicSplineInterpolation<T> {
+impl<T: RealField> CubicSplineInterpolation<T> {
     /// Construct a natural cubic spline from node data.
     ///
     /// # Errors
@@ -49,7 +49,7 @@ impl<T: RealField + FloatElement + Copy> CubicSplineInterpolation<T> {
 }
 
 #[allow(clippy::type_complexity)]
-fn compute_coefficients<T: RealField + FloatElement + Copy>(
+fn compute_coefficients<T: RealField>(
     x: &[T],
     y: &[T],
 ) -> Result<(Vec<T>, Vec<T>, Vec<T>, Vec<T>)> {
@@ -96,7 +96,7 @@ fn compute_coefficients<T: RealField + FloatElement + Copy>(
     Ok((a, b, c, d))
 }
 
-impl<T: RealField + FloatElement + Copy> Interpolation1D<T> for CubicSplineInterpolation<T> {
+impl<T: RealField> Interpolation1D<T> for CubicSplineInterpolation<T> {
     fn interpolate(&self, x: T) -> Result<T> {
         let n = self.x_data.len();
         check_bounds(x, self.x_data[0], self.x_data[n - 1])?;

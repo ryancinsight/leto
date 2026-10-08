@@ -18,7 +18,7 @@ where
 
 fn assert_real_supertrait<T>()
 where
-    T: leto_ops::RealScalar + eunomia::FloatElement,
+    T: leto_ops::RealScalar,
 {
 }
 

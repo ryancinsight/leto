@@ -17,12 +17,12 @@ use leto::{LetoError, Result};
 
 /// Piecewise-linear interpolation.
 #[derive(Debug, Clone)]
-pub struct LinearInterpolation<T: RealField + Copy> {
+pub struct LinearInterpolation<T: RealField> {
     x_data: Vec<T>,
     y_data: Vec<T>,
 }
 
-impl<T: RealField + Copy> LinearInterpolation<T> {
+impl<T: RealField> LinearInterpolation<T> {
     /// Construct from sorted node vectors.
     ///
     /// # Errors
@@ -40,7 +40,7 @@ impl<T: RealField + Copy> LinearInterpolation<T> {
     }
 }
 
-impl<T: RealField + Copy> Interpolation1D<T> for LinearInterpolation<T> {
+impl<T: RealField> Interpolation1D<T> for LinearInterpolation<T> {
     fn interpolate(&self, x: T) -> Result<T> {
         let n = self.x_data.len();
         check_bounds(x, self.x_data[0], self.x_data[n - 1])?;

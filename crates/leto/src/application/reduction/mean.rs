@@ -29,7 +29,7 @@ where
     for elem in iter_elements(&view) {
         acc += elem;
     }
-    let count = T::from_f64((arr.size()) as f64);
+    let count = T::from_count(arr.size());
     Ok(acc / count)
 }
 
@@ -57,7 +57,7 @@ where
             reason: format!("axis {axis} has length 0; mean is undefined"),
         });
     }
-    let count = T::from_f64((axis_len) as f64);
+    let count = T::from_count(axis_len);
 
     let sum: Array<T, VecStorage<T>, M> = sum_axis::<T, S, N, M>(arr, axis)?;
 

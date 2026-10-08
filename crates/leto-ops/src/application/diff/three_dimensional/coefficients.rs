@@ -60,7 +60,7 @@
 //! - Levander, A. R. (1988). "Fourth-order finite-difference P-SV seismograms."
 //!   *Geophysics* 53(11), 1425-1436. (The staggered fourth-order 9/8, −1/24.)
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{Array1, Array2, LetoError, Result};
 
 use crate::application::linalg::lu_decompose;
@@ -181,7 +181,7 @@ impl<T: Copy + NumericElement> TapCoefficients<T> {
 /// ```
 pub fn staggered_first_derivative_coefficients<T>(half_order: usize) -> Result<TapCoefficients<T>>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     coefficients_for_offsets(half_order, |n| n as f64 + 0.5, "staggered")
 }
@@ -212,7 +212,7 @@ where
 /// ```
 pub fn central_first_derivative_coefficients<T>(half_order: usize) -> Result<TapCoefficients<T>>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     coefficients_for_offsets(half_order, |n| n as f64 + 1.0, "central")
 }
@@ -226,7 +226,7 @@ fn coefficients_for_offsets<T>(
     kind: &str,
 ) -> Result<TapCoefficients<T>>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     if half_order == 0 || half_order > MAX_HALF_ORDER {
         return Err(LetoError::InvalidInput(format!(

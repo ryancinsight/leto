@@ -3,7 +3,7 @@
 
 use core::ops::Range;
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 
 use super::super::leapfrog::Axis;
 use super::stencil::{Scales, Stencil, ELEMENTS_PER_UNIT};
@@ -16,7 +16,7 @@ pub(super) fn sweep_dense<T>(
     axis: Axis,
     scales: Scales<T>,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     let [nx, ny, nz] = shape;
     let plane_len = ny * nz;
@@ -59,7 +59,7 @@ pub(super) fn divergence_dense<T>(
     shape: [usize; 3],
     scales: [Scales<T>; 3],
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     let [nx, ny, nz] = shape;
     let plane_len = ny * nz;
@@ -125,7 +125,7 @@ pub(super) fn map_dense<T, const N: usize, const M: usize, const K: usize, F>(
     planes: Range<usize>,
     combine: &F,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
     F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
 {
     let [nx, ny, nz] = shape;
@@ -204,11 +204,7 @@ pub(super) fn map_dense<T, const N: usize, const M: usize, const K: usize, F>(
 }
 
 /// The z-axis derivative of `row`, added to what `out` already holds.
-pub(super) fn add_row<T: RealField + FloatElement + Copy>(
-    scales: Scales<T>,
-    out: &mut [T],
-    row: &[T],
-) {
+pub(super) fn add_row<T: RealField>(scales: Scales<T>, out: &mut [T], row: &[T]) {
     let n = row.len();
     if n >= 5 {
         let interior = row[..n - 4]
@@ -239,11 +235,7 @@ pub(super) fn add_row<T: RealField + FloatElement + Copy>(
 }
 
 /// The derivative along one lane of the differentiated axis.
-pub(super) fn sweep_row<T: RealField + FloatElement + Copy>(
-    scales: Scales<T>,
-    out: &mut [T],
-    row: &[T],
-) {
+pub(super) fn sweep_row<T: RealField>(scales: Scales<T>, out: &mut [T], row: &[T]) {
     let n = row.len();
     if n >= 5 {
         let interior = row[..n - 4]

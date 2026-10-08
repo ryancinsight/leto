@@ -18,12 +18,12 @@ fn f<T: FloatElement>(v: f64) -> T {
 /// equal to the input length by falling back to one-sided differences near the
 /// boundary.
 #[derive(Debug, Clone, Copy)]
-pub struct FiniteDifference<T: RealField + Copy> {
+pub struct FiniteDifference<T: RealField> {
     scheme: FiniteDifferenceScheme,
     spacing: T,
 }
 
-impl<T: RealField + FloatElement + Copy> FiniteDifference<T> {
+impl<T: RealField> FiniteDifference<T> {
     /// Create a finite-difference operator with the given scheme and spacing.
     #[must_use]
     pub fn new(scheme: FiniteDifferenceScheme, spacing: T) -> Self {

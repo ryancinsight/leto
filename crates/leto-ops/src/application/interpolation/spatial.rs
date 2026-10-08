@@ -18,7 +18,7 @@
 //!
 //! Numerical Recipes in C, §3.6 (bilinear and trilinear interpolation).
 
-use eunomia::{FloatElement, NumericElement};
+use eunomia::FloatElement;
 use leto::{Array2, Array3, ArrayView2, ArrayView3};
 
 // ── Bilinear (2-D) ────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ use leto::{Array2, Array3, ArrayView2, ArrayView3};
 #[must_use]
 pub fn bilinear_index_space<T>(field: ArrayView2<T>, ix: T, iy: T) -> T
 where
-    T: FloatElement + NumericElement + Copy,
+    T: FloatElement + Copy,
 {
     let [nx, ny] = field.shape();
     let (i, dxf) = axis_index_and_frac::<T>(ix, nx);
@@ -64,10 +64,9 @@ where
     let c01 = field[[i, j1]];
     let c11 = field[[i1, j1]];
 
-    let one = T::from_f64(1.0);
-    let row0 = lerp(c00, c10, dxf, one);
-    let row1 = lerp(c01, c11, dxf, one);
-    lerp(row0, row1, dyf, one)
+    let row0 = lerp(c00, c10, dxf);
+    let row1 = lerp(c01, c11, dxf);
+    lerp(row0, row1, dyf)
 }
 
 /// Convenience wrapper accepting an `&Array2<T>` directly.
@@ -75,7 +74,7 @@ where
 #[inline]
 pub fn bilinear<T>(field: &Array2<T>, ix: T, iy: T) -> T
 where
-    T: FloatElement + NumericElement + Copy,
+    T: FloatElement + Copy,
 {
     bilinear_index_space(field.view(), ix, iy)
 }
@@ -110,7 +109,7 @@ where
 #[must_use]
 pub fn trilinear_index_space<T>(field: ArrayView3<T>, ix: T, iy: T, iz: T) -> T
 where
-    T: FloatElement + NumericElement + Copy,
+    T: FloatElement + Copy,
 {
     let [nx, ny, nz] = field.shape();
     let (i, dxf) = axis_index_and_frac::<T>(ix, nx);
@@ -129,17 +128,16 @@ where
     let c011 = field[[i, j1, k1]];
     let c111 = field[[i1, j1, k1]];
 
-    let one = T::from_f64(1.0);
     // Interpolate along x.
-    let c00 = lerp(c000, c100, dxf, one);
-    let c10 = lerp(c010, c110, dxf, one);
-    let c01 = lerp(c001, c101, dxf, one);
-    let c11 = lerp(c011, c111, dxf, one);
+    let c00 = lerp(c000, c100, dxf);
+    let c10 = lerp(c010, c110, dxf);
+    let c01 = lerp(c001, c101, dxf);
+    let c11 = lerp(c011, c111, dxf);
     // Interpolate along y.
-    let c0 = lerp(c00, c10, dyf, one);
-    let c1 = lerp(c01, c11, dyf, one);
+    let c0 = lerp(c00, c10, dyf);
+    let c1 = lerp(c01, c11, dyf);
     // Interpolate along z.
-    lerp(c0, c1, dzf, one)
+    lerp(c0, c1, dzf)
 }
 
 /// Convenience wrapper accepting an `&Array3<T>` directly.
@@ -147,7 +145,7 @@ where
 #[inline]
 pub fn trilinear<T>(field: &Array3<T>, ix: T, iy: T, iz: T) -> T
 where
-    T: FloatElement + NumericElement + Copy,
+    T: FloatElement + Copy,
 {
     trilinear_index_space(field.view(), ix, iy, iz)
 }
@@ -159,21 +157,29 @@ where
 /// Degenerate axis (n ≤ 1): always returns `(0, 0.0)` so the caller's
 /// `idx + 1` stays at 0 and the axis weight is zero.
 #[inline]
-fn axis_index_and_frac<T: FloatElement + NumericElement + Copy>(v: T, n: usize) -> (usize, T) {
+fn axis_index_and_frac<T: FloatElement + Copy>(v: T, n: usize) -> (usize, T) {
     if n <= 1 {
-        return (0, T::from_f64(0.0));
+        return (0, T::ZERO);
     }
     let max_idx = n - 2; // largest floor index that keeps idx + 1 in bounds
-    let clamped = v.to_f64().clamp(0.0, (n - 1) as f64);
-    let idx = (clamped.floor() as usize).min(max_idx);
-    let frac = T::from_f64((clamped - idx as f64).clamp(0.0, 1.0));
+                         // Clamp in T (avoids a f64 round-trip for f32 callers).
+    let clamped = v.max_scalar(T::ZERO).min_scalar(T::from_count(n - 1));
+    let fl = clamped.floor();
+    // Index extraction requires usize; a floored, non-negative T widens exactly.
+    // Clamp to max_idx ensures idx+1 stays in bounds.
+    let idx = (fl.to_f64() as usize).min(max_idx);
+    // Fractional part relative to the (possibly clamped) floor index.
+    // Clamp guards against float rounding at the upper boundary.
+    let frac = (clamped - T::from_count(idx))
+        .max_scalar(T::ZERO)
+        .min_scalar(T::ONE);
     (idx, frac)
 }
 
 /// Linear blend: `(1 − t) · a + t · b`.
 #[inline]
-fn lerp<T: FloatElement + NumericElement + Copy>(a: T, b: T, t: T, one: T) -> T {
-    a * (one - t) + b * t
+fn lerp<T: FloatElement + Copy>(a: T, b: T, t: T) -> T {
+    a * (T::ONE - t) + b * t
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

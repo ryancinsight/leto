@@ -3,8 +3,6 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use core::fmt::Debug;
-
 use eunomia::{Bf16, FloatElement, F16};
 use leto::{Array, Layout, LetoError, Storage, VecStorage};
 use leto_ops::{
@@ -26,7 +24,7 @@ fn array<T: Clone, const R: usize>(
 
 fn forward_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 4], (1..=4).map(T::from_count).collect::<Vec<_>>());
     let weight = array([1, 1, 2], vec![T::from_count(2), T::ONE]);
@@ -51,7 +49,7 @@ where
 
 fn backward_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 3], (1..=3).map(T::from_count).collect::<Vec<_>>());
     let weight = array([1, 1, 2], vec![T::from_count(2), T::from_count(3)]);
@@ -85,7 +83,7 @@ where
 
 fn transposed_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 2], vec![T::ONE, T::from_count(2)]);
     let weight = array([1, 1, 2], vec![T::from_count(3), T::from_count(4)]);
@@ -115,7 +113,7 @@ where
 
 fn transposed_backward_contract<T>()
 where
-    T: Scalar + FloatElement + Clone + Debug + PartialEq,
+    T: Scalar + FloatElement,
 {
     let input = array([1, 1, 2], vec![T::ONE, T::from_count(2)]);
     let weight = array([1, 1, 2], vec![T::from_count(3), T::from_count(4)]);

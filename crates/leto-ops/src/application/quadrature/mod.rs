@@ -1,7 +1,7 @@
 //! Numerical quadrature (integration) rules.
 //!
 //! SSOT for generic quadrature in the Atlas simulation stack.
-//! All rules are generic over `T: RealField + FloatElement + Copy`.
+//! All rules are generic over `T: RealField`.
 //!
 //! ## Rules
 //!
@@ -38,7 +38,7 @@ fn f<T: FloatElement>(v: f64) -> T {
 // ── Quadrature trait ──────────────────────────────────────────────────────────
 
 /// Quadrature rule for integrating `∫_a^b f(x) dx`.
-pub trait Quadrature<T: RealField + FloatElement + Copy>: Send + Sync {
+pub trait Quadrature<T: RealField>: Send + Sync {
     /// Integrate `f` over `[a, b]` using this rule.
     fn integrate<F: Fn(T) -> T>(&self, f: F, a: T, b: T) -> T;
     /// Polynomial degree of exactness.
@@ -53,7 +53,7 @@ pub trait Quadrature<T: RealField + FloatElement + Copy>: Send + Sync {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TrapezoidalRule;
 
-impl<T: RealField + FloatElement + Copy> Quadrature<T> for TrapezoidalRule {
+impl<T: RealField> Quadrature<T> for TrapezoidalRule {
     fn integrate<F: Fn(T) -> T>(&self, g: F, a: T, b: T) -> T {
         (b - a) * (g(a) + g(b)) / f(2.0)
     }
@@ -69,7 +69,7 @@ impl<T: RealField + FloatElement + Copy> Quadrature<T> for TrapezoidalRule {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SimpsonsRule;
 
-impl<T: RealField + FloatElement + Copy> Quadrature<T> for SimpsonsRule {
+impl<T: RealField> Quadrature<T> for SimpsonsRule {
     fn integrate<F: Fn(T) -> T>(&self, g: F, a: T, b: T) -> T {
         let mid = (a + b) / f(2.0);
         (b - a) * (g(a) + f::<T>(4.0) * g(mid) + g(b)) / f(6.0)
@@ -90,7 +90,7 @@ impl<T: RealField + FloatElement + Copy> Quadrature<T> for SimpsonsRule {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GaussLegendre2;
 
-impl<T: RealField + FloatElement + Copy> Quadrature<T> for GaussLegendre2 {
+impl<T: RealField> Quadrature<T> for GaussLegendre2 {
     fn integrate<F: Fn(T) -> T>(&self, g: F, a: T, b: T) -> T {
         const XI: f64 = 0.577_350_269_189_626; // 1/√3
         let half = f::<T>(0.5);
@@ -147,7 +147,7 @@ pub const GL3_WEIGHTS_UNIT: [f64; 3] = [
     0.277_777_777_777_778, // 5/18
 ];
 
-impl<T: RealField + FloatElement + Copy> Quadrature<T> for GaussLegendre3 {
+impl<T: RealField> Quadrature<T> for GaussLegendre3 {
     fn integrate<F: Fn(T) -> T>(&self, g: F, a: T, b: T) -> T {
         const XI: f64 = 0.774_596_669_241_483; // √(3/5)
         let half = f::<T>(0.5);
@@ -170,7 +170,7 @@ impl<T: RealField + FloatElement + Copy> Quadrature<T> for GaussLegendre3 {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GaussLegendre5;
 
-impl<T: RealField + FloatElement + Copy> Quadrature<T> for GaussLegendre5 {
+impl<T: RealField> Quadrature<T> for GaussLegendre5 {
     fn integrate<F: Fn(T) -> T>(&self, g: F, a: T, b: T) -> T {
         // Nodes and weights from Abramowitz & Stegun Table 25.4.
         const XI: [f64; 5] = [
@@ -225,9 +225,7 @@ impl<Q> CompositeQuadrature<Q> {
     }
 }
 
-impl<T: RealField + FloatElement + Copy, Q: Quadrature<T>> Quadrature<T>
-    for CompositeQuadrature<Q>
-{
+impl<T: RealField, Q: Quadrature<T>> Quadrature<T> for CompositeQuadrature<Q> {
     fn integrate<F: Fn(T) -> T>(&self, g: F, a: T, b: T) -> T {
         let n: T = f(self.n_panels as f64);
         let h = (b - a) / n;

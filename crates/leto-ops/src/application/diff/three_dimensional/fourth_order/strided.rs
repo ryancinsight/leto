@@ -4,7 +4,7 @@
 
 use core::ops::Range;
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3};
 
 use super::super::window::{PlaneWindow, PlaneWindowMut};
@@ -21,7 +21,7 @@ pub(super) fn map_strided<T, const N: usize, const M: usize, const K: usize, F>(
     scales: [Scales<T>; N],
     combine: &F,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
     F: Fn([T; N], [T; M], [T; K]) -> [T; K] + Send + Sync,
 {
     for i in planes {
@@ -65,7 +65,7 @@ pub(super) fn divergence_strided<T>(
     shape: [usize; 3],
     scales: [Scales<T>; 3],
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     for i in 0..shape[0] {
         for j in 0..shape[1] {
@@ -98,7 +98,7 @@ pub(super) fn sweep_strided<T>(
     axis: Axis,
     scales: Scales<T>,
 ) where
-    T: RealField + FloatElement + Copy,
+    T: RealField,
 {
     let d = axis.index();
     let n = shape[d];

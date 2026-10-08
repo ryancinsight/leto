@@ -7,7 +7,7 @@
 
 use core::ops::Range;
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use super::central::{
@@ -32,7 +32,7 @@ pub struct FiniteDifference3D<T> {
     dz: T,
 }
 
-impl<T: RealField + FloatElement + Copy> FiniteDifference3D<T> {
+impl<T: RealField> FiniteDifference3D<T> {
     /// Construct an operator from a stencil scheme and per-axis spacings.
     ///
     /// # Errors
