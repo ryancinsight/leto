@@ -132,7 +132,8 @@ pub use application::random::{
 pub use application::reduction::{
     max, max_axis, max_axis_into, mean_axis, mean_axis_into, min, min_axis, min_axis_into,
     product_axis, product_axis_into, reduce_all, reduce_axis, reduce_axis_into, sum_axis,
-    sum_axis_into, AxisReduction, MaxAxis, MeanAxis, MinAxis, ProductAxis, SumAxis,
+    sum_axis_into, topk_axis, topk_axis_into, AxisReduction, MaxAxis, MeanAxis, MinAxis,
+    ProductAxis, SumAxis, Topk,
 };
 pub use application::scan::{
     cumsum, cumsum_into, scan_axis, scan_axis_into, CumProdOp, CumSumOp, ScanDirection, ScanOp,
