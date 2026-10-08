@@ -1,14 +1,14 @@
-//! Rank-2 triangular masking (tril / triu): [`triangular_into`] and [`triangular`].
+//! Rank-2 triangular masking (tril / triu): [`triangular_into`](crate::application::triangular::triangular_into) and [`triangular`].
 //!
 //! CPU counterpart of `hephaestus_core::TriangularOps` (1:1 parity):
 //! `output[row, col]` copies the input when the element is on the kept side
-//! of the diagonal offset by `diagonal`, else [`Scalar::ZERO`].
-//! [`TriangularMode::Lower`] keeps `col <= row + diagonal` (numpy's `tril`:
+//! of the diagonal offset by `diagonal`, else [`NumericElement::ZERO`](eunomia::NumericElement::ZERO).
+//! [`TriangularMode::Lower`](crate::application::triangular::TriangularMode::Lower) keeps `col <= row + diagonal` (numpy's `tril`:
 //! `diagonal = 0` is the main diagonal, positive shifts it up-right,
-//! negative down-left); [`TriangularMode::Upper`] keeps
+//! negative down-left); [`TriangularMode::Upper`](crate::application::triangular::TriangularMode::Upper) keeps
 //! `col >= row + diagonal` (numpy's `triu`, the mirror condition).
 //!
-//! [`triangular_keeps`] ports the device seam's predicate verbatim — the
+//! [`triangular_keeps`](crate::application::triangular::triangular_keeps) ports the device seam's predicate verbatim — the
 //! same overflow-safe `u128` comparison, including the `usize`/`i64`
 //! extremes — so host and device agree cell for cell on every input.
 //! Zero-copy: masking writes directly into the caller-owned output view,
@@ -61,7 +61,7 @@ pub const fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diag
 /// run and fills the masked remainder, replacing the per-element branch with
 /// vectorized slice operations. The split point derives from the same
 /// `col <= row + diagonal` / `col >= row + diagonal` boundary
-/// [`triangular_keeps`] tests, computed in `i128` so `usize` rows and any
+/// [`triangular_keeps`](crate::application::triangular::triangular_keeps) tests, computed in `i128` so `usize` rows and any
 /// `i64` diagonal combine without overflow or clamping.
 fn triangular_contiguous<T: Scalar>(
     input: &[T],

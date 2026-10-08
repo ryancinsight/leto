@@ -1,4 +1,4 @@
-//! Volume ray line integrals: [`ray_line_integrals_into`] and [`ray_line_integrals`].
+//! Volume ray line integrals: [`ray_line_integrals_into`](crate::application::volume::ray_line_integrals_into) and [`ray_line_integrals`](crate::application::volume::ray_line_integrals).
 //!
 //! CPU counterpart of `hephaestus_core::RayIntegralOps` (1:1 parity): each ray
 //! is clipped to the node-centre bounding box by the slab method, the chord

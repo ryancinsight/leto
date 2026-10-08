@@ -1,6 +1,6 @@
 //! Elementwise unary maps and the named-operation family.
 //!
-//! [`traversal`] holds the shared map kernels; [`operators`] the
+//! `traversal` holds the shared map kernels; `operators` the
 //! [`UnaryOp`] contract and its operations.
 
 mod operators;

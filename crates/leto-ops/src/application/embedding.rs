@@ -1,10 +1,10 @@
-//! Embedding-table row gather: [`embedding_gather_into`] and [`embedding_gather`].
+//! Embedding-table row gather: [`embedding_gather_into`](crate::application::embedding::embedding_gather_into) and [`embedding_gather`](crate::application::embedding::embedding_gather).
 //!
 //! CPU counterpart of `hephaestus_core::EmbeddingOps` (1:1 parity):
 //! `output[row] = table[indices[row]]`, each a full `embedding_dim` row,
 //! gathered in index order. Indices are `u32`, exactly as on the device seam.
 //!
-//! An out-of-range index is a typed [`LetoError::OutOfBounds`] rejection -
+//! An out-of-range index is a typed [`LetoError::OutOfBounds`](leto::LetoError::OutOfBounds) rejection -
 //! never a clamped or wrapped read - matching the seam's `InvalidConfiguration`
 //! clause. Rows are gathered in order and the first out-of-range index aborts
 //! immediately, so rows before the failing index are already written when the
