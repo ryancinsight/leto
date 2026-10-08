@@ -547,6 +547,63 @@ impl<T: RealScalar> UnaryOp<T> for J1Op {
     }
 }
 
+/// Modified Bessel function of the second kind K0 over any real scalar:
+/// Abramowitz & Stegun 9.8.5 for `0 < x <= 2` and 9.8.6 for `x > 2`,
+/// transcribed verbatim from [`bessel_k0`](crate::application::special::bessel_k0)
+/// with the same nesting so every precision evaluates the same program.
+/// Non-positive and non-finite arguments yield `NaN`, as the scalar does.
+/// One deliberate rendering difference: the scalar fuses its final
+/// `ln(x/2) * -I0 + correction` with `mul_add`, while this form keeps the
+/// multiply and add separate so the transcription stays expressible in
+/// every lane type; the two roundings differ by at most 1 ULP.
+fn bessel_k0_value<T: RealScalar>(x: T) -> T {
+    if !(x.is_finite() && x > <T as NumericElement>::ZERO) {
+        return <T as NumericElement>::NAN;
+    }
+    if x <= T::from_f64(2.0) {
+        let t1 = (x / T::from_f64(3.75)) * (x / T::from_f64(3.75));
+        let i0 = <T as NumericElement>::ONE
+            + t1 * (T::from_f64(3.515_622_9)
+                + t1 * (T::from_f64(3.089_942_4)
+                    + t1 * (T::from_f64(1.206_749_2)
+                        + t1 * (T::from_f64(0.265_973_2)
+                            + t1 * (T::from_f64(0.036_076_8) + t1 * T::from_f64(0.004_581_3))))));
+        let t2 = (x * T::from_f64(0.5)) * (x * T::from_f64(0.5));
+        let correction = T::from_f64(-0.577_215_66)
+            + t2 * (T::from_f64(0.422_784_20)
+                + t2 * (T::from_f64(0.230_697_56)
+                    + t2 * (T::from_f64(0.034_885_90)
+                        + t2 * (T::from_f64(0.002_626_98)
+                            + t2 * (T::from_f64(0.000_107_50) + t2 * T::from_f64(7.4e-6))))));
+        (x * T::from_f64(0.5)).ln() * -i0 + correction
+    } else {
+        let t = T::from_f64(2.0) / x;
+        let series = T::from_f64(1.253_314_14)
+            + t * (T::from_f64(-0.078_323_58)
+                + t * (T::from_f64(0.021_895_68)
+                    + t * (T::from_f64(-0.010_624_46)
+                        + t * (T::from_f64(0.005_878_72)
+                            + t * (T::from_f64(-0.002_515_40) + t * T::from_f64(0.000_532_08))))));
+        (-x).exp() / x.sqrt() * series
+    }
+}
+
+/// Modified Bessel function of the second kind K0 operation marker.
+///
+/// Zero-sized: monomorphizes to the Abramowitz & Stegun 9.8.5/9.8.6 program
+/// per element. This is the elementwise counterpart of
+/// [`bessel_k0`](crate::application::special::bessel_k0), evaluating the
+/// same nested formulation in the lane precision.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct K0Op;
+
+impl<T: RealScalar> UnaryOp<T> for K0Op {
+    #[inline(always)]
+    fn apply(&self, x: T) -> T {
+        bessel_k0_value(x)
+    }
+}
+
 /// Apply a named unary operation into caller-owned output through the shared
 /// traversal kernel.
 #[inline]
