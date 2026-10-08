@@ -30,6 +30,7 @@ use eunomia::FloatElement;
 
 mod adjoint;
 mod central;
+mod checks;
 mod coefficients;
 mod fourth_order;
 mod leapfrog;
