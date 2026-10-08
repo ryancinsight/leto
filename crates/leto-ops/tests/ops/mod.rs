@@ -36,5 +36,7 @@ pub mod storage_bounds;
 pub mod structure_ops;
 pub mod svd;
 pub mod symmetric_qr;
+pub mod triangular;
 pub mod udu;
 pub mod unary_math;
+pub mod vector;

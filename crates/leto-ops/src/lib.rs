@@ -159,12 +159,13 @@ pub use application::statistics::{
     phase_shift_correlation_curve, psnr, rmse, validation_psnr_from_relative_rmse,
 };
 pub use application::stencil::laplacian_2d_into;
+pub use application::triangular::{triangular, triangular_into, triangular_keeps, TriangularMode};
 pub use application::unary::{
     map, map_inplace, map_into, map_into_with_cache_geometry, mapv, unary_map, unary_map_into,
     AbsOp, CosOp, ErfOp, ErfcOp, ExpOp, LgammaOp, LnOp, NegOp, PowfOp, RecipOp, SinOp, SqrtOp,
     UnaryOp,
 };
-pub use application::vector::{dot, hamming_distance, jaccard_distance, matvec};
+pub use application::vector::{cross_into, dot, hamming_distance, jaccard_distance, matvec};
 pub use application::zip::{
     coordinate_map_inplace, coordinate_map_plan, coordinate_map_plan_inplace, indexed_fold,
     indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip_mut_with,
