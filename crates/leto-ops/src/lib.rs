@@ -143,10 +143,10 @@ pub use application::signal::{blackman, hamming, hann, tukey, wrap_to_pi};
 pub use application::sliding_window::{fold_into, unfold_into};
 pub use application::sparse::{
     csc_spmv, csc_spmv_into, csc_spmv_view_into, csr_to_dense, factor_numeric, factor_symbolic,
-    factor_symbolic_with_ordering, sparse_lu_solve, spgemm, spmm, spmm_into, spmm_view_into, spmv,
-    spmv_into, spmv_view_into, CooMatrix, CscColumn, CscMatrix, CscView, CsrMatrix, CsrRow,
-    CsrView, NumericLu, OrderingStrategy, OwnedNumericLu, SparseLuSolver, SymbolicLu,
-    DENSE_LIMIT_DEFAULT,
+    factor_symbolic_with_ordering, solve_csr_via_dense_lu, sparse_lu_solve, spgemm, spmm,
+    spmm_into, spmm_view_into, spmv, spmv_into, spmv_view_into, CooMatrix, CscColumn, CscMatrix,
+    CscView, CsrMatrix, CsrRow, CsrView, NumericLu, OrderingStrategy, OwnedNumericLu,
+    SparseLuSolver, SymbolicLu, DENSE_LIMIT_DEFAULT,
 };
 /// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ, Legendre polynomials).
 pub use application::special::{bessel_k0, erf, j0, j1, jn, sinc};
