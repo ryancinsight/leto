@@ -43,3 +43,4 @@
 | [0032](0032-fused-passes-any-destination-count-over-plane-windows.md) | Fused derivative passes write any destination count, over plane windows | Accepted |
 | [0033](0033-lapack-safe-range-balancing.md) | Scale-safe kernels with a minimal-move matrix gate for dense factorizations | Accepted |
 | [0034](0034-layer-boundary-decision.md) | Atlas array/linalg layer boundary | Accepted |
+| [0035](0035-col-piv-qr-dlaqp2-norm-downdating.md) | Column-pivoted QR selects pivots by LAPACK DLAQP2 norm downdating | Accepted |
