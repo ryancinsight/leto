@@ -14,17 +14,6 @@
 - Overlap: #299 and #292 differ in 4 files (+4/-16) (`benches/kernels.rs`, two bench submodules, `sparse/csr.rs`); treat them as one change. Port #299 first, then diff #292 against the result and close it once empty.
 - Next step: port #299 onto the fetched main hunk by hunk (both touch `backlog.md`, so resolve that file against current board content), run `cargo fmt`, then the committed gate.
 
-<a id="LETO-COLPIVQR-NORM-DOWNDATE-2026-09-27"></a>
-
-## LETO-COLPIVQR-NORM-DOWNDATE-2026-09-27 — col_piv_qr recomputes every remaining column's tail norm each step [patch] — todo
-
-- priority: tightening
-- needs: none
-- scope: `crates/leto-ops/src/application/linalg/col_piv_qr/decompose.rs`
-- Evidence: split off `LETO-DECOMP-AXPY-FOLLOWUPS-2026-09-27` (delivered: the full_piv_lu/bunch_kaufman axpy conversion), whose evidence found `tail_norm_sq` recomputed from scratch for every remaining column at every step (O(p·n·m) total) instead of downdating a maintained running norm (O(p·n)) — the fix that item's own text called "distinct" and "non-SIMD". LAPACK's `dgeqpf`/`dlaqps` maintain a downdated norm with a recompute safeguard (Lawson & Hanson; also Reichel & Gragg) guarding against the downdated value drifting from the true norm under cancellation.
-- Outcome: maintain per-column downdated norms with LAPACK's safeguard (recompute exactly when the downdate is no longer numerically trustworthy), verified against the exact-recompute baseline (differential test: identical pivot sequence and rank on the existing `col_piv_qr` test suite, plus an adversarial near-cancellation case that would silently diverge without the safeguard), with a `bench_col_piv_qr_scaling` measurement before/after.
-- Next step: read LAPACK 3.12.0 `dgeqpf.f` (and/or `dlaqps.f`) directly and cite its exact downdating formula and recompute-safeguard threshold with verified line numbers before implementing — this codebase's convention (e.g. `dbdsqr.f` citations elsewhere) requires a verified citation, not one from memory.
-
 <a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
 
 ## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow CSR index storage from usize to u32 [major] [arch] — todo

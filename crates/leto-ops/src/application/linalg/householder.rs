@@ -126,10 +126,9 @@ pub(crate) fn apply_left<T: RealScalar>(
     // sweeps are contiguous element-wise `y += a·x` updates, dispatched through the
     // SIMD `Scalar::axpy_slice` (SSOT with the LU/QR/matmul row updates). The
     // per-`w[j]` summation order (reflector rows ascending) and the `(β·w)` scaling
-    // grouping are preserved; `axpy_slice` is bitwise-identical to the separate
-    // `mul`+`add` it replaces (hermes `axpy` performs no FMA contraction), so the
-    // result is unchanged to the last bit — the eigenvalue/SVD paths see no
-    // rounding perturbation.
+    // grouping are preserved. Hermes fuses the multiply-add on SIMD lanes, so the
+    // output follows the provider's native rounding semantics rather than the
+    // bitwise result of a separately rounded multiply and add.
     let span = c1 - c0;
     scratch.clear();
     scratch.resize(span, T::ZERO);
