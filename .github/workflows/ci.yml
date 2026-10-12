@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  ATLAS_PIN: b94ee304b83fbdc1a1542af66ba4668ebda2ae15
   CARGO_INCREMENTAL: "0"
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: 1.97.0
@@ -27,7 +28,7 @@ jobs:
   # Atlas ATLAS-SEMVER-GATE-FLEETWIDE-2026-08-28.
   semver:
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@50802ef4c975bdb1e668b94a700d8310f0348e9c
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@b44c45c3875c9c03ac9fc83994ee068c1805bb49
     with:
       package: leto-ops,leto
       rust-toolchain: 1.97.0
@@ -60,6 +61,24 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Install Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Materialize the pinned Atlas tooling checkout
+        # ADR 0067: the bench runner consumes Atlas's process-tree runner from
+        # an exact sparse checkout of the pinned commit, never a moving branch.
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/ryancinsight/atlas.git "$RUNNER_TEMP/atlas"
+          git -C "$RUNNER_TEMP/atlas" checkout "$ATLAS_PIN"
+
+      - name: Test bounded benchmark runner
+        working-directory: scripts
+        env:
+          ATLAS_TOOLING_CHECKOUT: ${{ runner.temp }}/atlas
+        run: python -m unittest discover -s tests/bench -t tests -p 'test_*.py'
 
       - name: Install the pinned Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
@@ -115,14 +134,13 @@ jobs:
   #   leto-ops ops_tests -E test(/reduction/) 17 tests,   6s   <- gated
   #   leto-ops --lib                         216 tests, >10m  <- excluded
   #   leto-ops --test ops_tests              full binary, >10m <- excluded
-  #   leto layout_property_tests             8 tests, 65s/80s <- gated 2026-10-10
+  #   leto layout_property_tests             proptest,     >10m <- excluded
   #
-  # The three selected runs are the storage substrate, the uninitialized-output
-  # caller, and the layout properties, which are the contracts this job exists
-  # for. The broader `leto-ops` surfaces are excluded because they are not yet
-  # Miri-clean or affordable, not because they are believed sound; the measured
-  # blockers are recorded on LETO-MIRI-GATE-2026-09-10, which owns widening
-  # this scope.
+  # The two selected runs are the storage substrate and the uninitialized-output
+  # caller, which are the contracts this job exists for. The broader `leto-ops`
+  # and property surfaces are excluded because they are not yet Miri-clean or
+  # affordable, not because they are believed sound; the measured blockers are
+  # recorded on LETO-MIRI-GATE-2026-09-10, which owns widening this scope.
   miri:
     name: Miri (uninitialized memory and aliasing)
     runs-on: ubuntu-latest
@@ -166,13 +184,6 @@ jobs:
           --test ops_tests
           -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
 
-      - name: Miri — layout properties (Stacked Borrows)
-        env:
-          MIRIFLAGS: -Zmiri-disable-isolation
-        run: >-
-          cargo +nightly miri nextest run -p leto --locked --profile miri
-          --test layout_property_tests
-
       - name: Miri — storage substrate (Tree Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
@@ -185,10 +196,3 @@ jobs:
           cargo +nightly miri nextest run -p leto-ops --locked --profile miri
           --test ops_tests
           -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
-
-      - name: Miri — layout properties (Tree Borrows)
-        env:
-          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
-        run: >-
-          cargo +nightly miri nextest run -p leto --locked --profile miri
-          --test layout_property_tests

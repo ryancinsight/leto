@@ -4,21 +4,63 @@ Benchmark baselines and optimization history for `crates/leto-ops/benches/kernel
 These gate optimization work: a statistically significant regression in a
 touched kernel blocks merge, and no change is labeled an optimization
 without a recorded comparison (engineering_gates: performance gate).
-Relocated from `gap_audit.md` 2026-09-27 (which had relocated it from a
-root-level `benchmark_results.md` on 2026-08-13) — this is reference/gate
-data, not an open risk, and does not belong in the risk register. Content
-below is otherwise unchanged from the `gap_audit.md` version.
 
 ## Harness and methodology
 
 Harness: `crates/leto-ops/benches/kernels.rs` (`cargo bench -p leto-ops`).
-Methodology: Criterion, sample_size 10 in the current harness, median + 95% CI;
-pinned deterministic inputs (no RNG); default features; f64. Historical rows
-retain their recorded sample size. Machine class: Windows 11 x86_64 dev
+Methodology: Criterion, sample size 10 except for the six operator-chain cases,
+which use 50; median + 95% CI; pinned deterministic inputs (no RNG); default
+features; f64. Historical rows retain their recorded sample size. Machine class: Windows 11 x86_64 dev
 workstation (AVX2-class). These baselines gate optimization work (Atlas ADR
 0002 leto slice): a statistically significant regression in a touched kernel
 blocks merge, and no change is labeled an optimization without a recorded
 comparison.
+
+### Bounded full runs
+
+Run the complete Criterion suite with `python scripts/bench.py`, or one binary
+with the same committed per-binary ceiling, for example
+`python scripts/bench.py col_piv_qr`. The runner reads the `leto-ops` benchmark
+target inventory from Cargo metadata and requires it to match
+`.config/bench.toml`; adding or removing a `[[bench]]` entry therefore requires
+updating its case and timing model in the same change. Named group overrides
+record source-level sample-size and timing changes. The validator computes
+nominal Criterion time from each group's case count and warm-up plus measurement
+time. The five target ceilings sum to 297 seconds under a 300-second suite
+deadline; each target also reserves its configured warm-cache build and process
+allowance.
+
+The runner preserves Cargo's target directory, profiles, pinned Rust toolchain,
+and member `.cargo/config.toml` environment. Inside the Atlas stack it invokes
+Cargo from a temporary config root containing the stack configuration with only
+the generated development `[patch]` overlay removed; this keeps the committed
+lock in standalone form and the shared build cache and profile hashes
+unchanged. It passes no target-directory or profile command-line override.
+Every Cargo child has a finite absolute deadline. Each target reserves part of
+its ceiling for process-tree termination and captured-output cleanup, and that
+cleanup remains inside the 300-second suite deadline. A Windows tree-kill
+failure stops the run rather than falling back to killing only the parent.
+Standard benchmark output remains attached to the terminal so Criterion
+medians and confidence intervals can be recorded directly.
+
+The runner requires Python 3.11 or newer. Process-tree ownership — the
+Windows Job Object, the POSIX process-group supervisor, interrupts inside the
+launch window, and bounded cleanup — is Atlas's (ADR 0067): this repository
+consumes Atlas's `scripts/process_tree.py` from an exact checkout of the
+pinned commit `ATLAS_PIN`, verified before import; standalone CI materializes
+the checkout and names it through `ATLAS_TOOLING_CHECKOUT`. Run the runner's
+value and consumer tests from scripts/ with
+python -m unittest discover -s tests/bench -t tests -p 'test_*.py'; CI runs
+the same suite against the pinned checkout.
+
+A completed run proves that the declared binaries finished inside the committed
+wall-clock budgets and supplies empirical Criterion estimates for that host and
+revision. It does not establish value correctness, cross-host performance, or a
+speedup by itself. Performance comparisons still require identical inputs and
+features, a recorded machine class and concurrent load, and median plus
+confidence-interval comparison against the relevant baseline revision. A
+timeout is a benchmark or production-path defect; do not increase the budget or
+reduce the workload to make it pass.
 
 ## Current state (fused multi-row AXPY, 0.19.7, 2026-06-13)
 
@@ -374,8 +416,10 @@ Blocked lever, not yet filed: narrowing `CsrMatrix`'s `col_indices`/
 SpMV (the dominant term), but it is a public-API format change — file as a
 [major] backlog item with an ADR before starting.
 
-Lesson: memory-bound benchmarks are invalid under concurrent builds — gate
-measurement on a quiet host (rustc/cargo process count ≈ 0).
+Concurrent builds invalidate wall-clock evidence when run-to-run variance
+exceeds the derived noise bound. Use deterministic instruction/cache counters
+for attribution, or isolate a wall-clock run on cores or a host-level benchmark
+lease; record host load with the result.
 
 ## Blocked LU cache-resident regression (2026-07-20)
 
@@ -391,41 +435,9 @@ threshold. Reverted — never ship a regression.
 Re-open only with: (a) a gate on `working_set > l3_bytes` (the cache-aware
 threshold the parallel policy already uses) so cache-resident sizes never
 regress, (b) trailing-update copies eliminated via matmul into strided
-views, (c) the win verified past the LLC on a quiet host. `lu_scaling` and
-a large-n `P·A=L·U` reconstruction test are retained as coverage.
-
-## Blocked LU gate landed (2026-10-10)
-
-Re-opened per the three conditions, on the same 36 MiB-L3 host
-(Intel Core Ultra 9 285K), quiet (0 cargo/rustc processes):
-
-- (a) `lu_decompose` dispatches on `n²·elem > l3_bytes` through the shared
-  `working_set_spills_llc` threshold (the parallel policy's comparison,
-  factored into `infrastructure::cache` so the spill point is one
-  definition); f64 routes blocked at n ≥ 2173.
-- (b) Right-looking blocked LU (LAPACK `dgetrf` shape, 64-wide panels,
-  partial pivoting): the panel factorizes through the same unblocked step
-  kernel, the top block row solves in place, and the trailing update runs
-  `A22 += (−L21)·U12` through `matmul_accumulate` with packed contiguous
-  panels (buffers sized once, reused every step) and a strided trailing
-  view — no extraction beyond the packing the GEMM's dispatch performs
-  for strided inputs anyway.
-- (c) `lu_scaling` (cache-resident, unblocked path): 128² 100.7 µs →
-  97.7 µs, 256² 721 µs → 681 µs, 512² 6.75 ms → 6.34 ms — no regression
-  (the step-kernel extraction is codegen-neutral). New
-  `lu_scaling_past_llc`: 2048² (33.5 MiB, unblocked at the boundary)
-  747 ms; 3072² (75 MiB, blocked) 702 ms — faster in absolute terms at
-  3.375× the flops, ≈3.6× against the cubic extrapolation of the
-  unblocked path (2.52 s; conservative, since unblocked scales
-  cubic-or-worse past the LLC). The blocked win compounds BLAS-3
-  intensity with the GEMM's parallel dispatch, which the serial axpy
-  path never had.
-
-Coverage: six unit tests (f64/f32 differential vs unblocked, bitwise
-identity at sub-panel orders, partial-panel, singular parity, gate
-boundary pins incl. `>`-vs-`>=` and saturation) plus
-`lu_reconstructs_past_the_llc`, which reconstructs `P·A = L·U` through
-`matmul` at the smallest spilling order (2173 here, capped at 2600).
+views, (c) the win verified past the LLC using a valid isolated wall-clock run
+or deterministic counters. `lu_scaling` and a large-n `P·A=L·U`
+reconstruction test are retained as coverage.
 
 ## Layout-copy / assign kernel (Apollo FFT gather/scatter, 2026-08-26)
 
