@@ -29,7 +29,7 @@ use leto_ops::{
 };
 use leto_ops::{
     cholesky_decompose, eigenvalues, lu_decompose, matexp, matpow, qr_decompose, singular_values,
-    svd_decompose, udu_decompose,
+    svd_decompose, symmetric_eigen_qr, udu_decompose,
 };
 use leto_ops::{csc_spmv_into, spmm, spmv_into, CscMatrix, CsrMatrix};
 use std::hint::black_box;
@@ -54,6 +54,6 @@ criterion_group! {
         .warm_up_time(std::time::Duration::from_millis(500))
         .measurement_time(std::time::Duration::from_millis(500))
         .without_plots();
-    targets = matmul::bench_matmul, elementwise::bench_elementwise, chains::bench_operator_chain, elementwise::bench_parallel_crossover, maps::bench_unary_map, maps::bench_runtime_tile_geometry, maps::bench_reductions, maps::bench_zip, oracle::bench_oracle_compare, oracle::bench_parity_oracle, oracle::bench_linalg_compare, oracle::bench_decomposition_compare, scaling::bench_lu_scaling, scaling::bench_full_piv_lu_scaling, scaling::bench_bunch_kaufman_scaling, oracle::bench_sparse_compare, scaling::bench_spmv, scaling::bench_csc_spmv, scaling::bench_cholesky_scaling, scaling::bench_qr_scaling, scaling::bench_svd_scaling, scaling::bench_udu_scaling
+    targets = matmul::bench_matmul, elementwise::bench_elementwise, chains::bench_operator_chain, elementwise::bench_parallel_crossover, maps::bench_unary_map, maps::bench_runtime_tile_geometry, maps::bench_reductions, maps::bench_zip, oracle::bench_oracle_compare, oracle::bench_parity_oracle, oracle::bench_linalg_compare, oracle::bench_decomposition_compare, scaling::bench_lu_scaling, scaling::bench_full_piv_lu_scaling, scaling::bench_bunch_kaufman_scaling, oracle::bench_sparse_compare, scaling::bench_spmv, scaling::bench_csc_spmv, scaling::bench_cholesky_scaling, scaling::bench_qr_scaling, scaling::bench_svd_scaling, scaling::bench_udu_scaling, scaling::bench_lu_scaling_past_llc, scaling::bench_symmetric_eigen_scaling
 }
 criterion_main!(kernels);

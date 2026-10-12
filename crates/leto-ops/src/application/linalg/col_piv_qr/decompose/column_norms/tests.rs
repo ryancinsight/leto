@@ -4,7 +4,7 @@ use crate::domain::real::RealScalar;
 use eunomia::{Bf16, F16};
 
 fn downdate_keeps_the_estimate_and_the_reference<T: RealScalar>() {
-    // Columns [·, 1, 2] and the removed row [·, 1]: the estimate 5 - 1 = 4 is
+    // Columns [Â·, 1, 2] and the removed row [Â·, 1]: the estimate 5 - 1 = 4 is
     // 4/5 of the reference, above every format's TOL3Z = sqrt(eps/2) < 0.1.
     let r = vec![T::ZERO, T::ONE, T::ZERO, T::from_count(2)];
     let mut norms = ColumnNorms::new(&r, 2, 2);
@@ -73,4 +73,19 @@ fn pivot_breaks_ties_toward_the_lowest_column_across_scalar_types() {
     pivot_is_the_first_maximum::<f32>();
     pivot_is_the_first_maximum::<F16>();
     pivot_is_the_first_maximum::<Bf16>();
+}
+
+#[test]
+fn recompute_threshold_is_sqrt_unit_roundoff() {
+    // dlaqp2.f line 187: TOL3Z = SQRT(DLAMCH('Epsilon')). DLAMCH('Epsilon')
+    // is the IEEE unit roundoff u (2^-53 binary64, 2^-24 binary32) â€” half the
+    // spacing `machine_epsilon` reports (see its `matches_each_format` pin).
+    // The expectations re-derive u from the IEEE exponents rather than
+    // calling `machine_epsilon`, so a wrong divisor in the implementation
+    // fails instead of agreeing with itself; the square root is correctly
+    // rounded on both sides, and exact equality is deterministic.
+    let norms64 = ColumnNorms::new(&[1.0f64], 1, 1);
+    assert_eq!(norms64.recompute_threshold, 2f64.powi(-53).sqrt());
+    let norms32 = ColumnNorms::new(&[1.0f32], 1, 1);
+    assert_eq!(norms32.recompute_threshold, 2f32.powi(-24).sqrt());
 }

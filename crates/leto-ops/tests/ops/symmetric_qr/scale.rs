@@ -9,7 +9,8 @@ use super::fixtures::{assert_spectrum, backward_bound, certified, round_into, wi
 use eunomia::{Bf16, F16};
 use leto::{Array2, LetoError, Storage};
 use leto_ops::{
-    symmetric_eigen_jacobi_with_tolerance, symmetric_eigen_qr, RealScalar, SymmetricEigenWorkspace,
+    symmetric_eigen_jacobi_with_tolerance, symmetric_eigen_qr, take_ql_sweeps, RealScalar,
+    SymmetricEigenWorkspace,
 };
 
 fn check_dynamic_range<T: RealScalar>() {
@@ -28,8 +29,16 @@ fn check_scale_sweep<T: Format>() {
     let n = 3;
     // Relative bounds, in units of s: the a-posteriori radius of the returned
     // pairs on `base` (the entries 2s and s are exact in every format), and
-    // the a-priori backward bound of the unscaled matrix where informative.
-    let a_priori = backward_bound::<T>(&base, n);
+    // the a-priori backward bound of the unscaled matrix where informative
+    // (deterministic at the sweep cap, else probabilistic at the sweeps one
+    // decompose of `base` instruments).
+    let a_priori = {
+        let unit: Vec<T> = base.iter().map(|&v| T::from_f64(v)).collect();
+        let matrix = Array2::from_shape_vec([n, n], unit).unwrap();
+        let mut workspace = SymmetricEigenWorkspace::new();
+        workspace.decompose(&matrix.view()).unwrap();
+        backward_bound::<T>(&base, n, take_ql_sweeps())
+    };
     // From seven binades into the subnormals (Bf16 has seven below its
     // smallest normal, the fewest of the four) to the largest scale whose
     // entries 2s stay finite; 4s then overflows at the top, which must be a
@@ -72,10 +81,13 @@ fn check_scale_sweep<T: Format>() {
                     } else {
                         0.0
                     };
-                    for relative in [Some(radius), a_priori].into_iter().flatten() {
+                    for (relative, tag) in [Some((radius, "a-posteriori")), a_priori]
+                        .into_iter()
+                        .flatten()
+                    {
                         assert!(
                             error <= relative + lost,
-                            "2^{exponent}: {:e} vs {expected}·s",
+                            "[{tag}] 2^{exponent}: {:e} vs {expected}·s",
                             value.to_f64()
                         );
                     }
@@ -127,13 +139,14 @@ fn check_far_out_of_range_entry_loss_stays_within_bound<T: RealScalar>(large: f6
     let values = [large, 0.0, 0.0, small];
     let (matrix, image) = round_into::<T>(&values, 2);
     let eigen = symmetric_eigen_qr(&matrix.view()).unwrap();
+    let sweeps = take_ql_sweeps();
     let mut expected = [image[0], image[3]];
     expected.sort_by(f64::total_cmp);
     let mut computed: Vec<f64> = eigen.eigenvalues.iter().map(|v| v.to_f64()).collect();
     computed.sort_by(f64::total_cmp);
-    for bound in [
-        Some(certified(&image, &eigen)),
-        backward_bound::<T>(&image, 2),
+    for (bound, tag) in [
+        Some((certified(&image, &eigen), "a-posteriori")),
+        backward_bound::<T>(&image, 2, sweeps),
     ]
     .into_iter()
     .flatten()
@@ -141,7 +154,7 @@ fn check_far_out_of_range_entry_loss_stays_within_bound<T: RealScalar>(large: f6
         for (value, expected) in computed.iter().zip(&expected) {
             assert!(
                 (value - expected).abs() <= bound,
-                "large={large} small={small}: {value} vs {expected}, bound {bound:e}"
+                "[{tag} {sweeps}] large={large} small={small}: {value} vs {expected}, bound {bound:e}"
             );
         }
     }

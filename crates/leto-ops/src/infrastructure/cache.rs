@@ -189,6 +189,29 @@ pub fn cached_cache_geometry() -> CacheGeometry {
     *GEOMETRY
 }
 
+/// Whether a `bytes`-large working set spills past the shared last-level
+/// cache, where streaming kernels leave cache bandwidth for DRAM bandwidth.
+///
+/// One core nearly saturates memory bandwidth while the data is resident in
+/// the shared LLC; past it, additional cores (parallelism) or higher
+/// arithmetic intensity (blocking) pay, and below it their overhead is pure
+/// loss. This is the single cache-aware threshold the parallel policy
+/// (`super::parallel::parallelize_bandwidth_bound`) and the LU
+/// blocked/unblocked dispatch share, so the spill point is one definition.
+#[must_use]
+#[inline]
+pub fn working_set_spills_llc(bytes: usize) -> bool {
+    bytes > cached_cache_geometry().l3_bytes()
+}
+
+/// [`working_set_spills_llc`] against an explicit geometry, for pinned policy
+/// tests that must not depend on the host topology.
+#[must_use]
+#[inline]
+pub fn working_set_spills_llc_for_geometry(geometry: CacheGeometry, bytes: usize) -> bool {
+    bytes > geometry.l3_bytes()
+}
+
 #[cfg(feature = "topology")]
 fn detect_cache_geometry() -> CacheGeometry {
     let Some(topology) = themis::CpuTopology::detect() else {

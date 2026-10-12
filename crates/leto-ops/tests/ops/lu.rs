@@ -4,7 +4,9 @@
 )]
 
 use leto::{Array, Storage};
-use leto_ops::{det, inv, lu_decompose, matmul, solve};
+use leto_ops::{
+    det, infrastructure::cache::cached_cache_geometry, inv, lu_decompose, matmul, solve,
+};
 
 const EPS: f64 = 1e-10;
 
@@ -88,6 +90,60 @@ fn lu_reconstructs_permuted_matrix_at_scale() {
     // Stable-factorization error is ~n·ε (≈4e-14 here); 1e-9 is far above that
     // and far below any real factorization defect.
     assert!(max_err < 1e-9, "LU reconstruction max error {max_err}");
+}
+
+#[test]
+fn lu_reconstructs_past_the_llc() {
+    // Public-API coverage at the scale the gate engages: n is the smallest
+    // order whose f64 factor working set spills this host's LLC (2173 on a
+    // 36 MiB host), capped at 2600 so exotic-L3 hosts stay in budget.
+    // Routing itself is pinned by `gate_pins_the_spill_boundary` and the
+    // blocked kernel by the differential unit tests; this test owns
+    // large-n correctness of whichever path the gate selects.
+    // Reconstruction runs through `matmul` (a naive triple loop would cost
+    // ~10 G flops here); the tolerance scales the n = 200 test's by n.
+    let l3 = cached_cache_geometry().l3_bytes();
+    let n = ((l3 / 8) as f64).sqrt() as usize + 1;
+    let n = n.min(2600);
+    let mut data = vec![0.0f64; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            data[i * n + j] = ((i * 7 + j * 13) % 17) as f64 * 0.01 - 0.08;
+        }
+        data[i * n + i] += n as f64;
+    }
+    let a = Array::from_shape_vec([n, n], data.clone()).unwrap();
+    let lu = lu_decompose(&a.view()).unwrap();
+    let f = lu.factors().storage().as_slice();
+    let pivots = lu.pivots();
+
+    let mut l = vec![0.0f64; n * n];
+    let mut u = vec![0.0f64; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            l[i * n + j] = if i > j {
+                f[i * n + j]
+            } else if i == j {
+                1.0
+            } else {
+                0.0
+            };
+            u[i * n + j] = if i <= j { f[i * n + j] } else { 0.0 };
+        }
+    }
+    let l = Array::from_shape_vec([n, n], l).unwrap();
+    let u = Array::from_shape_vec([n, n], u).unwrap();
+    let mut product = Array::zeros([n, n]);
+    matmul(&l.view(), &u.view(), &mut product.view_mut()).unwrap();
+
+    let got = product.storage().as_slice();
+    let mut max_err = 0.0f64;
+    for i in 0..n {
+        for j in 0..n {
+            max_err = max_err.max((got[i * n + j] - data[pivots[i] * n + j]).abs());
+        }
+    }
+    assert!(max_err < 1e-8, "LU reconstruction max error {max_err}");
 }
 
 #[test]

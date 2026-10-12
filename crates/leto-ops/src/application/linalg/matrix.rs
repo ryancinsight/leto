@@ -14,15 +14,15 @@
 //! arbitrary strided layouts are accepted by the kernels, a transposed or sliced
 //! `ArrayView2` carries the full surface unchanged.
 
+use super::eigen::symmetric_eigen_via_ql;
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use crate::{
     bidiagonalize, bunch_kaufman, cholesky_decompose, col_piv_qr, eigenvalues, full_piv_lu,
-    hessenberg, lu_decompose, qr_decompose, schur, svd_decompose, symmetric_eigen_jacobi,
-    symmetric_eigenvalues_jacobi, udu_decompose, BidiagonalDecomposition,
-    BunchKaufmanDecomposition, CholeskyDecomposition, ColPivQrDecomposition,
-    FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition, QrDecomposition, RealSchur,
-    SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
+    hessenberg, lu_decompose, qr_decompose, schur, svd_decompose, symmetric_eigenvalues_jacobi,
+    udu_decompose, BidiagonalDecomposition, BunchKaufmanDecomposition, CholeskyDecomposition,
+    ColPivQrDecomposition, FullPivLuDecomposition, HessenbergDecomposition, LuDecomposition,
+    QrDecomposition, RealSchur, SvdDecomposition, SymmetricEigenDecomposition, UduDecomposition,
 };
 use crate::{
     det as det_kernel, inv as inv_kernel, kron as kron_kernel, matexp as matexp_kernel,
@@ -229,6 +229,9 @@ pub trait MatrixDecompose<T: RealScalar> {
     fn singular_values(&self) -> Result<Vec<T>>;
     /// Symmetric eigendecomposition (ascending eigenvalues, orthonormal vectors).
     ///
+    /// Routed through the QL solver; [`symmetric_eigen_jacobi`](crate::symmetric_eigen_jacobi)
+    /// remains the high-relative-accuracy option.
+    ///
     /// # Errors
     /// [`LetoError`](leto::LetoError) on non-symmetric or non-finite input.
     fn symmetric_eigen(&self) -> Result<SymmetricEigenDecomposition<T>>;
@@ -299,7 +302,7 @@ impl<T: RealScalar, M: AsMatrixView<T>> MatrixDecompose<T> for M {
     }
     #[inline]
     fn symmetric_eigen(&self) -> Result<SymmetricEigenDecomposition<T>> {
-        symmetric_eigen_jacobi(&self.as_matrix_view())
+        symmetric_eigen_via_ql(&self.as_matrix_view())
     }
     #[inline]
     fn symmetric_eigenvalues(&self) -> Result<Vec<T>> {

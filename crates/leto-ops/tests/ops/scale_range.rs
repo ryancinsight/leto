@@ -52,6 +52,7 @@ use eunomia::{Bf16, F16};
 use leto::{Array2, Storage};
 use leto_ops::{
     col_piv_qr, eigenvalues, schur, singular_values, svd_decompose, symmetric_eigen_qr,
+    take_dbdsqr_counts, take_francis_steps,
 };
 
 const N: usize = 3;
@@ -132,8 +133,10 @@ fn check_singular_values<T: Format>() {
         let sample = sample::<T>(&GENERAL, exponent);
         let values = singular_values(&sample.matrix.view())
             .unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        let values_counts = take_dbdsqr_counts();
         let full = svd_decompose(&sample.matrix.view())
             .unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        let full_counts = take_dbdsqr_counts();
         // A posteriori, on the returned factors (Σ̂ in units of s).
         let sigmas: Vec<f64> = full
             .singular_values
@@ -165,8 +168,24 @@ fn check_singular_values<T: Format>() {
                 "2^{exponent}: σ {sigma} vs {expected}, certified {certified:e}"
             );
         }
-        // A priori, both entry points, where informative.
-        let Some(eta) = informative(backward_error::svd(N, N, sample.epsilon)) else {
+        // A priori, both entry points, where informative: deterministic at
+        // caps, else probabilistic at the larger instrumented counts (the
+        // bound increases in both, so it covers both runs).
+        let sweeps = values_counts.0.max(full_counts.0);
+        let chases = values_counts.1.max(full_counts.1);
+        let Some((eta, tag)) = informative(backward_error::svd(N, N, sample.epsilon))
+            .map(|eta| (eta, "a-priori"))
+            .or_else(|| {
+                informative(backward_error::svd_tilde(
+                    N,
+                    N,
+                    sample.epsilon,
+                    sweeps,
+                    chases,
+                ))
+                .map(|eta| (eta, "probabilistic"))
+            })
+        else {
             continue;
         };
         let bound = sample.input_error + eta * sample.norm + reference_error + sample.grid;
@@ -175,7 +194,7 @@ fn check_singular_values<T: Format>() {
                 let sigma = scale(sigma.to_f64(), -exponent);
                 assert!(
                     (sigma - expected).abs() <= bound,
-                    "2^{exponent}: σ {sigma} vs {expected}, bound {bound:e}"
+                    "2^{exponent}: [{tag} {sweeps}+{chases}] σ {sigma} vs {expected}, bound {bound:e}"
                 );
             }
         }
@@ -247,8 +266,10 @@ fn check_eigenvalues<T: Format>(spectrum: &Spectrum) {
         let sample = sample::<T>(&spectrum.matrix, exponent);
         let decomposition =
             schur(&sample.matrix.view()).unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        let schur_steps = take_francis_steps();
         let spectrum_only = eigenvalues(&sample.matrix.view())
             .unwrap_or_else(|error| panic!("2^{exponent}: {error}"));
+        let values_steps = take_francis_steps();
         // A posteriori: every eigenvalue of T̂ is one of Â − E = A + (Â − A) − E,
         // within κ·(δ + ‖E‖₂) of the spectrum of A (Bauer–Fike on A).
         let q: Vec<f64> = decomposition
@@ -282,8 +303,16 @@ fn check_eigenvalues<T: Format>(spectrum: &Spectrum) {
                 "2^{exponent}: λ(T̂) {re}+{im}i is {nearest:e} from the spectrum, certified {certified:e}"
             );
         }
-        // A priori, both entry points, where informative.
-        let Some(eta) = informative(backward_error::francis(N, sample.epsilon)) else {
+        // A priori, both entry points, where informative: deterministic at
+        // caps, else probabilistic at the larger instrumented step count.
+        let steps = schur_steps.max(values_steps);
+        let Some((eta, tag)) = informative(backward_error::francis(N, sample.epsilon))
+            .map(|eta| (eta, "a-priori"))
+            .or_else(|| {
+                informative(backward_error::francis_tilde(N, sample.epsilon, steps))
+                    .map(|eta| (eta, "probabilistic"))
+            })
+        else {
             continue;
         };
         let bound = spectrum.condition * (sample.input_error + eta * sample.norm)
@@ -296,7 +325,7 @@ fn check_eigenvalues<T: Format>(spectrum: &Spectrum) {
             {
                 assert!(
                     (re - expected).abs() <= bound && im.abs() <= bound,
-                    "2^{exponent}: λ {re}+{im}i vs {expected}, bound {bound:e}"
+                    "2^{exponent}: [{tag} {steps}] λ {re}+{im}i vs {expected}, bound {bound:e}"
                 );
             }
         }
@@ -330,14 +359,21 @@ fn check_pivoted_qr<T: Format>() {
             }
         }
         // A priori only (pivoted QR returns no certificate of its own), where
-        // informative: every format but Bf16.
-        let Some(eta) = informative(backward_error::col_piv_qr(N, N, sample.epsilon)) else {
+        // informative: deterministic at structural counts, else probabilistic
+        // (which also covers Bf16 here).
+        let Some((eta, tag)) = informative(backward_error::col_piv_qr(N, N, sample.epsilon))
+            .map(|eta| (eta, "a-priori"))
+            .or_else(|| {
+                informative(backward_error::col_piv_qr_tilde(N, N, sample.epsilon))
+                    .map(|eta| (eta, "probabilistic"))
+            })
+        else {
             continue;
         };
         let bound = eta * sample.norm + N as f64 * sample.grid + rounding.sqrt();
         assert!(
             residual.sqrt() <= bound,
-            "2^{exponent}: ‖ÂP − QR‖ {} > {bound:e}",
+            "2^{exponent}: [{tag}] ‖ÂP − QR‖ {} > {bound:e}",
             residual.sqrt()
         );
     }

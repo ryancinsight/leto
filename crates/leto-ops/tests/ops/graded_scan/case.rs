@@ -4,7 +4,7 @@ use super::super::a_posteriori::{self, BlockEigenvalue};
 use super::super::backward_error::{self, informative};
 use super::super::format::{epsilon, scale, Format};
 use leto::{Array2, Storage};
-use leto_ops::{schur, svd_decompose};
+use leto_ops::{schur, svd_decompose, take_dbdsqr_counts, take_francis_steps};
 
 pub(super) fn frobenius(values: &[f64]) -> f64 {
     let largest = values.iter().fold(0.0_f64, |acc, v| acc.max(v.abs()));
@@ -60,6 +60,9 @@ impl<T: Format> Case<'_, T> {
         let (label, n, eps) = (self.label, self.n, epsilon::<T>());
         let full = svd_decompose(&self.matrix.view())
             .unwrap_or_else(|error| panic!("{label}: svd_decompose: {error}"));
+        // Take immediately: no other instrumented call runs on this thread
+        // before the bounds below are evaluated.
+        let (sweeps, chases) = take_dbdsqr_counts();
         let sigmas: Vec<f64> = full
             .singular_values
             .iter()
@@ -80,17 +83,28 @@ impl<T: Format> Case<'_, T> {
             a_posteriori::gram_defect(&v, n, n),
         );
         let (eta_r, eta_o) = backward_error::svd_factors(n, n, eps);
-        if let Some(eta) = informative(eta_r) {
+        // The deterministic bound at caps, else the probabilistic bound at
+        // the instrumented counts (λ₇; per-product failure probability
+        // `theta_failure_probability(eps)`, union-bounded over the run).
+        let (eta_r_tilde, eta_o_tilde) =
+            backward_error::svd_factors_tilde(n, n, eps, sweeps, chases);
+        let residual_bound = informative(eta_r)
+            .map(|eta| (eta, "a-priori"))
+            .or_else(|| informative(eta_r_tilde).map(|eta| (eta, "probabilistic")));
+        if let Some((eta, tag)) = residual_bound {
             let bound = eta * self.norm();
             assert!(
                 residual <= bound,
-                "{label}: ‖Â − ÛΣ̂V̂ᵀ‖_F {residual:e} > {bound:e}"
+                "{label}: [{tag} {sweeps}+{chases}] ‖Â − ÛΣ̂V̂ᵀ‖_F {residual:e} > {bound:e}"
             );
         }
-        if let Some(eta) = informative(eta_o) {
+        let orthogonality_bound = informative(eta_o)
+            .map(|eta| (eta, "a-priori"))
+            .or_else(|| informative(eta_o_tilde).map(|eta| (eta, "probabilistic")));
+        if let Some((eta, tag)) = orthogonality_bound {
             assert!(
                 left <= eta && right <= eta,
-                "{label}: ‖ÛᵀÛ − I‖ {left:e}, ‖V̂ᵀV̂ − I‖ {right:e} > {eta:e}"
+                "{label}: [{tag} {sweeps}+{chases}] ‖ÛᵀÛ − I‖ {left:e}, ‖V̂ᵀV̂ − I‖ {right:e} > {eta:e}"
             );
         }
         let bound = a_posteriori::svd_certificate(residual, left, right, &sigmas) + reference_error;
@@ -117,6 +131,7 @@ impl<T: Format> Case<'_, T> {
         let (label, n, eps) = (self.label, self.n, epsilon::<T>());
         let decomposition =
             schur(&self.matrix.view()).unwrap_or_else(|error| panic!("{label}: schur: {error}"));
+        let steps = take_francis_steps();
         let q = image_of(&decomposition.q(), 0);
         let t = image_of(&decomposition.t(), self.exponent);
         let defect = a_posteriori::gram_defect(&q, n, n);
@@ -124,15 +139,27 @@ impl<T: Format> Case<'_, T> {
         let residual = a_posteriori::residual(self.image, &q, &t, &q, n, n, n)
             + (1.0 + defect) * n as f64 * self.grid;
         let (eta_r, eta_o) = backward_error::schur_factors(n, eps);
-        if let Some(eta) = informative(eta_r) {
+        // The deterministic bound at caps, else the probabilistic bound at
+        // the instrumented step count (λ₇; see `svd_factors`).
+        let (eta_r_tilde, eta_o_tilde) = backward_error::schur_factors_tilde(n, eps, steps);
+        let residual_bound = informative(eta_r)
+            .map(|eta| (eta, "a-priori"))
+            .or_else(|| informative(eta_r_tilde).map(|eta| (eta, "probabilistic")));
+        if let Some((eta, tag)) = residual_bound {
             let bound = eta * self.norm();
             assert!(
                 residual <= bound,
-                "{label}: ‖Â − Q̂T̂Q̂ᵀ‖_F {residual:e} > {bound:e}"
+                "{label}: [{tag} {steps}] ‖Â − Q̂T̂Q̂ᵀ‖_F {residual:e} > {bound:e}"
             );
         }
-        if let Some(eta) = informative(eta_o) {
-            assert!(defect <= eta, "{label}: ‖Q̂ᵀQ̂ − I‖ {defect:e} > {eta:e}");
+        let orthogonality_bound = informative(eta_o)
+            .map(|eta| (eta, "a-priori"))
+            .or_else(|| informative(eta_o_tilde).map(|eta| (eta, "probabilistic")));
+        if let Some((eta, tag)) = orthogonality_bound {
+            assert!(
+                defect <= eta,
+                "{label}: [{tag} {steps}] ‖Q̂ᵀQ̂ − I‖ {defect:e} > {eta:e}"
+            );
         }
         let blocks = a_posteriori::quasi_triangular_eigenvalues(&t, n);
         // The returned eigenvalues read off the same blocks in T: real parts

@@ -115,13 +115,14 @@ jobs:
   #   leto-ops ops_tests -E test(/reduction/) 17 tests,   6s   <- gated
   #   leto-ops --lib                         216 tests, >10m  <- excluded
   #   leto-ops --test ops_tests              full binary, >10m <- excluded
-  #   leto layout_property_tests             proptest,     >10m <- excluded
+  #   leto layout_property_tests             8 tests, 65s/80s <- gated 2026-10-10
   #
-  # The two selected runs are the storage substrate and the uninitialized-output
-  # caller, which are the contracts this job exists for. The broader `leto-ops`
-  # and property surfaces are excluded because they are not yet Miri-clean or
-  # affordable, not because they are believed sound; the measured blockers are
-  # recorded on LETO-MIRI-GATE-2026-09-10, which owns widening this scope.
+  # The three selected runs are the storage substrate, the uninitialized-output
+  # caller, and the layout properties, which are the contracts this job exists
+  # for. The broader `leto-ops` surfaces are excluded because they are not yet
+  # Miri-clean or affordable, not because they are believed sound; the measured
+  # blockers are recorded on LETO-MIRI-GATE-2026-09-10, which owns widening
+  # this scope.
   miri:
     name: Miri (uninitialized memory and aliasing)
     runs-on: ubuntu-latest
@@ -165,6 +166,13 @@ jobs:
           --test ops_tests
           -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
 
+      - name: Miri — layout properties (Stacked Borrows)
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation
+        run: >-
+          cargo +nightly miri nextest run -p leto --locked --profile miri
+          --test layout_property_tests
+
       - name: Miri — storage substrate (Tree Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
@@ -177,3 +185,10 @@ jobs:
           cargo +nightly miri nextest run -p leto-ops --locked --profile miri
           --test ops_tests
           -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
+
+      - name: Miri — layout properties (Tree Borrows)
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
+        run: >-
+          cargo +nightly miri nextest run -p leto --locked --profile miri
+          --test layout_property_tests

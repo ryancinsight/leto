@@ -6,10 +6,10 @@
 //! sit in cache. This bridge is how a caller reaches that path from CSR
 //! storage without assembling a dense matrix by hand.
 //!
-//! The expansion writes each stored nonzero into its dense position and
-//! leaves every unstored position at zero — the unstored entries *are*
-//! the zeros of the dense form, so the buffer is written once by
-//! construction and no separate zeroing pass exists.
+//! The expansion is [`CsrMatrix::to_dense`](super::CsrMatrix::to_dense):
+//! each stored nonzero lands in its dense position and every unstored
+//! position stays zero — the unstored entries *are* the zeros of the
+//! dense form.
 //!
 //! # Memory
 //!
@@ -20,7 +20,7 @@
 //! ([`SparseLuSolver`](super::SparseLuSolver)) instead.
 
 use crate::domain::real::RealScalar;
-use leto::{Array1, Array2, LetoError, Result};
+use leto::{Array1, LetoError, Result};
 
 use super::CsrMatrix;
 use crate::application::linalg::solve;
@@ -54,18 +54,7 @@ pub fn solve_csr_via_dense_lu<T: RealScalar>(
         )));
     }
 
-    let mut dense_values = vec![T::ZERO; nrows * ncols];
-    let row_offsets = matrix.row_ptr();
-    let col_indices = matrix.col_indices();
-    let values = matrix.values();
-    for row in 0..nrows {
-        for index in row_offsets[row]..row_offsets[row + 1] {
-            dense_values[row * ncols + col_indices[index]] = values[index];
-        }
-    }
-
-    let dense = Array2::from_shape_vec([nrows, ncols], dense_values)
-        .expect("invariant: row-major shape matches the buffer just filled");
+    let dense = matrix.to_dense();
     solve(&dense.view(), &rhs.view())
 }
 

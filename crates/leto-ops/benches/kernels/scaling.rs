@@ -2,8 +2,8 @@
 
 use super::{
     black_box, bunch_kaufman, cholesky_decompose, csc_spmv_into, full_piv_lu, lu_decompose,
-    pinned_values, qr_decompose, spmv_into, svd_decompose, udu_decompose, Array, Criterion,
-    CscMatrix, CsrMatrix,
+    pinned_values, qr_decompose, spmv_into, svd_decompose, symmetric_eigen_qr, udu_decompose,
+    Array, Criterion, CscMatrix, CsrMatrix,
 };
 
 /// LU scaling instrument. The factorization is a rank-1 (BLAS-2) trailing
@@ -227,6 +227,38 @@ pub(super) fn bench_udu_scaling(c: &mut Criterion) {
         let sym = Array::from_shape_vec([n, n], spd_values(n)).unwrap();
         group.bench_function(format!("udu_{n}x{n}"), |b| {
             b.iter(|| black_box(udu_decompose(black_box(&sym.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
+/// Past-LLC LU scaling instrument. 2048² f64 is 33.5 MiB — just under this
+/// host's 36 MiB LLC, so it pins the unblocked path at the boundary — while
+/// 3072² (75 MiB) routes blocked on every host with at most a 75 MiB LLC.
+/// Together with `bench_lu_scaling` this is the no-regression/win acceptance
+/// of `LETO-BLOCKED-LU-L3-GATE-2026-09-27`; iterations run seconds, so the
+/// group keeps the harness's 10-sample budget with a longer window.
+pub(super) fn bench_lu_scaling_past_llc(c: &mut Criterion) {
+    let mut group = c.benchmark_group("lu_scaling_past_llc");
+    group.measurement_time(std::time::Duration::from_secs(8));
+    for &n in &[2048usize, 3072] {
+        let mat = Array::from_shape_vec([n, n], pinned_values(n * n, 1.0e-3)).unwrap();
+        group.bench_function(format!("lu_{n}x{n}"), |b| {
+            b.iter(|| black_box(lu_decompose(black_box(&mat.view())).unwrap()))
+        });
+    }
+    group.finish();
+}
+
+/// Symmetric-eigen route scaling instrument: `symmetric_eigen_qr`
+/// (QL solver) on SPD input, including the 60x60 MP-PCA Gram size that cost
+/// 6.2 ms each under Jacobi's pivot scans.
+pub(super) fn bench_symmetric_eigen_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("symmetric_eigen_scaling");
+    for &n in &[60usize, 64, 128] {
+        let sym = Array::from_shape_vec([n, n], spd_values(n)).unwrap();
+        group.bench_function(format!("symmetric_eigen_{n}x{n}"), |b| {
+            b.iter(|| black_box(symmetric_eigen_qr(black_box(&sym.view())).unwrap()))
         });
     }
     group.finish();

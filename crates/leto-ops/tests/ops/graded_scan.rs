@@ -51,7 +51,10 @@ use case::{frobenius, nearest, Case};
 use eunomia::{Bf16, F16};
 use families::{place, unit, Family, FAMILIES};
 use leto::Array2;
-use leto_ops::{eigenvalues, schur, singular_values, svd_decompose, Xorshift64};
+use leto_ops::{
+    eigenvalues, schur, singular_values, svd_decompose, take_dbdsqr_counts, take_francis_steps,
+    Xorshift64,
+};
 
 mod case;
 mod families;
@@ -81,18 +84,26 @@ fn check_case<T: Format>(family: Family, n: usize, unit_values: &[f64], exponent
     let full = case.svd_factors(&reference_sigmas, reference_error);
     let values = singular_values(&matrix.view())
         .unwrap_or_else(|error| panic!("{label}: singular_values: {error}"));
-    if let Some(eta) = informative(backward_error::svd(n, n, eps)) {
+    let (sweeps, chases) = take_dbdsqr_counts();
+    // Deterministic at caps, else probabilistic at the instrumented counts.
+    let eta = informative(backward_error::svd(n, n, eps))
+        .map(|eta| (eta, "a-priori"))
+        .or_else(|| {
+            informative(backward_error::svd_tilde(n, n, eps, sweeps, chases))
+                .map(|eta| (eta, "probabilistic"))
+        });
+    if let Some((eta, tag)) = eta {
         let agreement = 2.0 * eta * norm + 2.0 * case.grid;
         let weyl = eta * norm + reference_error + case.grid;
         for ((a, b), r) in values.iter().zip(&full).zip(&reference_sigmas) {
             let a = scale(a.to_f64(), -exponent);
             assert!(
                 (a - b).abs() <= agreement,
-                "{label}: singular_values {a:e} vs svd_decompose {b:e}, bound {agreement:e}"
+                "{label}: [{tag} {sweeps}+{chases}] singular_values {a:e} vs svd_decompose {b:e}, bound {agreement:e}"
             );
             assert!(
                 (a - r).abs() <= weyl,
-                "{label}: σ {a:e} vs {r:e}, bound {weyl:e}"
+                "{label}: [{tag} {sweeps}+{chases}] σ {a:e} vs {r:e}, bound {weyl:e}"
             );
         }
     }
@@ -119,8 +130,14 @@ fn check_case<T: Format>(family: Family, n: usize, unit_values: &[f64], exponent
     case.schur_factors(&reference_spectrum, condition, reference_error);
     let spectrum =
         eigenvalues(&matrix.view()).unwrap_or_else(|error| panic!("{label}: eigenvalues: {error}"));
-    let (Some(condition), Some(eta)) = (condition, informative(backward_error::francis(n, eps)))
-    else {
+    let steps = take_francis_steps();
+    let eta = informative(backward_error::francis(n, eps))
+        .map(|eta| (eta, "a-priori"))
+        .or_else(|| {
+            informative(backward_error::francis_tilde(n, eps, steps))
+                .map(|eta| (eta, "probabilistic"))
+        });
+    let (Some(condition), Some((eta, tag))) = (condition, eta) else {
         return;
     };
     let bound = condition * eta * norm + reference_error + case.grid;
@@ -132,7 +149,7 @@ fn check_case<T: Format>(family: Family, n: usize, unit_values: &[f64], exponent
         let distance = nearest(&reference_spectrum, re, im);
         assert!(
             distance <= bound,
-            "{label}: eigenvalues() {re:e}+{im:e}i is {distance:e} from the spectrum, bound {bound:e} (κ {condition:e})"
+            "{label}: [{tag} {steps}] eigenvalues() {re:e}+{im:e}i is {distance:e} from the spectrum, bound {bound:e} (κ {condition:e})"
         );
     }
 }

@@ -1,10 +1,14 @@
 //! Shared fixtures: seeded symmetric matrices, rounding into `T`, and the
 //! a-priori and a-posteriori spectrum checks.
 
-use super::super::backward_error::{gamma, informative, ql, ql_vectors, symmetric_certificate};
+use super::super::backward_error::{
+    gamma, informative, ql, ql_tilde, ql_vectors, ql_vectors_tilde, symmetric_certificate,
+};
 use super::super::format::epsilon;
 use leto::{Array2, Storage};
-use leto_ops::{RealScalar, SymmetricEigenDecomposition, SymmetricEigenWorkspace, Xorshift64};
+use leto_ops::{
+    take_ql_sweeps, RealScalar, SymmetricEigenDecomposition, SymmetricEigenWorkspace, Xorshift64,
+};
 
 /// Round `values` into `T`, returning the `T` matrix and the exact `f64`
 /// image of what `T` holds.
@@ -78,10 +82,19 @@ fn frobenius(values: &[f64]) -> f64 {
             .sqrt()
 }
 
-/// `η·‖A‖_F`, the derived a-priori eigenvalue bound (module
-/// documentation), where informative.
-pub(super) fn backward_bound<T: RealScalar>(values: &[f64], n: usize) -> Option<f64> {
-    informative(ql(n, epsilon::<T>())).map(|eta| eta * frobenius(values))
+/// `(η·‖A‖_F, oracle)`, the derived a-priori eigenvalue bound (module
+/// documentation), where informative: deterministic at the sweep cap, else
+/// probabilistic at `sweeps` instrumented sweeps.
+pub(super) fn backward_bound<T: RealScalar>(
+    values: &[f64],
+    n: usize,
+    sweeps: usize,
+) -> Option<(f64, &'static str)> {
+    let eps = epsilon::<T>();
+    informative(ql(n, eps))
+        .map(|eta| (eta, "a-priori"))
+        .or_else(|| informative(ql_tilde(n, eps, sweeps)).map(|eta| (eta, "probabilistic")))
+        .map(|(eta, tag)| (eta * frobenius(values), tag))
 }
 
 /// The a-posteriori radius of a returned decomposition of the order-`n`
@@ -109,12 +122,17 @@ pub(super) fn certified<T: RealScalar>(
 /// informative; return the eigenvalues as `f64` with their a-posteriori
 /// radius: each within it of the matching (ascending) eigenvalue of the
 /// image `Â` ([`symmetric_certificate`], measured on the returned pairs).
-pub(super) fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) -> (Vec<f64>, f64) {
+pub(super) fn assert_backward_stable<T: RealScalar>(
+    values: &[f64],
+    n: usize,
+) -> (Vec<f64>, f64, usize) {
     let (matrix, image) = round_into::<T>(values, n);
     let mut workspace = SymmetricEigenWorkspace::new();
     workspace.decompose(&matrix.view()).unwrap();
+    let sweeps = take_ql_sweeps();
     let eps = epsilon::<T>();
     let (eta, eta_q) = (ql(n, eps), ql_vectors(n, eps));
+    let (eta_t, eta_qt) = (ql_tilde(n, eps, sweeps), ql_vectors_tilde(n, eps, sweeps));
     let vectors: Vec<Vec<f64>> = workspace
         .eigenvectors()
         .map(|v| v.iter().map(|x| x.to_f64()).collect())
@@ -129,7 +147,12 @@ pub(super) fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) ->
         }
     }
     let radius = symmetric_certificate(&image, &lambdas, &basis, n);
-    if let Some(eta) = informative(eta + 2.0 * eta_q * (1.0 + eta)) {
+    let residual_eta = informative(eta + 2.0 * eta_q * (1.0 + eta))
+        .map(|eta| (eta, "a-priori"))
+        .or_else(|| {
+            informative(eta_t + 2.0 * eta_qt * (1.0 + eta_t)).map(|eta| (eta, "probabilistic"))
+        });
+    if let Some((eta, tag)) = residual_eta {
         let bound = (eta + 2.0 * gamma(n as f64 + 2.0, f64::EPSILON)) * frobenius(&image);
         for (&lambda, v) in lambdas.iter().zip(&vectors) {
             let residual = (0..n)
@@ -139,10 +162,16 @@ pub(super) fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) ->
                 })
                 .sum::<f64>()
                 .sqrt();
-            assert!(residual <= bound, "residual {residual:e} exceeds {bound:e}");
+            assert!(
+                residual <= bound,
+                "[{tag} {sweeps}] residual {residual:e} exceeds {bound:e}"
+            );
         }
     }
-    if let Some(eta_o) = informative(2.0 * eta_q + eta_q * eta_q) {
+    let orthogonality_eta = informative(2.0 * eta_q + eta_q * eta_q)
+        .map(|eta| (eta, "a-priori"))
+        .or_else(|| informative(2.0 * eta_qt + eta_qt * eta_qt).map(|eta| (eta, "probabilistic")));
+    if let Some((eta_o, tag)) = orthogonality_eta {
         let orthogonality = eta_o + gamma(n as f64, f64::EPSILON);
         for (a, u) in vectors.iter().enumerate() {
             for (b, w) in vectors.iter().enumerate() {
@@ -150,12 +179,12 @@ pub(super) fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) ->
                 let expected = if a == b { 1.0 } else { 0.0 };
                 assert!(
                     (dot - expected).abs() <= orthogonality,
-                    "v{a}·v{b} = {dot}, expected {expected}"
+                    "[{tag} {sweeps}] v{a}·v{b} = {dot}, expected {expected}"
                 );
             }
         }
     }
-    (lambdas, radius)
+    (lambdas, radius, sweeps)
 }
 
 /// Every computed eigenvalue matches `spectrum` (ascending) within its
@@ -163,19 +192,19 @@ pub(super) fn assert_backward_stable<T: RealScalar>(values: &[f64], n: usize) ->
 /// informative, plus the rounding of the `f64` matrix into `T`.
 pub(super) fn assert_spectrum<T: RealScalar>(values: &[f64], spectrum: &[f64]) {
     let n = spectrum.len();
-    let (computed, radius) = assert_backward_stable::<T>(values, n);
+    let (computed, radius, sweeps) = assert_backward_stable::<T>(values, n);
     let rounding = epsilon::<T>() / 2.0 * frobenius(values);
-    let a_priori = informative(ql(n, epsilon::<T>())).map(|eta| eta * frobenius(values));
+    let a_priori = backward_bound::<T>(values, n, sweeps);
     for (value, expected) in computed.iter().zip(spectrum) {
         assert!(
             (value - expected).abs() <= radius + rounding,
             "{value} vs {expected}, certified {:e}",
             radius + rounding
         );
-        if let Some(bound) = a_priori {
+        if let Some((bound, tag)) = a_priori {
             assert!(
                 (value - expected).abs() <= bound + rounding,
-                "{value} vs {expected}, bound {:e}",
+                "[{tag} {sweeps}] {value} vs {expected}, bound {:e}",
                 bound + rounding
             );
         }

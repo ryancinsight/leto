@@ -59,6 +59,82 @@ pub fn informative(eta: f64) -> Option<f64> {
     (eta < 1.0).then_some(eta)
 }
 
+/// The probabilistic parameter: [`gamma_tilde`]'s `λ`, one value for the
+/// whole oracle. `λ = 7` holds the per-product failure probability
+/// ([`theta_failure_probability`]) at `≈ 7e-11` in every format while
+/// keeping the `F16` iterative bounds informative at instrumented counts
+/// and the `Bf16` SVD value bound informative at order `≤ 3`; larger `λ`
+/// costs the `Bf16` coverage, smaller `λ` costs failure-probability margin.
+pub const PROBABILISTIC_LAMBDA: f64 = 7.0;
+
+/// Higham–Mary's `γ̃_n(λ) = exp(λ√n·u + n·u²/(1−u)) − 1`, `u = ε/2`,
+/// `λ = λ₇` ([`PROBABILISTIC_LAMBDA`]): the probabilistic counterpart of
+/// [`gamma`] for a relative error accumulated as a product `Π(1+δᵢ) − 1`
+/// over `n` roundings.
+///
+/// *Model.* Higham & Mary, "A new approach to probabilistic rounding error
+/// analysis", SIAM J. Sci. Comput. 41(5), A2815–A2835 (2019), Theorem 2.4,
+/// eqs. 2.1, 2.3 (verified against the MIMS EPrint 2018.33 preprint; journal
+/// volume and pages from citing literature): under Model 2.1 — the `δᵢ`
+/// independent mean-zero with `|δᵢ| ≤ u`, an assumption about round-to-nearest
+/// stated here rather than proved — `|Π(1+δᵢ) − 1| ≤ γ̃_n(λ)` with
+/// probability at least `1 − 2exp(−λ²(1−u)²/2)` per product. A sum of terms
+/// is covered the same way (their eq. 2.1): each term carries its own
+/// product, and `γ̃` is increasing in `n`, so the term count bounds them
+/// jointly. The suite union-bounds the failure probability over the run's
+/// products (see the routine bounds); `γ̃` replaces `γ` term by term wherever
+/// the deterministic derivation counts roundings, while data perturbations
+/// (deflation floors) stay deterministic and compose as before.
+///
+/// *Magnitudes.* IEEE rounding perturbs each *result* by relative `u`, and
+/// every rounded result here is `O(‖A‖)` (values) or `O(1)` with
+/// `O(‖A‖)`-sensitivity (rotation/reflector parameters through smooth
+/// formulas), propagated through sensitivity-`1` orthogonal maps — so each
+/// rounding's forward influence is `∼u·‖A‖` and no extra size factor joins
+/// `γ̃_N` (the deterministic derivations' small sizes corroborate the
+/// kernels' stability). The empirical leg is the margin: firing bounds sit
+/// `3–100×` above the measured errors; a systematic undercount would fail
+/// the suite, not hide in it.
+pub fn gamma_tilde(n: f64, eps: f64) -> f64 {
+    let u = eps / 2.0;
+    let lambda = PROBABILISTIC_LAMBDA;
+    (lambda * n.sqrt() * u + n * u * u / (1.0 - u)).exp_m1()
+}
+
+/// The per-product failure probability of [`gamma_tilde`]:
+/// `2exp(−λ²(1−u)²/2)`, `u = ε/2`. The suite asserts each bound over many
+/// entries and cases; the union over a run's products is that many times
+/// this, stated at the call sites, and a flake-free suite run is the
+/// empirical leg (Model 2.1 is conservative for these kernels).
+pub fn theta_failure_probability(eps: f64) -> f64 {
+    let u = eps / 2.0;
+    let lambda = PROBABILISTIC_LAMBDA;
+    2.0 * (-lambda * lambda * (1.0 - u) * (1.0 - u) / 2.0).exp()
+}
+
+/// Inexact roundings on one entry's path through a one-sided Householder
+/// application of length `m`, construction included
+/// (`householder::reflect_in_place` + `apply_left`/`apply_right`): the
+/// construction's two norm reductions (`4m`), `sqrt`, `v₀` and `β` (`3`),
+/// and the application's reduction (`2m`), `β` scale and update (`3`).
+/// Exact ops (`scale_binary`, negations, `×±1`) contribute no `δ` and are
+/// not counted. SIMD reordering changes summation order, not the count.
+fn reflector_roundings(m: usize) -> f64 {
+    6.0 * m as f64 + 6.0
+}
+
+/// Inexact roundings on one entry's path through a one-sided stack-reflector
+/// application (`francis::bulge`): construction (`stack_reflector`, length
+/// `≤ 3`: two reductions and `τ`, `12`) and application (`w`, `β`, update,
+/// `9`). Length-2 chases cost less; `21` covers both.
+const STACK_ROUNDINGS: f64 = 21.0;
+
+/// Inexact roundings on one entry's path through one Givens rotation
+/// (`givens` + application): construction (`r`, `1/r`, `c`, `s`: `7`) and
+/// the `c·a + s·b` update (`3`). Entries written directly from the returned
+/// `r` see only its `4`.
+const ROTATION_ROUNDINGS: f64 = 10.0;
+
 /// `(1 + η)^count − 1`: `count` applications of a relative bound `η`.
 fn repeat(eta: f64, count: f64) -> f64 {
     (count * eta.ln_1p()).exp_m1()
@@ -147,7 +223,11 @@ fn dbdsqr_tol(eps: f64) -> f64 {
 ///   `k − 1` rotations each;
 /// - deflations: at most `k − 1` superdiagonals zeroed, each below
 ///   `dbdsqr`'s `tol` times a diagonal (or the floor, `≤ ε‖A‖_F`), and at
-///   most `k` diagonals zeroed below `u` times their neighbours' sum.
+///   most `k` diagonals zeroed below `u` times their neighbours' sum;
+/// - 2×2 direct diagonalizations (`triangular_svd`): at most `k − 1` firings
+///   (each zeroes a superdiagonal permanently, `continue`ing past the
+///   iteration counter), two values each with `≤ 40` roundings over terms
+///   `≤ 2‖block‖₂.
 pub fn svd(rows: usize, cols: usize, eps: f64) -> f64 {
     let (big, small) = (rows.max(cols), rows.min(cols));
     let k = small as f64;
@@ -157,6 +237,7 @@ pub fn svd(rows: usize, cols: usize, eps: f64) -> f64 {
         repeat(rotation(5, eps), rotations),
         repeat(dbdsqr_tol(eps).max(eps), k - 1.0),
         repeat(eps, k),
+        repeat(entries(2, 40, 2.0, eps), k - 1.0),
     ])
 }
 
@@ -394,8 +475,11 @@ pub fn schur_factors(n: usize, eps: f64) -> (f64, f64) {
 
 /// Per-row error of the accumulated singular vectors `Û` (or `V̂`) against the
 /// exactly orthogonal factors of [`svd`]: the bidiagonalization's reflectors
-/// (at most `k` per side, length `≤ M`) and every QR rotation (`givens`,
-/// `θ₅`), counted for both sides at [`svd`]'s totals.
+/// (at most `k` per side, length `≤ M`), every QR rotation (`givens`,
+/// `θ₅`), counted for both sides at [`svd`]'s totals, and the 2×2 pairs'
+/// factor rotations (each row in at most two pairs — a fired pair's zeroed
+/// superdiagonal never reforms — two one-sided rotations each with
+/// `triangular_svd`'s `(ĉ, ŝ)` carrying `θ₃₅`).
 pub fn svd_vectors(rows: usize, cols: usize, eps: f64) -> f64 {
     let (big, small) = (rows.max(cols), rows.min(cols));
     let k = small as f64;
@@ -403,6 +487,7 @@ pub fn svd_vectors(rows: usize, cols: usize, eps: f64) -> f64 {
     compose(&[
         repeat(householder(big, eps), k),
         repeat(rotation(5, eps), rotations),
+        repeat(2.0 * rotation(35, eps), 2.0),
     ])
 }
 
@@ -416,4 +501,238 @@ pub fn svd_factors(rows: usize, cols: usize, eps: f64) -> (f64, f64) {
     let d = (rows.max(cols) as f64).sqrt() * svd_vectors(rows, cols, eps);
     let orthogonality = 2.0 * d + d * d;
     (eta + orthogonality * (1.0 + eta), orthogonality)
+}
+
+// ---- Probabilistic bounds (Higham–Mary, at instrumented counts). ----
+//
+// The deterministic bounds above compose per-step `γ` at iteration caps,
+// which is vacuous for the iterative routines in `F16`/`Bf16`. These bounds
+// count the same roundings per entry over the run's *actual*
+// transformations (recorded by `leto_ops::transformation_counts`) and apply
+// [`gamma_tilde`] once per entry path: every `θ`-product in the deterministic
+// derivation becomes one `γ̃_N(λ)` with `N` the entry's total rounding
+// count, `λ = λ₇`. Deterministic data perturbations (deflation floors) are
+// not roundings and compose as before, on the good event.
+// Failure probability: union over the run's products, crudely capped by
+// (entries × roundings) × [`theta_failure_probability`]; the call sites
+// state it, and a flake-free suite run is the empirical leg.
+
+/// Inexact roundings on one `H` entry's path through one Francis step: at
+/// most three left and three right one-sided stack-reflector applications
+/// (a length-3 reflector spans a 3-window, so entry `(i, j)` meets the
+/// reflectors with `k ∈ [i−2, i]` from the left and `k ∈ [j−2, j]` from the
+/// right), plus the shift/first-column chain (`≤ 50`) seeding the first
+/// reflector and propagating through the chase.
+const FRANCIS_STEP_ROUNDINGS: f64 = 6.0 * STACK_ROUNDINGS + 50.0;
+
+/// Inexact roundings on one Schur-vector entry's path through one Francis
+/// step: at most three right applications (the row window slides the same
+/// way), plus the same shift chain through the applied reflectors.
+const FRANCIS_VECTORS_STEP_ROUNDINGS: f64 = 3.0 * STACK_ROUNDINGS + 50.0;
+
+/// Inexact roundings on one bidiagonal entry's path through one shifted
+/// `dbdsqr` sweep: the Wilkinson shift (`≤ 20`) plus the two overlapping
+/// `k`-iterations touching the entry (`2 × 26`: two Givens constructions
+/// and the bulge combinations each). Zero-shift sweeps skip the shift;
+/// `75` covers both with margin.
+const DBDSQR_SWEEP_ROUNDINGS: f64 = 75.0;
+
+/// Inexact roundings on one bidiagonal entry's path through one
+/// negligible-diagonal chase: one Givens construction and two multiplies
+/// per touched entry.
+const DBDSQR_CHASE_ROUNDINGS: f64 = 12.0;
+
+/// Inexact roundings on one entry's path through one 2×2 direct
+/// diagonalization (`triangular_svd`): the value chains run `≤ 35`
+/// roundings; `40` covers values and factor rotations alike.
+const DLASV2_ROUNDINGS: f64 = 40.0;
+
+/// Each bidiagonal entry joins at most two 2×2 blocks over a run: firing
+/// zeroes the shared superdiagonal permanently, so the pair can never
+/// reform — an entry is the top of one pair and the bottom of one pair at
+/// most.
+const DLASV2_OCCURRENCES: f64 = 2.0;
+
+/// Per-entry rounding count of the Francis value path: the Hessenberg
+/// reduction (`≤ 2(n−2)` one-sided applications of length `≤ n−1`, both
+/// paths), `steps` Francis steps, the `⌊n/2⌋` `dlanv2` blocks (rotation
+/// `θ_30` applied two-sided, `36` per entry; block entries `40`), and the
+/// `θ_3` read-off. The eigenvalues-only windows only exclude entries, so
+/// the Schur-path count covers both.
+pub fn francis_roundings(n: usize, steps: usize) -> f64 {
+    let hessenberg = 2.0 * n.saturating_sub(2) as f64 * reflector_roundings(n.saturating_sub(1));
+    let chase = steps as f64 * FRANCIS_STEP_ROUNDINGS;
+    let blocks = (n / 2) as f64 * 36.0 + DLASV2_ROUNDINGS + 3.0;
+    hessenberg + chase + blocks
+}
+
+/// Per-entry rounding count of the accumulated Schur vectors: the
+/// Hessenberg reflectors from the right, every Francis step's right
+/// applications, and the `dlanv2` rotations (`36` covers the one-sided
+/// application).
+pub fn francis_vectors_roundings(n: usize, steps: usize) -> f64 {
+    let hessenberg = n.saturating_sub(2) as f64 * reflector_roundings(n.saturating_sub(1));
+    let chase = steps as f64 * FRANCIS_VECTORS_STEP_ROUNDINGS;
+    let blocks = (n / 2) as f64 * 36.0;
+    hessenberg + chase + blocks
+}
+
+/// Per-entry rounding count of the Golub–Kahan value path: the
+/// bidiagonalization (`k` left reflectors of length `≤ M`, `k−1` right of
+/// length `≤ k−1`; [`reflector_roundings`] covers both the `U/V` and the
+/// values-only `larfg` (`3m+4`) constructions), the instrumented sweeps
+/// and chases, and the capped 2×2 direct diagonalizations.
+pub fn svd_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
+    let (big, k) = (rows.max(cols), rows.min(cols));
+    let bidiagonal = k as f64 * reflector_roundings(big)
+        + k.saturating_sub(1) as f64 * reflector_roundings(k.saturating_sub(1));
+    let iteration = sweeps as f64 * DBDSQR_SWEEP_ROUNDINGS + chases as f64 * DBDSQR_CHASE_ROUNDINGS;
+    let direct = DLASV2_OCCURRENCES * DLASV2_ROUNDINGS;
+    bidiagonal + iteration + direct
+}
+
+/// Per-entry rounding count of the accumulated `U`/`V`: `U` meets the `k`
+/// left reflectors and `V` the `k−1` right ones (the max covers both); per
+/// sweep an entry meets two rotations plus the shift chain (`40`); per
+/// chase the pivot row meets `≤ k` rotations, others one.
+pub fn svd_vectors_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
+    let (big, k) = (rows.max(cols), rows.min(cols));
+    let bidiagonal = k as f64 * reflector_roundings(big);
+    let per_sweep = 2.0 * ROTATION_ROUNDINGS + 20.0;
+    let per_chase = ROTATION_ROUNDINGS * k as f64;
+    let iteration = sweeps as f64 * per_sweep + chases as f64 * per_chase;
+    let direct = DLASV2_OCCURRENCES * DLASV2_ROUNDINGS;
+    bidiagonal + iteration + direct
+}
+
+/// Per-entry rounding count of pivoted QR: `min(rows, cols)` one-sided
+/// reflectors of length `≤ rows` on `R` and on the `Q` rows alike. Exact
+/// counts, no instrumentation: the loop trip count is structural.
+pub fn col_piv_qr_roundings(rows: usize, cols: usize) -> f64 {
+    rows.min(cols) as f64 * reflector_roundings(rows)
+}
+
+/// Probabilistic Francis value bound at `steps` instrumented steps: one
+/// `γ̃` over the entry path, composed with the deterministic deflation
+/// floors exactly as in [`francis`].
+pub fn francis_tilde(n: usize, eps: f64, steps: usize) -> f64 {
+    let roundings = gamma_tilde(francis_roundings(n, steps), eps);
+    compose(&[roundings, repeat(4.0 * eps, n.saturating_sub(1) as f64)])
+}
+
+/// Probabilistic Schur-vectors per-row bound at `steps` instrumented steps.
+pub fn francis_vectors_tilde(n: usize, eps: f64, steps: usize) -> f64 {
+    gamma_tilde(francis_vectors_roundings(n, steps), eps)
+}
+
+/// Probabilistic `(residual, orthogonality)` pair, same algebra as
+/// [`schur_factors`].
+pub fn schur_factors_tilde(n: usize, eps: f64, steps: usize) -> (f64, f64) {
+    let eta = francis_tilde(n, eps, steps);
+    let d = (n as f64).sqrt() * francis_vectors_tilde(n, eps, steps);
+    let orthogonality = 2.0 * d + d * d;
+    (eta + orthogonality * (1.0 + eta), orthogonality)
+}
+
+/// Probabilistic SVD value bound at `sweeps`/`chases` instrumented
+/// iterations: one `γ̃` over the entry path, composed with the
+/// deterministic deflation floors exactly as in [`svd`].
+pub fn svd_tilde(rows: usize, cols: usize, eps: f64, sweeps: usize, chases: usize) -> f64 {
+    let roundings = gamma_tilde(svd_roundings(rows, cols, sweeps, chases), eps);
+    let k = rows.min(cols);
+    compose(&[
+        roundings,
+        repeat(dbdsqr_tol(eps).max(eps), k.saturating_sub(1) as f64),
+        repeat(eps, k as f64),
+    ])
+}
+
+/// Probabilistic `U`/`V` per-row bound at instrumented iterations.
+pub fn svd_vectors_tilde(rows: usize, cols: usize, eps: f64, sweeps: usize, chases: usize) -> f64 {
+    gamma_tilde(svd_vectors_roundings(rows, cols, sweeps, chases), eps)
+}
+
+/// Probabilistic `(residual, orthogonality)` pair, same algebra as
+/// [`svd_factors`].
+pub fn svd_factors_tilde(
+    rows: usize,
+    cols: usize,
+    eps: f64,
+    sweeps: usize,
+    chases: usize,
+) -> (f64, f64) {
+    let eta = svd_tilde(rows, cols, eps, sweeps, chases);
+    let d = (rows.max(cols) as f64).sqrt() * svd_vectors_tilde(rows, cols, eps, sweeps, chases);
+    let orthogonality = 2.0 * d + d * d;
+    (eta + orthogonality * (1.0 + eta), orthogonality)
+}
+
+/// Probabilistic pivoted-QR bound: one `γ̃` over the entry path with the
+/// `Q`-row accumulation algebra of [`col_piv_qr`].
+pub fn col_piv_qr_tilde(rows: usize, cols: usize, eps: f64) -> f64 {
+    let eta = gamma_tilde(col_piv_qr_roundings(rows, cols), eps);
+    eta + (rows as f64).sqrt() * eta * (1.0 + eta)
+}
+
+/// Inexact roundings on one tridiagonal entry's path through one implicit-QL
+/// sweep (`symmetric_qr/ql.rs`): the Wilkinson-shift formation (`≤ 15`),
+/// the two overlapping rotations touching the entry (`2 × 24`, the
+/// `θ₆` Givens plus bulge combinations each), the tail chain (`7`), and
+/// the shift accumulation (`1`). `75` covers with margin.
+const QL_SWEEP_ROUNDINGS: f64 = 75.0;
+
+/// Per-entry rounding count of the tridiagonal-QL value path: the
+/// reduction (`n − 2` rank-2 updates, each a sequential `θ` of length
+/// `17n + 42` per [`householder_rank2`]'s derivation), `sweeps`
+/// instrumented sweeps, and the final `dₗ + σ` rounding. The eigenvalues-only
+/// and vector paths share the iteration; deflations stay deterministic.
+pub fn ql_roundings(n: usize, sweeps: usize) -> f64 {
+    let nf = n as f64;
+    let reduction = (nf - 2.0).max(0.0) * (17.0 * nf + 42.0);
+    let iteration = sweeps as f64 * QL_SWEEP_ROUNDINGS;
+    reduction + iteration + 1.0
+}
+
+/// Per-row rounding count of the accumulated QL eigenvectors: the
+/// reduction's reflectors one-sided plus two rotations (`θ₆`, `8`
+/// roundings each with the application) per sweep.
+pub fn ql_vectors_roundings(n: usize, sweeps: usize) -> f64 {
+    let nf = n as f64;
+    let reduction = (nf - 2.0).max(0.0) * reflector_roundings(n);
+    let iteration = sweeps as f64 * 16.0;
+    reduction + iteration
+}
+
+/// Probabilistic QL value bound at `sweeps` instrumented sweeps: one `γ̃`
+/// over the entry path, composed with the deterministic deflation floors
+/// exactly as in [`ql`].
+pub fn ql_tilde(n: usize, eps: f64, sweeps: usize) -> f64 {
+    let roundings = gamma_tilde(ql_roundings(n, sweeps), eps);
+    compose(&[roundings, repeat(eps, n as f64 - 1.0)])
+}
+
+/// Probabilistic QL-vectors per-row bound at instrumented sweeps.
+pub fn ql_vectors_tilde(n: usize, eps: f64, sweeps: usize) -> f64 {
+    gamma_tilde(ql_vectors_roundings(n, sweeps), eps)
+}
+
+/// The probabilistic oracle's failure budget: with `λ = λ₇` the per-product
+/// failure probability is `≈ 7e-11` in every format, so the runs' union
+/// (thousands of products each over hundreds of firing cases) stays
+/// negligible. Pins the knob: lowering `λ` to chase vacuous bounds would
+/// explode this.
+#[test]
+fn probabilistic_oracle_failure_budget_stays_negligible() {
+    for eps in [
+        f64::EPSILON,
+        f32::EPSILON as f64,
+        2.0f64.powi(-10),
+        2.0f64.powi(-7),
+    ] {
+        let p = theta_failure_probability(eps);
+        assert!(
+            p < 1e-9,
+            "λ₇ must hold the per-product failure probability below 1e-9 at ε = {eps:e}, got {p:e}"
+        );
+    }
 }

@@ -124,6 +124,7 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     n: usize,
 ) -> Result<()> {
     if n < 3 {
+        crate::application::linalg::transformation_counts::record_francis_steps(0);
         return Ok(()); // 0/1: trivial; 2: a single block, standardized later.
     }
     // Reusable left-apply accumulator `w`, sized to the widest possible column
@@ -144,6 +145,7 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
     };
     let mut hi = n - 1;
     let mut iter = 0usize;
+    let mut total = 0usize;
     let cap = iteration_cap(n);
     loop {
         // Bottom-most unreduced block: scan up while the subdiagonal is
@@ -189,6 +191,7 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
                 tol: ulp.to_f64(),
             });
         }
+        total += 1;
         francis_step::<T, ACCUMULATE_Q>(
             h,
             z,
@@ -199,5 +202,6 @@ pub(super) fn run<T: RealScalar, const ACCUMULATE_Q: bool>(
             &mut workspace,
         );
     }
+    crate::application::linalg::transformation_counts::record_francis_steps(total);
     Ok(())
 }

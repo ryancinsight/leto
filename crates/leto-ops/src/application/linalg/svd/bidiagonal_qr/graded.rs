@@ -256,8 +256,9 @@ fn iterate<T: RealScalar>(d0: &[f64], e0: &[f64]) -> (Vec<f64>, usize) {
         .map(|&x| T::from_f64(x))
         .chain([T::ZERO])
         .collect();
-    let sweeps = qr_iterate::<T, false>(&mut d, &mut e, d0.len(), &mut TransposedFactors::none())
+    let counts = qr_iterate::<T, false>(&mut d, &mut e, d0.len(), &mut TransposedFactors::none())
         .expect("a graded bidiagonal converges");
+    let sweeps = counts.total();
     let mut sigma: Vec<f64> = d.iter().map(|x| x.to_f64().abs()).collect();
     sigma.sort_by(f64::total_cmp);
     (sigma, sweeps)
