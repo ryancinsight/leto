@@ -57,6 +57,8 @@ pub mod svd;
 pub mod symmetric_qr;
 /// Shared relative thresholds for dense factorizations.
 pub(crate) mod thresholds;
+/// Instrumented transformation counts backing the probabilistic error oracle.
+pub mod transformation_counts;
 /// Symmetric indefinite unpivoted `U D Uᵀ` factorization.
 pub mod udu;
 
@@ -92,6 +94,7 @@ pub use qr::{qr_decompose, solve_least_squares, QrDecomposition};
 pub use schur::{schur, RealSchur};
 pub use svd::{pinv, singular_values, svd_decompose, SvdDecomposition};
 pub use symmetric_qr::{symmetric_eigen_qr, SymmetricEigenWorkspace};
+pub use transformation_counts::{take_dbdsqr_counts, take_francis_steps, take_ql_sweeps};
 pub use udu::{udu_decompose, UduDecomposition};
 
 /// Complex linear algebra (re-export).

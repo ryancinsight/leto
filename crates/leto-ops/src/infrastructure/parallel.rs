@@ -90,7 +90,7 @@ pub(crate) fn parallelize_bandwidth_bound<T>(len: usize, operands: usize) -> boo
     let working_set = len
         .saturating_mul(operands)
         .saturating_mul(core::mem::size_of::<T>());
-    working_set > crate::infrastructure::cache::cached_cache_geometry().l3_bytes()
+    crate::infrastructure::cache::working_set_spills_llc(working_set)
 }
 
 /// Whether a compute-bound elementwise op over `len` elements should run in

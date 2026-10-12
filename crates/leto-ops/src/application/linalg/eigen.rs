@@ -1,4 +1,5 @@
 use crate::application::linalg::scaling::{self, GateBound};
+use crate::application::linalg::symmetric_qr::symmetric_eigen_qr;
 use crate::application::linalg::thresholds::{machine_epsilon, scaled_frobenius};
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
@@ -116,17 +117,7 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     tolerance: T,
 ) -> Result<Vec<T>> {
-    let [rows, cols] = matrix.shape();
-    if rows != cols {
-        return Err(LetoError::ShapeMismatch {
-            lhs: vec![rows, cols],
-            rhs: vec![rows, rows],
-        });
-    }
-    let n = rows;
-    let mut a = copy_row_major(matrix);
-    validate_symmetric_input(&a, n, tolerance)?;
-    mirror_upper_triangle(&mut a, n);
+    let (mut a, n) = validated_upper_mirror(matrix, tolerance)?;
     let exponent = jacobi_gate_exponent(&a)?;
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut target = NoEigenvectors;
@@ -144,6 +135,44 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     Ok(sort_diagonal(&a, n))
 }
 
+/// Copy `matrix` to row-major storage, enforcing the symmetric-input
+/// contract (square, finite, asymmetry within [`symmetry_bound`]), and
+/// mirror the upper triangle over the lower.
+///
+/// Both the Jacobi solver and the QL-routed
+/// [`MatrixDecompose::symmetric_eigen`](super::matrix::MatrixDecompose::symmetric_eigen)
+/// start from this identical resolved matrix, so the route changes only the
+/// diagonalization kernel, never the accepted set or the resolved values.
+pub(crate) fn validated_upper_mirror<T: RealScalar>(
+    matrix: &ArrayView2<'_, T>,
+    tolerance: T,
+) -> Result<(Vec<T>, usize)> {
+    let [rows, cols] = matrix.shape();
+    if rows != cols {
+        return Err(LetoError::ShapeMismatch {
+            lhs: vec![rows, cols],
+            rhs: vec![rows, rows],
+        });
+    }
+    let n = rows;
+    let mut a = copy_row_major(matrix);
+    validate_symmetric_input(&a, n, tolerance)?;
+    mirror_upper_triangle(&mut a, n);
+    Ok((a, n))
+}
+
+/// Route the [`MatrixDecompose::symmetric_eigen`](super::matrix::MatrixDecompose::symmetric_eigen)
+/// contract through the QL solver: the identical accepted set and
+/// upper-triangle resolution as the Jacobi entry, diagonalized by
+/// Householder tridiagonalization and implicit-shift QL.
+pub(crate) fn symmetric_eigen_via_ql<T: RealScalar>(
+    matrix: &ArrayView2<'_, T>,
+) -> Result<SymmetricEigenDecomposition<T>> {
+    let (storage, n) = validated_upper_mirror(matrix, default_tolerance::<T>())?;
+    let mirror = Array2::from_shape_vec([n, n], storage)?;
+    symmetric_eigen_qr(&mirror.view())
+}
+
 /// Compute the eigendecomposition of a real symmetric matrix with an explicit
 /// relative tolerance.
 ///
@@ -158,7 +187,7 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
 /// a matrix assembled symmetric in exact arithmetic can carry. Only the upper
 /// triangle (diagonal included) is then used: it is mirrored onto the lower
 /// before the first rotation, so an accepted asymmetric input is resolved by
-/// its upper triangle. ([`symmetric_eigen_qr`](crate::symmetric_eigen_qr)
+/// its upper triangle. (`symmetric_eigen_qr`
 /// resolves by the lower triangle instead, the LAPACK `uplo = 'L'` convention.)
 ///
 /// # Errors
@@ -173,17 +202,7 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     matrix: &ArrayView2<'_, T>,
     tolerance: T,
 ) -> Result<SymmetricEigenDecomposition<T>> {
-    let [rows, cols] = matrix.shape();
-    if rows != cols {
-        return Err(LetoError::ShapeMismatch {
-            lhs: vec![rows, cols],
-            rhs: vec![rows, rows],
-        });
-    }
-    let n = rows;
-    let mut a = copy_row_major(matrix);
-    validate_symmetric_input(&a, n, tolerance)?;
-    mirror_upper_triangle(&mut a, n);
+    let (mut a, n) = validated_upper_mirror(matrix, tolerance)?;
     let exponent = jacobi_gate_exponent(&a)?;
     scaling::scale_by_power_of_two(&mut a, -exponent);
     let mut v = identity::<T>(n);

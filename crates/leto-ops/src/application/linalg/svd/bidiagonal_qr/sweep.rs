@@ -73,23 +73,39 @@ impl<T: RealScalar> SweepWindows<T> {
 /// down"), so a graded block converges its smallest singular value at the
 /// small end and keeps it to high relative accuracy whichever end is small.
 ///
-/// Returns the number of iterations run: sweeps (zero-shift or shifted)
-/// and negligible-diagonal chases — an upper bound on the `K` of Demmel &
-/// Kahan's accumulated relative error bound (Theorem 6: `69·K·n²·ε` to first
-/// order for `K` zero-shift sweeps).
+/// The iterations [`qr_iterate`] ran, split for the probabilistic error
+/// oracle (sweeps and chases cost different roundings per entry).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct IterationCounts {
+    /// Zero-shift or shifted sweeps ([`sweep`]).
+    pub(super) sweeps: usize,
+    /// Negligible-diagonal chases (row or column).
+    pub(super) chases: usize,
+}
+
+impl IterationCounts {
+    /// Total iterations: sweeps and chases — an upper bound on the `K` of
+    /// Demmel & Kahan's accumulated relative error bound (Theorem 6:
+    /// `69·K·n²·ε` to first order for `K` zero-shift sweeps).
+    pub(super) fn total(self) -> usize {
+        self.sweeps + self.chases
+    }
+}
+
+/// Returns the iterations run ([`IterationCounts`]).
 pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
     d: &mut [T],
     e: &mut [T],
     k: usize,
     factors: &mut TransposedFactors<'_, T>,
-) -> Result<usize> {
+) -> Result<IterationCounts> {
     if k <= 1 {
-        return Ok(0);
+        return Ok(IterationCounts::default());
     }
     let windows = SweepWindows::new();
     let deflation = Deflation::new(d, e, k);
     let mut q = k - 1;
-    let mut iter = 0usize;
+    let mut counts = IterationCounts::default();
     // The block the last sweep ran on and its chase direction (`dbdsqr`'s
     // `OLDLL`, `OLDM`, `IDIR`).
     let mut chased: Option<(usize, usize, Direction)> = None;
@@ -101,7 +117,7 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             q -= 1;
         }
         if q == 0 {
-            return Ok(iter);
+            return Ok(counts);
         }
         // Top of the bottom-most unreduced block: scan up, splitting at the
         // first `|e| ≤ thresh` (`dbdsqr`'s scan). A split at the bottom itself
@@ -152,8 +168,10 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
         }
         chased = Some((p, q, direction));
 
-        iter += 1;
-        if iter > MAX_ITER {
+        // Cap semantics preserved: at most `MAX_ITER` passes run, as when one
+        // counter covered both (`iter += 1; iter > MAX_ITER` ⟺ the
+        // `(MAX_ITER + 1)`th pass fails before running).
+        if counts.total() >= MAX_ITER {
             return Err(leto::LetoError::StorageError {
                 reason: "bidiagonal SVD QR failed to converge".to_string(),
             });
@@ -172,6 +190,7 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             } else {
                 chase_negligible_diagonal_column::<T, VEC>(d, e, p, q, factors, windows.rotation);
             }
+            counts.chases += 1;
             continue;
         }
 
@@ -179,6 +198,7 @@ pub(super) fn qr_iterate<T: RealScalar, const VEC: bool>(
             Direction::Down => sweep::<T, VEC, Down>(d, e, p, q, deflation, factors, windows),
             Direction::Up => sweep::<T, VEC, Up>(d, e, p, q, deflation, factors, windows),
         }
+        counts.sweeps += 1;
     }
 }
 

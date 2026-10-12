@@ -85,6 +85,41 @@ fn uniform_integral_is_step_independent() {
     );
 }
 
+/// The domain is the ray from its origin in world units: doubling the
+/// direction halves the parameter chord but the world chord stays 16
+/// (integral 4); a ray starting at x = 4 inside the volume integrates
+/// t in [0, 12] (integral 3); a backward ray and a zero direction
+/// integrate to exactly zero.
+#[test]
+fn ray_domain_uses_world_units_from_its_origin() {
+    let field = build_field(|_, _, _| 0.25);
+    let rays = Array::from_shape_vec([1, 6], vec![-10.0, 4.0, 4.0, 2.0, 0.0, 0.0]).unwrap();
+    let out = ray_line_integrals(&field.view(), ORIGIN, SPACING, &rays.view(), 0.5).unwrap();
+    let got = out.storage().as_slice()[0];
+    assert!(
+        (got - 4.0).abs() < SUM_BOUND,
+        "non-unit direction integral {got} != 4.0"
+    );
+    let rays = Array::from_shape_vec(
+        [3, 6],
+        vec![
+            4.0, 4.0, 4.0, 1.0, 0.0, 0.0, // inside origin
+            -10.0, 4.0, 4.0, -1.0, 0.0, 0.0, // backward
+            4.0, 4.0, 4.0, 0.0, 0.0, 0.0, // zero direction
+        ],
+    )
+    .unwrap();
+    let out = ray_line_integrals(&field.view(), ORIGIN, SPACING, &rays.view(), 0.5).unwrap();
+    let got = out.storage().as_slice();
+    assert!(
+        (got[0] - 3.0).abs() < SUM_BOUND,
+        "inside-origin integral {} != 3.0",
+        got[0]
+    );
+    assert_eq!(got[1], 0.0, "a backward ray must integrate to 0");
+    assert_eq!(got[2], 0.0, "a zero direction must integrate to 0");
+}
+
 /// An output shorter than the ray count is rejected and untouched.
 #[test]
 fn short_output_is_rejected_untouched() {

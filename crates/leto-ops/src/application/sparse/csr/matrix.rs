@@ -1,11 +1,5 @@
-//! Compressed Sparse Row (CSR) storage — the solve/kernel-facing sparse format.
-//!
-//! See the [module theorem](super) for the representation identity and the
-//! `O(nnz)` kernel-complexity argument. CSR is the format [`spmv`](super::spmv)
-//! and [`spmm`](super::spmm) consume; assembly happens in
-//! [`CooMatrix`](super::CooMatrix), which converts here via
-//! [`CooMatrix::to_csr`](super::CooMatrix::to_csr).
-
+use super::structure::validate_csr_parts;
+use super::views::{CsrRow, CsrView};
 use crate::domain::real::RealScalar;
 use crate::domain::scalar::Scalar;
 use eunomia::FloatElement;
@@ -25,166 +19,6 @@ pub struct CsrMatrix<T> {
     row_ptr: Vec<usize>,
     nrows: usize,
     ncols: usize,
-}
-
-/// Borrowed view over one CSR row.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CsrRow<'a, T> {
-    col_indices: &'a [usize],
-    values: &'a [T],
-}
-
-impl<'a, T> CsrRow<'a, T> {
-    /// Borrow the row column indices.
-    #[must_use]
-    #[inline]
-    pub fn col_indices(&self) -> &'a [usize] {
-        self.col_indices
-    }
-
-    /// Borrow the row values.
-    #[must_use]
-    #[inline]
-    pub fn values(&self) -> &'a [T] {
-        self.values
-    }
-
-    /// Number of stored entries in this row.
-    #[must_use]
-    #[inline]
-    pub fn nnz(&self) -> usize {
-        self.values.len()
-    }
-}
-
-/// Validate CSR parts against the [`CsrMatrix`] invariants.
-///
-/// Shared SSOT of [`CsrMatrix::from_parts`] and [`CsrView::from_slices`]:
-/// identical triples accept/reject identically with identical messages.
-/// Slice-only, so owned and borrowed construction validate the same way.
-fn validate_csr_parts(
-    nnz: usize,
-    col_indices: &[usize],
-    row_ptr: &[usize],
-    nrows: usize,
-    ncols: usize,
-) -> Result<()> {
-    let bad = |reason: &str| LetoError::StorageError {
-        reason: format!("invalid CSR: {reason}"),
-    };
-    let expected_row_ptr_len = nrows
-        .checked_add(1)
-        .ok_or_else(|| LetoError::StorageError {
-            reason: "invalid CSR: nrows + 1 overflows usize".to_string(),
-        })?;
-    if row_ptr.len() != expected_row_ptr_len {
-        return Err(bad("row_ptr length must be nrows + 1"));
-    }
-    if col_indices.len() != nnz {
-        return Err(bad("col_indices and values lengths differ"));
-    }
-    if row_ptr[0] != 0 || *row_ptr.last().expect("nrows+1 >= 1") != nnz {
-        return Err(bad("row_ptr must start at 0 and end at nnz"));
-    }
-    if row_ptr.windows(2).any(|w| w[0] > w[1]) {
-        return Err(bad("row_ptr must be non-decreasing"));
-    }
-    if col_indices.iter().any(|&j| j >= ncols) {
-        return Err(bad("column index out of range"));
-    }
-    for window in row_ptr.windows(2) {
-        let row_cols = &col_indices[window[0]..window[1]];
-        if row_cols.windows(2).any(|cols| cols[0] >= cols[1]) {
-            return Err(bad(
-                "column indices in each row must be strictly increasing",
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Borrowed CSR matrix view: the validated [`CsrMatrix`] triple without owning it.
-///
-/// Construct with [`CsrView::from_slices`] (validates the [`CsrMatrix`]
-/// invariants over borrowed slices — zero-copy, the view aliases its inputs)
-/// or reborrow an owned matrix with [`CsrMatrix::as_view`]. The SpMV/SpMM
-/// kernels consume the view ([`spmv_view_into`](super::spmv_view_into),
-/// [`spmm_view_into`](super::spmm_view_into)); the owned-matrix `_into`
-/// entries keep their signatures and delegate through [`CsrMatrix::as_view`].
-/// Structural and mutating operations stay on [`CsrMatrix`].
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CsrView<'a, T> {
-    values: &'a [T],
-    col_indices: &'a [usize],
-    row_ptr: &'a [usize],
-    nrows: usize,
-    ncols: usize,
-}
-
-impl<'a, T> CsrView<'a, T> {
-    /// Borrow CSR parts after validating the [`CsrMatrix`] invariants.
-    ///
-    /// # Errors
-    /// [`LetoError::StorageError`] on the same conditions as
-    /// [`CsrMatrix::from_parts`] (shared validator).
-    pub fn from_slices(
-        values: &'a [T],
-        col_indices: &'a [usize],
-        row_ptr: &'a [usize],
-        nrows: usize,
-        ncols: usize,
-    ) -> Result<Self> {
-        validate_csr_parts(values.len(), col_indices, row_ptr, nrows, ncols)?;
-        Ok(Self {
-            values,
-            col_indices,
-            row_ptr,
-            nrows,
-            ncols,
-        })
-    }
-
-    /// `(nrows, ncols)`.
-    #[must_use]
-    #[inline]
-    pub fn shape(&self) -> (usize, usize) {
-        (self.nrows, self.ncols)
-    }
-
-    /// Number of stored nonzero entries.
-    #[must_use]
-    #[inline]
-    pub fn nnz(&self) -> usize {
-        self.values.len()
-    }
-
-    /// Number of rows.
-    #[must_use]
-    #[inline]
-    pub fn nrows(&self) -> usize {
-        self.nrows
-    }
-
-    /// Number of columns.
-    #[must_use]
-    #[inline]
-    pub fn ncols(&self) -> usize {
-        self.ncols
-    }
-
-    /// Borrow the column indices.
-    #[must_use]
-    #[inline]
-    pub fn col_indices(&self) -> &'a [usize] {
-        self.col_indices
-    }
-
-    /// Borrowed CSR arrays `(values, col_indices, row_ptr)` for kernels.
-    #[must_use]
-    #[inline]
-    pub fn as_parts(&self) -> (&[T], &[usize], &[usize]) {
-        (self.values, self.col_indices, self.row_ptr)
-    }
 }
 
 impl<T: Scalar> CsrMatrix<T> {
@@ -308,7 +142,7 @@ impl<T: Scalar> CsrMatrix<T> {
     }
 
     /// Borrowed CSR arrays `(values, col_indices, row_ptr)` — zero-copy, for
-    /// kernels (e.g. [`spmv`](super::spmv)) and for bridging to an external SpMV
+    /// kernels (e.g. [`spmv`](super::super::spmv)) and for bridging to an external SpMV
     /// backend.
     #[must_use]
     #[inline]

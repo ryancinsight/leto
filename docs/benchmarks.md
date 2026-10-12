@@ -394,6 +394,39 @@ regress, (b) trailing-update copies eliminated via matmul into strided
 views, (c) the win verified past the LLC on a quiet host. `lu_scaling` and
 a large-n `P·A=L·U` reconstruction test are retained as coverage.
 
+## Blocked LU gate landed (2026-10-10)
+
+Re-opened per the three conditions, on the same 36 MiB-L3 host
+(Intel Core Ultra 9 285K), quiet (0 cargo/rustc processes):
+
+- (a) `lu_decompose` dispatches on `n²·elem > l3_bytes` through the shared
+  `working_set_spills_llc` threshold (the parallel policy's comparison,
+  factored into `infrastructure::cache` so the spill point is one
+  definition); f64 routes blocked at n ≥ 2173.
+- (b) Right-looking blocked LU (LAPACK `dgetrf` shape, 64-wide panels,
+  partial pivoting): the panel factorizes through the same unblocked step
+  kernel, the top block row solves in place, and the trailing update runs
+  `A22 += (−L21)·U12` through `matmul_accumulate` with packed contiguous
+  panels (buffers sized once, reused every step) and a strided trailing
+  view — no extraction beyond the packing the GEMM's dispatch performs
+  for strided inputs anyway.
+- (c) `lu_scaling` (cache-resident, unblocked path): 128² 100.7 µs →
+  97.7 µs, 256² 721 µs → 681 µs, 512² 6.75 ms → 6.34 ms — no regression
+  (the step-kernel extraction is codegen-neutral). New
+  `lu_scaling_past_llc`: 2048² (33.5 MiB, unblocked at the boundary)
+  747 ms; 3072² (75 MiB, blocked) 702 ms — faster in absolute terms at
+  3.375× the flops, ≈3.6× against the cubic extrapolation of the
+  unblocked path (2.52 s; conservative, since unblocked scales
+  cubic-or-worse past the LLC). The blocked win compounds BLAS-3
+  intensity with the GEMM's parallel dispatch, which the serial axpy
+  path never had.
+
+Coverage: six unit tests (f64/f32 differential vs unblocked, bitwise
+identity at sub-panel orders, partial-panel, singular parity, gate
+boundary pins incl. `>`-vs-`>=` and saturation) plus
+`lu_reconstructs_past_the_llc`, which reconstructs `P·A = L·U` through
+`matmul` at the smallest spilling order (2173 here, capped at 2600).
+
 ## Layout-copy / assign kernel (Apollo FFT gather/scatter, 2026-08-26)
 
 Apollo's non-contiguous 2-D/3-D FFT axis passes use caller-owned scratch and

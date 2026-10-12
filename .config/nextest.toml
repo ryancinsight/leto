@@ -15,3 +15,18 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 # exposes — not a reason to raise the number again.
 [profile.miri]
 slow-timeout = { period = "300s", terminate-after = 2 }
+
+# `lu_reconstructs_past_the_llc` exercises the blocked-LU path at the host's
+# LLC spill boundary (n = sqrt(l3/8) + 1, capped at 2600): its purpose is
+# correctness at the scale the gate engages, so the workload is analytically
+# irreducible — a smaller fixed n stays cache-resident on large-L3 hosts and
+# defeats the test. Total work is ~47 GFLOP (factor 2n³/3 + two n³
+# reconstruction matmuls at n = 2600); the reference host measures the whole
+# test at ~2 s (40+ GFLOP/s), while a hosted CI runner runs 10-30x slower on
+# the memory-bound blocked path. The 150 s period (terminate at 300 s) is
+# that measured ceiling with the same 2x headroom every other budget here
+# carries; a CI run exceeding it still fails visibly rather than hanging the
+# suite.
+[[profile.default.overrides]]
+filter = 'test(=lu_reconstructs_past_the_llc)'
+slow-timeout = { period = "150s", terminate-after = 2 }

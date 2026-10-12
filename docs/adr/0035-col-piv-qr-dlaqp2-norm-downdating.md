@@ -96,7 +96,13 @@ ratio (`[0, 2, 1]`, gap 4.0e-4 against `τ = 7.0e-6`); and a stale estimate of
 ratio 1.0e-12 to the reference but 1.0e-7 to the current key, recomputed only
 with the reference as denominator (`[0, 1, 2, 3]`, gap 2.5e-5 against
 `τ = 1.07e-5`). Replacing `TOL3Z` by `ε`, `u` or 0, rooting the ratio, or
-dividing by the current key each fails the suite (PR #290).
+dividing by the current key each fails the suite (PR #290; the `u` mutant
+kills exactly the two threshold tests, re-verified on takeover). The
+fixtures sit below the threshold boundary, so they pin recompute behavior
+across a band, not the boundary itself; the exact constant is pinned by
+`recompute_threshold_is_sqrt_unit_roundoff`, which re-derives `u` per
+format from the IEEE exponents and fails on a halved or doubled threshold
+(mutation-proved on takeover).
 
 *Replaced assertions.* The downdate commit of PR #290 asserted exact
 permutations and bitwise `Q`, `R` equality with an exact-recompute reference

@@ -150,6 +150,7 @@ pub(super) fn diagonalize<T: RealScalar>(
         off_diagonal[l] = T::ZERO;
     }
     sort_ascending(diagonal, vectors, n);
+    crate::application::linalg::transformation_counts::record_ql_sweeps(sweeps);
     Ok(())
 }
 

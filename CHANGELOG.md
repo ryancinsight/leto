@@ -295,6 +295,13 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   fast paths instead of canonical C order only.
 - [patch] The strided-output matmul fallback accumulates into its pre-zeroed
   scratch instead of asking the kernel to zero it a second time.
+- [patch] `MatrixDecompose::symmetric_eigen` routes through the QL solver
+  (`symmetric_eigen_qr`) instead of classical Jacobi: 60x60 SPD at
+  [75.5, 76.0, 76.5] us on the local Windows workstation (one Criterion run;
+  the 6.2 ms Jacobi figure is ritk's MP-PCA Gram workload on its own host,
+  not a paired control). The accepted set and upper-triangle resolution are
+  unchanged; `symmetric_eigen_jacobi` remains the high-relative-accuracy
+  option.
 
 ### Removed
 

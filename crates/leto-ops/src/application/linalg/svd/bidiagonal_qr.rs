@@ -115,7 +115,11 @@ fn singular_values_of_balanced<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Res
     };
     let k = rows.min(cols);
 
-    qr_iterate::<T, false>(&mut d, &mut e, k, &mut TransposedFactors::none())?;
+    let counts = qr_iterate::<T, false>(&mut d, &mut e, k, &mut TransposedFactors::none())?;
+    crate::application::linalg::transformation_counts::record_dbdsqr_counts(
+        counts.sweeps,
+        counts.chases,
+    );
 
     let mut sigmas: Vec<T> = d.into_iter().map(|x| x.abs()).collect();
     sigmas.sort_by(|a, b| {
@@ -188,12 +192,16 @@ fn svd_tall<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<(Array2<T>, Vec
         }
     }
 
-    qr_iterate::<T, true>(
+    let counts = qr_iterate::<T, true>(
         &mut d,
         &mut e,
         n,
         &mut TransposedFactors::new(&mut ut, m, &mut vt, n),
     )?;
+    crate::application::linalg::transformation_counts::record_dbdsqr_counts(
+        counts.sweeps,
+        counts.chases,
+    );
 
     // Force σ ≥ 0: a negative pivot flips the sign of its left singular vector
     // (column `i` of `U` = row `i` of `ut`, contiguous).
