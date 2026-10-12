@@ -8,7 +8,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-MAXIMUM_SUITE_SECONDS = 300
+# 370 s is the measured suite bound (2026-10-12, warm shared target under
+# in-suite heat): kernels 165 + leapfrog 56 + col_piv_qr 25 + layout_copy 40
+# + lbfgs 75 = 361 s of per-target ceilings plus the metadata and
+# termination slack.
+MAXIMUM_SUITE_SECONDS = 370
 
 
 class ConfigurationError(ValueError):

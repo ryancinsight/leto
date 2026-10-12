@@ -43,13 +43,15 @@ failure stops the run rather than falling back to killing only the parent.
 Standard benchmark output remains attached to the terminal so Criterion
 medians and confidence intervals can be recorded directly.
 
-The runner requires Python 3.11 or newer and uses only the standard library.
-Run its value and process-tree tests from scripts/ with
-python -m unittest discover -s tests/bench -t tests -p 'test_*.py'; CI runs the
-same suite. On Windows, child processes start suspended and enter a Job Object
-before resuming. Cleanup uses bounded completion-port waits and verifies the
-kernel's active-process count; it does not wait on the Job Object handle or
-leave descendants behind after a successful parent exit.
+The runner requires Python 3.11 or newer. Process-tree ownership — the
+Windows Job Object, the POSIX process-group supervisor, interrupts inside the
+launch window, and bounded cleanup — is Atlas's (ADR 0067): this repository
+consumes Atlas's `scripts/process_tree.py` from an exact checkout of the
+pinned commit `ATLAS_PIN`, verified before import; standalone CI materializes
+the checkout and names it through `ATLAS_TOOLING_CHECKOUT`. Run the runner's
+value and consumer tests from scripts/ with
+python -m unittest discover -s tests/bench -t tests -p 'test_*.py'; CI runs
+the same suite against the pinned checkout.
 
 A completed run proves that the declared binaries finished inside the committed
 wall-clock budgets and supplies empirical Criterion estimates for that host and

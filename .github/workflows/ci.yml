@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  ATLAS_PIN: b94ee304b83fbdc1a1542af66ba4668ebda2ae15
   CARGO_INCREMENTAL: "0"
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: 1.97.0
@@ -66,8 +67,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Materialize the pinned Atlas tooling checkout
+        # ADR 0067: the bench runner consumes Atlas's process-tree runner from
+        # an exact sparse checkout of the pinned commit, never a moving branch.
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/ryancinsight/atlas.git "$RUNNER_TEMP/atlas"
+          git -C "$RUNNER_TEMP/atlas" checkout "$ATLAS_PIN"
+
       - name: Test bounded benchmark runner
         working-directory: scripts
+        env:
+          ATLAS_TOOLING_CHECKOUT: ${{ runner.temp }}/atlas
         run: python -m unittest discover -s tests/bench -t tests -p 'test_*.py'
 
       - name: Install the pinned Rust toolchain

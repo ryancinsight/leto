@@ -45,10 +45,10 @@ class BudgetTests(unittest.TestCase):
         configuration = load_configuration(REPOSITORY / ".config" / "bench.toml")
         self.assertEqual(sum(
             budget.ceiling_seconds for budget in configuration.targets.values()
-        ), 297)
-        self.assertEqual(configuration.suite_seconds, 300)
+        ), 361)
+        self.assertEqual(configuration.suite_seconds, 370)
         self.assertEqual(configuration.targets["col_piv_qr"], TargetBudget(18, 7, 25))
-        self.assertEqual(configuration.targets["kernels"].criterion_seconds, 111)
+        self.assertEqual(configuration.targets["kernels"].criterion_seconds, 116)
         self.assertEqual(select_targets(["col_piv_qr"], configuration), ["col_piv_qr"])
 
     def test_valid_budget_parses_to_typed_values(self) -> None:
@@ -138,7 +138,7 @@ class BudgetTests(unittest.TestCase):
 
     def test_suite_limit_and_empty_target_map_are_rejected(self) -> None:
         document = valid_document()
-        document["suite_seconds"] = 301
+        document["suite_seconds"] = 371
         with self.assertRaisesRegex(ConfigurationError, "maximum is"):
             parse_configuration(document)
 
