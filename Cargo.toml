@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.45.1"
+version = "0.45.2"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -17,8 +17,8 @@ readme = "README.md"
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──
-leto = { version = "0.45.1", path = "crates/leto" }
-leto-ops = { version = "0.45.1", path = "crates/leto-ops" }
+leto = { version = "0.45.2", path = "crates/leto" }
+leto-ops = { version = "0.45.2", path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
 # Mnemosyne main already follows Eunomia's merged provider source; the lockfile
@@ -26,7 +26,7 @@ leto-ops = { version = "0.45.1", path = "crates/leto-ops" }
 mnemosyne = { package = "mnemosyne-memory", version = "0.9.0", git = "https://github.com/ryancinsight/Mnemosyne", features = ["eunomia"] }
 # Moirai PR #256 merged to the default branch; the lockfile records its
 # resolved source identity without a temporary revision pin.
-moirai = { package = "moirai-runtime", version = "0.7.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+moirai = { package = "moirai-runtime", version = "0.8.2", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 # Hermes PR #155, Eunomia PR #87, and Aequitas PR #51 are merged;
 # default-branch resolution preserves their shared trait source identity.
 hermes-simd = { version = "0.8.0", git = "https://github.com/ryancinsight/hermes.git" }
