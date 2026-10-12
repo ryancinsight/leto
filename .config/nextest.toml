@@ -28,5 +28,5 @@ slow-timeout = { period = "300s", terminate-after = 2 }
 # carries; a CI run exceeding it still fails visibly rather than hanging the
 # suite.
 [[profile.default.overrides]]
-filter = 'test(=lu_reconstructs_past_the_llc)'
+filter = 'test(=ops::lu::lu_reconstructs_past_the_llc)'
 slow-timeout = { period = "150s", terminate-after = 2 }
