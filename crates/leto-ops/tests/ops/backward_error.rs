@@ -44,6 +44,7 @@
 //! residuals of the returned factors, measured.
 
 /// Higham's `γ_k = k·u/(1 − k·u)`, `u = ε/2`; `+∞` once `k·u ≥ 1`.
+use eunomia::FloatElement;
 pub fn gamma(k: f64, eps: f64) -> f64 {
     let ku = k * eps / 2.0;
     if ku >= 1.0 {
@@ -120,7 +121,7 @@ pub fn theta_failure_probability(eps: f64) -> f64 {
 /// Exact ops (`scale_binary`, negations, `×±1`) contribute no `δ` and are
 /// not counted. SIMD reordering changes summation order, not the count.
 fn reflector_roundings(m: usize) -> f64 {
-    6.0 * m as f64 + 6.0
+    6.0 * f64::from_count(m) + 6.0
 }
 
 /// Inexact roundings on one entry's path through a one-sided stack-reflector
@@ -162,7 +163,7 @@ fn compose(parts: &[f64]) -> f64 {
 /// `‖ŷ − P̂x‖₂ ≤ 2γ_{m+2}‖x‖₂ + u‖x‖₂` to first order. Adding `2γ_q` and
 /// taking `q ≤ 3m + 12`: `2γ_{3m+12} + 2γ_{m+2} + γ_1 ≤ γ_{8m+29}`.
 pub fn householder(m: usize, eps: f64) -> f64 {
-    gamma(8.0 * m as f64 + 29.0, eps)
+    gamma(8.0 * f64::from_count(m) + 29.0, eps)
 }
 
 /// The symmetric rank-2 update `B − v̂ŵᵀ − ŵv̂ᵀ` of `symmetric_qr/reduce.rs`
@@ -178,7 +179,7 @@ pub fn householder(m: usize, eps: f64) -> f64 {
 /// with the reflector's `4γ_{m+1}` and the off-diagonal `α̂` written from the
 /// norm (`γ_{m+1}`): `17γ_{m+1} + 25u ≤ γ_{17m+42}`.
 pub fn householder_rank2(m: usize, eps: f64) -> f64 {
-    gamma(17.0 * m as f64 + 42.0, eps)
+    gamma(17.0 * f64::from_count(m) + 42.0, eps)
 }
 
 /// One-sided application of a plane rotation whose computed `ĉ, ŝ` carry
@@ -186,14 +187,14 @@ pub fn householder_rank2(m: usize, eps: f64) -> f64 {
 /// components `ĉx₁ + ŝx₂` errs by `γ_{k+2}·(|c||x₁| + |s||x₂|) ≤
 /// γ_{k+2}‖x‖₂` (Higham Lemmas 19.7–19.8 with `k = 4`), so `√2·γ_{k+2}`.
 pub fn rotation(k: usize, eps: f64) -> f64 {
-    std::f64::consts::SQRT_2 * gamma(k as f64 + 2.0, eps)
+    std::f64::consts::SQRT_2 * gamma(f64::from_count(k) + 2.0, eps)
 }
 
 /// The entry rule for `count` written entries, each with at most `r`
 /// roundings over terms summing to at most `size·‖A‖`: Frobenius
 /// `√count·γ_r·size`.
 pub fn entries(count: usize, r: usize, size: f64, eps: f64) -> f64 {
-    (count as f64).sqrt() * gamma(r as f64, eps) * size
+    (f64::from_count(count)).sqrt() * gamma(f64::from_count(r), eps) * size
 }
 
 /// `bidiagonal_qr`'s iteration cap (`MAX_ITER`).
@@ -230,8 +231,8 @@ fn dbdsqr_tol(eps: f64) -> f64 {
 ///   `≤ 2‖block‖₂.
 pub fn svd(rows: usize, cols: usize, eps: f64) -> f64 {
     let (big, small) = (rows.max(cols), rows.min(cols));
-    let k = small as f64;
-    let rotations = (SVD_ITERATION_CAP as f64) * 2.0 * (k - 1.0) + (k - 1.0) * (k - 1.0);
+    let k = f64::from_count(small);
+    let rotations = f64::from_count(SVD_ITERATION_CAP) * 2.0 * (k - 1.0) + (k - 1.0) * (k - 1.0);
     compose(&[
         repeat(householder(big, eps), 2.0 * k - 1.0),
         repeat(rotation(5, eps), rotations),
@@ -261,8 +262,8 @@ pub fn svd(rows: usize, cols: usize, eps: f64) -> f64 {
 ///   computed shift in its quadratic, bounded the same way) — and the
 ///   eigenvalue `a′ ± i√|b′|√|c′|` read with `θ₃` on `|b′c′|`.
 pub fn francis(n: usize, eps: f64) -> f64 {
-    let nf = n as f64;
-    let steps = francis_iteration_cap(n) as f64 * nf;
+    let nf = f64::from_count(n);
+    let steps = f64::from_count(francis_iteration_cap(n)) * nf;
     let blocks = (nf / 2.0).floor();
     compose(&[
         repeat(
@@ -297,9 +298,9 @@ fn ql_sweep(n: usize, eps: f64) -> f64 {
     let u = eps / 2.0;
     entries(n, 1, 4.0, eps)
         + entries(2, 7, 5.0, eps)
-        + (n as f64 - 1.0) * entries(3, 24, 12.0, eps)
+        + (f64::from_count(n) - 1.0) * entries(3, 24, 12.0, eps)
         + entries(2, 32, 4.0, eps)
-        + 3.0 * u * (n as f64).sqrt()
+        + 3.0 * u * (f64::from_count(n)).sqrt()
 }
 
 /// Eigenvalues of a symmetric `n × n` matrix through the tridiagonal QL
@@ -312,10 +313,13 @@ fn ql_sweep(n: usize, eps: f64) -> f64 {
 ///   `t ≤ 2‖T‖₂`;
 /// - the final `dₗ + σ`: one rounding over `|dₗ| + |σ| ≤ 3‖T‖₂`, `n` entries.
 pub fn ql(n: usize, eps: f64) -> f64 {
-    let nf = n as f64;
+    let nf = f64::from_count(n);
     compose(&[
         repeat(householder_rank2(n, eps), (nf - 2.0).max(0.0)),
-        repeat(ql_sweep(n, eps), (QL_SWEEPS_PER_EIGENVALUE as f64) * nf),
+        repeat(
+            ql_sweep(n, eps),
+            f64::from_count(QL_SWEEPS_PER_EIGENVALUE) * nf,
+        ),
         repeat(eps, nf - 1.0),
         entries(n, 1, 3.0, eps),
     ])
@@ -327,12 +331,12 @@ pub fn ql(n: usize, eps: f64) -> f64 {
 /// QL rotation is applied to a row pair (`ĉ, ŝ` with `θ₆`), at most
 /// `(n − 1)` per sweep.
 pub fn ql_vectors(n: usize, eps: f64) -> f64 {
-    let nf = n as f64;
+    let nf = f64::from_count(n);
     compose(&[
         repeat(householder(n, eps), (nf - 2.0).max(0.0)),
         repeat(
             rotation(6, eps),
-            (QL_SWEEPS_PER_EIGENVALUE as f64) * nf * (nf - 1.0),
+            f64::from_count(QL_SWEEPS_PER_EIGENVALUE) * nf * (nf - 1.0),
         ),
     ])
 }
@@ -343,8 +347,8 @@ pub fn ql_vectors(n: usize, eps: f64) -> f64 {
 /// within the same `η` of `Q̃` (the same reflectors applied to the rows of
 /// `I`), so `‖A·P − Q̂·R̂‖_F ≤ (η + √rows·η·(1 + η))·‖A‖_F`.
 pub fn col_piv_qr(rows: usize, cols: usize, eps: f64) -> f64 {
-    let eta = repeat(householder(rows, eps), rows.min(cols) as f64);
-    eta + (rows as f64).sqrt() * eta * (1.0 + eta)
+    let eta = repeat(householder(rows, eps), f64::from_count(rows.min(cols)));
+    eta + (f64::from_count(rows)).sqrt() * eta * (1.0 + eta)
 }
 
 /// Relative slack `τ` of the pivot order of column-pivoted QR with `DLAQP2`
@@ -371,7 +375,7 @@ pub fn col_piv_qr(rows: usize, cols: usize, eps: f64) -> f64 {
 /// `1 + τ = ((1 + ρ)/(1 − ρ))·(1 + η)^{2p}/(1 − η)²`. `TOL3Z = √u` is the
 /// library's threshold, taken one rounding low.
 pub fn col_piv_qr_pivot_slack(rows: usize, cols: usize, eps: f64) -> f64 {
-    let (m, steps) = (rows as f64, rows.min(cols) as f64);
+    let (m, steps) = (f64::from_count(rows), f64::from_count(rows.min(cols)));
     let u = eps / 2.0;
     let eta = householder(rows, eps);
     let key = gamma(m + 1.0, eps);
@@ -417,7 +421,7 @@ pub fn symmetric_certificate(a: &[f64], values: &[f64], vectors: &[f64], n: usiz
                 .sum::<f64>()
                 + (vectors[i * n + j] * values[j]).abs();
             residual += (av - vectors[i * n + j] * values[j]).powi(2);
-            residual_rounding += (gamma(n as f64 + 2.0, eps) * magnitude).powi(2);
+            residual_rounding += (gamma(f64::from_count(n) + 2.0, eps) * magnitude).powi(2);
         }
     }
     let (mut gram, mut gram_rounding) = (0.0_f64, 0.0_f64);
@@ -430,7 +434,7 @@ pub fn symmetric_certificate(a: &[f64], values: &[f64], vectors: &[f64], n: usiz
                 .map(|k| (vectors[k * n + i] * vectors[k * n + j]).abs())
                 .sum();
             gram += (dot - if i == j { 1.0 } else { 0.0 }).powi(2);
-            gram_rounding += (gamma(n as f64, eps) * magnitude).powi(2);
+            gram_rounding += (gamma(f64::from_count(n), eps) * magnitude).powi(2);
         }
     }
     let delta = gram.sqrt() + gram_rounding.sqrt();
@@ -447,12 +451,12 @@ pub fn symmetric_certificate(a: &[f64], values: &[f64], vectors: &[f64], n: usiz
 /// rows of `I`, every Francis reflector applied from the right, and every
 /// `dlanv2` rotation, at the same counts.
 pub fn francis_vectors(n: usize, eps: f64) -> f64 {
-    let nf = n as f64;
+    let nf = f64::from_count(n);
     compose(&[
         repeat(householder(n, eps), (nf - 2.0).max(0.0)),
         repeat(
             householder(3, eps),
-            francis_iteration_cap(n) as f64 * nf * (nf - 1.0),
+            f64::from_count(francis_iteration_cap(n)) * nf * (nf - 1.0),
         ),
         repeat(rotation(30, eps), (nf / 2.0).floor()),
     ])
@@ -468,7 +472,7 @@ pub fn francis_vectors(n: usize, eps: f64) -> f64 {
 /// `‖T̂‖_F ≤ (1 + η)‖Â‖_F` gives `η_R = η + (2d + d²)(1 + η)`.
 pub fn schur_factors(n: usize, eps: f64) -> (f64, f64) {
     let eta = francis(n, eps);
-    let d = (n as f64).sqrt() * francis_vectors(n, eps);
+    let d = (f64::from_count(n)).sqrt() * francis_vectors(n, eps);
     let orthogonality = 2.0 * d + d * d;
     (eta + orthogonality * (1.0 + eta), orthogonality)
 }
@@ -482,8 +486,8 @@ pub fn schur_factors(n: usize, eps: f64) -> (f64, f64) {
 /// `triangular_svd`'s `(ĉ, ŝ)` carrying `θ₃₅`).
 pub fn svd_vectors(rows: usize, cols: usize, eps: f64) -> f64 {
     let (big, small) = (rows.max(cols), rows.min(cols));
-    let k = small as f64;
-    let rotations = (SVD_ITERATION_CAP as f64) * 2.0 * (k - 1.0) + (k - 1.0) * (k - 1.0);
+    let k = f64::from_count(small);
+    let rotations = f64::from_count(SVD_ITERATION_CAP) * 2.0 * (k - 1.0) + (k - 1.0) * (k - 1.0);
     compose(&[
         repeat(householder(big, eps), k),
         repeat(rotation(5, eps), rotations),
@@ -498,7 +502,7 @@ pub fn svd_vectors(rows: usize, cols: usize, eps: f64) -> f64 {
 /// `η_R = η + (2d + d²)(1 + η)` and `η_O = 2d + d²`.
 pub fn svd_factors(rows: usize, cols: usize, eps: f64) -> (f64, f64) {
     let eta = svd(rows, cols, eps);
-    let d = (rows.max(cols) as f64).sqrt() * svd_vectors(rows, cols, eps);
+    let d = (f64::from_count(rows.max(cols))).sqrt() * svd_vectors(rows, cols, eps);
     let orthogonality = 2.0 * d + d * d;
     (eta + orthogonality * (1.0 + eta), orthogonality)
 }
@@ -560,9 +564,10 @@ const DLASV2_OCCURRENCES: f64 = 2.0;
 /// `θ_3` read-off. The eigenvalues-only windows only exclude entries, so
 /// the Schur-path count covers both.
 pub fn francis_roundings(n: usize, steps: usize) -> f64 {
-    let hessenberg = 2.0 * n.saturating_sub(2) as f64 * reflector_roundings(n.saturating_sub(1));
-    let chase = steps as f64 * FRANCIS_STEP_ROUNDINGS;
-    let blocks = (n / 2) as f64 * 36.0 + DLASV2_ROUNDINGS + 3.0;
+    let hessenberg =
+        2.0 * f64::from_count(n.saturating_sub(2)) * reflector_roundings(n.saturating_sub(1));
+    let chase = f64::from_count(steps) * FRANCIS_STEP_ROUNDINGS;
+    let blocks = f64::from_count(n / 2) * 36.0 + DLASV2_ROUNDINGS + 3.0;
     hessenberg + chase + blocks
 }
 
@@ -571,9 +576,10 @@ pub fn francis_roundings(n: usize, steps: usize) -> f64 {
 /// applications, and the `dlanv2` rotations (`36` covers the one-sided
 /// application).
 pub fn francis_vectors_roundings(n: usize, steps: usize) -> f64 {
-    let hessenberg = n.saturating_sub(2) as f64 * reflector_roundings(n.saturating_sub(1));
-    let chase = steps as f64 * FRANCIS_VECTORS_STEP_ROUNDINGS;
-    let blocks = (n / 2) as f64 * 36.0;
+    let hessenberg =
+        f64::from_count(n.saturating_sub(2)) * reflector_roundings(n.saturating_sub(1));
+    let chase = f64::from_count(steps) * FRANCIS_VECTORS_STEP_ROUNDINGS;
+    let blocks = f64::from_count(n / 2) * 36.0;
     hessenberg + chase + blocks
 }
 
@@ -584,9 +590,10 @@ pub fn francis_vectors_roundings(n: usize, steps: usize) -> f64 {
 /// and chases, and the capped 2×2 direct diagonalizations.
 pub fn svd_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
     let (big, k) = (rows.max(cols), rows.min(cols));
-    let bidiagonal = k as f64 * reflector_roundings(big)
-        + k.saturating_sub(1) as f64 * reflector_roundings(k.saturating_sub(1));
-    let iteration = sweeps as f64 * DBDSQR_SWEEP_ROUNDINGS + chases as f64 * DBDSQR_CHASE_ROUNDINGS;
+    let bidiagonal = f64::from_count(k) * reflector_roundings(big)
+        + f64::from_count(k.saturating_sub(1)) * reflector_roundings(k.saturating_sub(1));
+    let iteration = f64::from_count(sweeps) * DBDSQR_SWEEP_ROUNDINGS
+        + f64::from_count(chases) * DBDSQR_CHASE_ROUNDINGS;
     let direct = DLASV2_OCCURRENCES * DLASV2_ROUNDINGS;
     bidiagonal + iteration + direct
 }
@@ -597,10 +604,10 @@ pub fn svd_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> 
 /// chase the pivot row meets `≤ k` rotations, others one.
 pub fn svd_vectors_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
     let (big, k) = (rows.max(cols), rows.min(cols));
-    let bidiagonal = k as f64 * reflector_roundings(big);
+    let bidiagonal = f64::from_count(k) * reflector_roundings(big);
     let per_sweep = 2.0 * ROTATION_ROUNDINGS + 20.0;
-    let per_chase = ROTATION_ROUNDINGS * k as f64;
-    let iteration = sweeps as f64 * per_sweep + chases as f64 * per_chase;
+    let per_chase = ROTATION_ROUNDINGS * f64::from_count(k);
+    let iteration = f64::from_count(sweeps) * per_sweep + f64::from_count(chases) * per_chase;
     let direct = DLASV2_OCCURRENCES * DLASV2_ROUNDINGS;
     bidiagonal + iteration + direct
 }
@@ -609,7 +616,7 @@ pub fn svd_vectors_roundings(rows: usize, cols: usize, sweeps: usize, chases: us
 /// reflectors of length `≤ rows` on `R` and on the `Q` rows alike. Exact
 /// counts, no instrumentation: the loop trip count is structural.
 pub fn col_piv_qr_roundings(rows: usize, cols: usize) -> f64 {
-    rows.min(cols) as f64 * reflector_roundings(rows)
+    f64::from_count(rows.min(cols)) * reflector_roundings(rows)
 }
 
 /// Probabilistic Francis value bound at `steps` instrumented steps: one
@@ -617,7 +624,10 @@ pub fn col_piv_qr_roundings(rows: usize, cols: usize) -> f64 {
 /// floors exactly as in [`francis`].
 pub fn francis_tilde(n: usize, eps: f64, steps: usize) -> f64 {
     let roundings = gamma_tilde(francis_roundings(n, steps), eps);
-    compose(&[roundings, repeat(4.0 * eps, n.saturating_sub(1) as f64)])
+    compose(&[
+        roundings,
+        repeat(4.0 * eps, f64::from_count(n.saturating_sub(1))),
+    ])
 }
 
 /// Probabilistic Schur-vectors per-row bound at `steps` instrumented steps.
@@ -629,7 +639,7 @@ pub fn francis_vectors_tilde(n: usize, eps: f64, steps: usize) -> f64 {
 /// [`schur_factors`].
 pub fn schur_factors_tilde(n: usize, eps: f64, steps: usize) -> (f64, f64) {
     let eta = francis_tilde(n, eps, steps);
-    let d = (n as f64).sqrt() * francis_vectors_tilde(n, eps, steps);
+    let d = (f64::from_count(n)).sqrt() * francis_vectors_tilde(n, eps, steps);
     let orthogonality = 2.0 * d + d * d;
     (eta + orthogonality * (1.0 + eta), orthogonality)
 }
@@ -642,8 +652,11 @@ pub fn svd_tilde(rows: usize, cols: usize, eps: f64, sweeps: usize, chases: usiz
     let k = rows.min(cols);
     compose(&[
         roundings,
-        repeat(dbdsqr_tol(eps).max(eps), k.saturating_sub(1) as f64),
-        repeat(eps, k as f64),
+        repeat(
+            dbdsqr_tol(eps).max(eps),
+            f64::from_count(k.saturating_sub(1)),
+        ),
+        repeat(eps, f64::from_count(k)),
     ])
 }
 
@@ -662,7 +675,8 @@ pub fn svd_factors_tilde(
     chases: usize,
 ) -> (f64, f64) {
     let eta = svd_tilde(rows, cols, eps, sweeps, chases);
-    let d = (rows.max(cols) as f64).sqrt() * svd_vectors_tilde(rows, cols, eps, sweeps, chases);
+    let d = (f64::from_count(rows.max(cols))).sqrt()
+        * svd_vectors_tilde(rows, cols, eps, sweeps, chases);
     let orthogonality = 2.0 * d + d * d;
     (eta + orthogonality * (1.0 + eta), orthogonality)
 }
@@ -671,7 +685,7 @@ pub fn svd_factors_tilde(
 /// `Q`-row accumulation algebra of [`col_piv_qr`].
 pub fn col_piv_qr_tilde(rows: usize, cols: usize, eps: f64) -> f64 {
     let eta = gamma_tilde(col_piv_qr_roundings(rows, cols), eps);
-    eta + (rows as f64).sqrt() * eta * (1.0 + eta)
+    eta + (f64::from_count(rows)).sqrt() * eta * (1.0 + eta)
 }
 
 /// Inexact roundings on one tridiagonal entry's path through one implicit-QL
@@ -687,9 +701,9 @@ const QL_SWEEP_ROUNDINGS: f64 = 75.0;
 /// instrumented sweeps, and the final `dₗ + σ` rounding. The eigenvalues-only
 /// and vector paths share the iteration; deflations stay deterministic.
 pub fn ql_roundings(n: usize, sweeps: usize) -> f64 {
-    let nf = n as f64;
+    let nf = f64::from_count(n);
     let reduction = (nf - 2.0).max(0.0) * (17.0 * nf + 42.0);
-    let iteration = sweeps as f64 * QL_SWEEP_ROUNDINGS;
+    let iteration = f64::from_count(sweeps) * QL_SWEEP_ROUNDINGS;
     reduction + iteration + 1.0
 }
 
@@ -697,9 +711,9 @@ pub fn ql_roundings(n: usize, sweeps: usize) -> f64 {
 /// reduction's reflectors one-sided plus two rotations (`θ₆`, `8`
 /// roundings each with the application) per sweep.
 pub fn ql_vectors_roundings(n: usize, sweeps: usize) -> f64 {
-    let nf = n as f64;
+    let nf = f64::from_count(n);
     let reduction = (nf - 2.0).max(0.0) * reflector_roundings(n);
-    let iteration = sweeps as f64 * 16.0;
+    let iteration = f64::from_count(sweeps) * 16.0;
     reduction + iteration
 }
 
@@ -708,7 +722,7 @@ pub fn ql_vectors_roundings(n: usize, sweeps: usize) -> f64 {
 /// exactly as in [`ql`].
 pub fn ql_tilde(n: usize, eps: f64, sweeps: usize) -> f64 {
     let roundings = gamma_tilde(ql_roundings(n, sweeps), eps);
-    compose(&[roundings, repeat(eps, n as f64 - 1.0)])
+    compose(&[roundings, repeat(eps, f64::from_count(n) - 1.0)])
 }
 
 /// Probabilistic QL-vectors per-row bound at instrumented sweeps.
@@ -725,7 +739,7 @@ pub fn ql_vectors_tilde(n: usize, eps: f64, sweeps: usize) -> f64 {
 fn probabilistic_oracle_failure_budget_stays_negligible() {
     for eps in [
         f64::EPSILON,
-        f32::EPSILON as f64,
+        f64::from(f32::EPSILON),
         2.0f64.powi(-10),
         2.0f64.powi(-7),
     ] {

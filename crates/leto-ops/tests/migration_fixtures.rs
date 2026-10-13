@@ -3,7 +3,9 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use eunomia::{Complex32, Complex64, F16};
+use eunomia::convert::IntegerTarget;
+use eunomia::TryFromCount;
+use eunomia::{Complex32, Complex64, FloatElement, F16};
 use leto::{Array1, Array2, Array3, SliceArg, Storage};
 use leto_ops::{add, mapv, matmul, mul, sum_axis_into};
 
@@ -17,11 +19,11 @@ fn assert_close(lhs: f32, rhs: f32) {
 #[test]
 fn apollo_fft_1d_complex_arrays_support_generation_mapping_and_output_storage() {
     let signal = Array1::from_shape_fn([8], |[index]| {
-        let x = index as f64 * 0.25;
+        let x = f64::from_count(index) * 0.25;
         Complex64::new(x.cos(), x.sin())
     });
     let converted = mapv(&signal.view(), |value| {
-        Complex32::new(value.re as f32, value.im as f32)
+        Complex32::new(f32::from_f64(value.re), f32::from_f64(value.im))
     })
     .unwrap();
     let mut spectrum = Array1::<Complex32>::zeros([8]);
@@ -39,7 +41,9 @@ fn apollo_fft_1d_complex_arrays_support_generation_mapping_and_output_storage() 
 
 #[test]
 fn apollo_fft_2d_and_3d_real_fields_support_generated_and_zeroed_outputs() {
-    let field_2d = Array2::from_shape_fn([4, 5], |[row, col]| ((row + col) as f64 * 0.3).sin());
+    let field_2d = Array2::from_shape_fn([4, 5], |[row, col]| {
+        (f64::from_count(row + col) * 0.3).sin()
+    });
     let mut spectrum_2d = Array2::<Complex64>::zeros([4, 5]);
     for row in 0..4 {
         for col in 0..5 {
@@ -48,7 +52,9 @@ fn apollo_fft_2d_and_3d_real_fields_support_generated_and_zeroed_outputs() {
         }
     }
 
-    let field_3d = Array3::from_shape_fn([3, 4, 5], |[x, y, z]| ((x + y + z) as f64 * 0.2).cos());
+    let field_3d = Array3::from_shape_fn([3, 4, 5], |[x, y, z]| {
+        (f64::from_count(x + y + z) * 0.2).cos()
+    });
     let recovered_3d = mapv(&field_3d.view(), |value| value).unwrap();
 
     assert_eq!(spectrum_2d.shape(), [4, 5]);
@@ -61,7 +67,11 @@ fn apollo_fft_2d_and_3d_real_fields_support_generated_and_zeroed_outputs() {
 
 #[test]
 fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
-    let base = || Array3::from_shape_fn([2, 3, 4], |[x, y, z]| (x * 12 + y * 4 + z) as i32);
+    let base = || {
+        Array3::from_shape_fn([2, 3, 4], |[x, y, z]| {
+            i32::try_from_count(x * 12 + y * 4 + z).expect("invariant: fixture index fits i32")
+        })
+    };
 
     let mut axis2 = base();
     for x in 0..2 {
@@ -69,8 +79,8 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
             let mut lane = axis2
                 .view_mut()
                 .slice_with_mut::<1>(&[
-                    SliceArg::Index(x as isize),
-                    SliceArg::Index(y as isize),
+                    SliceArg::Index(isize::try_from(x).expect("invariant: index fits isize")),
+                    SliceArg::Index(isize::try_from(y).expect("invariant: index fits isize")),
                     SliceArg::All,
                 ])
                 .unwrap();
@@ -82,7 +92,10 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
     for x in 0..2 {
         for y in 0..3 {
             for z in 0..4 {
-                let expected = (x * 12 + y * 4 + z) as i32 + 100 + (x * 10 + y) as i32;
+                let expected = i32::try_from_count(x * 12 + y * 4 + z)
+                    .expect("invariant: fixture index fits i32")
+                    + 100
+                    + i32::try_from_count(x * 10 + y).expect("invariant: fixture index fits i32");
                 assert_eq!(*axis2.get([x, y, z]).unwrap(), expected);
             }
         }
@@ -94,9 +107,9 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
             let mut lane = axis1
                 .view_mut()
                 .slice_with_mut::<1>(&[
-                    SliceArg::Index(x as isize),
+                    SliceArg::Index(isize::try_from(x).expect("invariant: index fits isize")),
                     SliceArg::All,
-                    SliceArg::Index(z as isize),
+                    SliceArg::Index(isize::try_from(z).expect("invariant: index fits isize")),
                 ])
                 .unwrap();
             for y in 0..3 {
@@ -107,7 +120,10 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
     for x in 0..2 {
         for y in 0..3 {
             for z in 0..4 {
-                let expected = (x * 12 + y * 4 + z) as i32 + 200 + (x * 10 + z) as i32;
+                let expected = i32::try_from_count(x * 12 + y * 4 + z)
+                    .expect("invariant: fixture index fits i32")
+                    + 200
+                    + i32::try_from_count(x * 10 + z).expect("invariant: fixture index fits i32");
                 assert_eq!(*axis1.get([x, y, z]).unwrap(), expected);
             }
         }
@@ -120,8 +136,8 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
                 .view_mut()
                 .slice_with_mut::<1>(&[
                     SliceArg::All,
-                    SliceArg::Index(y as isize),
-                    SliceArg::Index(z as isize),
+                    SliceArg::Index(isize::try_from(y).expect("invariant: index fits isize")),
+                    SliceArg::Index(isize::try_from(z).expect("invariant: index fits isize")),
                 ])
                 .unwrap();
             for x in 0..2 {
@@ -132,7 +148,10 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
     for x in 0..2 {
         for y in 0..3 {
             for z in 0..4 {
-                let expected = (x * 12 + y * 4 + z) as i32 + 300 + (y * 10 + z) as i32;
+                let expected = i32::try_from_count(x * 12 + y * 4 + z)
+                    .expect("invariant: fixture index fits i32")
+                    + 300
+                    + i32::try_from_count(y * 10 + z).expect("invariant: fixture index fits i32");
                 assert_eq!(*axis0.get([x, y, z]).unwrap(), expected);
             }
         }
@@ -142,14 +161,14 @@ fn apollo_fft_three_axis_lane_mutation_uses_leto_views_without_ndarray() {
 #[test]
 fn apollo_precision_conversion_fixture_supports_reduced_pair_storage() {
     let input = Array1::from_shape_fn([4], |[index]| {
-        let value = index as f64 + 0.5;
+        let value = f64::from_count(index) + 0.5;
         Complex64::new(value, -value)
     });
 
     let reduced_pairs = mapv(&input.view(), |value| {
         [
-            F16::from_f32(value.re as f32),
-            F16::from_f32(value.im as f32),
+            F16::from_f32(f32::from_f64(value.re)),
+            F16::from_f32(f32::from_f64(value.im)),
         ]
     })
     .unwrap();
@@ -218,13 +237,13 @@ fn coeus_tensor_matmul_fixture_matches_dense_layer_shape() {
 #[test]
 fn apollo_dht_real_transform_simulation() {
     let n = 8;
-    let signal = Array1::from_shape_fn([n], |[i]| (i as f64 * 0.5).sin());
+    let signal = Array1::from_shape_fn([n], |[i]| (f64::from_count(i) * 0.5).sin());
     let mut dht = Array1::<f64>::zeros([n]);
 
     for k in 0..n {
         let mut sum = 0.0;
         for j in 0..n {
-            let angle = 2.0 * std::f64::consts::PI * (j * k) as f64 / n as f64;
+            let angle = 2.0 * std::f64::consts::PI * f64::from_count(j * k) / f64::from_count(n);
             let cas = angle.cos() + angle.sin();
             sum += signal.get([j]).unwrap() * cas;
         }
@@ -234,7 +253,7 @@ fn apollo_dht_real_transform_simulation() {
     assert_eq!(dht.shape(), [n]);
     let sig_energy: f64 = signal.storage().as_slice().iter().map(|&x| x * x).sum();
     let dht_energy: f64 = dht.storage().as_slice().iter().map(|&x| x * x).sum();
-    assert!((sig_energy - dht_energy / n as f64).abs() < 1.0e-5);
+    assert!((sig_energy - dht_energy / f64::from_count(n)).abs() < 1.0e-5);
 }
 
 #[test]
@@ -242,7 +261,9 @@ fn apollo_ntt_modular_transform_simulation() {
     let n = 8;
     let q = 17;
     let root = 9;
-    let signal = Array1::from_shape_fn([n], |[i]| (i as u64) % q);
+    let signal = Array1::from_shape_fn([n], |[i]| {
+        (u64::try_from(i).expect("invariant: index fits u64")) % q
+    });
     let mut ntt = Array1::<u64>::zeros([n]);
 
     for k in 0..n {
@@ -269,8 +290,9 @@ fn apollo_nufft_non_uniform_grid_interpolation() {
     let n = 16;
 
     let coords = Array1::<f64>::from_shape_vec([m], vec![1.2, 4.7, 8.0, 11.5, 14.1]).unwrap();
-    let strengths =
-        Array1::from_shape_fn([m], |[i]| Complex64::new((i + 1) as f64, -((i + 1) as f64)));
+    let strengths = Array1::from_shape_fn([m], |[i]| {
+        Complex64::new(f64::from_count(i + 1), -(f64::from_count(i + 1)))
+    });
 
     let mut grid = Array1::<Complex64>::zeros([n]);
     let width = 2.0;
@@ -279,10 +301,16 @@ fn apollo_nufft_non_uniform_grid_interpolation() {
         let x = *coords.get([i]).unwrap();
         let c = *strengths.get([i]).unwrap();
 
-        let x_center = x.round() as isize;
-        for offset in -2..=2 {
-            let g_idx = ((x_center + offset).rem_euclid(n as isize)) as usize;
-            let dist = x - (x_center + offset) as f64;
+        let centre = usize::from_rounded(x);
+        let centre_f = f64::from_count(centre);
+        for offset in -2i64..=2 {
+            let g_idx = usize::try_from(
+                (isize::try_from(centre).expect("invariant: centre fits isize")
+                    + isize::try_from(offset).expect("invariant: literal fits"))
+                .rem_euclid(isize::try_from(n).expect("invariant: n fits isize")),
+            )
+            .expect("invariant: index fits usize");
+            let dist = x - centre_f - f64::from_integer(offset);
             let weight = (-dist * dist / (2.0 * width * width)).exp();
 
             let current = grid.get([g_idx]).unwrap();
@@ -302,10 +330,10 @@ fn apollo_sht_spherical_harmonic_grid_eval() {
     let n_phi = 8;
 
     let theta = Array1::from_shape_fn([n_theta], |[i]| {
-        std::f64::consts::PI * (i as f64 + 0.5) / n_theta as f64
+        std::f64::consts::PI * (f64::from_count(i) + 0.5) / f64::from_count(n_theta)
     });
     let _phi = Array1::from_shape_fn([n_phi], |[j]| {
-        2.0 * std::f64::consts::PI * j as f64 / n_phi as f64
+        2.0 * std::f64::consts::PI * f64::from_count(j) / f64::from_count(n_phi)
     });
 
     let factor = 0.5 * (3.0 / std::f64::consts::PI).sqrt();
@@ -323,14 +351,17 @@ fn apollo_sht_spherical_harmonic_grid_eval() {
     for i in 0..n_theta {
         let reference = *grid.get([i, 0]).unwrap();
         for j in 1..n_phi {
-            assert_close(reference as f32, *grid.get([i, j]).unwrap() as f32);
+            assert_close(
+                f32::from_f64(reference),
+                f32::from_f64(*grid.get([i, j]).unwrap()),
+            );
         }
     }
 }
 
 #[test]
 fn apollo_wgpu_host_mapped_buffer_verification() {
-    let arr = Array3::from_shape_fn([2, 3, 4], |[x, y, z]| (x * 12 + y * 4 + z) as f32);
+    let arr = Array3::from_shape_fn([2, 3, 4], |[x, y, z]| f32::from_count(x * 12 + y * 4 + z));
 
     assert_eq!(arr.strides(), [12, 4, 1]);
 
@@ -350,7 +381,8 @@ fn apollo_python_bindings_strides_compatibility() {
     let elem_strides = arr.strides();
     assert_eq!(elem_strides, [4, 1]);
 
-    let item_size = std::mem::size_of::<i32>() as isize;
+    let item_size =
+        isize::try_from(std::mem::size_of::<i32>()).expect("invariant: size fits isize");
     let byte_strides = [elem_strides[0] * item_size, elem_strides[1] * item_size];
     assert_eq!(byte_strides, [16, 4]);
 
