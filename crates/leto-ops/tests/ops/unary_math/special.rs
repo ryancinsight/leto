@@ -4,6 +4,7 @@
 )]
 
 use super::maps::{assert_close_slice, EPS};
+use eunomia::RealField;
 use leto::{Array, Layout, Storage, VecStorage};
 use leto_ops::{bessel_k0, j0, j1, sinc, unary_map, unary_map_into, J0Op, J1Op, K0Op, SincOp};
 
@@ -45,21 +46,46 @@ fn test_sinc_op_f32_and_nan() {
 }
 
 #[test]
-fn test_bessel_ops_match_scalar_oracle_both_branches() {
-    // Values span the rational branch, the |x| = 8 crossover, the Hankel
-    // branch, and negative arguments (J0 even, J1 odd).
+fn test_bessel_ops_match_core_oracle() {
+    // Elementwise J0/J1 evaluate the eunomia RealField core (libm-routed),
+    // while the f64 scalars keep the Numerical-Recipes rational/Hankel
+    // program as the device-shader oracle — so the oracle here is the core
+    // itself (delegation wiring, exact), anchored to the classic J(1)
+    // constants (independent accuracy): libm's fdlibm error is ulp-scale
+    // (<< 1e-12), while the retired program differed systematically (~2e-9
+    // per its documented bound), so 1e-12 separates the two routings.
+    // Values still span magnitudes, the former crossover, and negative
+    // arguments (J0 even, J1 odd).
     let values = vec![0.0f64, 0.5, 1.0, 2.0, 5.0, 7.999, 8.0, 9.0, 12.0, -3.0];
     let layout = Layout::c_contiguous([values.len()]).unwrap();
     let array = Array::new(layout, VecStorage::new(values.clone())).unwrap();
 
     let j0_out = unary_map(J0Op, &array.view()).unwrap();
-    let expected_j0: Vec<f64> = values.iter().map(|&x| j0(x)).collect();
-    assert_close_slice(j0_out.storage().as_slice(), &expected_j0);
+    for (got, &x) in j0_out.storage().as_slice().iter().zip(&values) {
+        let expected = RealField::bessel_j0(x);
+        assert!(
+            (got - expected).abs() <= EPS,
+            "j0({x}): got {got} expected {expected}"
+        );
+    }
+    assert!(
+        (j0_out.storage().as_slice()[2] - 0.7651976865579666).abs() < 1e-12,
+        "j0(1) must match the classic constant"
+    );
 
     let mut j1_out = Array::new(layout, VecStorage::fill(values.len(), 0.0f64)).unwrap();
     unary_map_into(J1Op, &array.view(), &mut j1_out.view_mut()).unwrap();
-    let expected_j1: Vec<f64> = values.iter().map(|&x| j1(x)).collect();
-    assert_close_slice(j1_out.storage().as_slice(), &expected_j1);
+    for (got, &x) in j1_out.storage().as_slice().iter().zip(&values) {
+        let expected = RealField::bessel_j1(x);
+        assert!(
+            (got - expected).abs() <= EPS,
+            "j1({x}): got {got} expected {expected}"
+        );
+    }
+    assert!(
+        (j1_out.storage().as_slice()[2] - 0.4400505857449335).abs() < 1e-12,
+        "j1(1) must match the classic constant"
+    );
 }
 
 #[test]

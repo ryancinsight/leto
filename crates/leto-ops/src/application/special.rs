@@ -12,6 +12,8 @@
 //! | [Error function](crate::application::special::erf) | Gaussian error function (A&S 7.1.26) |
 //! | [J₀](crate::application::special::j0), [J₁](crate::application::special::j1), [Jₙ](crate::application::special::jn) | Bessel functions of the first kind |
 
+use eunomia::RealField;
+
 /// Unnormalized cardinal sine `sinc(x) = sin(x)/x`, with the removable
 /// singularity `sinc(0) = 1`.
 ///
@@ -190,42 +192,14 @@ pub fn jn(n: usize, x: f64) -> f64 {
 
 /// Modified Bessel function of the second kind, order zero: `K₀(x)` for `x > 0`.
 ///
-/// # Approximation
-///
+/// Delegates to the one generic core on [`RealField`]:
 /// Abramowitz & Stegun 9.8.5 for `0 < x ≤ 2`, and 9.8.6 for `x > 2`. Both
 /// polynomial forms carry an absolute error below `1e-7` on their stated
 /// domains. `K₀` diverges at the origin and is undefined for `x ≤ 0`, so
 /// non-positive and non-finite arguments return `NaN`.
 #[must_use]
 pub fn bessel_k0(x: f64) -> f64 {
-    if !(x.is_finite() && x > 0.0) {
-        return f64::NAN;
-    }
-    if x <= 2.0 {
-        // A&S 9.8.5: K₀(x) = −ln(x/2)·I₀(x) + Σ cₙ (x/2)^{2n}.
-        let t1 = (x / 3.75) * (x / 3.75);
-        let i0 = 1.0
-            + t1 * (3.515_622_9
-                + t1 * (3.089_942_4
-                    + t1 * (1.206_749_2
-                        + t1 * (0.265_973_2 + t1 * (0.036_076_8 + t1 * 0.004_581_3)))));
-        let t2 = (x * 0.5) * (x * 0.5);
-        let correction = -0.577_215_66
-            + t2 * (0.422_784_20
-                + t2 * (0.230_697_56
-                    + t2 * (0.034_885_90
-                        + t2 * (0.002_626_98 + t2 * (0.000_107_50 + t2 * 7.4e-6)))));
-        (x * 0.5).ln().mul_add(-i0, correction)
-    } else {
-        // A&S 9.8.6: K₀(x) = e^{-x}/√x · Σ dₙ (2/x)^n.
-        let t = 2.0 / x;
-        let series = 1.253_314_14
-            + t * (-0.078_323_58
-                + t * (0.021_895_68
-                    + t * (-0.010_624_46
-                        + t * (0.005_878_72 + t * (-0.002_515_40 + t * 0.000_532_08)))));
-        (-x).exp() / x.sqrt() * series
-    }
+    <f64 as RealField>::bessel_k0(x)
 }
 
 #[cfg(test)]
