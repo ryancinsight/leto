@@ -16,13 +16,29 @@ use leto::{ArrayView2, LetoError, Result};
 /// Panel width for blocked QR. 32 matches the GEMM tile and the `axpy` crossover.
 const BLOCK_WIDTH: usize = 32;
 
-/// Minimum row count for the blocked path to pay. The compact-WY trailing GEMM
-/// only amortizes the panel extraction/transpose/allocation overhead at scale
-/// (measured A/B crossover ≈ 200 rows: 256² QR 1.51 → 1.29 ms blocked, but 128²
-/// 175 → 223 µs — a regression). Below it the factorization runs as a single
-/// full-width panel, byte-for-byte the original unblocked sweep, so small and
-/// medium matrices pay nothing.
-const BLOCK_MIN_ROWS: usize = 256;
+/// Minimum column count for the compact-WY blocked path to pay, by element
+/// width.
+///
+/// The crossover is driven by trailing width, not row count: the per-panel
+/// T construction, C-block packing, and GEMM setup only amortize once the
+/// trailing block is wide enough, and the knee moves down as bytes per
+/// element grow (unblocked streaming traffic doubles while the overhead is
+/// largely traffic-insensitive). A/B sweeps under this workspace's release
+/// profile (Ultra 9 285K) place it at 9 panels for 4-byte scalars —
+/// f32 512x256 ties (2386 vs 2314 us) while 512x288 blocks 1.53x faster
+/// (2864 vs 1869 us), and every narrower shape at every row count up to
+/// 1024 favors unblocked — and at 6 panels for 8-byte scalars (f64 512x129
+/// ties, 512x192 blocks 1.45x faster). Unmeasured widths stay on the
+/// smooth unblocked path, which degrades gracefully; blocking is enabled
+/// per width only by measurement. Re-tune from a fresh A/B sweep if the
+/// compact-WY kernel, the GEMM tile, or the release profile changes.
+const fn block_min_cols<T>() -> usize {
+    match size_of::<T>() {
+        4 => 288,
+        8 => 192,
+        _ => usize::MAX,
+    }
+}
 
 /// Compute the Householder QR factorization of an `m × n` matrix, `m ≥ n`.
 ///
@@ -83,10 +99,11 @@ pub fn qr_decompose<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<QrDecom
         &mut w_vec[..]
     };
 
-    // Block only when the matrix is large enough that the trailing GEMM amortizes
-    // the panel overhead; otherwise a single full-width panel reproduces the exact
-    // unblocked sweep (no block apply, no numeric change).
-    let panel_width = if rows >= BLOCK_MIN_ROWS {
+    // Block only when the trailing block is wide enough that the compact-WY
+    // GEMM amortizes the panel overhead; otherwise a single full-width panel
+    // reproduces the exact unblocked sweep (no block apply, no numeric
+    // change). The `m >= n` rejection above subsumes any row floor.
+    let panel_width = if cols >= block_min_cols::<T>() {
         BLOCK_WIDTH
     } else {
         cols.max(1)

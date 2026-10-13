@@ -29,10 +29,11 @@ fn assert_close_slice(actual: &[f64], expected: &[f64]) {
 
 #[test]
 fn qr_blocked_path_solves_large_system() {
-    // n = 256 reaches BLOCK_MIN_ROWS, so the panel-blocked compact-WY trailing
-    // update runs (eight panels); a diagonally-dominant A is well-conditioned, so a
-    // square QR solve must recover a known x to tight tolerance — value-semantic
-    // proof the blocked factorization equals the unblocked one.
+    // n = 256 clears the f64 column gate (192), so the panel-blocked
+    // compact-WY trailing update runs (eight panels); a diagonally-dominant A
+    // is well-conditioned, so a square QR solve must recover a known x to
+    // tight tolerance — value-semantic proof the blocked factorization
+    // equals the unblocked one.
     let n = 256usize;
     let a_values: Vec<f64> = (0..n * n)
         .map(|idx| {
