@@ -69,6 +69,38 @@ pub(super) fn route_matmul<T: Scalar>(
         return Ok(());
     }
 
+    // FxF with a C-dense output needs only one operand in C order: copying
+    // the lhs gives (C, F, C) for the dot kernel, copying the rhs gives
+    // (F, C, C) for the outer kernel. Copy the smaller operand (`m·k` vs
+    // `k·n` elements) — one allocation and one materialization pass instead
+    // of the fallback's two.
+    if lhs.is_f_dense() && rhs.is_f_dense() && out.is_c_dense() {
+        let [m, k] = lhs.shape();
+        let [_, n] = rhs.shape();
+        if m * k <= k * n {
+            let lhs_contig = lhs.to_contiguous();
+            #[cfg(feature = "parallel")]
+            {
+                if is_parallel_beneficial(layout) {
+                    parallel_dot_matmul(&lhs_contig.view(), rhs, out, accumulate);
+                    return Ok(());
+                }
+            }
+            serial_dot_matmul(&lhs_contig.view(), rhs, out, accumulate);
+        } else {
+            let rhs_contig = rhs.to_contiguous();
+            #[cfg(feature = "parallel")]
+            {
+                if is_parallel_beneficial(layout) {
+                    parallel_outer_matmul(lhs, &rhs_contig.view(), out, accumulate);
+                    return Ok(());
+                }
+            }
+            serial_outer_matmul(lhs, &rhs_contig.view(), out, accumulate);
+        }
+        return Ok(());
+    }
+
     // Fallback: copy only genuinely non-dense operands to contiguous. A
     // dense-but-offset operand is kept in place (the generic kernel addresses it
     // through its layout offset), so only strided/broadcast operands pay a copy.
