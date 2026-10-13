@@ -180,6 +180,20 @@ fn assign_view_into<T: Copy, const N: usize>(
         return Ok(());
     }
 
+    if destination_layout.is_f_dense() && source.layout().is_f_dense() {
+        // Same shape and both column-major dense: the physical element order
+        // is identical, so the dense blocks copy directly at any rank.
+        let source_values =
+            source
+                .as_slice_memory_order()
+                .ok_or_else(|| LetoError::StorageError {
+                    reason: "assignment source memory-order range exceeds its storage".to_string(),
+                })?;
+        let destination_values = dense_destination(&destination_layout, destination_data, size)?;
+        destination_values.copy_from_slice(source_values);
+        return Ok(());
+    }
+
     if N == 2 && destination_layout.is_c_dense() && source.layout().is_f_dense() {
         let source_values =
             source
@@ -193,6 +207,22 @@ fn assign_view_into<T: Copy, const N: usize>(
             destination_values,
             destination_layout.shape()[1],
             destination_layout.shape()[0],
+        );
+    }
+
+    if N == 2 && destination_layout.is_f_dense() && source.layout().is_c_dense() {
+        // The destination's memory-order block is the row-major transpose of
+        // the source, so the row/column arguments swap relative to the
+        // C-destination case above.
+        let source_values = source.as_slice().ok_or_else(|| LetoError::StorageError {
+            reason: "assignment source dense range exceeds its storage".to_string(),
+        })?;
+        let destination_values = dense_destination(&destination_layout, destination_data, size)?;
+        return transpose_copy(
+            source_values,
+            destination_values,
+            destination_layout.shape()[0],
+            destination_layout.shape()[1],
         );
     }
 

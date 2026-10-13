@@ -182,6 +182,97 @@ fn offset_fortran_source_copies_into_offset_c_destination() {
 }
 
 #[test]
+fn offset_fortran_source_copies_into_offset_fortran_destination() {
+    let shape = [3, 5];
+    let source_layout = Layout::try_new(shape, [1, 3], 2).expect("offset F layout is valid");
+    let mut source_storage = vec![-1_i32; 19];
+    for row in 0..shape[0] {
+        for column in 0..shape[1] {
+            source_storage[2 + column * shape[0] + row] =
+                i32::try_from(row * 10 + column).expect("fixture values fit in i32");
+        }
+    }
+    let source = ArrayView::try_new(source_layout, &source_storage)
+        .expect("offset F source fits its storage");
+    let destination_layout =
+        Layout::try_new(shape, [1, 3], 4).expect("offset F destination layout is valid");
+    let mut destination_storage = vec![-7_i32; 21];
+
+    ArrayViewMut::try_new(destination_layout, &mut destination_storage)
+        .expect("offset F destination fits its storage")
+        .try_assign(&source)
+        .expect("offset F-to-F assignment is valid");
+
+    assert_eq!(&destination_storage[..4], &[-7; 4]);
+    assert_eq!(
+        &destination_storage[4..19],
+        &[0, 10, 20, 1, 11, 21, 2, 12, 22, 3, 13, 23, 4, 14, 24]
+    );
+    assert_eq!(&destination_storage[19..], &[-7; 2]);
+}
+
+#[test]
+fn offset_c_source_copies_into_offset_fortran_destination() {
+    let shape = [3, 5];
+    let source_layout = Layout::try_new(shape, [5, 1], 1).expect("offset C layout is valid");
+    let mut source_storage = vec![-1_i32; 17];
+    for row in 0..shape[0] {
+        for column in 0..shape[1] {
+            source_storage[1 + row * shape[1] + column] =
+                i32::try_from(row * 10 + column).expect("fixture values fit in i32");
+        }
+    }
+    let source = ArrayView::try_new(source_layout, &source_storage)
+        .expect("offset C source fits its storage");
+    let destination_layout =
+        Layout::try_new(shape, [1, 3], 3).expect("offset F destination layout is valid");
+    let mut destination_storage = vec![-7_i32; 20];
+
+    ArrayViewMut::try_new(destination_layout, &mut destination_storage)
+        .expect("offset F destination fits its storage")
+        .try_assign(&source)
+        .expect("offset C-to-F assignment is valid");
+
+    assert_eq!(&destination_storage[..3], &[-7; 3]);
+    assert_eq!(
+        &destination_storage[3..18],
+        &[0, 10, 20, 1, 11, 21, 2, 12, 22, 3, 13, 23, 4, 14, 24]
+    );
+    assert_eq!(&destination_storage[18..], &[-7; 2]);
+}
+
+#[test]
+fn rank3_fortran_to_fortran_assignment_copies_the_dense_block() {
+    let shape = [2, 3, 4];
+    let strides = [1, 2, 6];
+    let source_layout = Layout::try_new(shape, strides, 1).expect("rank-3 F layout is valid");
+    let mut source_storage = vec![-1_i32; 26];
+    for i in 0..shape[0] {
+        for j in 0..shape[1] {
+            for k in 0..shape[2] {
+                source_storage[1 + i + 2 * j + 6 * k] =
+                    i32::try_from((i * shape[1] + j) * shape[2] + k)
+                        .expect("fixture values fit in i32");
+            }
+        }
+    }
+    let source = ArrayView::try_new(source_layout, &source_storage)
+        .expect("rank-3 F source fits its storage");
+    let destination_layout =
+        Layout::try_new(shape, strides, 2).expect("rank-3 F destination layout is valid");
+    let mut destination_storage = vec![-7_i32; 27];
+
+    ArrayViewMut::try_new(destination_layout, &mut destination_storage)
+        .expect("rank-3 F destination fits its storage")
+        .try_assign(&source)
+        .expect("rank-3 F-to-F assignment is valid");
+
+    assert_eq!(&destination_storage[..2], &[-7; 2]);
+    assert_eq!(&destination_storage[2..26], &source_storage[1..25]);
+    assert_eq!(&destination_storage[26..], &[-7; 1]);
+}
+
+#[test]
 fn offset_dense_views_copy_only_their_reachable_blocks() {
     let source_storage = vec![-1_i32, -1, 2, 3, 5, 7, -1, -1];
     let source_layout = Layout::try_new([2, 2], [2, 1], 2).expect("offset source layout is valid");
