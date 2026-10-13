@@ -138,6 +138,67 @@ fn test_matmul_strided_and_transposed() {
 }
 
 #[test]
+fn test_matmul_fortran_both_smaller_lhs() {
+    // FxF, lhs smaller (2·3 <= 3·4): dispatch copies the lhs only and runs
+    // the (C, F, C) dot kernel. F storage is column-major.
+    // lhs = [[1,2,3],[4,5,6]], rhs = [[7,8,9,10],[11,12,13,14],[15,16,17,18]].
+    let lhs = Array::new(
+        Layout::f_contiguous([2, 3]).unwrap(),
+        VecStorage::new(vec![1.0f64, 4.0, 2.0, 5.0, 3.0, 6.0]),
+    )
+    .unwrap();
+    let rhs = Array::new(
+        Layout::f_contiguous([3, 4]).unwrap(),
+        VecStorage::new(vec![
+            7.0f64, 11.0, 15.0, 8.0, 12.0, 16.0, 9.0, 13.0, 17.0, 10.0, 14.0, 18.0,
+        ]),
+    )
+    .unwrap();
+    assert!(lhs.view().is_f_dense() && rhs.view().is_f_dense());
+    let mut out = Array::zeros([2, 4]);
+
+    matmul(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(
+        out.storage().as_slice(),
+        &[74.0, 80.0, 86.0, 92.0, 173.0, 188.0, 203.0, 218.0]
+    );
+}
+
+#[test]
+fn test_matmul_fortran_both_smaller_rhs() {
+    // FxF, rhs smaller (4·3 > 3·2): dispatch copies the rhs only and runs
+    // the (F, C, C) outer kernel.
+    // lhs = [[1,2,3],[4,5,6],[7,8,9],[10,11,12]], rhs = [[7,8],[9,10],[11,12]].
+    let lhs = Array::new(
+        Layout::f_contiguous([4, 3]).unwrap(),
+        VecStorage::new(vec![
+            1.0f64, 4.0, 7.0, 10.0, 2.0, 5.0, 8.0, 11.0, 3.0, 6.0, 9.0, 12.0,
+        ]),
+    )
+    .unwrap();
+    let rhs = Array::new(
+        Layout::f_contiguous([3, 2]).unwrap(),
+        VecStorage::new(vec![7.0f64, 9.0, 11.0, 8.0, 10.0, 12.0]),
+    )
+    .unwrap();
+    assert!(lhs.view().is_f_dense() && rhs.view().is_f_dense());
+    let mut out = Array::zeros([4, 2]);
+
+    matmul(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(
+        out.storage().as_slice(),
+        &[58.0, 64.0, 139.0, 154.0, 220.0, 244.0, 301.0, 334.0]
+    );
+
+    // The accumulate entry point shares the route and must double the result.
+    matmul_accumulate(&lhs.view(), &rhs.view(), &mut out.view_mut()).unwrap();
+    assert_eq!(
+        out.storage().as_slice(),
+        &[116.0, 128.0, 278.0, 308.0, 440.0, 488.0, 602.0, 668.0]
+    );
+}
+
+#[test]
 fn matmul_matches_dense_on_sparse_and_dense_inputs() {
     let b = Array::from_shape_vec([5, 3], (0..15).map(|i| i as f64 + 1.0).collect()).unwrap();
 
