@@ -39,6 +39,14 @@ pub enum TriangularMode {
 #[inline]
 #[must_use]
 pub const fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diagonal: i64) -> bool {
+    // Both operands widen to `u128` for the mixed-width compare: the
+    // predicate evaluates in const contexts (the compile-time-asserted
+    // contract in the test), and `usize -> u128` is a lossless widening
+    // for which std provides no `From`/`TryFrom` on 64-bit targets - the
+    // conversion-module class the stack's cast rule names: all three are
+    // lossless 64 -> 128-bit widenings, and `From`'s associated function
+    // is not yet stable as const. The eunomia conversion module owning
+    // these widenings is a separate item.
     let difference = if col >= row {
         (true, (col - row) as u128)
     } else {
@@ -47,11 +55,11 @@ pub const fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diag
     let diagonal_magnitude = diagonal.unsigned_abs() as u128;
     match mode {
         TriangularMode::Lower => match difference {
-            (true, magnitude) => diagonal >= 0 && magnitude <= diagonal as u128,
+            (true, magnitude) => diagonal >= 0 && magnitude <= diagonal_magnitude,
             (false, magnitude) => diagonal >= 0 || magnitude >= diagonal_magnitude,
         },
         TriangularMode::Upper => match difference {
-            (true, magnitude) => diagonal < 0 || magnitude >= diagonal as u128,
+            (true, magnitude) => diagonal < 0 || magnitude >= diagonal_magnitude,
             (false, magnitude) => diagonal < 0 && magnitude <= diagonal_magnitude,
         },
     }
@@ -73,12 +81,18 @@ fn triangular_contiguous<T: Scalar>(
 ) {
     for row in 0..rows {
         let base = row * cols;
-        let bound = row as i128 + diagonal as i128;
+        let bound = i128::try_from(row).expect("invariant: row fits i128") + i128::from(diagonal);
         let split = match mode {
             // Lower keeps `col <= row + diagonal`: the kept prefix length.
-            TriangularMode::Lower => (bound + 1).clamp(0, cols as i128) as usize,
+            TriangularMode::Lower => usize::try_from(
+                (bound + 1).clamp(0, i128::try_from(cols).expect("invariant: cols fits i128")),
+            )
+            .expect("invariant: prefix length fits usize"),
             // Upper keeps `col >= row + diagonal`: the masked prefix length.
-            TriangularMode::Upper => bound.clamp(0, cols as i128) as usize,
+            TriangularMode::Upper => usize::try_from(
+                bound.clamp(0, i128::try_from(cols).expect("invariant: cols fits i128")),
+            )
+            .expect("invariant: prefix length fits usize"),
         };
         let (out_head, out_tail) = output[base..base + cols].split_at_mut(split);
         let (in_head, in_tail) = input[base..base + cols].split_at(split);
@@ -132,14 +146,25 @@ pub fn triangular_into<T: Scalar>(
     let output_layout = output.layout();
     let input_data = input.data();
     let output_data = output.data_mut();
-    let input_base = input_layout.offset() as isize;
-    let output_base = output_layout.offset() as isize;
+    let input_base = isize::try_from(input_layout.offset()).expect("invariant: offset fits isize");
+    let output_base =
+        isize::try_from(output_layout.offset()).expect("invariant: offset fits isize");
     let (in_row, in_col) = (input_layout.strides()[0], input_layout.strides()[1]);
     let (out_row, out_col) = (output_layout.strides()[0], output_layout.strides()[1]);
     for row in 0..rows {
         for col in 0..cols {
-            let from = (input_base + row as isize * in_row + col as isize * in_col) as usize;
-            let to = (output_base + row as isize * out_row + col as isize * out_col) as usize;
+            let from = usize::try_from(
+                input_base
+                    + isize::try_from(row).expect("invariant: row fits isize") * in_row
+                    + isize::try_from(col).expect("invariant: col fits isize") * in_col,
+            )
+            .expect("invariant: index fits usize");
+            let to = usize::try_from(
+                output_base
+                    + isize::try_from(row).expect("invariant: row fits isize") * out_row
+                    + isize::try_from(col).expect("invariant: col fits isize") * out_col,
+            )
+            .expect("invariant: index fits usize");
             output_data[to] = if triangular_keeps(mode, row, col, diagonal) {
                 input_data[from]
             } else {

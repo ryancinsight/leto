@@ -95,43 +95,48 @@ where
     if N == 2
         && axis == 0
         && input_layout.strides()[1] == 1
-        && input_layout.strides()[0] == input.shape()[1] as isize
+        && input_layout.strides()[0]
+            == isize::try_from(input.shape()[1]).expect("invariant: shape fits isize")
         && output_layout.strides()[1] == 1
-        && output_layout.strides()[0] == out_shape[1] as isize
+        && output_layout.strides()[0]
+            == isize::try_from(out_shape[1]).expect("invariant: shape fits isize")
     {
         let rows = input.shape()[0];
         let cols = input.shape()[1];
-        let row_stride = input_layout.strides()[0];
-        let col_stride = input_layout.strides()[1];
+        let row_stride = usize::try_from(input_layout.strides()[0])
+            .expect("invariant: contiguous-row stride is non-negative");
+        let col_stride = usize::try_from(input_layout.strides()[1])
+            .expect("invariant: contiguous-row stride is non-negative");
         let input_base = input_layout.offset();
         let output_base = output_layout.offset();
-        let output_col_stride = output_layout.strides()[1];
+        let output_col_stride = usize::try_from(output_layout.strides()[1])
+            .expect("invariant: contiguous-row stride is non-negative");
 
         if rows == 0 {
             for col in 0..cols {
-                let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+                let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
                 output_data[out_off] = Op::EMPTY;
             }
             return Ok(());
         }
 
         for col in 0..cols {
-            let input_off = (input_base as isize + col as isize * col_stride) as usize;
-            let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+            let input_off = input_base.wrapping_add(col.wrapping_mul(col_stride));
+            let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
             output_data[out_off] = Op::initial(input_data[input_off]);
         }
 
         for row in 1..rows {
-            let row_base = input_base as isize + row as isize * row_stride;
+            let row_base = input_base.wrapping_add(row.wrapping_mul(row_stride));
             for col in 0..cols {
-                let input_off = (row_base + col as isize * col_stride) as usize;
-                let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+                let input_off = row_base.wrapping_add(col.wrapping_mul(col_stride));
+                let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
                 output_data[out_off] = Op::fold(output_data[out_off], input_data[input_off]);
             }
         }
 
         for col in 0..cols {
-            let out_off = (output_base as isize + col as isize * output_col_stride) as usize;
+            let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
             output_data[out_off] = Op::finalize(output_data[out_off], rows);
         }
         return Ok(());
@@ -179,7 +184,14 @@ where
                 None
             },
             |axis_idx| {
-                let input_off = (first_off as isize + axis_idx as isize * axis_stride) as usize;
+                let input_off = usize::try_from(
+                    isize::try_from(first_off).expect("invariant: base offset fits isize")
+                        + isize::try_from(axis_idx)
+                            .expect("invariant: index fits isize")
+                            .checked_mul(axis_stride)
+                            .expect("invariant: offset arithmetic fits isize"),
+                )
+                .expect("invariant: offset indexes within the slice");
                 input_data[input_off]
             },
         );
@@ -214,8 +226,15 @@ where
     Op: AxisReduction<T>,
     T: Scalar,
 {
-    let input_ptr = ctx.input_data.as_ptr() as usize;
-    let output_ptr = ctx.output_data.as_mut_ptr() as usize;
+    // SAFETY: the parallel closure below writes disjoint output elements per
+    // worker range (the for_each_unit_range contract), so the raw pointers it
+    // captures are never raced. The Send wrapper states what `as usize` used
+    // to launder implicitly.
+    struct SendPtr<T>(*mut T);
+    unsafe impl<T> Send for SendPtr<T> {}
+    unsafe impl<T> Sync for SendPtr<T> {}
+    let input_ptr = SendPtr(ctx.input_data.as_ptr().cast_mut());
+    let output_ptr = SendPtr(ctx.output_data.as_mut_ptr());
     let axis_stride = ctx.input_layout.strides()[ctx.axis];
     // One unit is one output element: it reads the whole reduced axis and
     // writes once.
@@ -236,9 +255,17 @@ where
                     .offset_of(out_idx)
                     .expect("validated output layout must map every logical index");
                 if ctx.axis_len == 0 {
-                    // SAFETY: each worker writes a distinct logical output element.
+                    // SAFETY: each worker writes a distinct logical output
+                    // element. The reference borrows the whole SendPtr: edition
+                    // 2024's precise capture would otherwise capture the raw
+                    // pointer field alone, which is !Send.
                     unsafe {
-                        *(output_ptr as *mut T).add(out_off) = Op::EMPTY;
+                        #[expect(
+                            clippy::needless_borrow,
+                            reason = "whole-struct capture keeps the raw pointer behind the Send wrapper"
+                        )]
+                        let out_ptr = (&output_ptr).0;
+                        *out_ptr.add(out_off) = Op::EMPTY;
                     }
                     continue;
                 }
@@ -253,10 +280,17 @@ where
                 let acc = reduce_nonempty_axis_values::<Op, T, _>(
                     ctx.axis_len,
                     if is_axis_contiguous {
-                        // SAFETY: input slice bounds are validated.
+                        // SAFETY: input slice bounds are validated. The
+                        // reference borrows the whole SendPtr for edition
+                        // 2024's precise capture (the raw field is !Send).
                         Some(unsafe {
+                            #[expect(
+                                clippy::needless_borrow,
+                                reason = "whole-struct capture keeps the raw pointer behind the Send wrapper"
+                            )]
+                            let in_ptr = (&input_ptr).0;
                             std::slice::from_raw_parts(
-                                (input_ptr as *const T).add(first_off),
+                                in_ptr.cast::<T>().add(first_off),
                                 ctx.axis_len,
                             )
                         })
@@ -264,15 +298,37 @@ where
                         None
                     },
                     |axis_idx| unsafe {
-                        let input_off =
-                            (first_off as isize + axis_idx as isize * axis_stride) as usize;
-                        *(input_ptr as *const T).add(input_off)
+                        let input_off = usize::try_from(
+                            isize::try_from(first_off).expect("invariant: base offset fits isize")
+                                + isize::try_from(axis_idx)
+                                    .expect("invariant: index fits isize")
+                                    .checked_mul(axis_stride)
+                                    .expect("invariant: offset arithmetic fits isize"),
+                        )
+                        .expect("invariant: offset indexes within the slice");
+                        // The reference borrows the whole SendPtr: edition
+                        // 2024's precise capture would otherwise capture the
+                        // raw pointer field alone, which is !Send.
+                        #[expect(
+                            clippy::needless_borrow,
+                            reason = "whole-struct capture keeps the raw pointer behind the Send wrapper"
+                        )]
+                        let in_ptr = (&input_ptr).0;
+                        *in_ptr.add(input_off)
                     },
                 );
 
-                // SAFETY: each worker writes a distinct logical output element.
+                // SAFETY: each worker writes a distinct logical output
+                // element. The reference borrows the whole SendPtr: edition
+                // 2024's precise capture would otherwise capture the raw
+                // pointer field alone, which is !Send.
                 unsafe {
-                    *(output_ptr as *mut T).add(out_off) = Op::finalize(acc, ctx.axis_len);
+                    #[expect(
+                        clippy::needless_borrow,
+                        reason = "whole-struct capture keeps the raw pointer behind the Send wrapper"
+                    )]
+                    let out_ptr = (&output_ptr).0;
+                    *out_ptr.add(out_off) = Op::finalize(acc, ctx.axis_len);
                 }
             }
         },
