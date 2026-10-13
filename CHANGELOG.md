@@ -280,6 +280,12 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   the local Windows AVX2 workstation. The paired control is Leto's unchanged
   generic assignment; the claim does not extend to other shapes or machines.
 
+- [patch] Assignment into a Fortran-dense destination now takes bulk-copy
+  kernels instead of the per-element logical zip: a Fortran-dense source
+  copies its dense block directly at any rank, and a rank-2 C-dense source
+  goes through the cache-blocked `transpose_copy`. This completes the 2x2
+  dense dispatch beside the existing C-destination routes; values and the
+  zero-allocation profile are unchanged.
 - [patch] `ArrayViewMut::fill` fills contiguous views through one dense
   memory-order slice pass instead of a per-element odometer with checked
   offset arithmetic per element.
