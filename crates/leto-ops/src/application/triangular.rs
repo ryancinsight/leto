@@ -15,6 +15,7 @@
 //! holding only scalar registers besides the two buffers.
 
 use crate::application::index::validate_mutable_output;
+use crate::application::output::OutputSlot;
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
@@ -71,9 +72,9 @@ pub const fn triangular_keeps(mode: TriangularMode, row: usize, col: usize, diag
 /// `col <= row + diagonal` / `col >= row + diagonal` boundary
 /// [`triangular_keeps`](crate::application::triangular::triangular_keeps) tests, computed in `i128` so `usize` rows and any
 /// `i64` diagonal combine without overflow or clamping.
-fn triangular_contiguous<T: Scalar>(
+fn triangular_contiguous<T: Scalar, S: OutputSlot<T>>(
     input: &[T],
-    output: &mut [T],
+    output: &mut [S],
     rows: usize,
     cols: usize,
     mode: TriangularMode,
@@ -98,12 +99,12 @@ fn triangular_contiguous<T: Scalar>(
         let (in_head, in_tail) = input[base..base + cols].split_at(split);
         match mode {
             TriangularMode::Lower => {
-                out_head.copy_from_slice(in_head);
-                out_tail.fill(T::ZERO);
+                S::copy_from_slice(out_head, in_head);
+                S::fill(out_tail, T::ZERO);
             }
             TriangularMode::Upper => {
-                out_head.fill(T::ZERO);
-                out_tail.copy_from_slice(in_tail);
+                S::fill(out_head, T::ZERO);
+                S::copy_from_slice(out_tail, in_tail);
             }
         }
     }
@@ -126,6 +127,15 @@ pub fn triangular_into<T: Scalar>(
     mode: TriangularMode,
     diagonal: i64,
     output: &mut ArrayViewMut<'_, T, 2>,
+) -> Result<()> {
+    triangular_slots::<T, T>(input, mode, diagonal, output)
+}
+
+fn triangular_slots<T: Scalar, S: OutputSlot<T>>(
+    input: &ArrayView<'_, T, 2>,
+    mode: TriangularMode,
+    diagonal: i64,
+    output: &mut ArrayViewMut<'_, S, 2>,
 ) -> Result<()> {
     if output.shape() != input.shape() {
         return Err(LetoError::ShapeMismatch {
@@ -165,11 +175,11 @@ pub fn triangular_into<T: Scalar>(
                     + isize::try_from(col).expect("invariant: col fits isize") * out_col,
             )
             .expect("invariant: index fits usize");
-            output_data[to] = if triangular_keeps(mode, row, col, diagonal) {
+            output_data[to].write(if triangular_keeps(mode, row, col, diagonal) {
                 input_data[from]
             } else {
                 T::ZERO
-            };
+            });
         }
     }
     Ok(())
@@ -187,6 +197,7 @@ pub fn triangular<T: Scalar>(
     let layout = Layout::c_contiguous(input.shape())?;
     let size = layout.checked_size()?;
     let mut output = Array::new(layout, VecStorage::uninit(size))?;
-    triangular_into(input, mode, diagonal, &mut output.view_mut())?;
-    Ok(output)
+    triangular_slots::<T, _>(input, mode, diagonal, &mut output.view_mut())?;
+    // SAFETY: both mask branches write every dense output element. T is Copy.
+    Array::new(layout, unsafe { output.into_storage().assume_init() })
 }

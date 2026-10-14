@@ -23,6 +23,7 @@
 
 use crate::application::index::validate_mutable_output;
 use crate::application::interpolation::trilinear_index_space;
+use crate::application::output::OutputSlot;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
 /// Number of `f32` lanes per packed ray (`origin.xyz`, then `direction.xyz`).
@@ -97,6 +98,17 @@ pub fn ray_line_integrals_into(
     step: f32,
     out: &mut ArrayViewMut<'_, f32, 1>,
 ) -> Result<()> {
+    ray_line_integrals_slots::<f32>(field, origin, spacing, rays, step, out)
+}
+
+fn ray_line_integrals_slots<S: OutputSlot<f32>>(
+    field: &ArrayView<'_, f32, 3>,
+    origin: [f32; 3],
+    spacing: [f32; 3],
+    rays: &ArrayView<'_, f32, 2>,
+    step: f32,
+    out: &mut ArrayViewMut<'_, S, 1>,
+) -> Result<()> {
     let dims = field.shape();
     if dims.contains(&0) {
         return Err(LetoError::InvalidInput(format!(
@@ -156,7 +168,7 @@ pub fn ray_line_integrals_into(
         let direction = [record(3), record(4), record(5)];
         // A zero direction carries no world direction; see `chord`.
         if direction.iter().all(|&component| component == 0.0) {
-            out_data[(out_base + ray as isize * out_stride) as usize] = 0.0;
+            out_data[(out_base + ray as isize * out_stride) as usize].write(0.0);
             continue;
         }
         let integral = match chord(ray_origin, direction, dims, origin, spacing) {
@@ -194,7 +206,7 @@ pub fn ray_line_integrals_into(
                 sum * segment
             }
         };
-        out_data[(out_base + ray as isize * out_stride) as usize] = integral;
+        out_data[(out_base + ray as isize * out_stride) as usize].write(integral);
     }
     Ok(())
 }
@@ -214,6 +226,8 @@ pub fn ray_line_integrals(
     let layout = Layout::c_contiguous([n_rays])?;
     let size = layout.checked_size()?;
     let mut out = Array::new(layout, VecStorage::uninit(size))?;
-    ray_line_integrals_into(field, origin, spacing, rays, step, &mut out.view_mut())?;
-    Ok(out)
+    ray_line_integrals_slots(field, origin, spacing, rays, step, &mut out.view_mut())?;
+    // SAFETY: success writes one value for every dense ray output. f32 is Copy,
+    // so a validation error or panic never drops an uninitialized value.
+    Array::new(layout, unsafe { out.into_storage().assume_init() })
 }

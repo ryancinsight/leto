@@ -1,5 +1,14 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-14 Safe typed initialization [major]
+
+- risk: safe VecStorage::uninit creates ordinary T over uninitialized memory;
+  Miri confirms safe reads, String drop and pad of strings fail on cbba7c0e.
+- fix: 0.46 MaybeUninit slots, explicit unsafe conversion, shared numeric slot
+  kernels and vector-owned Clone padding prefix; ADR 0036.
+- evidence: eight regressions and 1,189 native passes, zero skips; final-head
+  Miri/hosted/API acceptance and release-policy resolution remain pending.
+
 ## 2026-09-27 Francis skew ties beyond one ulp (Bf16)
 
 - risk: a Bf16 skew tridiagonal whose iterate couples two `[[0, a], [−a, 0]]` blocks by `ulp·2a < δ ≲ 2·ulp·2a` cycles to the iteration cap and returns `ConvergenceError` (3 of 90,000 scan matrices, orders 3–8); `dhseqr`'s recovery for a failed `dlahqr` is `dlaqr0` (AED), which leto lacks.

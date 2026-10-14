@@ -1,6 +1,9 @@
 #![warn(missing_docs)]
 //! Leto is a systems-optimized N-dimensional strided array library.
 
+#[cfg(test)]
+mod test_trace;
+
 /// Application-level array and view types.
 pub mod application;
 /// Domain-level layout, slicing, and error contracts.

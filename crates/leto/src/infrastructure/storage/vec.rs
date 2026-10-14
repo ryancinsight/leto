@@ -1,5 +1,6 @@
 use super::traits::{Storage, StorageMut};
 use serde::{Deserialize, Serialize};
+use std::mem::MaybeUninit;
 
 /// Owned array storage backed by a standard heap `Vec`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,25 +37,26 @@ impl<T> VecStorage<T> {
         }
     }
 
-    /// Create uninitialized storage without zero-filling.
+    /// Allocate uninitialized slots without zero-filling or constructing `T`.
     ///
-    /// # Safety
+    /// The slots can be safely written or dropped. Reading a `T` requires
+    /// initialization and an explicit unsafe conversion through
+    /// [`assume_init`](VecStorage::assume_init).
     ///
-    /// The returned storage contains uninitialized memory. Every element must
-    /// be written before being read, otherwise the behavior is undefined. This
-    /// is safe when the caller fully overwrites the storage (e.g. a
-    /// keep-dim reduction that writes every output element).
+    /// ```compile_fail
+    /// use leto::{Storage, VecStorage};
+    /// let storage = VecStorage::<u32>::uninit(1);
+    /// let _: u32 = storage.as_slice()[0];
+    /// ```
     #[inline]
-    #[expect(clippy::uninit_vec, reason = "caller fully overwrites uninit storage")]
-    pub fn uninit(len: usize) -> Self {
+    pub fn uninit(len: usize) -> VecStorage<MaybeUninit<T>> {
         let mut data = Vec::with_capacity(len);
-        // SAFETY: `Vec::with_capacity` allocates `len` elements, `set_len`
-        // exposes them as initialized for the caller to overwrite. The caller
-        // must write every element before any read, which `reduce_axis` does.
+        // SAFETY: capacity is at least len and every bit pattern, including
+        // uninitialized memory, is valid for MaybeUninit<T>.
         unsafe {
             data.set_len(len);
         }
-        Self { data }
+        VecStorage { data }
     }
 
     /// Wrap an existing Vec.
@@ -67,6 +69,34 @@ impl<T> VecStorage<T> {
     #[inline]
     pub fn into_inner(self) -> Vec<T> {
         self.data
+    }
+}
+
+impl<T> VecStorage<MaybeUninit<T>> {
+    /// Consume fully initialized slots without copying the allocation.
+    ///
+    /// # Safety
+    ///
+    /// Every slot must hold a valid, uniquely owned `T`. Each value becomes
+    /// owned by the returned storage and will be dropped normally. Initialized
+    /// resource-owning values in abandoned slots must be dropped by the caller
+    /// before dropping unconverted storage.
+    ///
+    /// ```compile_fail
+    /// use leto::VecStorage;
+    /// let storage = VecStorage::<u32>::uninit(1);
+    /// let _ = storage.assume_init();
+    /// ```
+    #[inline]
+    pub unsafe fn assume_init(self) -> VecStorage<T> {
+        let mut data = std::mem::ManuallyDrop::new(self.data);
+        // SAFETY: the caller establishes initialization and ownership of all
+        // len elements. MaybeUninit<T> has T's layout, including alignment;
+        // the original pointer/capacity preserve the allocation's layout.
+        let data = unsafe {
+            Vec::from_raw_parts(data.as_mut_ptr().cast::<T>(), data.len(), data.capacity())
+        };
+        VecStorage { data }
     }
 }
 
@@ -83,3 +113,7 @@ impl<T> StorageMut<T> for VecStorage<T> {
         &mut self.data
     }
 }
+
+#[cfg(test)]
+#[path = "vec_tests.rs"]
+mod tests;
