@@ -35,18 +35,18 @@ pub use linear::LinearInterpolation;
 pub use spatial::{bilinear, bilinear_index_space, trilinear, trilinear_index_space};
 
 use eunomia::RealField;
-use leto::{LetoError, Result};
+use leto::Result;
 
 /// Trait for 1-D interpolation methods.
 ///
 /// All implementations must be `Send + Sync` so they can be used in parallel
 /// solver loops.  Extrapolation (query outside `[x_min, x_max]`) always returns
-/// [`LetoError::InvalidInput`].
+/// [`leto::LetoError::InvalidInput`].
 pub trait Interpolation1D<T: RealField>: Send + Sync {
     /// Interpolate the function at a single query point `x`.
     ///
     /// # Errors
-    /// - [`LetoError::InvalidInput`] — `x` is outside the data domain.
+    /// - [`leto::LetoError::InvalidInput`] — `x` is outside the data domain.
     fn interpolate(&self, x: T) -> Result<T>;
 
     /// Inclusive data domain `(x_min, x_max)`.
@@ -56,30 +56,4 @@ pub trait Interpolation1D<T: RealField>: Send + Sync {
     fn interpolate_many(&self, xs: &[T]) -> Result<Vec<T>> {
         xs.iter().map(|&x| self.interpolate(x)).collect()
     }
-}
-
-/// Validate and return `Err` when `x` is outside `(lo, hi)`.
-pub(super) fn check_bounds<T: RealField>(x: T, lo: T, hi: T) -> Result<()> {
-    if x < lo || x > hi {
-        Err(LetoError::InvalidInput(
-            "query point is outside the data range".into(),
-        ))
-    } else {
-        Ok(())
-    }
-}
-
-/// Validate that `x_data` is non-empty, long enough, and strictly increasing.
-pub(super) fn validate_nodes<T: RealField>(x_data: &[T], min_len: usize) -> Result<()> {
-    if x_data.len() < min_len {
-        return Err(LetoError::InvalidInput(format!(
-            "Need at least {min_len} points for interpolation"
-        )));
-    }
-    if !x_data.windows(2).all(|w| w[0] < w[1]) {
-        return Err(LetoError::InvalidInput(
-            "x_data must be strictly increasing (no duplicate nodes)".into(),
-        ));
-    }
-    Ok(())
 }

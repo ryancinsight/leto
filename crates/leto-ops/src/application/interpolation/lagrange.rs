@@ -13,7 +13,8 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
-use super::{check_bounds, validate_nodes, Interpolation1D};
+use super::search::{check_bounds, validate_nodes};
+use super::Interpolation1D;
 use eunomia::{NumericElement, RealField};
 use leto::{LetoError, Result};
 

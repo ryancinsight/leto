@@ -102,6 +102,21 @@ impl<T: RealScalar> LuDecomposition<T> {
         Array2::from_shape_vec([n, n], out)
     }
 
+    /// Determinant of the original matrix: parity × product of `U`'s diagonal.
+    #[must_use]
+    pub fn det(&self) -> T {
+        let n = self.dim();
+        let mut det = if self.sign >= 0 {
+            T::ONE
+        } else {
+            T::ZERO.sub(T::ONE)
+        };
+        for k in 0..n {
+            det = det.mul(*self.factors.get([k, k]).expect("diagonal in bounds"));
+        }
+        det
+    }
+
     /// Forward- then back-substitution over the packed factors. `x` arrives
     /// already permuted and leaves holding the solution.
     ///
