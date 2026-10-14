@@ -24,9 +24,8 @@ leto-ops = { version = "0.45.2", path = "crates/leto-ops" }
 # Mnemosyne main already follows Eunomia's merged provider source; the lockfile
 # records the reviewed default revision without retaining the obsolete PR.
 mnemosyne = { package = "mnemosyne-memory", version = "0.9.0", git = "https://github.com/ryancinsight/Mnemosyne", features = ["eunomia"] }
-# Moirai PR #256 merged to the default branch; the lockfile records its
-# resolved source identity without a temporary revision pin.
-moirai = { package = "moirai-runtime", version = "0.8.2", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+# Moirai 0.9 provider bump (stack co-evolution; unblocks apollo/Coeus/hephaestus/consus/gaia/ritk).
+moirai = { package = "moirai-runtime", version = "0.9.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 # Hermes PR #155, Eunomia PR #87, and Aequitas PR #51 are merged;
 # default-branch resolution preserves their shared trait source identity.
 hermes-simd = { version = "0.8.0", git = "https://github.com/ryancinsight/hermes.git" }
