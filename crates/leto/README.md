@@ -64,3 +64,13 @@ storage, view, structural, and sparse contracts with executable examples.
 
 Licensed under either of [Apache License, Version 2.0](../../LICENSE-APACHE) or
 [MIT license](../../LICENSE-MIT) at your option.
+
+## Uninitialized storage in 0.46
+
+`VecStorage::<T>::uninit(len)` returns `VecStorage<MaybeUninit<T>>`, which can
+be safely dropped or filled with slot `write` calls. Converting to
+`VecStorage<T>` requires unsafe `assume_init` after every slot holds a valid,
+uniquely owned value. For safe construction without an initialization proof,
+use `VecStorage::generate`, `fill`, or `new`. Owned operations perform their
+own initialization; `pad` supports resource-owning Clone types and cleans its
+initialized prefix on error or panic. See ADR 0036 and the changelog migration.

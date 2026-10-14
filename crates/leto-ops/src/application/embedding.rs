@@ -13,6 +13,7 @@
 //! only scalar registers besides the three buffers.
 
 use crate::application::index::validate_mutable_output;
+use crate::application::output::OutputSlot;
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
@@ -32,6 +33,14 @@ pub fn embedding_gather_into<T: Scalar>(
     table: &ArrayView<'_, T, 2>,
     indices: &ArrayView<'_, u32, 1>,
     output: &mut ArrayViewMut<'_, T, 2>,
+) -> Result<()> {
+    embedding_gather_slots::<T, T>(table, indices, output)
+}
+
+fn embedding_gather_slots<T: Scalar, S: OutputSlot<T>>(
+    table: &ArrayView<'_, T, 2>,
+    indices: &ArrayView<'_, u32, 1>,
+    output: &mut ArrayViewMut<'_, S, 2>,
 ) -> Result<()> {
     let [num_embeddings, embedding_dim] = table.shape();
     let [rows] = indices.shape();
@@ -62,8 +71,10 @@ pub fn embedding_gather_into<T: Scalar>(
             }
             let table_base = selected * embedding_dim;
             let out_base = row * embedding_dim;
-            out_slice[out_base..out_base + embedding_dim]
-                .copy_from_slice(&table_slice[table_base..table_base + embedding_dim]);
+            S::copy_from_slice(
+                &mut out_slice[out_base..out_base + embedding_dim],
+                &table_slice[table_base..table_base + embedding_dim],
+            );
         }
         return Ok(());
     }
@@ -94,7 +105,7 @@ pub fn embedding_gather_into<T: Scalar>(
         for col in 0..embedding_dim {
             let from = (table_base + selected as isize * tab_row + col as isize * tab_col) as usize;
             let to = (output_base + row as isize * out_row + col as isize * out_col) as usize;
-            output_data[to] = table_data[from];
+            output_data[to].write(table_data[from]);
         }
     }
     Ok(())
@@ -113,6 +124,8 @@ pub fn embedding_gather<T: Scalar>(
     let layout = Layout::c_contiguous([rows, embedding_dim])?;
     let size = layout.checked_size()?;
     let mut output = Array::new(layout, VecStorage::uninit(size))?;
-    embedding_gather_into(table, indices, &mut output.view_mut())?;
-    Ok(output)
+    embedding_gather_slots::<T, _>(table, indices, &mut output.view_mut())?;
+    // SAFETY: success writes every dense output row. T is Copy, so a rejected
+    // index or panic drops only uninitialized slots and their allocation.
+    Array::new(layout, unsafe { output.into_storage().assume_init() })
 }

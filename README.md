@@ -116,6 +116,11 @@ assert_eq!(view.shape(), [1, 2]);
 - `SliceStorage<'a, T>` for borrowed read-only storage.
 - `SliceStorageMut<'a, T>` for borrowed mutable storage.
 - `VecStorage<T>` for owned heap-backed storage.
+- `VecStorage::<T>::uninit` allocates `MaybeUninit<T>` slots. Typed values
+  become available only after every slot is written and the unsafe
+  `assume_init` contract is established (0.46 migration, ADR 0036).
+- Owned numeric operations initialize those slots through the same kernels
+  as caller-owned operations; padding tracks live Clone values during unwind.
 - `MnemosyneStorage<T>` behind `mnemosyne-alloc` for optional aligned
   allocation. `new(len)` requires `T: Default` and initializes elements before
   exposing safe slices.

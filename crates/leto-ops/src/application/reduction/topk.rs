@@ -18,6 +18,7 @@
 //! holding only scalar registers besides the three buffers.
 
 use crate::application::index::validate_mutable_output;
+use crate::application::output::OutputSlot;
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
@@ -41,6 +42,16 @@ pub fn topk_axis_into<T: Scalar>(
     k: usize,
     values: &mut ArrayViewMut<'_, T, 2>,
     indices: &mut ArrayViewMut<'_, u32, 2>,
+) -> Result<()> {
+    topk_axis_slots::<T, T, u32>(input, axis, k, values, indices)
+}
+
+fn topk_axis_slots<T: Scalar, S: OutputSlot<T>, I: OutputSlot<u32>>(
+    input: &ArrayView<'_, T, 2>,
+    axis: usize,
+    k: usize,
+    values: &mut ArrayViewMut<'_, S, 2>,
+    indices: &mut ArrayViewMut<'_, I, 2>,
 ) -> Result<()> {
     if axis >= 2 {
         return Err(LetoError::StorageError {
@@ -115,10 +126,10 @@ pub fn topk_axis_into<T: Scalar>(
             let value = input_data[(lane_in + a as isize * input_axis_stride) as usize];
             if a < k {
                 slots.place(a, value, a as u32);
-                slots.bubble_up(a);
-            } else if value > slots.worst(k) {
+                slots.bubble_up::<T>(a);
+            } else if value > slots.worst::<T>(k) {
                 slots.place(k - 1, value, a as u32);
-                slots.bubble_up(k - 1);
+                slots.bubble_up::<T>(k - 1);
             }
         }
     }
@@ -153,49 +164,74 @@ pub fn topk_axis<T: Scalar>(input: &ArrayView<'_, T, 2>, axis: usize, k: usize) 
     let size = values_layout.checked_size()?;
     let mut values = Array::new(values_layout, VecStorage::uninit(size))?;
     let mut indices = Array::new(indices_layout, VecStorage::uninit(size))?;
-    topk_axis_into(
+    topk_axis_slots::<T, _, _>(
         input,
         axis,
         k,
         &mut values.view_mut(),
         &mut indices.view_mut(),
     )?;
+    // SAFETY: k <= axis_len and success fills every lane's k slots before
+    // reading them. Both buffers are dense and both element types are Copy.
+    let values = Array::new(values_layout, unsafe {
+        values.into_storage().assume_init()
+    })?;
+    let indices = Array::new(indices_layout, unsafe {
+        indices.into_storage().assume_init()
+    })?;
     Ok(Topk { values, indices })
 }
 
 /// One lane's output slots: the value/index buffers plus this lane's base
 /// offsets and axis strides.
-struct LaneSlots<'a, T> {
-    values: &'a mut [T],
-    indices: &'a mut [u32],
+struct LaneSlots<'a, S, I> {
+    values: &'a mut [S],
+    indices: &'a mut [I],
     values_base: isize,
     indices_base: isize,
     values_stride: isize,
     indices_stride: isize,
 }
 
-impl<T: Scalar> LaneSlots<'_, T> {
+impl<S, I> LaneSlots<'_, S, I> {
     /// Write one selected element into its output slots.
     #[inline]
-    fn place(&mut self, slot: usize, value: T, index: u32) {
-        self.values[(self.values_base + slot as isize * self.values_stride) as usize] = value;
-        self.indices[(self.indices_base + slot as isize * self.indices_stride) as usize] = index;
+    fn place<T: Scalar>(&mut self, slot: usize, value: T, index: u32)
+    where
+        S: OutputSlot<T>,
+        I: OutputSlot<u32>,
+    {
+        self.values[(self.values_base + slot as isize * self.values_stride) as usize].write(value);
+        self.indices[(self.indices_base + slot as isize * self.indices_stride) as usize]
+            .write(index);
     }
 
     /// Read the current worst slot's value.
     #[inline]
-    fn worst(&self, k: usize) -> T {
-        self.values[(self.values_base + (k - 1) as isize * self.values_stride) as usize]
+    fn worst<T: Scalar>(&self, k: usize) -> T
+    where
+        S: OutputSlot<T>,
+    {
+        // SAFETY: worst is called only after all k slots have been placed.
+        unsafe {
+            self.values[(self.values_base + (k - 1) as isize * self.values_stride) as usize].read()
+        }
     }
 
     /// Bubble the occupant of `slot` up while the previous slot does not
     /// dominate it — the kernel's `>=`-break, verbatim.
     #[inline]
-    fn bubble_up(&mut self, mut slot: usize) {
+    fn bubble_up<T: Scalar>(&mut self, mut slot: usize)
+    where
+        S: OutputSlot<T>,
+        I: OutputSlot<u32>,
+    {
         while slot > 0 {
             let curr = (self.values_base + slot as isize * self.values_stride) as usize;
             let prev = (self.values_base + (slot - 1) as isize * self.values_stride) as usize;
-            if self.values[prev] >= self.values[curr] {
+            // SAFETY: place initialized slot, and every lower slot was placed
+            // earlier. Swaps preserve initialization of both values/indices.
+            if unsafe { self.values[prev].read() >= self.values[curr].read() } {
                 break;
             }
             self.values.swap(prev, curr);

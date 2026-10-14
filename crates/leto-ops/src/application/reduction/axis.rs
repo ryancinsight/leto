@@ -2,6 +2,7 @@
 
 use super::strategies::AxisReduction;
 use crate::application::index::{index_from_flat, validate_mutable_output};
+use crate::application::output::OutputSlot;
 use crate::domain::scalar::Scalar;
 use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage};
 
@@ -9,7 +10,7 @@ use leto::{Array, ArrayView, ArrayViewMut, Layout, LetoError, Result, VecStorage
 use crate::infrastructure::parallel::PARALLEL_MIN_REDUCTION_OUTPUTS;
 
 #[cfg(feature = "parallel")]
-struct AxisReductionContext<'a, T, const N: usize> {
+struct AxisReductionContext<'a, T, S, const N: usize> {
     out_size: usize,
     out_shape: [usize; N],
     axis: usize,
@@ -17,7 +18,7 @@ struct AxisReductionContext<'a, T, const N: usize> {
     input_layout: leto::Layout<N>,
     output_layout: leto::Layout<N>,
     input_data: &'a [T],
-    output_data: &'a mut [T],
+    output_data: &'a mut [S],
 }
 
 #[inline]
@@ -67,6 +68,19 @@ where
     Op: AxisReduction<T>,
     T: Scalar,
 {
+    reduce_axis_slots::<Op, T, T, N>(input, axis, output)
+}
+
+fn reduce_axis_slots<Op, T, S, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    axis: usize,
+    output: &mut ArrayViewMut<'_, S, N>,
+) -> Result<()>
+where
+    Op: AxisReduction<T>,
+    T: Scalar,
+    S: OutputSlot<T>,
+{
     let expected_shape = output_shape(input.shape(), axis)?;
     if output.shape() != expected_shape {
         return Err(LetoError::ShapeMismatch {
@@ -115,7 +129,7 @@ where
         if rows == 0 {
             for col in 0..cols {
                 let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
-                output_data[out_off] = Op::EMPTY;
+                output_data[out_off].write(Op::EMPTY);
             }
             return Ok(());
         }
@@ -123,7 +137,7 @@ where
         for col in 0..cols {
             let input_off = input_base.wrapping_add(col.wrapping_mul(col_stride));
             let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
-            output_data[out_off] = Op::initial(input_data[input_off]);
+            output_data[out_off].write(Op::initial(input_data[input_off]));
         }
 
         for row in 1..rows {
@@ -131,13 +145,17 @@ where
             for col in 0..cols {
                 let input_off = row_base.wrapping_add(col.wrapping_mul(col_stride));
                 let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
-                output_data[out_off] = Op::fold(output_data[out_off], input_data[input_off]);
+                // SAFETY: the first row initializes every column before folding.
+                let previous = unsafe { output_data[out_off].read() };
+                output_data[out_off].write(Op::fold(previous, input_data[input_off]));
             }
         }
 
         for col in 0..cols {
             let out_off = output_base.wrapping_add(col.wrapping_mul(output_col_stride));
-            output_data[out_off] = Op::finalize(output_data[out_off], rows);
+            // SAFETY: the first row initializes every column before finalization.
+            let previous = unsafe { output_data[out_off].read() };
+            output_data[out_off].write(Op::finalize(previous, rows));
         }
         return Ok(());
     }
@@ -147,7 +165,7 @@ where
         // Output injectivity is established by `validate_mutable_output`, so
         // parallel workers' logical rows map to disjoint physical elements.
         if out_size >= PARALLEL_MIN_REDUCTION_OUTPUTS {
-            parallel_reduce_axis_into::<Op, T, N>(AxisReductionContext {
+            parallel_reduce_axis_into::<Op, T, S, N>(AxisReductionContext {
                 out_size,
                 out_shape,
                 axis,
@@ -168,7 +186,7 @@ where
         let out_idx = index_from_flat(flat_idx, &out_shape);
         let out_off = output_layout.offset_of(out_idx)?;
         if axis_len == 0 {
-            output_data[out_off] = Op::EMPTY;
+            output_data[out_off].write(Op::EMPTY);
             continue;
         }
 
@@ -196,7 +214,7 @@ where
             },
         );
 
-        output_data[out_off] = Op::finalize(acc, axis_len);
+        output_data[out_off].write(Op::finalize(acc, axis_len));
     }
 
     Ok(())
@@ -216,15 +234,18 @@ where
     let size = layout.checked_size()?;
     let storage = VecStorage::uninit(size);
     let mut output = Array::new(layout, storage)?;
-    reduce_axis_into::<Op, T, N>(input, axis, &mut output.view_mut())?;
-    Ok(output)
+    reduce_axis_slots::<Op, T, _, N>(input, axis, &mut output.view_mut())?;
+    // SAFETY: success initializes each slot of the dense output, including
+    // empty-axis identities. T is Copy, so error/unwind cannot leak payloads.
+    Array::new(layout, unsafe { output.into_storage().assume_init() })
 }
 
 #[cfg(feature = "parallel")]
-fn parallel_reduce_axis_into<Op, T, const N: usize>(ctx: AxisReductionContext<'_, T, N>)
+fn parallel_reduce_axis_into<Op, T, S, const N: usize>(ctx: AxisReductionContext<'_, T, S, N>)
 where
     Op: AxisReduction<T>,
     T: Scalar,
+    S: OutputSlot<T>,
 {
     // SAFETY: the parallel closure below writes disjoint output elements per
     // worker range (the for_each_unit_range contract), so the raw pointers it
@@ -265,7 +286,7 @@ where
                             reason = "whole-struct capture keeps the raw pointer behind the Send wrapper"
                         )]
                         let out_ptr = (&output_ptr).0;
-                        *out_ptr.add(out_off) = Op::EMPTY;
+                        (*out_ptr.add(out_off)).write(Op::EMPTY);
                     }
                     continue;
                 }
@@ -328,7 +349,7 @@ where
                         reason = "whole-struct capture keeps the raw pointer behind the Send wrapper"
                     )]
                     let out_ptr = (&output_ptr).0;
-                    *out_ptr.add(out_off) = Op::finalize(acc, ctx.axis_len);
+                    (*out_ptr.add(out_off)).write(Op::finalize(acc, ctx.axis_len));
                 }
             }
         },

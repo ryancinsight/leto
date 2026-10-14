@@ -107,3 +107,5 @@ pub use zip::{
     indexed_fold_fortran, indexed_map4_inplace, indexed_map_inplace, indexed_zip_mut_with,
     zip_fold, zip_mut_with, CoordinateMapPlan, IndexedZipMutOutputs, ZipMutOutputs, ZipSources,
 };
+
+mod output;

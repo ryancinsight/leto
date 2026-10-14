@@ -6,6 +6,29 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [Unreleased]
 
+### Breaking (0.46.0)
+
+- [major] `VecStorage::<T>::uninit` returns `VecStorage<MaybeUninit<T>>`.
+  Previously, safe reads, drops, and padding could consume uninitialized T;
+  Miri reproduces failures for NonZeroU8, u32, and String. Migration: write
+  every slot with `MaybeUninit::write`, then establish the unsafe consuming
+  `assume_init` contract; use `generate`, `fill`, or `new` for safe construction.
+  Partial resource-owning initialization requires explicit cleanup before
+  abandoning slots. The pre-1.0 workspace advances from 0.45.2 to 0.46.0.
+
+### Fixed
+
+- [patch] Owned numerical outputs share their existing kernels through static
+  initialized/uninitialized slot representations, preserving arithmetic order,
+  row copy/fill paths and parallel partitioning without zero-fill allocation.
+- [patch] `pad` of Clone payloads initializes a vector's live prefix by push,
+  sharing value selection with `pad_into` and dropping only live values during
+  panic/error. New tests cover strings, strided/empty layouts and exact drops.
+- [patch] Both Miri borrow models now cover embedding, triangular masking and
+  ray integrals alongside reduction and the complete storage substrate.
+- [patch] PR API validation uses Atlas's committed locked-source gate. The
+  prior informational job reported success after a Moirai resolution failure.
+
 ### Changed
 
 - [minor] `StaggeredLeapfrog3D::map_divergence_into(fields, pointwise, dst,

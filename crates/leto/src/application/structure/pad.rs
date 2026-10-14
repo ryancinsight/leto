@@ -59,27 +59,28 @@ pub fn pad_into<T: Clone, const N: usize>(
     }
 
     for (out_index, slot) in output.reborrow().indexed_iter_mut()? {
-        let mut src_index = [0usize; N];
-        let mut inside = true;
-        for d in 0..N {
-            if out_index[d] < width[d].0 {
-                inside = false;
-                break;
-            }
-            let s = out_index[d] - width[d].0;
-            if s >= in_shape[d] {
-                inside = false;
-                break;
-            }
-            src_index[d] = s;
-        }
-        *slot = if inside {
-            input.get(src_index)?.clone()
-        } else {
-            fill.clone()
-        };
+        *slot = padded_value(input, width, &fill, out_index)?;
     }
     Ok(())
+}
+
+fn padded_value<T: Clone, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    width: PadWidth<N>,
+    fill: &T,
+    out_index: [usize; N],
+) -> Result<T> {
+    let mut src_index = [0usize; N];
+    for d in 0..N {
+        let Some(index) = out_index[d].checked_sub(width[d].0) else {
+            return Ok(fill.clone());
+        };
+        if index >= input.shape()[d] {
+            return Ok(fill.clone());
+        }
+        src_index[d] = index;
+    }
+    Ok(input.get(src_index)?.clone())
 }
 
 /// Pad `input` with `fill` by `width` elements before and after on each axis,
@@ -95,7 +96,15 @@ pub fn pad<T: Clone, const N: usize>(
     let out_shape = padded_shape(input.shape(), width)?;
     let out_layout = Layout::c_contiguous(out_shape)?;
     let size = out_layout.size();
-    let mut output = Array::new(out_layout, VecStorage::uninit(size))?;
-    pad_into(input, width, fill, &mut output.view_mut())?;
-    Ok(output)
+    let mut values = Vec::with_capacity(size);
+    for flat in 0..size {
+        let mut index = [0; N];
+        crate::domain::layout::kernels::fill_index_from_flat(flat, &out_shape, &mut index);
+        values.push(padded_value(input, width, &fill, index)?);
+    }
+    Array::new(out_layout, VecStorage::new(values))
 }
+
+#[cfg(test)]
+#[path = "pad_tests.rs"]
+mod tests;

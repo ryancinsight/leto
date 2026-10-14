@@ -22,16 +22,18 @@ env:
   RUST_TOOLCHAIN: 1.97.0
 
 jobs:
-  # Public-surface compatibility, informational on pull requests: the
-  # detected change class is visible while the change is still in
-  # review. The blocking comparison runs on release.
-  # Atlas ATLAS-SEMVER-GATE-FLEETWIDE-2026-08-28.
+  # Compare the committed locked source contract, failing on build errors.
+  # The informational generator updates moving Git providers and can report
+  # success after failing to resolve this workspace's reviewed Moirai version.
+  # Reuse Atlas PR #540's existing implementation at an exact source revision.
   semver:
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@b44c45c3875c9c03ac9fc83994ee068c1805bb49
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@a55f3e2d3c9c2a7626baca05dbccc49642e521aa
     with:
       package: leto-ops,leto
       rust-toolchain: 1.97.0
+      dependency-contract: locked
+      atlas-ref: a55f3e2d3c9c2a7626baca05dbccc49642e521aa
     permissions:
       contents: read
 
@@ -115,32 +117,19 @@ jobs:
   # Miri over the code whose correctness rests on an invariant the native suite
   # cannot see.
   #
-  # `reduce_axis` writes its output through `VecStorage::uninit` and raw
-  # pointers (PR #157, `d16e3b2`): the single-write optimization is sound only
-  # because every output element is written before it is read, and that
-  # obligation lives in prose on `VecStorage::uninit`, not in the type system.
-  # Nothing gated it, which is the defect generator the mnemosyne board already
-  # recorded for a crate sitting outside its Miri gate (MN-459): the sweep that
-  # fixed every gated sibling could not see the ungated copy.
+  # Owned numerical outputs remain MaybeUninit slots until their shared kernel
+  # succeeds. Padding supports Clone payloads and tracks its live prefix through
+  # vector ownership. Storage tests cover valid conversion, abandoned slots,
+  # alignment and panic cleanup; operation tests cover every numeric caller.
   #
   # Both borrow models run, and that is not belt-and-braces: an MN-437 fix in
   # this stack passed Stacked Borrows while Tree Borrows still rejected it, so a
   # single-model gate would have certified a still-broken fix.
   #
-  # SCOPE, measured locally on 2026-09-10. Miri interprets every instruction, so
-  # runtime is dominated by suite size rather than by the code under test:
-  #
-  #   leto --lib                             130 tests, 206s   <- gated
-  #   leto-ops ops_tests -E test(/reduction/) 17 tests,   6s   <- gated
-  #   leto-ops --lib                         216 tests, >10m  <- excluded
-  #   leto-ops --test ops_tests              full binary, >10m <- excluded
-  #   leto layout_property_tests             proptest,     >10m <- excluded
-  #
-  # The two selected runs are the storage substrate and the uninitialized-output
-  # caller, which are the contracts this job exists for. The broader `leto-ops`
-  # and property surfaces are excluded because they are not yet Miri-clean or
-  # affordable, not because they are believed sound; the measured blockers are
-  # recorded on LETO-MIRI-GATE-2026-09-10, which owns widening this scope.
+  # Complete leto --lib and affected reduction/embedding/triangular/volume
+  # ops tests run under both models. Broader ops/property Miri suites remain
+  # outside this gate; their limitations stay on LETO-MIRI-GATE-2026-09-10.
+  # The original 600-second per-test and 45-minute job bounds are unchanged.
   miri:
     name: Miri (uninitialized memory and aliasing)
     runs-on: ubuntu-latest
@@ -176,23 +165,23 @@ jobs:
       # test reduces a 40000x8 array; under Miri that exceeds the profile's
       # 600 s bound. Miri therefore covers the serial output path only, and
       # the parallel task split is covered by the native suite.
-      - name: Miri — uninitialized reduction output (Stacked Borrows)
+      - name: Miri — initialized numeric output contracts (Stacked Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation
         run: >-
           cargo +nightly miri nextest run -p leto-ops --locked --profile miri
           --test ops_tests
-          -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
+          -E '(test(/reduction/) | test(/embedding/) | test(/triangular/) | test(/volume/)) & !test(parallel_axis_reduction_matches_the_serial_result)'
 
       - name: Miri — storage substrate (Tree Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
         run: cargo +nightly miri nextest run -p leto --locked --profile miri --lib
 
-      - name: Miri — uninitialized reduction output (Tree Borrows)
+      - name: Miri — initialized numeric output contracts (Tree Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
         run: >-
           cargo +nightly miri nextest run -p leto-ops --locked --profile miri
           --test ops_tests
-          -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
+          -E '(test(/reduction/) | test(/embedding/) | test(/triangular/) | test(/volume/)) & !test(parallel_axis_reduction_matches_the_serial_result)'
