@@ -3,8 +3,9 @@
 //! Vertical structure (SoC, mirroring `qr/{decompose, solve}`): the `decompose`
 //! leaf owns the factorization driver ([`lu_decompose`]) and the blocked-path
 //! gate; the `eliminate` leaf owns the elimination kernels; the `solvers`
-//! leaf owns substitution and the one-call conveniences. This module owns the
-//! [`LuDecomposition`] type and its materialization accessors.
+//! leaf owns substitution, the determinant, and the one-call conveniences.
+//! This module owns the [`LuDecomposition`] type and its materialization
+//! accessors.
 
 pub mod decompose;
 pub mod eliminate;
@@ -69,20 +70,5 @@ impl<T: RealScalar> LuDecomposition<T> {
     #[inline]
     pub fn pivots(&self) -> &[usize] {
         &self.pivots
-    }
-
-    /// Determinant of the original matrix: parity × product of `U`'s diagonal.
-    #[must_use]
-    pub fn det(&self) -> T {
-        let n = self.dim();
-        let mut det = if self.sign >= 0 {
-            T::ONE
-        } else {
-            T::ZERO.sub(T::ONE)
-        };
-        for k in 0..n {
-            det = det.mul(*self.factors.get([k, k]).expect("diagonal in bounds"));
-        }
-        det
     }
 }
