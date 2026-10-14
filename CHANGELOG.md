@@ -26,6 +26,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   panic/error. New tests cover strings, strided/empty layouts and exact drops.
 - [patch] Both Miri borrow models now cover embedding, triangular masking and
   ray integrals alongside reduction and the complete storage substrate.
+- [patch] PR API validation uses Atlas's committed locked-source gate. The
+  prior informational job reported success after a Moirai resolution failure.
 
 ### Changed
 

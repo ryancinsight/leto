@@ -7,7 +7,8 @@
 - [x] Preserve shared numeric kernels and single-write allocation; make Clone
       padding error/panic cleanup follow the initialized vector prefix.
 - [x] Pass eight new regressions and the full 1,189-test native suite.
-- [ ] Complete both Miri borrow models and final-head hosted/API gates.
+- [x] Pass both Miri borrow models, all features and all 170 benchmark cases.
+- [ ] Verify final-head hosted/API gates using Atlas #540's locked contract.
 - [ ] Resolve release side effects before any merge; keep the PR in draft.
 
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [minor, perf] — Codex

@@ -6,8 +6,8 @@
   Miri confirms safe reads, String drop and pad of strings fail on cbba7c0e.
 - fix: 0.46 MaybeUninit slots, explicit unsafe conversion, shared numeric slot
   kernels and vector-owned Clone padding prefix; ADR 0036.
-- evidence: eight regressions and 1,189 native passes, zero skips; final-head
-  Miri/hosted/API acceptance and release-policy resolution remain pending.
+- evidence: eight regressions, 1,189 native passes and hosted Miri 141+43 per
+  model. Final locked CI acceptance and release-policy resolution are pending.
 
 ## 2026-09-27 Francis skew ties beyond one ulp (Bf16)
 

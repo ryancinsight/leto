@@ -22,16 +22,18 @@ env:
   RUST_TOOLCHAIN: 1.97.0
 
 jobs:
-  # Public-surface compatibility, informational on pull requests: the
-  # detected change class is visible while the change is still in
-  # review. The blocking comparison runs on release.
-  # Atlas ATLAS-SEMVER-GATE-FLEETWIDE-2026-08-28.
+  # Compare the committed locked source contract, failing on build errors.
+  # The informational generator updates moving Git providers and can report
+  # success after failing to resolve this workspace's reviewed Moirai version.
+  # Reuse Atlas PR #540's existing implementation at an exact source revision.
   semver:
     name: SemVer gate
-    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@b44c45c3875c9c03ac9fc83994ee068c1805bb49
+    uses: ryancinsight/atlas/.github/workflows/semver-gate.yml@a55f3e2d3c9c2a7626baca05dbccc49642e521aa
     with:
       package: leto-ops,leto
       rust-toolchain: 1.97.0
+      dependency-contract: locked
+      atlas-ref: a55f3e2d3c9c2a7626baca05dbccc49642e521aa
     permissions:
       contents: read
 

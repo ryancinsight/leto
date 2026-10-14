@@ -82,8 +82,10 @@
   kernels; Clone padding owns only its initialized prefix during unwind.
 - Regression coverage: eight native storage/padding tests, two compile-fail
   contracts, all existing numerical scenarios and exact error/drop behavior.
-- Local native: 1,189 passes, zero skips; strict lint/minimal features pass.
-  Both-borrow-model Miri and final exact-head hosted results remain required.
+- Native/all-feature: 1,189 passes each, zero skips; strict lint and docs pass.
+  Hosted Linux Miri passes 141 storage and 43 numeric tests per borrow model.
+- API: Atlas #540 locked gate replaces a falsely green moving-source failure;
+  compiler proves the return-type break that 0.49.0 API lints do not detect.
 - Gate scope: complete leto library plus reduction/embedding/triangular/volume
   ops scenarios; unchanged parallel-axis scenario is native-only because its
   40,000x8 input exceeds the existing 600-second interpreter bound.
