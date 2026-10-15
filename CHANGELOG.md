@@ -4,7 +4,7 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
-## [0.46.0] - Unreleased
+## [0.47.0] - Unreleased
 
 ### Added
 
@@ -23,8 +23,26 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   constructor, owned canonical storage and strided RHS behavior stay compatible.
 - [patch] Feature-disabled batched LU propagates its real decomposition result
   with `?`, closing the previously recorded strict Clippy diagnostic.
-- [arch] Advance the lockstep workspace to 0.46.0 for the approved API addition.
+- [arch] Advance the lockstep workspace to 0.47.0 for the approved API addition.
   This development change does not publish packages or create release tags.
+
+## [0.46.0] - Unreleased
+
+### Breaking
+
+- [minor] Version the shared published numeric/provider boundary for Eunomia 0.10,
+  Hermes 0.9, Aequitas 0.3 and Mnemosyne-memory 0.10; Moirai 0.9.3 consumes
+  the compatible private allocator. Direct consumers must advance those
+  requirements together with Leto/Leto-ops 0.46. Old and new pre-1.0 provider
+  types must not cross one public boundary (ADR 0029).
+
+### Changed
+
+- Preserve all Rust implementations, numerical bounds and tests. Canonical
+  Git URLs remain unpinned in manifests; the lock records one source per
+  provider. Preserve the provider constraints merged in #364; require the
+  integrated Moirai 0.9.3 line and refresh its merged source. The API gate
+  compares the exact committed locked graphs.
 
 ## [0.45.3] - Specification increment
 

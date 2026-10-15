@@ -1,6 +1,6 @@
 # Leto Development Checklist
 
-Active sprint target: **0.46.0** — approved borrowed CSR integration [arch].
+Active sprint target: **0.47.0** — approved borrowed CSR integration [arch].
 
 ## LETO-CSR-FORWARD-CONTRACT — Execution — Owner: Codex `/root`
 
@@ -14,7 +14,7 @@ Active sprint target: **0.46.0** — approved borrowed CSR integration [arch].
 - [x] [patch] Prepare the independently reviewable proposal and synchronize
       verification evidence, changelog and lockstep workspace version.
 - [x] [arch] Ryan Clanton approves ADR 0036 in the task conversation on
-      2026-10-15; provider target 0.46.0.
+      2026-10-15; provider target 0.47.0 (0.46 is now the merged numeric cohort).
 - [x] [arch] Implement checked generic borrowed CSR and one prepared product
       with scalar/SIMD arithmetic and synchronous row dispatch.
 - [ ] [arch] Verify rejection, exact arithmetic, initialization, allocation,
@@ -33,6 +33,19 @@ both borrow models; the signed-width case also passes on 32-bit ARM. i686
 stops in an existing Eunomia alignment assertion. Precision and all 64 empty
 shape triples pass Stacked Borrows; the Tree Borrows repeat is in progress.
 Final consumer/performance and hosted gates remain open in the record.
+
+**Target Version**: 0.46.0
+
+## LETO-EUNOMIA-010-COHORT [minor] — provider compatibility
+
+- [x] Audit default requirements and preserve canonical provider ownership (ADR 0029).
+- [x] Advance workspace/internal and direct provider requirements together; document the pre-1.0 migration.
+- [x] Preserve #364's integrated provider constraints and the earlier 1,181-test source evidence.
+- [ ] Reverify the merged-default source lock, strict Clippy and complete native values on the refreshed head.
+- [x] Verify all 33 doctests (one existing ignored example) and warning-denied documentation.
+- [ ] Pass exact committed API comparison and applicable hosted CI.
+- [ ] Verify an unseeded consumer against the merged provider defaults.
+- [ ] Obtain approval for main integration, pending-crate publication and legacy Pages deployment.
 
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [minor, perf] — Codex
 

@@ -6,7 +6,7 @@ Status: Accepted
 
 Date: 2026-10-15. Owner: Codex `/root`.
 Board: `LETO-CSR-FORWARD-CONTRACT`. Classification: [arch], prospective
-implementation target 0.46.0. The original proposal and its current-API witnesses are
+implementation target 0.47.0. The original proposal and its current-API witnesses are
 a [patch] documentation/test increment targeting 0.45.3.
 
 ## Context
@@ -115,6 +115,13 @@ and paired performance comparisons against the recorded base.
 Ryan Clanton explicitly approves this decision in the task conversation on
 2026-10-15 ("approve"), after reviewing the proposal. This satisfies the
 global engineering SOP's architectural sign-off requirement and opens the
-0.46.0 implementation checklist. Approval covers the provider execution
+0.47.0 implementation checklist. Approval covers the provider execution
 boundary and the documented downstream safety-contract clarification; it
 does not authorize a registry release or merge without checks.
+
+
+Version adjustment: main `8b4ab407` merges the separately owned numeric-provider
+cohort as 0.46.0 during implementation. The additive CSR capability therefore
+targets 0.47.0. This changes the version/dependency delivery order, not the
+approved behavior or safety boundary. Preserve that cohort and update consumer
+provider bindings together under ADR 0029's nominal-identity contract.

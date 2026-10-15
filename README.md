@@ -6,6 +6,12 @@ and `nalgebra` usage as the shared non-differentiable memory, layout, and
 dense-linear-algebra vocabulary between Atlas spectral transforms (`apollo`)
 and tensor/autodiff systems (`coeus`, the Atlas replacement for `burn`).
 
+Leto/Leto-ops 0.46 follows the Eunomia 0.10 provider cohort. Direct Rust
+consumers advance numeric, SIMD, comparison and allocation requirements
+alongside Leto; numerical kernels and layouts remain unchanged. The
+[source-identity decision](docs/adr/0029-provider-source-identity-during-coevolution.md)
+requires provider-first integration and one nominal type identity.
+
 ## Role In Atlas
 
 Leto sits between:

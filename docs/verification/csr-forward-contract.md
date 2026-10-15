@@ -223,3 +223,20 @@ budget, strict provenance, Miri isolation and default arithmetic error injection
 Full native and strict Clippy repeat after changes; only actual executed checks
 are counted. Provider/consumer performance and fresh exact-Git resolution remain
 completion gates, not conclusions derived from these correctness tests.
+
+
+The Tree repeat of the three precision/empty cases passes at the published
+`3fa5d8d3dea3317a2bcced1f62bdcb67457f816d` candidate: run
+`d167b3be-8df0-4693-9f6d-f48e9264cb18`, 209.345 s, no handle marker. A clean
+external Git consumer of that exact revision resolves from an empty local
+manifest without inherited lock/path/patch overrides, aliases original signed
+indices, and computes `[68, 0]` for `[3,5]` at columns `[1,0]` against `[7,11]`.
+Strict feature-disabled Clippy and 107 sparse/LU native cases also pass.
+
+Main then advances to `8b4ab407` (0.46 numeric cohort), independently of #362.
+The sparse addition moves to 0.47.0; merge resolution retains both owners'
+boards/changelog and all current provider constraints. Current Coeus graph
+resolution rejects Hephaestus's old `leto ^0.45.2` edge before compilation; this
+is a shared nominal-provider boundary, not a sparse numerical failure. Follow
+provider-first delivery and prepare separate dependency-binding changes rather
+than retaining old pins, duplicating provider types, or adding conversion shims.

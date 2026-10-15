@@ -11,7 +11,7 @@
   current-API witnesses specify signed portable borrowing, stored entry order,
   separate rounding, complete writes and caller-owned row scheduling.
 - Decision: Ryan Clanton approves ADR 0036 on 2026-10-15 in the task
-  conversation. Provider implementation target: 0.46.0.
+  conversation. Provider implementation target: 0.47.0; main 0.46 carries the numeric cohort.
 - Outcome: one provider row kernel, no CSR slice reinterpretation or index
   copies, no new Coeus scalar bound, preserved typed validation/allocation
   failures and backend scheduling. Owned `usize` storage remains unchanged.
@@ -36,6 +36,17 @@
   decomposition assignment and run the real batched LU tests in both modes.
   The 0.46.0 implementation replaces the branch with `?`; real batched-LU
   tests pass in both feature modes.
+
+<a id="LETO-EUNOMIA-010-COHORT"></a>
+## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
+
+- priority: correctness
+- scope: dependency requirements, canonical source lock, 0.46 version/migration records and exact-source API gate; all Rust sources stay unchanged.
+- Outcome: one Eunomia 0.10 identity across Aequitas 0.3, Hermes 0.9, Mnemosyne-memory 0.10 and Moirai 0.9.3.
+- Acceptance: standalone lock and identity checks, strict Clippy, complete native value tests, doctests/docs, exact-source API comparison, hosted CI and a fresh consumer after upstream integration.
+- Dependency: Mnemosyne #237, Hermes #260 and Moirai #623 are merged/published. Main #364 adopts their Git cohort; 0.46 supplies the distinct published boundary required by downstream consumers.
+- Evidence: earlier source `ed231333` passes 1,181 native cases, strict Clippy, docs and hosted Miri. The merged-default refresh requires new exact-head gates and an unseeded consumer.
+- Next step: finish PR #363's refreshed gates, then obtain approval for the existing publisher and legacy Pages effects; preserve separate sparse-contract ownership.
 
 <a id="LETO-RESCUE-QUEUE"></a>
 
