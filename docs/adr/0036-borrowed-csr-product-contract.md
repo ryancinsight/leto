@@ -5,8 +5,8 @@
 Status: Accepted
 
 Date: 2026-10-15. Owner: Codex `/root`.
-Board: `LETO-CSR-FORWARD-CONTRACT`. Classification: [arch], prospective
-implementation target 0.47.0. The original proposal and its current-API witnesses are
+Board: `LETO-CSR-FORWARD-CONTRACT`. Classification: [arch], implementation
+target 0.47.0. The original proposal and its current-API witnesses are
 a [patch] documentation/test increment targeting 0.45.3.
 
 ## Context
@@ -15,9 +15,9 @@ a [patch] documentation/test increment targeting 0.45.3.
 CSR products and Coeus ownership of backend selection. Coeus preservation
 [draft #531](https://github.com/ryancinsight/Coeus/pull/531) predates current
 fallible tensor/storage contracts. Independently recovered
-[draft #533](https://github.com/ryancinsight/Coeus/pull/533) removes three copies
-from an already compatible unsigned bridge. It leaves the tensor forward
-kernels intact because their contracts differ from Leto's current interface.
+[draft #533](https://github.com/ryancinsight/Coeus/pull/533) initially removes three copies
+from an already compatible unsigned bridge. Its later tensor cutover consumes
+the provider capability specified here after resolving those contract differences.
 
 At Leto main `248fe4f63c674f6fca1f89ac19c1f817e67bc417`:
 
@@ -54,7 +54,7 @@ inputs, add scalar bounds to Coeus, or weaken exact numerical checks.
    Separate preparation, mutable-output binding and execution. Workers have
    no fallible input checks and write complete rows, including empty rows.
    The provider accepts initialized `&mut [T]`; no new uninitialized-storage
-   API is part of this proposal.
+   API is part of this decision.
 4. Expose a narrowly unsafe, synchronous row-dispatch scope over that
    prepared product. Its private-constructor row task contains the provider
    implementation, never a consumer-owned mathematical loop. Coeus adapts
@@ -97,12 +97,13 @@ the design alone is not evidence that an implementation is sound or fast.
 ## Verification and delivery order
 
 The [verification record](../verification/csr-forward-contract.md) distinguishes
-current-API characterization from prospective acceptance. Current witnesses
+original-API characterization from executed 0.47 acceptance. Original witnesses
 check ordering/canonicalization, scalar versus slice-hook arithmetic, absolute
-row offsets, failure atomicity and empty outputs. They run real current Leto
-operations and do not substitute implementations of proposed APIs.
+row offsets, failure atomicity and empty outputs. The final record additionally
+checks signed stored order, all scalar families, initialization, dispatch and
+checked widths through the real implementation.
 
-After sign-off, deliver provider-first: checked borrowed representation,
+Implementation follows the approved provider-first order: checked borrowed representation,
 arithmetic policy and common row kernel, validated output/dispatch scope,
 then the independently reviewed Coeus adapter. Each slice must satisfy the
 full applicable contracts before the next depends on it. The provider gate

@@ -17,15 +17,17 @@
   failures and backend scheduling. Owned `usize` storage remains unchanged.
 - Acceptance: `docs/verification/csr-forward-contract.md` records complete
   provider/consumer native, strict, memory, arithmetic, allocation, architecture
-  and current-main performance evidence. Source `a2778334` passes every actual
-  hosted check; configured release/informational jobs remain distinguished.
+  and current-main performance evidence. Final source `b7670636` passes 1202
+  native cases, strict/docs/API, twenty memory cases and ten ARM32 cases per
+  model. Current-head hosted receipts remain an explicit integration gate.
 - Dependency order: checked borrowed representation and arithmetic, validated
   output/dispatch scope, then Coeus backend unwind-contract clarification and
   adapter. The clarification is a reviewed implementor-contract change even
   without a method-signature change.
-- Performance boundary: the final consumer-lock repeat records 2–8% median
-  SpMV overhead and Moirai SpMM ratios of 0.09–0.32. Keep that tradeoff visible
-  with earlier near-parity observations; no universal non-regression claim.
+- Performance boundary: the final same-workload repeat retains about 2–3% median
+  SpMV overhead in three cases; large sequential SpMV is near parity. Moirai
+  SpMM ratios span 0.093–0.299. Earlier adverse observations stay revision-
+  scoped; retained dispatch does not establish a universal throughput bound.
 - Next action: review #362 with Coeus #533 and compatible Hephaestus #497 /
   Apollo #674. The latter retain 0.46 while admitting 0.47, allowing ordered
   source/publication integration. Unseeded Coeus defaults remain unavailable

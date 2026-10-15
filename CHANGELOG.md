@@ -21,6 +21,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [patch] Record exact-source native/API, both strict memory models, ARM32
+  execution and current-main consumer timings, including remaining SpMV cost.
 - [patch] Fuse row-offset representability and ordering checks while retaining
   representation/endpoint/monotonicity/column diagnostic precedence.
 - [patch] A one-column product uses one local accumulator before its final

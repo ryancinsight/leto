@@ -22,22 +22,24 @@ Active sprint target: **0.47.0** — approved borrowed CSR integration [arch].
 - [x] [arch] Integrate Coeus after its backend safety clarification; compare
       against current main, including wide RHS products.
 
-Implementation and source acceptance complete: 1200 native core/ops tests
-pass, strict all-target diagnostics pass in both feature modes, and the additive
-API comparison passes 196 checks (57 tool checks skip). All 18 deterministic
-memory cases pass both strict/isolation borrow models; eight provider cases
-also pass both models on 32-bit ARM without parallel runtime features.
-Coeus #533 passes 1272 native cases, strict diagnostics and 13 memory cases in
-each model. The final-lock timing repeat observes 2–8% median SpMV overhead;
-measured Moirai SpMM ratios are 0.09–0.32. Earlier timings lie near parity. The record separates host-load uncertainty and the
-full consumer's upstream 32-bit build limitation.
+Final runtime `b7670636` passes 1202 native core/ops cases (zero skipped),
+220 feature-disabled sparse/LU cases, strict all-target diagnostics in both
+feature modes, 38 doctests (one existing ignored), warning-denied docs and two
+explicit minor API comparisons (196 checks, 57 tool skips each). Twenty memory
+cases pass each strict/isolation model; ten provider cases pass each model on
+ARM32. Coeus #533 passes 1272 native cases, strict/docs/API and thirteen memory
+cases in each model. The final same-workload timings retain about 2–3% median
+SpMV cost in three cases, near-parity large sequential SpMV, and Moirai SpMM
+ratios 0.093–0.299. Retained dispatch is not a universal throughput guarantee.
 
-- [x] [patch] Verify a fresh external 0.47 review-source consumer: alias all
-      original signed arrays and compute exact nontrivial vector/matrix values.
+- [x] [patch] Verify an unseeded final 0.47 review-source consumer: alias all
+      original signed arrays and execute exact vector/matrix products and typed rejection.
+- [ ] [patch] Inspect all final hosted receipts before separately authorized integration.
 - [ ] [minor] Integrate compatible provider bindings, refresh defaults and
       verify release availability under separately authorized publication gates.
 
 No main merge, release or tag is claimed. Preservation #531 remains intact.
+Architecture, runner and availability limits stay explicit in the current record.
 
 **Historical cohort target**: 0.46.0
 
@@ -253,9 +255,12 @@ production change is justified; future matmul work requires a working profile.
   Mnemosyne's `themis ^0.8.0` requirement vs Themis main 0.9.5.
 
 
-## Known-width callback specialization [minor] — Closure optimization
+## Known-width callback specialization [minor] — Closure complete
 
 - [x] Specify sealed checked width metadata and reproduce the missing API.
-- [x] Preserve dynamic defaults and one recurrence; run 1201 native tests and strict Clippy.
-- [ ] Repeat feature modes, API/docs, both memory models and ARM32 for this source.
-- [ ] Bind Coeus's known vector width and repeat full consumer/performance gates.
+- [x] Preserve dynamic defaults, old strategy bounds and one CSR recurrence.
+- [x] Fuse representability/ordering checks after unchanged multi-fault characterization.
+- [x] Repeat both feature modes, API/docs, twenty cases in both memory models
+      and ten ARM32 cases in each model on final runtime `b7670636`.
+- [x] Bind Coeus's checked vector width and repeat complete consumer and
+      unchanged-workload performance gates; record the remaining narrow cost.

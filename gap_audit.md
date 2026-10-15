@@ -1,65 +1,24 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-## 2026-10-15 — Narrow callback metadata optimization [minor]
+## 2026-10-15 — Borrowed CSR source contracts close
 
-Fixed/dynamic width metadata implements the same prepared product with no
-runtime width storage for a known vector. New tests first fail on the old API;
-1201 native tests and strict Clippy pass after implementation. Repeat memory,
-feature-mode, API/architecture and coupled performance gates before accepting
-this source. The earlier complete graph below remains revision-scoped evidence.
+Checked signed/stored-order views, separate native arithmetic, complete row
+writes and synchronous dispatch replace duplicated consumer forward math.
+Checked fixed metadata and fused row validation preserve error priority and
+one recurrence. Final source `b7670636` passes 1202 native cases, both strict
+feature modes, docs/API, twenty memory cases in each strict/isolation model
+and ten ARM32 cases per model. [Current evidence](docs/verification/csr-forward-contract.md)
+replaces superseded proposal-only and intermediate acceptance claims.
 
-## 2026-10-15 — Borrowed forward source contracts close
-
-- Checked signed/stored-order views and one prepared row recurrence replace
-  consumer arithmetic without index copies, reinterpretation or scalar widening.
-  Existing default canonical views and scalar/SIMD policies remain compatible.
-- 1200 native tests, both strict Clippy modes, 196 additive API checks and
-  all actual hosted checks pass at runtime source `a2778334`. Eighteen memory
-  contracts pass both strict/isolation models, including complex/exceptional
-  values, subnormal ties, empty shapes and joined dispatch.
-- Eight provider ARM32 cases pass both models without parallel features;
-  full Coeus ARM32 stops in current Moirai's existing deque-alignment assertion.
-  i686 stops in Eunomia's existing binary64 alignment assertion. These scopes
-  remain distinct from the tested portable scalar address kernel.
-- Coeus #533 retains its backend dispatch and exact diagnostic/rounding contract.
-  One local vector accumulator and one successful validation scan remove the
-  measured multi-fold regression. The final consumer-lock repeat observes
-  2–8% median SpMV overhead and Moirai SpMM ratios of 0.09–0.32; earlier
-  timings lie near parity. Retained dispatch does not imply cost-free adaptation.
-- Remaining: independent review and provider-first default/registry availability.
-  Fresh provider review sources resolve; the actual 0.47 product executes in a
-  clean external consumer. Unseeded Coeus defaults reject unmerged Apollo 0.29.2.
-
-## 2026-10-15 Coeus borrowed CSR forward contracts
-
-- historical finding: prior `usize`/canonical-only views, SIMD SpMM rounding and
-  serial row loops cannot preserve Coeus's signed stored-order CSR forward
-  contract directly. Coeus's backend safety documentation also needs explicit
-  completion on unwind before a generic lifetime-erasing adapter relies on it.
-- evidence: ADR 0036 and its co-located design; six executable current-API
-  witnesses pass within the 33-test sparse suite in both native feature modes
-  and under both Miri borrow models. Strict default-feature all-target Clippy
-  and warning-denied docs pass. These checks characterize existing behavior;
-  they do not verify a proposed implementation.
-- decision: Ryan Clanton approves ADR 0036 on 2026-10-15.
-- closed source gap: accepted implementation and current verification are in
-  `docs/verification/csr-forward-contract.md`; release availability remains separate.
-- scope: the existing owned CSR `usize` to `u32` item remains separate. Coeus
-  #531 stays intact; compatible bridge recovery #533 remains independent.
-
-## 2026-10-15 CSR specification verification limits
-
-- Fresh Git consumers of base main fail before compilation because Eunomia
-  `^0.9.0` no longer matches default-branch 0.10.0; this patch retains the
-  complete external lock and production dependency bounds. Dependency graph
-  co-evolution remains a release prerequisite.
-- Feature-disabled strict Clippy reports the unchanged batched-LU
-  `clippy::question_mark` lint; `LETO-NOPARALLEL-CLIPPY-2026-10-15` tracks it.
-- The Stacked Borrows witness run passes all six cases with one Nextest late
-  handle marker. The isolated case and complete Tree Borrows run have none;
-  the runner cause remains undetermined. No safety gate is disabled.
-- Exact commands and the distinction between executed characterization and
-  unimplemented-provider acceptance live in the verification record.
+Coeus retains exact selected-backend row dispatch. Its final tested SpMV cost
+is about 2–3% in three cases, with large sequential SpMV near parity; Moirai
+SpMM ratios span 0.093–0.299. Earlier adverse timing remains revision-scoped.
+Full consumer ARM32/i686 still stops at upstream alignment assertions. Fresh
+final Leto executes real borrowed products, but Coeus defaults still reject
+unmerged Apollo ^0.29.2. Review, final hosted receipts and provider-first
+availability remain concrete actions in LETO-CSR-FORWARD-CONTRACT. No main
+merge, release, hidden safety-option change or owned-CSR representation change
+is part of this increment. Coeus #531 stays intact.
 
 ## 2026-10-15 Provider-default resolution [minor]
 
