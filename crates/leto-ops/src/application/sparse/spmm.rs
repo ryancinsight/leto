@@ -1,7 +1,8 @@
 //! Sparse–dense matrix product `C = A · B` (CSR `A`, dense `B`) in `O(nnz·k)`.
 
-use super::{CsrMatrix, CsrView};
+use super::{CsrMatrix, CsrProduct, CsrView};
 use crate::domain::scalar::Scalar;
+use crate::domain::strategy::SimdStrategy;
 use leto::{Array2, ArrayView2, LetoError, Result, Storage};
 
 /// Compute `C = A · B` into the caller-owned row-major slice `c`
@@ -66,20 +67,7 @@ pub fn spmm_into<T: Scalar>(a: &CsrMatrix<T>, b: &ArrayView2<'_, T>, c: &mut [T]
 }
 
 fn spmm_slice_into<T: Scalar>(a: &CsrView<T>, bcols: usize, bs: &[T], c: &mut [T]) -> Result<()> {
-    let (nrows, _) = a.shape();
-    let (values, col_indices, row_ptr) = a.as_parts();
-
-    c.fill(T::ZERO);
-    for i in 0..nrows {
-        let c_row = &mut c[i * bcols..i * bcols + bcols];
-        for p in row_ptr[i]..row_ptr[i + 1] {
-            let col = col_indices[p];
-            let b_row = &bs[col * bcols..col * bcols + bcols];
-            // c_row += values[p] · b_row  (fused, SIMD-dispatched).
-            T::axpy_slice(values[p], b_row, c_row);
-        }
-    }
-    Ok(())
+    CsrProduct::<_, _, _, SimdStrategy>::prepare(*a, bs, bcols)?.execute(c)
 }
 
 /// Compute `C = A · B`, allocating the `nrows × bcols` result. Thin wrapper over

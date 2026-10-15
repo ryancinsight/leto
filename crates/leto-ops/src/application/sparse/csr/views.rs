@@ -1,4 +1,6 @@
+use super::policy::{Canonical, CsrIndex, CsrOrdering};
 use super::structure::validate_csr_parts;
+use core::marker::PhantomData;
 use leto::Result;
 
 /// Borrowed view over one CSR row.
@@ -31,7 +33,12 @@ impl<'a, T> CsrRow<'a, T> {
     }
 }
 
-/// Borrowed CSR matrix view: the validated [`CsrMatrix`](super::CsrMatrix) triple without owning it.
+/// Checked borrowed CSR matrix, without owning or converting its input slices.
+///
+/// The defaults match [`CsrMatrix`](super::CsrMatrix): `usize` indices with
+/// canonical, strictly increasing row columns. The checked builder also accepts
+/// signed indices and [`StoredOrder`](super::StoredOrder), preserving unsorted
+/// columns, duplicate entries and explicit zeros in their physical order.
 ///
 /// Construct with [`CsrView::from_slices`] (validates the [`CsrMatrix`](super::CsrMatrix)
 /// invariants over borrowed slices — zero-copy, the view aliases its inputs)
@@ -41,12 +48,13 @@ impl<'a, T> CsrRow<'a, T> {
 /// entries keep their signatures and delegate through [`CsrMatrix::as_view`](super::CsrMatrix::as_view).
 /// Structural and mutating operations stay on [`CsrMatrix`](super::CsrMatrix).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CsrView<'a, T> {
+pub struct CsrView<'a, T, I: CsrIndex = usize, O: CsrOrdering = Canonical> {
     pub(super) values: &'a [T],
-    pub(super) col_indices: &'a [usize],
-    pub(super) row_ptr: &'a [usize],
+    pub(super) col_indices: &'a [I],
+    pub(super) row_ptr: &'a [I],
     pub(super) nrows: usize,
     pub(super) ncols: usize,
+    pub(super) order: PhantomData<O>,
 }
 
 impl<'a, T> CsrView<'a, T> {
@@ -62,16 +70,85 @@ impl<'a, T> CsrView<'a, T> {
         nrows: usize,
         ncols: usize,
     ) -> Result<Self> {
-        validate_csr_parts(values.len(), col_indices, row_ptr, nrows, ncols)?;
-        Ok(Self {
+        Self::builder(values, col_indices, row_ptr, nrows, ncols).build()
+    }
+}
+
+impl<'a, T, I: CsrIndex> CsrView<'a, T, I> {
+    /// Start checked construction, inferring the original index representation.
+    /// Canonical ordering is the default; select another policy with
+    /// [`CsrViewBuilder::with_order`]. No input is copied or converted.
+    #[inline]
+    pub fn builder(
+        values: &'a [T],
+        col_indices: &'a [I],
+        row_ptr: &'a [I],
+        nrows: usize,
+        ncols: usize,
+    ) -> CsrViewBuilder<'a, T, I> {
+        CsrViewBuilder {
             values,
             col_indices,
             row_ptr,
             nrows,
             ncols,
-        })
+            order: PhantomData,
+        }
+    }
+}
+
+/// Unvalidated borrowed CSR parts. Only [`Self::build`] creates a usable view.
+#[derive(Debug)]
+pub struct CsrViewBuilder<'a, T, I: CsrIndex, O: CsrOrdering = Canonical> {
+    values: &'a [T],
+    col_indices: &'a [I],
+    row_ptr: &'a [I],
+    nrows: usize,
+    ncols: usize,
+    order: PhantomData<O>,
+}
+
+impl<'a, T, I: CsrIndex, O: CsrOrdering> CsrViewBuilder<'a, T, I, O> {
+    /// Select the structural ordering invariant without changing input data.
+    #[inline]
+    pub fn with_order<P: CsrOrdering>(self) -> CsrViewBuilder<'a, T, I, P> {
+        CsrViewBuilder {
+            values: self.values,
+            col_indices: self.col_indices,
+            row_ptr: self.row_ptr,
+            nrows: self.nrows,
+            ncols: self.ncols,
+            order: PhantomData,
+        }
     }
 
+    /// Validate lengths, target-width representability, offsets, columns and order.
+    ///
+    /// # Errors
+    /// Returns [`leto::LetoError::StorageError`] for any invalid CSR invariant.
+    #[inline]
+    pub fn build(self) -> Result<CsrView<'a, T, I, O>> {
+        let Self {
+            values,
+            col_indices,
+            row_ptr,
+            nrows,
+            ncols,
+            ..
+        } = self;
+        validate_csr_parts::<I, O>(values.len(), col_indices, row_ptr, nrows, ncols)?;
+        Ok(CsrView {
+            values,
+            col_indices,
+            row_ptr,
+            nrows,
+            ncols,
+            order: PhantomData,
+        })
+    }
+}
+
+impl<'a, T, I: CsrIndex, O: CsrOrdering> CsrView<'a, T, I, O> {
     /// `(nrows, ncols)`.
     #[must_use]
     #[inline]
@@ -103,14 +180,14 @@ impl<'a, T> CsrView<'a, T> {
     /// Borrow the column indices.
     #[must_use]
     #[inline]
-    pub fn col_indices(&self) -> &'a [usize] {
+    pub fn col_indices(&self) -> &'a [I] {
         self.col_indices
     }
 
     /// Borrowed CSR arrays `(values, col_indices, row_ptr)` for kernels.
     #[must_use]
     #[inline]
-    pub fn as_parts(&self) -> (&[T], &[usize], &[usize]) {
+    pub fn as_parts(&self) -> (&'a [T], &'a [I], &'a [I]) {
         (self.values, self.col_indices, self.row_ptr)
     }
 }

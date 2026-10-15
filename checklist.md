@@ -1,6 +1,47 @@
 # Leto Development Checklist
 
-**Target Version**: 0.46.0
+Active sprint target: **0.47.0** — approved borrowed CSR integration [arch].
+
+## LETO-CSR-FORWARD-CONTRACT — Closure / review — Owner: Codex `/root`
+
+- [x] [patch] Audit current Leto and Coeus contracts at recorded revisions.
+- [x] [patch] Draft ADR 0036 and the co-located sparse design with numerical,
+      index-width, validation, initialization and dispatch obligations.
+- [x] [patch] Add six current-API witnesses and pass all 33 sparse tests.
+- [x] [patch] Run default-feature all-target strict Clippy.
+- [x] [patch] Complete formatting, feature-mode, memory-safety and documentation
+      checks; record the baseline no-parallel lint and runner limitation.
+- [x] [patch] Prepare the independently reviewable proposal and synchronize
+      verification evidence, changelog and lockstep workspace version.
+- [x] [arch] Ryan Clanton approves ADR 0036 in the task conversation on
+      2026-10-15; provider target 0.47.0 (0.46 is now the merged numeric cohort).
+- [x] [arch] Implement checked generic borrowed CSR and one prepared product
+      with scalar/SIMD arithmetic and synchronous row dispatch.
+- [x] [arch] Verify rejection, exact arithmetic, initialization, allocation,
+      dispatch lifetime, architecture and compatibility contracts.
+- [x] [arch] Integrate Coeus after its backend safety clarification; compare
+      against current main, including wide RHS products.
+
+Final runtime `b7670636` passes 1202 native core/ops cases (zero skipped),
+220 feature-disabled sparse/LU cases, strict all-target diagnostics in both
+feature modes, 38 doctests (one existing ignored), warning-denied docs and two
+explicit minor API comparisons (196 checks, 57 tool skips each). Twenty memory
+cases pass each strict/isolation model; ten provider cases pass each model on
+ARM32. Coeus #533 passes 1272 native cases, strict/docs/API and thirteen memory
+cases in each model. The final same-workload timings retain about 2–3% median
+SpMV cost in three cases, near-parity large sequential SpMV, and Moirai SpMM
+ratios 0.093–0.299. Retained dispatch is not a universal throughput guarantee.
+
+- [x] [patch] Verify an unseeded final 0.47 review-source consumer: alias all
+      original signed arrays and execute exact vector/matrix products and typed rejection.
+- [ ] [patch] Inspect all final hosted receipts before separately authorized integration.
+- [ ] [minor] Integrate compatible provider bindings, refresh defaults and
+      verify release availability under separately authorized publication gates.
+
+No main merge, release or tag is claimed. Preservation #531 remains intact.
+Architecture, runner and availability limits stay explicit in the current record.
+
+**Historical cohort target**: 0.46.0
 
 ## LETO-EUNOMIA-010-COHORT [minor] — provider compatibility
 
@@ -212,3 +253,14 @@ production change is justified; future matmul work requires a working profile.
   doc target, while full workspace docs still build. Full Git dependency update
   is still blocked upstream by
   Mnemosyne's `themis ^0.8.0` requirement vs Themis main 0.9.5.
+
+
+## Known-width callback specialization [minor] — Closure complete
+
+- [x] Specify sealed checked width metadata and reproduce the missing API.
+- [x] Preserve dynamic defaults, old strategy bounds and one CSR recurrence.
+- [x] Fuse representability/ordering checks after unchanged multi-fault characterization.
+- [x] Repeat both feature modes, API/docs, twenty cases in both memory models
+      and ten ARM32 cases in each model on final runtime `b7670636`.
+- [x] Bind Coeus's checked vector width and repeat complete consumer and
+      unchanged-workload performance gates; record the remaining narrow cost.

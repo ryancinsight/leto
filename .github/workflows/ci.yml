@@ -186,6 +186,14 @@ jobs:
           --test ops_tests
           -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
 
+      - name: Miri — borrowed CSR scope (Stacked Borrows, strict provenance)
+        env:
+          MIRIFLAGS: -Zmiri-strict-provenance
+        run: >-
+          cargo +nightly miri nextest run -p leto-ops --locked --profile miri
+          --test-threads 1
+          -E '(test(sparse::contracts::) & !test(properties::)) | test(sparse_allocations::)'
+
       - name: Miri — storage substrate (Tree Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
@@ -198,3 +206,11 @@ jobs:
           cargo +nightly miri nextest run -p leto-ops --locked --profile miri
           --test ops_tests
           -E 'test(/reduction/) & !test(parallel_axis_reduction_matches_the_serial_result)'
+
+      - name: Miri — borrowed CSR scope (Tree Borrows, strict provenance)
+        env:
+          MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-tree-borrows
+        run: >-
+          cargo +nightly miri nextest run -p leto-ops --locked --profile miri
+          --test-threads 1
+          -E '(test(sparse::contracts::) & !test(properties::)) | test(sparse_allocations::)'

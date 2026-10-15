@@ -4,6 +4,38 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.47.0] - Unreleased
+
+### Added
+
+- [minor] Checked dynamic/fixed RHS width metadata preserves the default
+  product API while representing known widths without runtime storage. Vector
+  entry points use fixed width one through the same provider recurrence.
+- [arch] Accepted ADR 0036: checked borrowed CSR indices (`usize`/`i64`),
+  canonical/stored ordering policies, and a prepared CSR product with explicit
+  scalar or SIMD arithmetic and a synchronous caller-owned row-dispatch scope.
+- [minor] Signed borrowing, all Coeus scalar families, failure atomicity,
+  complete-row writes, zero-allocation execution and joined-unwind regressions;
+  compile-fail examples enforce input lifetimes, output exclusivity and unsafe
+  row invocation.
+
+### Changed
+
+- [patch] Record exact-source native/API, both strict memory models, ARM32
+  execution and current-main consumer timings, including remaining SpMV cost.
+- [patch] Fuse row-offset representability and ordering checks while retaining
+  representation/endpoint/monotonicity/column diagnostic precedence.
+- [patch] A one-column product uses one local accumulator before its final
+  output write, preserving the shared row traversal and selected arithmetic.
+  This removes measured partial-sum load/store overhead in backend callbacks.
+- [patch] Existing SpMV and SpMM entry points share the provider row kernel,
+  retaining separate scalar SpMV and slice-hook SpMM arithmetic. The unsigned
+  constructor, owned canonical storage and strided RHS behavior stay compatible.
+- [patch] Feature-disabled batched LU propagates its real decomposition result
+  with `?`, closing the previously recorded strict Clippy diagnostic.
+- [arch] Advance the lockstep workspace to 0.47.0 for the approved API addition.
+  This development change does not publish packages or create release tags.
+
 ## [0.46.0] - Unreleased
 
 ### Breaking
@@ -21,6 +53,25 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
   provider. Preserve the provider constraints merged in #364; require the
   integrated Moirai 0.9.3 line and refresh its merged source. The API gate
   compares the exact committed locked graphs.
+
+## [0.45.3] - Specification increment
+
+### Added
+
+- [patch] Proposed ADR 0036 and a co-located borrowed-CSR product design for
+  Coeus tensor-forward integration. They specify portable checked signed
+  indices, stored-order arithmetic, output initialization and a synchronous
+  caller-dispatch safety boundary. Architectural implementation awaits sign-off.
+- [patch] Six current-API sparse witnesses cover ordering transformations,
+  separate versus slice-hook rounding, absolute row offsets, empty dimensions
+  and output-error failure atomicity, with hierarchical failure tracing.
+
+### Changed
+
+- [patch] Advance the lockstep workspace version to 0.45.3 for this
+  documentation/test increment. Production APIs and kernels are unchanged;
+  the prospective implementation targets 0.46.0. This records a development
+  change, not a registry publication or release tag.
 
 ## [Unreleased]
 

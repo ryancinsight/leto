@@ -1,5 +1,25 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-15 — Borrowed CSR source contracts close
+
+Checked signed/stored-order views, separate native arithmetic, complete row
+writes and synchronous dispatch replace duplicated consumer forward math.
+Checked fixed metadata and fused row validation preserve error priority and
+one recurrence. Final source `b7670636` passes 1202 native cases, both strict
+feature modes, docs/API, twenty memory cases in each strict/isolation model
+and ten ARM32 cases per model. [Current evidence](docs/verification/csr-forward-contract.md)
+replaces superseded proposal-only and intermediate acceptance claims.
+
+Coeus retains exact selected-backend row dispatch. Its final tested SpMV cost
+is about 2–3% in three cases, with large sequential SpMV near parity; Moirai
+SpMM ratios span 0.093–0.299. Earlier adverse timing remains revision-scoped.
+Full consumer ARM32/i686 still stops at upstream alignment assertions. Fresh
+final Leto executes real borrowed products, but Coeus defaults still reject
+unmerged Apollo ^0.29.2. Review, final hosted receipts and provider-first
+availability remain concrete actions in LETO-CSR-FORWARD-CONTRACT. No main
+merge, release, hidden safety-option change or owned-CSR representation change
+is part of this increment. Coeus #531 stays intact.
+
 ## 2026-10-15 Provider-default resolution [minor]
 
 - risk: published 0.45.2 belongs to the older provider line. Main #364 now admits the new Git cohort; 0.46 must expose that published boundary without changing Rust sources or numerical assertions.

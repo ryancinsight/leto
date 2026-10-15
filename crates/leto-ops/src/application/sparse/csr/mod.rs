@@ -7,8 +7,11 @@
 //! [`CooMatrix::to_csr`](super::CooMatrix::to_csr).
 
 mod matrix;
+mod policy;
 mod structure;
 mod views;
 
 pub use matrix::CsrMatrix;
-pub use views::{CsrRow, CsrView};
+pub(super) use policy::address;
+pub use policy::{Canonical, CsrIndex, CsrOrdering, StoredOrder};
+pub use views::{CsrRow, CsrView, CsrViewBuilder};

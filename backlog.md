@@ -1,5 +1,50 @@
 # Leto Work Backlog
 
+<a id="LETO-CSR-FORWARD-CONTRACT"></a>
+
+## LETO-CSR-FORWARD-CONTRACT — Borrowed CSR tensor-forward provider contract [arch] — review
+
+- Owner: Codex `/root`; updated 2026-10-15; priority: correctness.
+- Driver: Coeus preservation #531 and independent compatible bridge recovery
+  #533; the tensor adapter now consumes the checked prepared product.
+- Foundation [patch], target 0.45.3: ADR 0036, co-located sparse design and six
+  current-API witnesses specify signed portable borrowing, stored entry order,
+  separate rounding, complete writes and caller-owned row scheduling.
+- Decision: Ryan Clanton approves ADR 0036 on 2026-10-15 in the task
+  conversation. Provider implementation target: 0.47.0; main 0.46 carries the numeric cohort.
+- Outcome: one provider row kernel, no CSR slice reinterpretation or index
+  copies, no new Coeus scalar bound, preserved typed validation/allocation
+  failures and backend scheduling. Owned `usize` storage remains unchanged.
+- Acceptance: `docs/verification/csr-forward-contract.md` records complete
+  provider/consumer native, strict, memory, arithmetic, allocation, architecture
+  and current-main performance evidence. Final source `b7670636` passes 1202
+  native cases, strict/docs/API, twenty memory cases and ten ARM32 cases per
+  model. Current-head hosted receipts remain an explicit integration gate.
+- Dependency order: checked borrowed representation and arithmetic, validated
+  output/dispatch scope, then Coeus backend unwind-contract clarification and
+  adapter. The clarification is a reviewed implementor-contract change even
+  without a method-signature change.
+- Performance boundary: the final same-workload repeat retains about 2–3% median
+  SpMV overhead in three cases; large sequential SpMV is near parity. Moirai
+  SpMM ratios span 0.093–0.299. Earlier adverse observations stay revision-
+  scoped; retained dispatch does not establish a universal throughput bound.
+- Next action: review #362 with Coeus #533 and compatible Hephaestus #497 /
+  Apollo #674. The latter retain 0.46 while admitting 0.47, allowing ordered
+  source/publication integration. Unseeded Coeus defaults remain unavailable
+  until those provider reviews integrate. Keep Coeus #531 intact.
+
+<a id="LETO-NOPARALLEL-CLIPPY-2026-10-15"></a>
+
+## LETO-NOPARALLEL-CLIPPY-2026-10-15 — Restore strict diagnostics without parallel [patch] — fixed
+
+- priority: verification; scope: `application/linalg/lu_batch.rs:112`.
+- Evidence: strict `leto-ops --all-targets --no-default-features` Clippy rejects
+  the unchanged explicit `match` on `lu_decompose` with `clippy::question_mark`.
+  Default-feature strict Clippy passes; both sparse feature modes pass tests.
+- Closed: the implementation propagates with `?`, preserves the computed
+  decomposition assignment, and passes real batched-LU tests and strict
+  diagnostics in both feature modes.
+
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
 

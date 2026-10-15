@@ -1,6 +1,7 @@
 //! CSR structure validation: the shared accept/reject SSOT for owned
 //! and borrowed construction.
 
+use super::policy::{address, canonical, checked, CsrIndex, CsrOrdering};
 use leto::{LetoError, Result};
 
 /// Validate CSR parts against the [`CsrMatrix`] invariants.
@@ -8,10 +9,10 @@ use leto::{LetoError, Result};
 /// Shared SSOT of [`CsrMatrix::from_parts`] and [`CsrView::from_slices`]:
 /// identical triples accept/reject identically with identical messages.
 /// Slice-only, so owned and borrowed construction validate the same way.
-pub(super) fn validate_csr_parts(
+pub(super) fn validate_csr_parts<I: CsrIndex, O: CsrOrdering>(
     nnz: usize,
-    col_indices: &[usize],
-    row_ptr: &[usize],
+    col_indices: &[I],
+    row_ptr: &[I],
     nrows: usize,
     ncols: usize,
 ) -> Result<()> {
@@ -29,21 +30,39 @@ pub(super) fn validate_csr_parts(
     if col_indices.len() != nnz {
         return Err(bad("col_indices and values lengths differ"));
     }
-    if row_ptr[0] != 0 || *row_ptr.last().expect("nrows+1 >= 1") != nnz {
+    // Check representation and ordering in one pass. Defer ordering failure until every offset
+    // is representable and endpoints are checked, preserving error priority.
+    let mut previous = 0;
+    let mut non_decreasing = true;
+    for &index in row_ptr {
+        let offset =
+            checked(index).ok_or_else(|| bad("row offset is negative or exceeds usize"))?;
+        non_decreasing &= previous <= offset;
+        previous = offset;
+    }
+    if address(row_ptr[0]) != 0 || previous != nnz {
         return Err(bad("row_ptr must start at 0 and end at nnz"));
     }
-    if row_ptr.windows(2).any(|w| w[0] > w[1]) {
+    if !non_decreasing {
         return Err(bad("row_ptr must be non-decreasing"));
     }
-    if col_indices.iter().any(|&j| j >= ncols) {
+    if col_indices
+        .iter()
+        .any(|&j| checked(j).is_none_or(|index| index >= ncols))
+    {
         return Err(bad("column index out of range"));
     }
-    for window in row_ptr.windows(2) {
-        let row_cols = &col_indices[window[0]..window[1]];
-        if row_cols.windows(2).any(|cols| cols[0] >= cols[1]) {
-            return Err(bad(
-                "column indices in each row must be strictly increasing",
-            ));
+    if canonical::<O>() {
+        for window in row_ptr.windows(2) {
+            let row_cols = &col_indices[address(window[0])..address(window[1])];
+            if row_cols
+                .windows(2)
+                .any(|cols| address(cols[0]) >= address(cols[1]))
+            {
+                return Err(bad(
+                    "column indices in each row must be strictly increasing",
+                ));
+            }
         }
     }
     Ok(())
