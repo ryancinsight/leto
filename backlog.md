@@ -1,9 +1,9 @@
 # Leto Work Backlog
 
 <a id="LETO-PYTHON-NATIVE-LINK"></a>
-## LETO-PYTHON-NATIVE-LINK — Separate native-test and extension linkage [patch] — in-progress
+## LETO-PYTHON-NATIVE-LINK — Separate native-test and extension linkage [patch] — blocked
 
-- priority: correctness; status: in-progress; owner: Codex.
+- priority: correctness; status: blocked; owner: Codex.
 - Scope: binding linkage/build metadata and CI; independent of provider ranges.
 - Finding: unconditional PyO3 extension-module selection disables libpython
   linkage on Darwin, so the native binding test executable has unresolved
@@ -29,7 +29,8 @@
   portable target. The actual installed wheel imports and passes all 29 parity
   cases, zero skips, without libpython linkage or linker/SDK overrides. Both
   artifacts and compiler flags are retained; see rust-lang/rust#157750.
-- Hosted evidence before that profile correction: PR #365 head 0f2a325 passes
+- Hosted evidence before that profile correction: PR #365's
+  [tested head](https://github.com/ryancinsight/leto/commit/0f2a325225a6850030d1b42904c4c5552fe08624) passes
   all nine executed checks, including 1,202 native cases and the Linux wheel's
   29 parity cases. The graded-scan native case exceeds the unchanged 30-second
   slow threshold (39.334 seconds) while remaining below its termination limit;
