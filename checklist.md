@@ -28,8 +28,8 @@ API comparison passes 196 checks (57 tool checks skip). All 18 deterministic
 memory cases pass both strict/isolation borrow models; eight provider cases
 also pass both models on 32-bit ARM without parallel runtime features.
 Coeus #533 passes 1272 native cases, strict diagnostics and 13 memory cases in
-each model. Paired current-main SpMV ratios lie near parity; measured Moirai
-SpMM ratios are 0.09–0.29. The record separates host-load uncertainty and the
+each model. The final-lock timing repeat observes 2–8% median SpMV overhead;
+measured Moirai SpMM ratios are 0.09–0.32. Earlier timings lie near parity. The record separates host-load uncertainty and the
 full consumer's upstream 32-bit build limitation.
 
 - [x] [patch] Verify a fresh external 0.47 review-source consumer: alias all

@@ -23,6 +23,9 @@
   output/dispatch scope, then Coeus backend unwind-contract clarification and
   adapter. The clarification is a reviewed implementor-contract change even
   without a method-signature change.
+- Performance boundary: the final consumer-lock repeat records 2–8% median
+  SpMV overhead and Moirai SpMM ratios of 0.09–0.32. Keep that tradeoff visible
+  with earlier near-parity observations; no universal non-regression claim.
 - Next action: review #362 with Coeus #533 and compatible Hephaestus #497 /
   Apollo #674. The latter retain 0.46 while admitting 0.47, allowing ordered
   source/publication integration. Unseeded Coeus defaults remain unavailable

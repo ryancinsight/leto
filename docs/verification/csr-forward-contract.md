@@ -357,3 +357,28 @@ Fresh Coeus defaults still reject Apollo ^0.29.2 because main exposes 0.29.1;
 the complete locked review graph passes independently. Provider-first default
 refresh and actual registry verification remain integration/release gates.
 Preservation Coeus #531 remains open, draft and unchanged at `4b7d360e`.
+
+
+## Consumer record advances through current main
+
+Coeus preserves main `f0d01021` and its CUDA crossover/provider-cohort update,
+including all 231 registry records. Hephaestus compatibility #497 preserves
+both concurrent CUDA fixes and advances to 0.22.2 (`e867be0d`) because 0.22.1
+is published independently. That provider source passes every actual hosted
+check; hardware-required NVIDIA/AMD jobs remain explicit skips.
+
+The final Coeus review graph repeats 1272 native passes (`b08e612b`, 6.042 s;
+eight existing ignored), strict all-workspace/all-target Clippy, 159 doctests
+(two existing ignored) and warning-denied documentation. Both thirteen-case
+macOS memory jobs and both twelve-case Linux memory jobs pass on the prior
+complete graph; Linux excludes only the real Moirai case because its topology
+`opendir` is unsupported with Miri isolation. That unchanged 4097-row scenario
+executes on macOS. Isolation/leak checks and all assertions remain enabled.
+
+The final-lock 21-pair repeat observes 2–8% median SpMV overhead, with the
+small-vector quartiles above 1; Moirai SpMM ratios span 0.09–0.32. The provider
+retains the backend row-dispatch seam. These results qualify the earlier
+near-parity observations; they do not establish universal performance
+preservation. The updated proof, exact-value timing tables and source
+fingerprints live in [the consumer review](https://github.com/ryancinsight/Coeus/pull/533).
+No provider runtime changes occur in this record update.

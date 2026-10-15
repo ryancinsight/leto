@@ -15,8 +15,9 @@
   remain distinct from the tested portable scalar address kernel.
 - Coeus #533 retains its backend dispatch and exact diagnostic/rounding contract.
   One local vector accumulator and one successful validation scan remove the
-  measured multi-fold regression; paired SpMV medians lie near parity, and
-  measured Moirai SpMM ratios are 0.09–0.29 against current-main source.
+  measured multi-fold regression. The final consumer-lock repeat observes
+  2–8% median SpMV overhead and Moirai SpMM ratios of 0.09–0.32; earlier
+  timings lie near parity. Retained dispatch does not imply cost-free adaptation.
 - Remaining: independent review and provider-first default/registry availability.
   Fresh provider review sources resolve; the actual 0.47 product executes in a
   clean external consumer. Unseeded Coeus defaults reject unmerged Apollo 0.29.2.
