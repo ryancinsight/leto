@@ -1,5 +1,11 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-15 Provider-default resolution [minor]
+
+- risk: main's Eunomia 0.9, Hermes 0.8, Aequitas 0.2 and allocator 0.9 requirements cannot consume the current numeric-provider defaults. The 0.46 candidate advances the full cohort without changing Rust sources or numerical assertions.
+- boundary: Mnemosyne 0.10 is merged and published; Hermes #260 is merged and Moirai #623 remains a reviewed source dependency. A valid locked candidate does not establish fresh default-branch or registry availability before their integration.
+- acceptance: exact-source API/native/hosted checks, one provider identity, provider-first integration and a clean consumer after the final refresh. No path override, manifest revision pin or conversion adapter masks an old edge.
+
 ## 2026-09-27 Francis skew ties beyond one ulp (Bf16)
 
 - risk: a Bf16 skew tridiagonal whose iterate couples two `[[0, a], [−a, 0]]` blocks by `ulp·2a < δ ≲ 2·ulp·2a` cycles to the iteration cap and returns `ConvergenceError` (3 of 90,000 scan matrices, orders 3–8); `dhseqr`'s recovery for a failed `dlahqr` is `dlaqr0` (AED), which leto lacks.

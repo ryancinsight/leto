@@ -1,5 +1,15 @@
 # Leto Work Backlog
 
+<a id="LETO-EUNOMIA-010-COHORT"></a>
+## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
+
+- priority: correctness
+- scope: dependency requirements, canonical source lock, 0.46 version/migration records and exact-source API gate; all Rust sources stay unchanged.
+- Outcome: one Eunomia 0.10 identity across Aequitas 0.3, Hermes 0.9, Mnemosyne-memory 0.10 and Moirai 0.9.3.
+- Acceptance: standalone lock and identity checks, strict Clippy, complete native value tests, doctests/docs, exact-source API comparison, hosted CI and a fresh consumer after upstream integration.
+- Dependency: Mnemosyne #237 is merged/published and Hermes #260 is merged; reviewed Moirai #623 must integrate before Leto's final default-source refresh.
+- Next step: finish exact-source API/hosted checks and open the independent dependency PR; preserve separate sparse-contract ownership.
+
 <a id="LETO-RESCUE-QUEUE"></a>
 
 ## LETO-RESCUE-QUEUE — Complete or close the open rescue PRs [patch] — todo

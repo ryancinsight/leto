@@ -78,3 +78,13 @@ Mnemosyne's obsolete Eunomia PR #87 revision after the provider merge.
 correction already exists on `main`; independent review rejected the stale PR's
 unrelated conflicting allocator changes. Removed Leto's temporary Mnemosyne
 revision pin and restored provider-default resolution.
+
+2026-10-15: Apply the same ownership rule to the Eunomia 0.10 cohort. Leto
+0.46 requires Hermes 0.9, Aequitas 0.3, Mnemosyne-memory 0.10 and Moirai 0.9.3.
+This pre-1.0 dependency boundary requires direct consumers to advance their
+provider requirements together. Rust algorithm/test bytes remain unchanged.
+The review lock may select the actual reviewed upstream commits; final
+integration refreshes only after those providers merge. Manifests retain
+canonical default Git sources, with no path patch, revision pin or type adapter.
+The API gate compares each exact committed base/head lock rather than resolving
+an incompatible historical dependency through today's defaults.
