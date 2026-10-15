@@ -1,8 +1,9 @@
 # Borrowed CSR forward product design
 
-Proposed under [ADR 0036](../../../../../docs/adr/0036-borrowed-csr-product-contract.md).
-The Rust names below specify the next implementation; they are not available
-APIs. Current implementations remain in `csr/`, `spmv.rs` and `spmm.rs`.
+Accepted under [ADR 0036](../../../../../docs/adr/0036-borrowed-csr-product-contract.md).
+Ryan Clanton approves the decision on 2026-10-15. Checked representation lives
+in `csr/`; arithmetic, preparation and the common row task live in `product/`.
+The existing `spmv.rs` and `spmm.rs` entry points delegate to that kernel.
 
 ## Ownership and scope
 
@@ -15,7 +16,7 @@ remain separate work.
 
 ## Representation and public shape
 
-The proposed descriptor is `CsrView<'a, T, I = usize, O = Canonical>`. `I`
+The descriptor is `CsrView<'a, T, I = usize, O = Canonical>`. `I`
 implements a sealed `CsrIndex` role, initially for `usize` and `i64`. `O`
 implements a sealed `CsrOrdering` role:
 
@@ -58,13 +59,13 @@ do not bypass validation. Complexity is `Theta(m + q)`, auxiliary space `O(1)`.
 
 ## Preparation, output binding and execution
 
-The proposed `CsrProduct<'a, T, I, O, A>` stores borrowed validated CSR parts,
+The `CsrProduct<'a, T, I, O, A>` stores borrowed validated CSR parts,
 a contiguous dense slice of exact shape `k * n`, and its checked dimensions.
 `A` implements a sealed operation-specific `CsrArithmetic<T>` role. Use
 `n = 1` for SpMV; SpMM uses the dense RHS column count. This is one CSR row
 traversal, with arithmetic policy selecting the row update.
 
-| Proposed operation | Result and obligation |
+| Operation | Result and obligation |
 | --- | --- |
 | `CsrProduct::<..., A>::prepare(view, rhs, rhs_columns)` | `leto::Result<Self>`; check `k*n`, `m*n`, and exact RHS length without writing or allocating |
 | `product.bind_output(&mut [T])` | `leto::Result<CsrOutput<...>>`; check exact output length and retain exclusive borrow |
@@ -203,7 +204,7 @@ when `n == 0`.
 
 ## Acceptance and migration
 
-Implement only after ADR sign-off. Required evidence is enumerated in the
+ADR sign-off is recorded. Required evidence is enumerated in the
 [verification record](../../../../../docs/verification/csr-forward-contract.md).
 Provider implementation must cover checked signed borrowing, strict versus
 stored ordering, all scalar families, failure atomicity, offset slices,

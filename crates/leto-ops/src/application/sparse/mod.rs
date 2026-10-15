@@ -58,6 +58,7 @@ mod dense_bridge;
 mod lu_numeric;
 mod lu_sparse;
 mod lu_symbolic;
+mod product;
 mod spgemm;
 mod spmm;
 mod spmv;
@@ -66,7 +67,9 @@ pub use amd::amd_order;
 pub use coo::CooMatrix;
 pub use csc::{CscColumn, CscMatrix, CscView};
 pub use csc_spmv::{csc_spmv, csc_spmv_into, csc_spmv_view_into};
-pub use csr::{CsrMatrix, CsrRow, CsrView};
+pub use csr::{
+    Canonical, CsrIndex, CsrMatrix, CsrOrdering, CsrRow, CsrView, CsrViewBuilder, StoredOrder,
+};
 pub use dense_bridge::solve_csr_via_dense_lu;
 pub use lu_numeric::{factor_numeric, NumericLu};
 pub use lu_sparse::{
@@ -74,6 +77,7 @@ pub use lu_sparse::{
     DENSE_LIMIT_DEFAULT,
 };
 pub use lu_symbolic::{factor_symbolic, factor_symbolic_with_ordering, SymbolicLu};
+pub use product::{CsrArithmetic, CsrOutput, CsrProduct, CsrRowTask};
 pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into, spmm_view_into};
 pub use spmv::{spmv, spmv_into, spmv_view_into};

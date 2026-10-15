@@ -1,5 +1,5 @@
-use leto::{Array1, Array2, LetoError};
-use leto_ops::{spmm_view_into, spmv_view_into, CsrView};
+use leto::{Array1, Array2, LetoError, Storage};
+use leto_ops::{spmm_view_into, spmv_view_into, CsrProduct, CsrView, ScalarStrategy, StoredOrder};
 
 use super::trace;
 
@@ -59,6 +59,21 @@ fn empty_rows_and_shared_dimensions_overwrite_every_output() {
                         .expect("valid empty CSR");
                     spmm_view_into(&empty, &b.view(), &mut output).expect("empty matrix product");
                     spmv_view_into(&empty, &x.view(), &mut vector).expect("empty vector product");
+                    let signed_offsets = vec![0i64; rows + 1];
+                    let stored = CsrView::builder(&[], &[], &signed_offsets, rows, shared)
+                        .with_order::<StoredOrder>()
+                        .build()
+                        .expect("empty signed CSR");
+                    let mut prepared_output = vec![f64::NAN; rows * width];
+                    CsrProduct::<_, _, _, ScalarStrategy>::prepare(
+                        stored,
+                        b.storage().as_slice(),
+                        width,
+                    )
+                    .expect("empty prepared product")
+                    .execute(&mut prepared_output)
+                    .expect("complete empty output");
+                    assert!(prepared_output.iter().all(|value| value.to_bits() == 0));
                 }
                 let _phase = tracing::info_span!("assert").entered();
                 assert_eq!(output.len(), rows * width);

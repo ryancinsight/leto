@@ -91,7 +91,13 @@ impl<T: Scalar> CsrMatrix<T> {
         nrows: usize,
         ncols: usize,
     ) -> Result<Self> {
-        validate_csr_parts(values.len(), &col_indices, &row_ptr, nrows, ncols)?;
+        validate_csr_parts::<usize, super::Canonical>(
+            values.len(),
+            &col_indices,
+            &row_ptr,
+            nrows,
+            ncols,
+        )?;
         Ok(Self {
             values,
             col_indices,
@@ -167,6 +173,7 @@ impl<T: Scalar> CsrMatrix<T> {
             row_ptr: &self.row_ptr,
             nrows: self.nrows,
             ncols: self.ncols,
+            order: core::marker::PhantomData,
         }
     }
 

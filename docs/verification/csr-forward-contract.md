@@ -155,3 +155,28 @@ Existing performance evidence is in
 It is prior consumer evidence, not a benchmark of this unimplemented provider
 proposal. Provider and consumer dependency owners must resolve their current
 fresh-graph version drift before claiming release readiness.
+
+
+## Approved implementation — 2026-10-15
+
+Ryan Clanton explicitly approves ADR 0036 in the task conversation. Target
+0.46.0 opens the provider implementation. The first implementation retains the
+original locked provider graph against main `248fe4f` while the new current-main
+dependency update is inspected. This is intermediate evidence, not final-head
+acceptance:
+
+- Acceptance tests fail on unchanged source: missing `CsrProduct`, `StoredOrder`
+  and checked `CsrView::builder` (compiler E0432/E0599).
+- Native sparse Nextest: 98 pass, 725 unrelated tests excluded, default budget.
+- All-target strict Clippy passes; no diagnostics are suppressed.
+- Strict-provenance Stacked Borrows Miri: eight new representation/product/
+  dispatch/allocation tests pass, 816 unrelated excluded, run
+  `6aaeb2b2-a02c-4372-be28-066ed9c0df86`, 31.026 s, no handle marker.
+- Commands run from `/private/tmp`, with absolute manifest and the Atlas shared
+  target, `--offline --locked`, Rust 1.97.0 or `+nightly` for Miri. Miri keeps
+  isolation and default arithmetic error injection enabled.
+
+Before delivery, repeat applicable gates after incorporating the newly merged
+provider dependency update, then execute Tree Borrows, architecture, legacy API,
+fresh-consumer and complete-product performance gates. No Coeus forward cutover
+is certified by this intermediate provider result.

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-use leto::{Array1, Array2};
-use leto_ops::{spmm_view_into, spmv_view_into, CsrView, RealScalar};
+use leto::{Array1, Array2, Storage};
+use leto_ops::{spmm_view_into, spmv_view_into, CsrProduct, CsrView, RealScalar, ScalarStrategy};
 
 use super::trace;
 
@@ -42,7 +42,7 @@ fn compare_product_policies<T: BinaryWitness>() {
         let b = Array2::from_shape_vec([2, 17], dense).expect("matrix shape");
         (values, [0, 1], [0, 2], x, b)
     };
-    let (vector, matrix, hook_reference, fused_residual) = {
+    let (vector, matrix, hook_reference, fused_residual, separate) = {
         let _phase = tracing::info_span!("act").entered();
         let view = CsrView::from_slices(&values, &columns, &offsets, 1, 2).expect("canonical CSR");
         let mut vector = [T::ONE];
@@ -56,12 +56,24 @@ fn compare_product_policies<T: BinaryWitness>() {
             &[T::ONE - T::EPSILON; 17],
             &mut hook_reference,
         );
-        (vector, matrix, hook_reference, -(T::EPSILON * T::EPSILON))
+        let mut separate = [T::ONE; 17];
+        CsrProduct::<_, _, _, ScalarStrategy>::prepare(view, b.storage().as_slice(), 17)
+            .expect("separate policy shape")
+            .execute(&mut separate)
+            .expect("separate output");
+        (
+            vector,
+            matrix,
+            hook_reference,
+            -(T::EPSILON * T::EPSILON),
+            separate,
+        )
     };
     let _phase = tracing::info_span!("assert").entered();
     // Separate rounding makes the second product 1 before it cancels -1.
     assert_eq!(vector[0].bits(), T::ZERO.bits());
     assert_ne!(fused_residual, T::ZERO);
+    assert!(separate.iter().all(|value| value.bits() == T::ZERO.bits()));
     for (actual, hook) in matrix.into_iter().zip(hook_reference) {
         assert_eq!(actual.bits(), hook.bits());
         // This is the existing ISA-dependent policy, not the acceptance

@@ -1,8 +1,8 @@
 # Leto Development Checklist
 
-Active sprint target: **0.45.3** — CSR contract specification [patch].
+Active sprint target: **0.46.0** — approved borrowed CSR integration [arch].
 
-## LETO-CSR-FORWARD-CONTRACT — Foundation — Owner: Codex `/root`
+## LETO-CSR-FORWARD-CONTRACT — Execution — Owner: Codex `/root`
 
 - [x] [patch] Audit current Leto and Coeus contracts at recorded revisions.
 - [x] [patch] Draft ADR 0036 and the co-located sparse design with numerical,
@@ -13,12 +13,18 @@ Active sprint target: **0.45.3** — CSR contract specification [patch].
       checks; record the baseline no-parallel lint and runner limitation.
 - [x] [patch] Prepare the independently reviewable proposal and synchronize
       verification evidence, changelog and lockstep workspace version.
-- [ ] [arch] Record Ryan Clanton's decision on ADR 0036 before opening any
-      implementation checklist item (prospective provider target 0.46.0).
+- [x] [arch] Ryan Clanton approves ADR 0036 in the task conversation on
+      2026-10-15; provider target 0.46.0.
+- [ ] [arch] Implement checked generic borrowed CSR and one prepared product
+      with scalar/SIMD arithmetic and synchronous row dispatch.
+- [ ] [arch] Verify rejection, exact arithmetic, initialization, allocation,
+      dispatch lifetime, architecture and compatibility contracts.
+- [ ] [arch] Integrate Coeus after its backend safety clarification; compare
+      against current main, including wide RHS products.
 
-The proposed APIs and dispatch safety boundary are not implemented. Existing
-production sparse source and both Coeus drafts remain unchanged by this
-specification increment. No release or merge is claimed.
+ADR approval is recorded. Implementation gates remain open; the existing
+characterization evidence below does not certify the new APIs. No release
+or merge is claimed. Coeus preservation draft #531 remains intact.
 
 Evidence: 33 sparse tests pass in each native feature mode; six witnesses pass
 under strict-provenance Stacked/Tree Borrows; default-feature strict Clippy,

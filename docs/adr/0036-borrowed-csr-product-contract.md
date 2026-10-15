@@ -2,11 +2,11 @@
 
 # ADR 0036: Borrowed CSR products separate representation, arithmetic and row execution
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-10-15. Owner: Codex `/root`.
 Board: `LETO-CSR-FORWARD-CONTRACT`. Classification: [arch], prospective
-implementation target 0.46.0. This proposal and its current-API witnesses are
+implementation target 0.46.0. The original proposal and its current-API witnesses are
 a [patch] documentation/test increment targeting 0.45.3.
 
 ## Context
@@ -36,7 +36,7 @@ At Leto main `248fe4f63c674f6fca1f89ac19c1f817e67bc417`:
 These are observable differences, not reasons to cast index slices, sort
 inputs, add scalar bounds to Coeus, or weaken exact numerical checks.
 
-## Proposed decision
+## Decision
 
 1. Extend the borrowed descriptor with sealed index and ordering policies,
    defaulting to the existing `usize`/canonical contract and retaining the
@@ -71,9 +71,9 @@ inputs, add scalar bounds to Coeus, or weaken exact numerical checks.
    reviewed Coeus change before a generic adapter relies on it.
 
 The [co-located design](../../crates/leto-ops/src/application/sparse/README.md)
-defines the proposed API, lifecycle, safety obligations, numerical recurrence
-and acceptance gates. All names there describe proposed interfaces, not
-shipped symbols.
+defines the API, lifecycle, safety obligations, numerical recurrence
+and acceptance gates. Implementation and verification status remain tracked
+in the checklist and verification record.
 
 ## Alternatives
 
@@ -112,9 +112,9 @@ and paired performance comparisons against the recorded base.
 
 ## Sign-off
 
-Pending Ryan Clanton's decision. No [arch] implementation checklist item is
-opened by this proposal. `/Users/ryanclanton/AGENTS.md`, versioning, requires:
-"[major] and [arch] items require ADR sign-off before the implementation
-checklist item is opened." The same requirement appears in the task's global
-engineering SOP. Signing off authorizes the proposed provider execution
-boundary; it does not authorize a registry release or merge without checks.
+Ryan Clanton explicitly approves this decision in the task conversation on
+2026-10-15 ("approve"), after reviewing the proposal. This satisfies the
+global engineering SOP's architectural sign-off requirement and opens the
+0.46.0 implementation checklist. Approval covers the provider execution
+boundary and the documented downstream safety-contract clarification; it
+does not authorize a registry release or merge without checks.

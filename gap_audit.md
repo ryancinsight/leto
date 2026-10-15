@@ -11,7 +11,8 @@
   and under both Miri borrow models. Strict default-feature all-target Clippy
   and warning-denied docs pass. These checks characterize existing behavior;
   they do not verify a proposed implementation.
-- next: ADR sign-off, then provider-first implementation and the prospective
+- decision: Ryan Clanton approves ADR 0036 on 2026-10-15.
+- next: provider-first implementation and the prospective
   numerical, allocation, architecture, borrow-model and performance gates in
   `docs/verification/csr-forward-contract.md`.
 - scope: the existing owned CSR `usize` to `u32` item remains separate. Coeus

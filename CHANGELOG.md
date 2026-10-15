@@ -4,7 +4,29 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
-## [0.45.3] - Unreleased
+## [0.46.0] - Unreleased
+
+### Added
+
+- [arch] Accepted ADR 0036: checked borrowed CSR indices (`usize`/`i64`),
+  canonical/stored ordering policies, and a prepared CSR product with explicit
+  scalar or SIMD arithmetic and a synchronous caller-owned row-dispatch scope.
+- [minor] Signed borrowing, all Coeus scalar families, failure atomicity,
+  complete-row writes, zero-allocation execution and joined-unwind regressions;
+  compile-fail examples enforce input lifetimes, output exclusivity and unsafe
+  row invocation.
+
+### Changed
+
+- [patch] Existing SpMV and SpMM entry points share the provider row kernel,
+  retaining separate scalar SpMV and slice-hook SpMM arithmetic. The unsigned
+  constructor, owned canonical storage and strided RHS behavior stay compatible.
+- [patch] Feature-disabled batched LU propagates its real decomposition result
+  with `?`, closing the previously recorded strict Clippy diagnostic.
+- [arch] Advance the lockstep workspace to 0.46.0 for the approved API addition.
+  This development change does not publish packages or create release tags.
+
+## [0.45.3] - Specification increment
 
 ### Added
 

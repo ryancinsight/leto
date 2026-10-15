@@ -3,9 +3,12 @@
 //! These characterize the compatibility gap; they do not implement or certify
 //! the proposed signed, stored-order, externally scheduled product.
 
+mod dispatch;
 mod ordering;
 mod partitions;
+mod product;
 mod rounding;
+mod signed;
 
 use tracing_subscriber::fmt::format::FmtSpan;
 

@@ -2,7 +2,7 @@
 
 <a id="LETO-CSR-FORWARD-CONTRACT"></a>
 
-## LETO-CSR-FORWARD-CONTRACT — Borrowed CSR tensor-forward provider contract [arch] — proposed
+## LETO-CSR-FORWARD-CONTRACT — Borrowed CSR tensor-forward provider contract [arch] — in progress
 
 - Owner: Codex `/root`; updated 2026-10-15; priority: correctness.
 - Driver: Coeus preservation #531 and independent compatible bridge recovery
@@ -10,8 +10,8 @@
 - Foundation [patch], target 0.45.3: ADR 0036, co-located sparse design and six
   current-API witnesses specify signed portable borrowing, stored entry order,
   separate rounding, complete writes and caller-owned row scheduling.
-- Needs: Ryan Clanton's ADR sign-off before opening an implementation
-  checklist item. Proposed provider implementation target: 0.46.0.
+- Decision: Ryan Clanton approves ADR 0036 on 2026-10-15 in the task
+  conversation. Provider implementation target: 0.46.0.
 - Outcome: one provider row kernel, no CSR slice reinterpretation or index
   copies, no new Coeus scalar bound, preserved typed validation/allocation
   failures and backend scheduling. Owned `usize` storage remains unchanged.
@@ -21,8 +21,8 @@
   output/dispatch scope, then Coeus backend unwind-contract clarification and
   adapter. The clarification is a reviewed implementor-contract change even
   without a method-signature change.
-- Next action: obtain the decision on `docs/adr/0036-borrowed-csr-product-contract.md`.
-  Keep Coeus #531 intact; do not open implementation work before sign-off.
+- Next action: complete provider acceptance on the current dependency graph,
+  then integrate the Coeus adapter. Keep Coeus #531 intact.
 
 <a id="LETO-NOPARALLEL-CLIPPY-2026-10-15"></a>
 

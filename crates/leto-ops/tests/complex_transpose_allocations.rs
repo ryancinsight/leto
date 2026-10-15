@@ -8,6 +8,8 @@ use leto_ops::{ComplexLayout, SquareTransposeError};
 
 #[path = "ops/layout/payloads.rs"]
 mod payloads;
+#[path = "ops/sparse/allocations.rs"]
+mod sparse_allocations;
 #[path = "ops/symmetric_qr_allocations.rs"]
 mod symmetric_qr_allocations;
 use payloads::{assert_bits, expected, values, PayloadScalar};
