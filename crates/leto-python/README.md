@@ -86,6 +86,9 @@ The package-scoped release profile retains extension symbols to avoid
 [Rust/LLVM's Mach-O stripping defect](https://github.com/rust-lang/rust/issues/157750).
 Release optimization and the CPython wheel ABI are unchanged; the default
 macOS toolchain must build an importable wheel without linker overrides.
+Every release-matrix row also executes nine NumPy-only value, dtype and error
+contracts. The closed-form fixtures cover both float32 and float64 without a
+SciPy dependency on musl; the full 29-case NumPy/SciPy suite runs in native CI.
 
 ## Links
 

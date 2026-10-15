@@ -163,8 +163,10 @@ jobs:
       - name: Require the installed extension and SciPy
         run: python -c "import leto_python, scipy.linalg; print(leto_python.__file__)"
 
-      - name: Run the unchanged NumPy and SciPy parity suite
-        run: python -m pytest crates/leto-python/tests/test_numpy_parity.py
+      - name: Run parity and installed-wheel contracts
+        run: >-
+          python -m pytest crates/leto-python/tests/test_numpy_parity.py
+          crates/leto-python/tests/test_wheel_contract.py
 
   # Miri over the code whose correctness rests on an invariant the native suite
   # cannot see.

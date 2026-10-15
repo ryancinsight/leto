@@ -14,6 +14,8 @@
   Mach-O stripping defect (rust-lang/rust#157750); keep release optimization
   and wheel ABI unchanged. Verify the full release wheel matrix on pull requests
   before a release can attach or publish artifacts.
+- Run nine bounded, closed-form NumPy value/dtype/error contracts against each
+  installed release wheel, including musl; retain all 29 NumPy/SciPy parity cases.
 
 All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to

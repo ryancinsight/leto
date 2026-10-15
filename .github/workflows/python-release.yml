@@ -30,6 +30,8 @@ jobs:
       tag-prefix: leto-python-v
       abi3: false
       python-versions: '["3.9", "3.10", "3.11", "3.12", "3.13"]'
+      python-test-path: crates/leto-python/tests/test_wheel_contract.py
+      pytest-version: "8.4.2"
       # Exercise the actual release matrix before integration. The shared
       # verification mode validates/attests artifacts without a release tag,
       # GitHub Release attachment or PyPI publication.

@@ -35,8 +35,20 @@
   29 parity cases. The graded-scan native case exceeds the unchanged 30-second
   slow threshold (39.334 seconds) while remaining below its termination limit;
   that existing performance concern is not resolved by this build repair.
-- Remaining: exact-final-head CI, the unchanged 30-row release wheel matrix
-  (CPython 3.9–3.13 on six platforms), independent review and gated integration.
+- Complete build/import evidence: the
+  [tested candidate](https://github.com/ryancinsight/leto/commit/ee0eeffa2e4f369e221b93881f7c9502f89793b0)
+  passes all nine executed CI checks and all 30 release wheel rows, plus the
+  consolidated wheel-set/source-distribution validator. Configured event skips
+  are recorded separately; this includes the existing Leto Miri job, while
+  deferred Coeus Miri remains unverified.
+- Additional coverage finding: the shared release matrix only executes value
+  tests when its provider selects them. Select nine bounded NumPy-only
+  value/dtype/error cases on every platform/interpreter row; keep all 29
+  NumPy/SciPy parity cases. The original default Mac wheel fails mandatory import;
+  the corrected wheel passes all 38 cases locally, zero skips. Initial test
+  fixtures were corrected to the existing two-dimensional elementwise contract.
+- Release acceptance still requires final-head CI/value-matrix evidence,
+  independent review, normal gated integration and verified publication receipts.
   No merge/publication yet. Other owner
   branches and the pending Eunomia version decision stay untouched.
 
