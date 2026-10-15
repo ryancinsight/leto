@@ -9,9 +9,12 @@ Python repair target: leto-python 0.46.1; Rust packages remain 0.46.0.
 - [x] Separate native linkage from maturin's existing dependency feature.
 - [x] Pass all 1,202 CPython 3.13 native cases, zero skips, strict full-feature
       workspace lint/docs and both unchanged Rust API/package gates.
-- [ ] Complete the matching Python 3.11 CI setup with its required SciPy runtime
-      and repeat the complete native suite.
-- [ ] Build, install, import and run the unchanged parity suite against a wheel.
+- [x] Provide Python 3.11 CI with NumPy/SciPy and pass all 1,202 native cases,
+      zero skips; keep the initial missing-runtime failure in the evidence.
+- [x] Build/install/import the Python 3.13 wheel with installed ld-classic and
+      SDK 15.4; all 29 unchanged parity cases pass, zero skips.
+- [ ] Collect the default Linux wheel gate; retain this Mac default-linker
+      LINKEDIT import failure and keep full release-matrix claims unverified.
 - [ ] Pass exact final-head CI/review; preserve release matrices and test limits.
 - [ ] Verify any later permitted integration; no publication in this repair pass.
 

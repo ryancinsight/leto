@@ -18,8 +18,15 @@
   workspace lint, minimal Rust checks, docs/doctests, both API comparisons
   and ordinary Rust package verification pass. All 531 Rust/test/release files
   and all 223 external lock records stay unchanged.
-- Remaining: CPython 3.11 rerun after installing the native SciPy runtime,
-  actual built-wheel import/parity, exact-final-head CI and review. Other owner
+- Wheel/native evidence: all 1,202 native cases also pass on Python 3.11
+  after installing its required SciPy runtime. An actual Python 3.13 wheel
+  built with installed ld-classic/SDK 15.4 imports and passes all 29 unchanged
+  NumPy/SciPy parity tests, zero skips; it does not link libpython.
+- Limitation: this Mac default linker builds a loader-rejected LINKEDIT string
+  pool, as also recorded by the separate storage owner. That failure is retained
+  and not counted green. The default-toolchain Linux wheel gate and existing
+  release matrix still require their own actual results.
+- Remaining: exact-final-head CI and review; no merge/publication. Other owner
   branches and the pending Eunomia version decision stay untouched.
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>

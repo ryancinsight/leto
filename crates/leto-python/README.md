@@ -70,7 +70,7 @@ feature from pyproject.toml when building a wheel, preserving extension linkage.
 Select the interpreter with PYO3_PYTHON when the default is not the intended
 Python installation.
 
-From the repository root, run native tests with NumPy installed in the selected
+From the repository root, run native tests with NumPy and SciPy installed in the selected
 interpreter, then build and install a wheel before running the parity suite:
 
     cargo nextest run --locked --workspace
