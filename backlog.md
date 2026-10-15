@@ -1,5 +1,21 @@
 # Leto Work Backlog
 
+<a id="LETO-PYTHON-NATIVE-LINK"></a>
+## LETO-PYTHON-NATIVE-LINK — Separate native-test and extension linkage [patch] — todo
+
+- priority: correctness; status: todo; owner: Codex.
+- Scope: binding linkage/build metadata and CI; independent of provider ranges.
+- Finding: unconditional PyO3 extension-module selection disables libpython
+  linkage on Darwin, so the native binding test executable has unresolved
+  CPython symbols. The unchanged main fails on supported CPython 3.13.
+- Implemented: native default dependency linkage and maturin-selected existing
+  pyo3/extension-module feature. Only the unpublished Python binding advances
+  to 0.46.1; public Rust packages stay 0.46.0 with all provider floors preserved.
+- Acceptance: full native workspace, strict lint/docs and actual built-wheel
+  import/parity pass; final-head CI/review and applicable matrix evidence follow.
+- Status: implementation prepared; after-regression and final checks pending.
+  Other owner branches and the pending Eunomia version decision stay untouched.
+
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
 

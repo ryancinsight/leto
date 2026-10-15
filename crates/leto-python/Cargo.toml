@@ -1,6 +1,6 @@
 [package]
 name = "leto-python"
-version.workspace = true
+version = "0.46.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true

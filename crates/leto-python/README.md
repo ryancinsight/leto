@@ -62,6 +62,27 @@ SVD) are checked by their mathematical invariants — reconstruction,
 orthonormality, sorted spectra — because a factorization is unique only up to
 signs and permutations, so raw factor equality would be the wrong oracle.
 
+## Build and test
+
+Native Cargo tests link libpython so their executable can initialize an
+interpreter. Maturin selects the existing pyo3/extension-module dependency
+feature from pyproject.toml when building a wheel, preserving extension linkage.
+Select the interpreter with PYO3_PYTHON when the default is not the intended
+Python installation.
+
+From the repository root, run native tests with NumPy installed in the selected
+interpreter, then build and install a wheel before running the parity suite:
+
+    cargo nextest run --locked --workspace
+    maturin build --locked --release --manifest-path crates/leto-python/Cargo.toml
+    python -m pip install --no-deps target/wheels/leto_python-*.whl
+    python -c "import leto_python, scipy.linalg"
+    python -m pytest crates/leto-python/tests/test_numpy_parity.py
+
+The explicit imports make a missing or unloadable wheel fail before pytest's
+optional-import guards. The existing release interpreter/platform matrix stays
+unchanged; a local build validates only its actual interpreter and target.
+
 ## Links
 
 - [Source and issues](https://github.com/ryancinsight/leto)

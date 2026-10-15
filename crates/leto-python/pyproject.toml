@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "leto-python"
-# Single source of truth: maturin reads the version from Cargo.toml, which
-# inherits the workspace version.
+# Single source of truth: maturin reads the independently versioned binding
+# package from Cargo.toml.
 dynamic = ["version"]
 description = "NumPy-compatible array kernels and dense linear algebra over the Leto Rust substrate"
 readme = "README.md"
@@ -56,6 +56,9 @@ Issues = "https://github.com/ryancinsight/leto/issues"
 
 [tool.maturin]
 module-name = "leto_python"
+# Wheels resolve CPython symbols from their importing interpreter. Native
+# cargo tests keep libpython linkage by leaving this dependency feature off.
+features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

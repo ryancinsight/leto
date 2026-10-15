@@ -43,7 +43,8 @@ anyhow = "1.0"
 serde_json = "1"
 
 # ── Python FFI ──
-pyo3 = { version = "0.23", features = ["extension-module"] }
+# Native test executables embed Python; maturin alone selects extension linkage.
+pyo3 = "0.23"
 numpy = "0.23"
 
 # ── Testing / Benchmarking ──

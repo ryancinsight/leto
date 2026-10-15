@@ -1,5 +1,16 @@
 # Changelog
 
+## leto-python 0.46.1 — Unreleased
+
+### Fixed
+
+- [patch] Native binding tests link libpython; maturin explicitly selects
+  extension-module linkage for wheels using PyO3's existing dependency feature.
+  Rust library versions, scalar behavior and provider requirements stay unchanged.
+- Extend native CI to the full workspace and require actual built-wheel import
+  before the unchanged NumPy/SciPy parity suite. Existing release matrices,
+  native test limits and assertions stay unchanged.
+
 All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
