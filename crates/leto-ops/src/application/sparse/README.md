@@ -168,13 +168,18 @@ The provider does not broaden Coeus's layout contract by materializing views.
 Existing Leto public view products retain their strided-input materialization.
 
 Keep Coeus's error categories and ordering: negative indices return
-`InvalidNumericInput`, non-representable indices return `Overflow`, invalid
-columns return `IndexOutOfRange`, and structural/storage/layout failures keep
-their existing typed errors. Check current validators for the precise
-precedence when several faults coexist. Provider constructors/preparation
-return existing `LetoError` categories; no new public error-enum variant is
-required. The adapter maps unexpected provider failures explicitly to
-contextual backend errors instead of `expect`, panic or error masking.
+`InvalidNumericInput`; invalid or non-representable columns return
+`IndexOutOfRange` (an unrepresentable column reports `usize::MAX` as its
+index). Non-representable row offsets also return `InvalidNumericInput`;
+the existing message calls them negative even when the original `i64` was
+positive. A representable offset outside the stored range returns `Storage`.
+Preserve this width-dependent distinction during integration; correcting its
+wording/category is a separate behavioral decision. Shape-count overflow
+retains `Overflow`. Check current validators for the precise precedence when
+several faults coexist. Provider constructors/preparation return existing
+`LetoError` categories; no new public error-enum variant is required. The
+adapter maps unexpected provider failures explicitly to contextual backend
+errors instead of `expect`, panic or error masking.
 
 Retaining Coeus validation means provider construction may validate indices a
 second time. Measure that cost in the complete product; do not add an unsafe

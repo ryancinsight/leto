@@ -121,6 +121,10 @@ requests `leto-ops` 0.45.2 from the exact base Git revision and runs online
 compilation: Leto requests Eunomia `^0.9.0`, while the default Git branch now
 provides 0.10.0. Locked tests do not establish a resolvable fresh source graph.
 The specification patch changes no external version bound or locked package.
+The same clean consumer then requests the published proposal commit
+`890a73c77dd40f2adc7982dcaaabe26fd5ca5572` with version 0.45.3 and fails on the
+same Eunomia bound. Both base and candidate failures execute online; neither
+uses a copied lockfile or development override.
 
 Production Rust sources and all external lock entries compare byte-for-byte
 with the recorded base. No public symbol or production algorithm changes.
