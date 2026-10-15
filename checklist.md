@@ -7,7 +7,10 @@ Python repair target: leto-python 0.46.1; Rust packages remain 0.46.0.
 - [x] Check current main, repository instructions and both active owner patches.
 - [x] Reproduce the native linker regression on supported CPython 3.13.
 - [x] Separate native linkage from maturin's existing dependency feature.
-- [ ] Pass the full workspace native suite and strict lint/docs without skips.
+- [x] Pass all 1,202 CPython 3.13 native cases, zero skips, strict full-feature
+      workspace lint/docs and both unchanged Rust API/package gates.
+- [ ] Complete the matching Python 3.11 CI setup with its required SciPy runtime
+      and repeat the complete native suite.
 - [ ] Build, install, import and run the unchanged parity suite against a wheel.
 - [ ] Pass exact final-head CI/review; preserve release matrices and test limits.
 - [ ] Verify any later permitted integration; no publication in this repair pass.

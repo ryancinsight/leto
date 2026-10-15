@@ -13,8 +13,14 @@
   to 0.46.1; public Rust packages stay 0.46.0 with all provider floors preserved.
 - Acceptance: full native workspace, strict lint/docs and actual built-wheel
   import/parity pass; final-head CI/review and applicable matrix evidence follow.
-- Status: implementation prepared; after-regression and final checks pending.
-  Other owner branches and the pending Eunomia version decision stay untouched.
+- Local evidence: the supported CPython 3.13 baseline fails native linking;
+  the repair passes all 1,202 native tests, zero skips. Strict full-feature
+  workspace lint, minimal Rust checks, docs/doctests, both API comparisons
+  and ordinary Rust package verification pass. All 531 Rust/test/release files
+  and all 223 external lock records stay unchanged.
+- Remaining: CPython 3.11 rerun after installing the native SciPy runtime,
+  actual built-wheel import/parity, exact-final-head CI and review. Other owner
+  branches and the pending Eunomia version decision stay untouched.
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
