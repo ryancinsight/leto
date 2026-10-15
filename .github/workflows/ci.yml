@@ -70,8 +70,11 @@ jobs:
           python-version: "3.11"
 
       - name: Install the native binding runtime
-        # NumPy 2.2.6 supports this job's existing Python 3.11 interpreter.
-        run: python -m pip install --disable-pip-version-check "numpy==2.2.6"
+        # Both runtimes support this job's existing Python 3.11 interpreter.
+        # The native binding tests compare matrix exponentials against SciPy.
+        run: >-
+          python -m pip install --disable-pip-version-check
+          "numpy==2.2.6" "scipy==1.16.3"
 
       - name: Materialize the pinned Atlas tooling checkout
         # ADR 0067: the bench runner consumes Atlas's process-tree runner from
