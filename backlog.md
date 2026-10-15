@@ -29,12 +29,7 @@
   portable target. The actual installed wheel imports and passes all 29 parity
   cases, zero skips, without libpython linkage or linker/SDK overrides. Both
   artifacts and compiler flags are retained; see rust-lang/rust#157750.
-- Hosted evidence before that profile correction: PR #365's
-  [tested head](https://github.com/ryancinsight/leto/commit/0f2a325225a6850030d1b42904c4c5552fe08624) passes
-  all nine executed checks, including 1,202 native cases and the Linux wheel's
-  29 parity cases. The graded-scan native case exceeds the unchanged 30-second
-  slow threshold (39.334 seconds) while remaining below its termination limit;
-  that existing performance concern is not resolved by this build repair.
+- Earlier [CI](https://github.com/ryancinsight/leto/actions/runs/38802358418) passed 1,202 native and 29 Linux parity cases; its 39.334s graded-scan slow observation remains recorded.
 - Complete same-repository evidence: the
   [tested candidate](https://github.com/ryancinsight/leto/commit/c861229de52881529dfe2b678e9a7a3954a2863c)
   passes 40 checks, including all 30 wheel rows with nine value cases each and
