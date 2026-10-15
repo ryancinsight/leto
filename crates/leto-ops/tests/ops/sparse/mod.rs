@@ -5,6 +5,7 @@
 //! at `Complex64`, and [`views`] the zero-copy view constructors.
 
 mod complex;
+mod contracts;
 mod csr;
 mod products;
 mod views;

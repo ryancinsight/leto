@@ -1,5 +1,36 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-15 Coeus borrowed CSR forward contracts
+
+- risk: open — current `usize`/canonical-only views, SIMD SpMM rounding and
+  serial row loops cannot preserve Coeus's signed stored-order CSR forward
+  contract directly. Coeus's backend safety documentation also needs explicit
+  completion on unwind before a generic lifetime-erasing adapter relies on it.
+- evidence: ADR 0036 and its co-located design; six executable current-API
+  witnesses pass within the 33-test sparse suite in both native feature modes
+  and under both Miri borrow models. Strict default-feature all-target Clippy
+  and warning-denied docs pass. These checks characterize existing behavior;
+  they do not verify a proposed implementation.
+- next: ADR sign-off, then provider-first implementation and the prospective
+  numerical, allocation, architecture, borrow-model and performance gates in
+  `docs/verification/csr-forward-contract.md`.
+- scope: the existing owned CSR `usize` to `u32` item remains separate. Coeus
+  #531 stays intact; compatible bridge recovery #533 remains independent.
+
+## 2026-10-15 CSR specification verification limits
+
+- Fresh Git consumers of base main fail before compilation because Eunomia
+  `^0.9.0` no longer matches default-branch 0.10.0; this patch retains the
+  complete external lock and production dependency bounds. Dependency graph
+  co-evolution remains a release prerequisite.
+- Feature-disabled strict Clippy reports the unchanged batched-LU
+  `clippy::question_mark` lint; `LETO-NOPARALLEL-CLIPPY-2026-10-15` tracks it.
+- The Stacked Borrows witness run passes all six cases with one Nextest late
+  handle marker. The isolated case and complete Tree Borrows run have none;
+  the runner cause remains undetermined. No safety gate is disabled.
+- Exact commands and the distinction between executed characterization and
+  unimplemented-provider acceptance live in the verification record.
+
 ## 2026-09-27 Francis skew ties beyond one ulp (Bf16)
 
 - risk: a Bf16 skew tridiagonal whose iterate couples two `[[0, a], [−a, 0]]` blocks by `ulp·2a < δ ≲ 2·ulp·2a` cycles to the iteration cap and returns `ConvergenceError` (3 of 90,000 scan matrices, orders 3–8); `dhseqr`'s recovery for a failed `dlahqr` is `dlaqr0` (AED), which leto lacks.

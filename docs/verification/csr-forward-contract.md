@@ -1,0 +1,153 @@
+# Borrowed CSR forward contract verification
+
+## Revisions and scope
+
+Provider base: Leto main `248fe4f63c674f6fca1f89ac19c1f817e67bc417`
+(0.45.2). The lock selects Eunomia 0.9.1 at
+`ee7c6911652ee7438566d5def1d6d4f519abc7fd`, Hermes 0.8.2 at
+`8648f280daed75d872ee87c2b93a3c177a4c41c1`, and Moirai 0.9.2 at
+`2b189f0a8aaf4a45aab1f2085c2ec748e483b8b3`.
+
+Consumer audit: Coeus original base `cd8e984e0d9c4f3621bd89f7830646de845a22e5`
+and independently recovered bridge `35e452686785cb409dd648c0565b3f9600e5de8d`
+([draft #533](https://github.com/ryancinsight/Coeus/pull/533)). Those revisions
+have identical tensor forward source; their canonical lock uses older
+provider revisions. Coeus preservation
+[draft #531](https://github.com/ryancinsight/Coeus/pull/531), head
+`4b7d360efdd829538ea68905795c02b7bd4f4252`, remains intact.
+Coeus main advances during this audit to
+`dd27214f88a5c23e0e9abc58e014e58b902d67fb` (Moirai 0.9 dependency migration).
+Its relevant sparse, scalar, backend and CPU storage sources remain identical
+to the original base; validation of the updated dependency graph belongs to
+the independent recovery draft, not this unimplemented provider proposal.
+
+This 0.45.3 [patch] increment contains a proposed [ADR 0036](../adr/0036-borrowed-csr-product-contract.md),
+a [co-located design](../../crates/leto-ops/src/application/sparse/README.md),
+current-API characterization and development tracing dependencies. It adds
+no production Rust change and makes no performance improvement claim. It
+does not implement signed/stored-order views or a row dispatch scope.
+
+## Mathematical witnesses
+
+| Executed witness | Exact oracle and reason |
+| --- | --- |
+| Coalescing | Binary64 `(2^53 + 1) - 2^53` is +0 under separate ties-to-even operations; coalescing the equal-column `2^53` and `-2^53` first leaves 1. The real canonical Leto product computes 1. |
+| Sorting | Stable column sorting of values `[2^53, 1, -2^53]`, columns `[1, 1, 0]`, moves `-2^53` first and yields 1 instead of +0. The current view rejects the original structure. |
+| Arithmetic policy | For `e = EPSILON`, exact `(1+e)*(1-e) = 1-e^2`. The product rounds to 1 before separate addition of -1, yielding +0. FMA yields `-e^2`, exactly representable for binary32/64. Current vector output is +0; matrix output equals the real scalar slice hook, including vector body and ragged tail. |
+| Row partition | Current standalone CSR construction rejects absolute offsets `[1,3]`; rebasing to `[0,2]` computes `3*7 + 5*11 = 76`. A prepared product must retain the full descriptor instead of rebuilding per-row arrays. |
+| Empty dimensions | All 64 triples `(m,k,n)` in `0..=3` with empty CSR produce `m*n` matrix and `m` vector zeros, overwriting NaN sentinels wherever slots exist. |
+| Failure atomicity | Both current products reject a one-slot output for a two-row result with typed `ShapeMismatch`; a NaN payload sentinel remains bit-identical. |
+
+The rounding witness deliberately characterizes the existing ISA-dependent
+matrix hook. It is not the future scalar-strategy acceptance test: that test
+must require +0 bits exclusively. No future signed-index or scheduling test
+is represented as passing merely because a current canonical case passes.
+These are characterization tests, not red/green claims for a production fix.
+
+## Executed gates (2026-10-15)
+
+Host: Apple M4 Max, `aarch64-apple-darwin`; native Rust 1.97.0;
+Miri 0.1.0 (`822182db4c`, 2026-10-13). Commands run
+from `/private/tmp`, outside Atlas, with absolute manifest and shared target
+paths. This prevents the Atlas development path overlay from changing the
+canonical git dependency graph. A process-tree timeout bounds every long
+command; native tests use Nextest's committed 30-second slow / 60-second
+termination budget. No individual sparse test reaches the slow threshold.
+
+- Native default-feature sparse suite: **33 passed**, 456 unrelated tests
+  excluded by the explicit sparse filter, including all six new witnesses.
+- Native sparse suite with `--no-default-features`: **33 passed**, the same
+  456 unrelated tests excluded.
+- Strict default-feature `leto-ops --all-targets` Clippy: **passes** with
+  `-D warnings`.
+- Strict `--no-default-features --all-targets` Clippy: **fails in unchanged
+  baseline code**, `application/linalg/lu_batch.rs:112`,
+  `clippy::question_mark`. No lint is suppressed. The separate
+  `LETO-NOPARALLEL-CLIPPY-2026-10-15` backlog item records the fix and LU tests.
+- Warning-denied `cargo doc -p leto-ops --no-deps`: **passes**.
+- Formatting, diff whitespace and local Markdown links: **pass**. The ADR
+  index is generated from the proposed decision's canonical header/status.
+- Strict-provenance Miri: **all six witnesses pass in each borrow model**,
+  isolation enabled, default seed 0. Stacked Borrows run
+  `85d5defd-54f3-4935-95c7-db8a000a5937` takes 98.937 seconds; Tree Borrows run
+  `80ffd963-bb25-43c4-b9e8-390b61c63351` takes 243.369 seconds. Each excludes
+  483 unrelated tests and stays within the committed interpreter budget.
+
+The Stacked Borrows full run receives one Nextest `LEAK` marker for the
+canonicalization witness despite the test's successful exit. Nextest uses
+that marker for [late stdout/stderr handle closure](https://nexte.st/docs/features/leaky-tests/),
+not a Miri heap-leak finding. Its isolated rerun
+`41b432e9-5fd1-4d91-abbf-76995ac9cbea` passes without the marker; the complete
+Tree Borrows run has no marker. The runner cause remains undetermined. No
+timeout, leak rule, input, assertion or Miri safety option is relaxed to hide
+it; these results do not claim universally clean runner process teardown.
+
+```sh
+cargo +1.97.0 nextest run --offline --locked \
+  --manifest-path "$LETO/Cargo.toml" --target-dir "$ATLAS/target" \
+  --config-file "$LETO/.config/nextest.toml" \
+  -p leto-ops --test ops_tests -E 'test(ops::sparse::)'
+cargo +1.97.0 clippy --offline --locked \
+  --manifest-path "$LETO/Cargo.toml" --target-dir "$ATLAS/target" \
+  -p leto-ops --all-targets -- -D warnings
+cargo +1.97.0 fmt --manifest-path "$LETO/Cargo.toml" --all -- --check
+MIRIFLAGS=-Zmiri-strict-provenance cargo +nightly miri nextest run --offline --locked \
+  --manifest-path "$LETO/Cargo.toml" --target-dir "$ATLAS/target" \
+  --config-file "$LETO/.config/nextest.toml" --profile miri \
+  -p leto-ops --test ops_tests -E 'test(ops::sparse::contracts::)'
+# Repeat with MIRIFLAGS='-Zmiri-strict-provenance -Zmiri-tree-borrows'.
+```
+
+The first local test build corrects a missing `RealField` witness bound before
+execution; the successful build uses the bound that actually defines
+`EPSILON`. Tracing disables its default attribute feature, so all external
+package versions and source revisions remain those of the base lock. Only
+local package versions and the new direct development dependency edges change.
+
+An initial Miri characterization run exposes an invalid fixture assumption:
+two `powi(53)` calls need not produce an exact power of two under
+[Rust's documented precision contract](https://doc.rust-lang.org/std/primitive.f64.html#method.powi).
+The corrected fixtures use the exactly representable binary64 literal
+`9_007_199_254_740_992.0`; no oracle, input domain or numerical assertion is
+weakened. Miri's extra rounding-error modeling stays enabled. The same exact
+fixture correction is applied to Coeus #533; its 293 native tests and five
+tensor-forward strict-provenance Miri cases pass again.
+
+## Fresh consumer and compatibility limits
+
+A clean consumer outside Atlas, without a lockfile or local overrides,
+requests `leto-ops` 0.45.2 from the exact base Git revision and runs online
+`cargo +1.97.0 metadata --format-version 1`. Resolution fails before
+compilation: Leto requests Eunomia `^0.9.0`, while the default Git branch now
+provides 0.10.0. Locked tests do not establish a resolvable fresh source graph.
+The specification patch changes no external version bound or locked package.
+
+Production Rust sources and all external lock entries compare byte-for-byte
+with the recorded base. No public symbol or production algorithm changes.
+`cargo-semver-checks`, full workspace tests, package publication, native
+non-host architectures and 32-bit Miri are not executed for this
+documentation/test increment. A release or the later implementation still
+requires its applicable compatibility and fresh-consumer gates.
+
+## Prospective acceptance after ADR sign-off — not executed
+
+| Gate | Required coverage | Mathematical or safety justification |
+| --- | --- | --- |
+| Borrowed representation | Valid `usize`/`i64` slices alias all inputs; negative offsets/columns, `i64::MAX`, and `2^32` on 32-bit reject before output writes; malformed lengths, endpoints and monotonicity | Lossless scalar decoding plus CSR bounds proves every address lies in its input slice. No same-length slice cast can satisfy this on unequal widths. |
+| Ordering policy | Canonical accept/reject behavior unchanged; stored-order unsorted/duplicate cases pass with exact consumer outputs; canonical-only CSC calls reject the wrong typestate at compile time | Physical entry order defines the recurrence. Canonicalization is not floating-point equivalent. |
+| Scalar coverage | Every existing Coeus integer type, four real float types and their complex family compiles without a new bound; exact nontrivial products and documented overflow behavior | `NumericElement` is already a Coeus supertrait. Native operators preserve the scalar contract without an ad hoc wider accumulator. |
+| Rounding | Binary32/64 counterexamples require +0 for scalar mode; ties, adjacent values, cancellation, signed zero, NaN payloads, infinities, subnormals, explicit zero coefficients and complex values compare to unchanged Coeus | Bitwise comparison follows the same per-output recurrence. Where a scalar's NaN behavior differs across ISA, characterize the exact supported contract rather than introduce a tolerance. |
+| Layout and errors | Coeus negative/overflow/column/storage errors and precedence; bad rank/shape; noncontiguous rejection; readable bounds; accepted nonzero contiguous offsets | Preserve existing validation before dispatch, slice only the validated logical region, and propagate allocation/mutable-access errors. |
+| Output proof | Nonempty, empty-row, zero-shared and zero-output dimensions; sentinel/canary checks; all output rows visited once; no mutation after preflight rejection | Checked `m*n` gives disjoint row intervals; fill-before-update establishes initialization. |
+| Dispatch safety | Real sequential/Moirai backends, 4,096-row threshold boundary, nested execution, worker panic and caller panic completion; no task escape or duplicate-row invocation through safe APIs | Completion must hold on return and unwind. Existing normal-return trait wording is insufficient for arbitrary external backends until clarified. |
+| Memory and architecture | Strict-provenance Miri under Stacked and Tree Borrows; supported native targets and 32-bit target checks; zero-width paths; both initialized-output and failure paths | Proves dynamic aliasing/address validity for exercised paths; it does not replace the unsafe API proof. Earlier Coeus 32-bit Miri attempts stop in upstream alignment assertions and do not establish portability. |
+| Allocation | Real allocator census after warmup: no CSR or dense input copies for contiguous operands; no per-row heap allocation; include wide outputs beyond 256 columns | Borrowed descriptors use constant auxiliary space; caller-provided output stores the recurrence directly. |
+| Differential and properties | Reuse all 689 small canonical sparsity masks and add unsorted/duplicate stored sequences with meaningful shrinking; real end-to-end tensor products and exact value assertions | Independent dense or stored-order oracles prevent an empty/default kernel from passing. |
+| Performance | Same four existing Coeus workloads, wide RHS, paired alternating order, full value checks and consumed output; include validation, initialization, allocation and scheduling | Existing direct serial-provider SpMV measured a 2.069 median time ratio at 16,384 rows. Kernel formula equivalence alone cannot establish preserved backend throughput. |
+| Compatibility and delivery | Formatting, strict Clippy, docs, native tests, API compatibility, clean-consumer dependency resolution, exact-revision CI and provider-first integration | A locked build does not prove a fresh published consumer graph resolves. No merge or release gate is inferred from characterization tests. |
+
+Existing performance evidence is in
+[Coeus #533's verification record](https://github.com/ryancinsight/Coeus/blob/35e452686785cb409dd648c0565b3f9600e5de8d/docs/verification/sparse-recovery.md).
+It is prior consumer evidence, not a benchmark of this unimplemented provider
+proposal. Provider and consumer dependency owners must resolve their current
+fresh-graph version drift before claiming release readiness.

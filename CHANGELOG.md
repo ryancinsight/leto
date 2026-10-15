@@ -4,6 +4,25 @@ All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
+## [0.45.3] - Unreleased
+
+### Added
+
+- [patch] Proposed ADR 0036 and a co-located borrowed-CSR product design for
+  Coeus tensor-forward integration. They specify portable checked signed
+  indices, stored-order arithmetic, output initialization and a synchronous
+  caller-dispatch safety boundary. Architectural implementation awaits sign-off.
+- [patch] Six current-API sparse witnesses cover ordering transformations,
+  separate versus slice-hook rounding, absolute row offsets, empty dimensions
+  and output-error failure atomicity, with hierarchical failure tracing.
+
+### Changed
+
+- [patch] Advance the lockstep workspace version to 0.45.3 for this
+  documentation/test increment. Production APIs and kernels are unchanged;
+  the prospective implementation targets 0.46.0. This records a development
+  change, not a registry publication or release tag.
+
 ## [Unreleased]
 
 ### Changed

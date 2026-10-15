@@ -1,5 +1,33 @@
 # Leto Development Checklist
 
+Active sprint target: **0.45.3** — CSR contract specification [patch].
+
+## LETO-CSR-FORWARD-CONTRACT — Foundation — Owner: Codex `/root`
+
+- [x] [patch] Audit current Leto and Coeus contracts at recorded revisions.
+- [x] [patch] Draft ADR 0036 and the co-located sparse design with numerical,
+      index-width, validation, initialization and dispatch obligations.
+- [x] [patch] Add six current-API witnesses and pass all 33 sparse tests.
+- [x] [patch] Run default-feature all-target strict Clippy.
+- [x] [patch] Complete formatting, feature-mode, memory-safety and documentation
+      checks; record the baseline no-parallel lint and runner limitation.
+- [x] [patch] Prepare the independently reviewable proposal and synchronize
+      verification evidence, changelog and lockstep workspace version.
+- [ ] [arch] Record Ryan Clanton's decision on ADR 0036 before opening any
+      implementation checklist item (prospective provider target 0.46.0).
+
+The proposed APIs and dispatch safety boundary are not implemented. Existing
+production sparse source and both Coeus drafts remain unchanged by this
+specification increment. No release or merge is claimed.
+
+Evidence: 33 sparse tests pass in each native feature mode; six witnesses pass
+under strict-provenance Stacked/Tree Borrows; default-feature strict Clippy,
+formatting and warning-denied documentation pass. No-parallel strict Clippy
+finds an unchanged LU lint. A Stacked Borrows Nextest handle marker does not
+reproduce in isolation; its cause remains undetermined. Fresh main consumers
+fail the existing Eunomia version bound. See the verification record for
+commands, exclusions and prospective implementation gates.
+
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [minor, perf] — Codex
 
 - [x] Attribute Apollo's 3-D transpose phase with a pinned value-checked

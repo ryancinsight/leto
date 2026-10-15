@@ -1,5 +1,41 @@
 # Leto Work Backlog
 
+<a id="LETO-CSR-FORWARD-CONTRACT"></a>
+
+## LETO-CSR-FORWARD-CONTRACT — Borrowed CSR tensor-forward provider contract [arch] — proposed
+
+- Owner: Codex `/root`; updated 2026-10-15; priority: correctness.
+- Driver: Coeus preservation #531 and independent compatible bridge recovery
+  #533; tensor-forward kernels still require provider contracts.
+- Foundation [patch], target 0.45.3: ADR 0036, co-located sparse design and six
+  current-API witnesses specify signed portable borrowing, stored entry order,
+  separate rounding, complete writes and caller-owned row scheduling.
+- Needs: Ryan Clanton's ADR sign-off before opening an implementation
+  checklist item. Proposed provider implementation target: 0.46.0.
+- Outcome: one provider row kernel, no CSR slice reinterpretation or index
+  copies, no new Coeus scalar bound, preserved typed validation/allocation
+  failures and backend scheduling. Owned `usize` storage remains unchanged.
+- Acceptance: the prospective gates in `docs/verification/csr-forward-contract.md`;
+  current characterization alone does not certify a cutover.
+- Dependency order: checked borrowed representation and arithmetic, validated
+  output/dispatch scope, then Coeus backend unwind-contract clarification and
+  adapter. The clarification is a reviewed implementor-contract change even
+  without a method-signature change.
+- Next action: obtain the decision on `docs/adr/0036-borrowed-csr-product-contract.md`.
+  Keep Coeus #531 intact; do not open implementation work before sign-off.
+
+<a id="LETO-NOPARALLEL-CLIPPY-2026-10-15"></a>
+
+## LETO-NOPARALLEL-CLIPPY-2026-10-15 — Restore strict diagnostics without parallel [patch] — todo
+
+- priority: verification; scope: `application/linalg/lu_batch.rs:112`.
+- Evidence: strict `leto-ops --all-targets --no-default-features` Clippy rejects
+  the unchanged explicit `match` on `lu_decompose` with `clippy::question_mark`.
+  Default-feature strict Clippy passes; both sparse feature modes pass tests.
+- Next: replace the redundant error branch with `?`, preserve the computed
+  decomposition assignment and run the real batched LU tests in both modes.
+  This baseline diagnostic is outside the CSR contract specification.
+
 <a id="LETO-RESCUE-QUEUE"></a>
 
 ## LETO-RESCUE-QUEUE — Complete or close the open rescue PRs [patch] — todo
