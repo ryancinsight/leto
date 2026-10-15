@@ -2,8 +2,8 @@
 
 ## 2026-10-15 Provider-default resolution [minor]
 
-- risk: main's Eunomia 0.9, Hermes 0.8, Aequitas 0.2 and allocator 0.9 requirements cannot consume the current numeric-provider defaults. The 0.46 candidate advances the full cohort without changing Rust sources or numerical assertions.
-- boundary: Mnemosyne 0.10 is merged and published; Hermes #260 is merged and Moirai #623 remains a reviewed source dependency. A valid locked candidate does not establish fresh default-branch or registry availability before their integration.
+- risk: published 0.45.2 belongs to the older provider line. Main #364 now admits the new Git cohort; 0.46 must expose that published boundary without changing Rust sources or numerical assertions.
+- boundary: Mnemosyne 0.10, Hermes 0.9 and Moirai 0.9.3 are integrated/published. The refreshed lock follows those defaults; fresh Git-consumer and exact-head gates remain distinct from publishing Leto 0.46. Main integration also triggers legacy Pages and the existing pending publisher.
 - acceptance: exact-source API/native/hosted checks, one provider identity, provider-first integration and a clean consumer after the final refresh. No path override, manifest revision pin or conversion adapter masks an old edge.
 
 ## 2026-09-27 Francis skew ties beyond one ulp (Bf16)

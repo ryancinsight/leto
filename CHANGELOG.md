@@ -8,7 +8,7 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Breaking
 
-- [minor] Align the shared numeric/provider boundary with Eunomia 0.10,
+- [minor] Version the shared published numeric/provider boundary for Eunomia 0.10,
   Hermes 0.9, Aequitas 0.3 and Mnemosyne-memory 0.10; Moirai 0.9.3 consumes
   the compatible private allocator. Direct consumers must advance those
   requirements together with Leto/Leto-ops 0.46. Old and new pre-1.0 provider
@@ -18,7 +18,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 - Preserve all Rust implementations, numerical bounds and tests. Canonical
   Git URLs remain unpinned in manifests; the lock records one source per
-  provider. The API gate compares the exact committed locked graphs.
+  provider. Preserve the provider constraints merged in #364; require the
+  integrated Moirai 0.9.3 line and refresh its merged source. The API gate
+  compares the exact committed locked graphs.
 
 ## [Unreleased]
 

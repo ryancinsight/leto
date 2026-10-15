@@ -6,10 +6,12 @@
 
 - [x] Audit default requirements and preserve canonical provider ownership (ADR 0029).
 - [x] Advance workspace/internal and direct provider requirements together; document the pre-1.0 migration.
-- [x] Verify one source per provider, standalone locked compilation, strict Clippy and all 1,181 native value tests (zero skips).
+- [x] Preserve #364's integrated provider constraints and the earlier 1,181-test source evidence.
+- [ ] Reverify the merged-default source lock, strict Clippy and complete native values on the refreshed head.
 - [x] Verify all 33 doctests (one existing ignored example) and warning-denied documentation.
 - [ ] Pass exact committed API comparison and applicable hosted CI.
-- [ ] Integrate upstream Moirai, refresh the final source lock and repeat the clean-consumer gate.
+- [ ] Verify an unseeded consumer against the merged provider defaults.
+- [ ] Obtain approval for main integration, pending-crate publication and legacy Pages deployment.
 
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [minor, perf] — Codex
 
