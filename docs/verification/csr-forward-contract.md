@@ -1,9 +1,11 @@
 # Borrowed CSR forward contract verification
 
 Current target: **0.47.0**, accepted ADR 0036. Checked borrowed representation,
-prepared arithmetic and row dispatch are implemented. The initial tensor
-cutover shows a measured SpMV regression; its resolution and coherent consumer
-bindings remain open. Earlier sections below preserve proposal evidence.
+prepared arithmetic and row dispatch are implemented and verified. Coeus #533
+uses the common row kernel with typed errors and its existing backend. The
+measured SpMV regression closes after local accumulation and checked-view reuse;
+paired medians now lie near parity, with explicit host-load uncertainty.
+Earlier sections preserve proposal and intermediate evidence.
 
 ## Original audit revisions and scope
 
@@ -283,3 +285,75 @@ IEEE requires NaN class for the latter; Rust does not specify its payload.
 The scalar path does not drop those stored entries. A positive public product
 example and all three compile-fail contracts pass within 33 successful
 doctests (one pre-existing ignored example).
+
+## Exact local-accumulator candidate
+
+Provider `a277833444ed6d54b5b58cf72bf8911c4c9cbb3a` keeps a one-column
+accumulator local while sharing the same CSR traversal and arithmetic policy.
+All 1200 native core/ops tests pass, zero skipped (Nextest `a2b13942`,
+19.948 s); strict all-target Clippy passes in default and feature-disabled
+operation modes. Native tests retain the committed 60-second per-test limit.
+A broader invocation first stops at unchanged PyO3 0.23's rejection of the
+host's default Python 3.14; that failed Python build is not a native-test pass.
+
+All 18 deterministic sparse memory contracts pass with isolation and strict
+provenance in both models, one test process at a time: Stacked `e0d2cf72`,
+195.880 s, and Tree `2ab1a28b`, 469.433 s. Each excludes 811 unrelated cases;
+no late-handle marker appears. The added subnormal/exceptional cases retain
+extra arithmetic-error modeling. The 256-case generated property test runs
+natively; deterministic memory witnesses exercise the unsafe address,
+initialization, ordering, precision and dispatch boundaries under Miri.
+The checked-address proof applies independently of random input generation.
+
+The local-accumulator diagnostic run improves the initial one-column result,
+but still measures roughly 1.4–1.6 times the unchanged Coeus recurrence.
+It overlaps interpreter verification and is not a final throughput claim.
+The consumer removes its duplicate healthy-path structure scan by reusing the
+checked view. Exact-error multiple-fault witnesses first pass on unchanged
+main, then all 151 real CPU integration cases pass with the revised adapter.
+Performance acceptance remains open until that path is measured.
+
+## Complete provider and consumer source evidence
+
+All actual hosted checks pass at runtime source `a2778334`, including Rust,
+locked-source SemVer, dependency/version/lock/ADR guards and the full Miri job
+([run 38776871929](https://github.com/ryancinsight/leto/actions/runs/38776871929)).
+Configured release and informational jobs skip; no registry receipt is claimed.
+
+The actual row kernel executes eight signed/product/partition cases on
+`armv7-unknown-linux-gnueabihf`, without default parallel features, under both
+strict/isolation models: Stacked `6cafdb7b`, 123.766 s; Tree `ee7e731c`,
+230.257 s. The all-sixteen-family product, stored-order/separate-rounding
+witness, target-width 2^32 rejection, empty output and failure-atomic cases
+pass. Real Clang cross-compiles the existing C helper. Full Coeus ARM32 still
+stops before tests at Moirai's deque alignment assertion; its Tree command does
+not execute. Provider-only execution is not full-consumer portability proof.
+
+Three fresh, unseeded external consumers select actual review sources without
+local paths/patches: Leto 0.47 (`a2778334`), Hephaestus 0.22.1 (`a153f475`),
+and Apollo FFT 0.29.2 (`f8fa292c`). Metadata resolves with 7/7/9 canonical
+providers respectively and zero excess identities. The real fresh Leto program
+aliases all original signed arrays and computes `[98,0]` and
+`[140,166,200,0,0,0]`, including an empty row; negative columns reject.
+
+Coeus recovery retains main's S2/S3 refactors at `33f6f1f0`. Its final complete
+review graph passes 1272 native tests (`d1f54759`, 5.784 s; eight existing
+ignored cases), all-workspace/all-target strict Clippy, 159 doctests (two existing
+ignored examples) and warning-denied documentation. Thirteen selected cases
+pass each borrow model, including real backend panic completion and capture
+release. An isolated interpreter process shuts down actual idle global workers
+only after all callback assertions; no leak or isolation check is disabled.
+
+The final 21-pair current-main comparison uses byte-identical reference files
+and the same real current CPU graph. SpMV paired medians span 0.93–1.03; tested
+Moirai SpMM ratios are 0.092, 0.182 and 0.291 for widths 16/64/257. Quartiles,
+exact-output checks, source fingerprint and the host-load limit live in
+[the current consumer record](https://github.com/ryancinsight/Coeus/blob/4c2a29c5d5e204e2a7c45eff66684b526e3164ae/docs/verification/sparse-forward-cutover.md).
+These results do not claim a universal non-regression bound.
+
+Compatible binding reviews #497/#674 retain Leto 0.46 and admit 0.47. They keep
+all Rust bytes and external locks unchanged against their actual current bases.
+Fresh Coeus defaults still reject Apollo ^0.29.2 because main exposes 0.29.1;
+the complete locked review graph passes independently. Provider-first default
+refresh and actual registry verification remain integration/release gates.
+Preservation Coeus #531 remains open, draft and unchanged at `4b7d360e`.

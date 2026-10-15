@@ -1,21 +1,29 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
-## 2026-10-15 — Approved provider implementation
+## 2026-10-15 — Borrowed forward source contracts close
 
-- Checked generic views and the common prepared row product are implemented.
-  All 1198 native tests and default strict Clippy pass on main's 0.10 cohort;
-  actual-source API comparison passes 196 checks after removing an unintended
-  Copy implementation on existing strategy markers.
-- Both borrow models pass eight core cases. New precision/complex/empty tests
-  pass Stacked Borrows; the Tree repeat remains in progress at this checkpoint.
-- 32-bit ARM executes and passes the signed index-width test. i686 still stops
-  in Eunomia's existing F64 alignment assertion; no portability check is faked.
-- Consumer binding and exact-main performance evidence remain open. Current
-  evidence supersedes the specification-only status below, not its history.
+- Checked signed/stored-order views and one prepared row recurrence replace
+  consumer arithmetic without index copies, reinterpretation or scalar widening.
+  Existing default canonical views and scalar/SIMD policies remain compatible.
+- 1200 native tests, both strict Clippy modes, 196 additive API checks and
+  all actual hosted checks pass at runtime source `a2778334`. Eighteen memory
+  contracts pass both strict/isolation models, including complex/exceptional
+  values, subnormal ties, empty shapes and joined dispatch.
+- Eight provider ARM32 cases pass both models without parallel features;
+  full Coeus ARM32 stops in current Moirai's existing deque-alignment assertion.
+  i686 stops in Eunomia's existing binary64 alignment assertion. These scopes
+  remain distinct from the tested portable scalar address kernel.
+- Coeus #533 retains its backend dispatch and exact diagnostic/rounding contract.
+  One local vector accumulator and one successful validation scan remove the
+  measured multi-fold regression; paired SpMV medians lie near parity, and
+  measured Moirai SpMM ratios are 0.09–0.29 against current-main source.
+- Remaining: independent review and provider-first default/registry availability.
+  Fresh provider review sources resolve; the actual 0.47 product executes in a
+  clean external consumer. Unseeded Coeus defaults reject unmerged Apollo 0.29.2.
 
 ## 2026-10-15 Coeus borrowed CSR forward contracts
 
-- risk: open — current `usize`/canonical-only views, SIMD SpMM rounding and
+- historical finding: prior `usize`/canonical-only views, SIMD SpMM rounding and
   serial row loops cannot preserve Coeus's signed stored-order CSR forward
   contract directly. Coeus's backend safety documentation also needs explicit
   completion on unwind before a generic lifetime-erasing adapter relies on it.
@@ -25,9 +33,8 @@
   and warning-denied docs pass. These checks characterize existing behavior;
   they do not verify a proposed implementation.
 - decision: Ryan Clanton approves ADR 0036 on 2026-10-15.
-- next: provider-first implementation and the prospective
-  numerical, allocation, architecture, borrow-model and performance gates in
-  `docs/verification/csr-forward-contract.md`.
+- closed source gap: accepted implementation and current verification are in
+  `docs/verification/csr-forward-contract.md`; release availability remains separate.
 - scope: the existing owned CSR `usize` to `u32` item remains separate. Coeus
   #531 stays intact; compatible bridge recovery #533 remains independent.
 

@@ -2,7 +2,7 @@
 
 Active sprint target: **0.47.0** — approved borrowed CSR integration [arch].
 
-## LETO-CSR-FORWARD-CONTRACT — Execution — Owner: Codex `/root`
+## LETO-CSR-FORWARD-CONTRACT — Closure / review — Owner: Codex `/root`
 
 - [x] [patch] Audit current Leto and Coeus contracts at recorded revisions.
 - [x] [patch] Draft ADR 0036 and the co-located sparse design with numerical,
@@ -17,24 +17,29 @@ Active sprint target: **0.47.0** — approved borrowed CSR integration [arch].
       2026-10-15; provider target 0.47.0 (0.46 is now the merged numeric cohort).
 - [x] [arch] Implement checked generic borrowed CSR and one prepared product
       with scalar/SIMD arithmetic and synchronous row dispatch.
-- [ ] [arch] Verify rejection, exact arithmetic, initialization, allocation,
+- [x] [arch] Verify rejection, exact arithmetic, initialization, allocation,
       dispatch lifetime, architecture and compatibility contracts.
-- [ ] [arch] Integrate Coeus after its backend safety clarification; compare
+- [x] [arch] Integrate Coeus after its backend safety clarification; compare
       against current main, including wide RHS products.
 
-ADR approval is recorded. Implementation gates remain open; the existing
-characterization evidence below does not certify the new APIs. No release
-or merge is claimed. Coeus preservation draft #531 remains intact.
+Implementation and source acceptance complete: 1200 native core/ops tests
+pass, strict all-target diagnostics pass in both feature modes, and the additive
+API comparison passes 196 checks (57 tool checks skip). All 18 deterministic
+memory cases pass both strict/isolation borrow models; eight provider cases
+also pass both models on 32-bit ARM without parallel runtime features.
+Coeus #533 passes 1272 native cases, strict diagnostics and 13 memory cases in
+each model. Paired current-main SpMV ratios lie near parity; measured Moirai
+SpMM ratios are 0.09–0.29. The record separates host-load uncertainty and the
+full consumer's upstream 32-bit build limitation.
 
-Evidence on current main's dependency graph: all 1198 native provider tests
-pass (zero skipped); strict default-feature diagnostics pass; the additive API
-comparison passes 196 checks (57 tool skips). Eight core memory cases pass
-both borrow models; the signed-width case also passes on 32-bit ARM. i686
-stops in an existing Eunomia alignment assertion. Precision and all 64 empty
-shape triples pass Stacked Borrows; the Tree Borrows repeat is in progress.
-Final consumer/performance and hosted gates remain open in the record.
+- [x] [patch] Verify a fresh external 0.47 review-source consumer: alias all
+      original signed arrays and compute exact nontrivial vector/matrix values.
+- [ ] [minor] Integrate compatible provider bindings, refresh defaults and
+      verify release availability under separately authorized publication gates.
 
-**Target Version**: 0.46.0
+No main merge, release or tag is claimed. Preservation #531 remains intact.
+
+**Historical cohort target**: 0.46.0
 
 ## LETO-EUNOMIA-010-COHORT [minor] — provider compatibility
 

@@ -2,11 +2,11 @@
 
 <a id="LETO-CSR-FORWARD-CONTRACT"></a>
 
-## LETO-CSR-FORWARD-CONTRACT — Borrowed CSR tensor-forward provider contract [arch] — in progress
+## LETO-CSR-FORWARD-CONTRACT — Borrowed CSR tensor-forward provider contract [arch] — review
 
 - Owner: Codex `/root`; updated 2026-10-15; priority: correctness.
 - Driver: Coeus preservation #531 and independent compatible bridge recovery
-  #533; tensor-forward kernels still require provider contracts.
+  #533; the tensor adapter now consumes the checked prepared product.
 - Foundation [patch], target 0.45.3: ADR 0036, co-located sparse design and six
   current-API witnesses specify signed portable borrowing, stored entry order,
   separate rounding, complete writes and caller-owned row scheduling.
@@ -15,14 +15,18 @@
 - Outcome: one provider row kernel, no CSR slice reinterpretation or index
   copies, no new Coeus scalar bound, preserved typed validation/allocation
   failures and backend scheduling. Owned `usize` storage remains unchanged.
-- Acceptance: the prospective gates in `docs/verification/csr-forward-contract.md`;
-  current characterization alone does not certify a cutover.
+- Acceptance: `docs/verification/csr-forward-contract.md` records complete
+  provider/consumer native, strict, memory, arithmetic, allocation, architecture
+  and current-main performance evidence. Source `a2778334` passes every actual
+  hosted check; configured release/informational jobs remain distinguished.
 - Dependency order: checked borrowed representation and arithmetic, validated
   output/dispatch scope, then Coeus backend unwind-contract clarification and
   adapter. The clarification is a reviewed implementor-contract change even
   without a method-signature change.
-- Next action: complete provider acceptance on the current dependency graph,
-  then integrate the Coeus adapter. Keep Coeus #531 intact.
+- Next action: review #362 with Coeus #533 and compatible Hephaestus #497 /
+  Apollo #674. The latter retain 0.46 while admitting 0.47, allowing ordered
+  source/publication integration. Unseeded Coeus defaults remain unavailable
+  until those provider reviews integrate. Keep Coeus #531 intact.
 
 <a id="LETO-NOPARALLEL-CLIPPY-2026-10-15"></a>
 
@@ -32,10 +36,9 @@
 - Evidence: strict `leto-ops --all-targets --no-default-features` Clippy rejects
   the unchanged explicit `match` on `lu_decompose` with `clippy::question_mark`.
   Default-feature strict Clippy passes; both sparse feature modes pass tests.
-- Next: replace the redundant error branch with `?`, preserve the computed
-  decomposition assignment and run the real batched LU tests in both modes.
-  The 0.46.0 implementation replaces the branch with `?`; real batched-LU
-  tests pass in both feature modes.
+- Closed: the implementation propagates with `?`, preserves the computed
+  decomposition assignment, and passes real batched-LU tests and strict
+  diagnostics in both feature modes.
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
