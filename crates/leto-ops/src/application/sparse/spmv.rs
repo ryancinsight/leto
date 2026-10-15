@@ -1,6 +1,6 @@
 //! Sparse matrix–vector product `y = A · x` over CSR, in `O(nnz)` time.
 
-use super::{CsrMatrix, CsrProduct, CsrView};
+use super::{CsrMatrix, CsrProduct, CsrView, FixedWidth};
 use crate::domain::scalar::Scalar;
 use crate::domain::strategy::ScalarStrategy;
 use leto::{Array1, ArrayView1, LetoError, Result, Storage};
@@ -50,7 +50,7 @@ pub fn spmv_into<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>, y: &mut [T]
 }
 
 fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<()> {
-    CsrProduct::<_, _, _, ScalarStrategy>::prepare(*a, xs, 1)?.execute(y)
+    CsrProduct::<_, _, _, ScalarStrategy, FixedWidth<1>>::prepare(*a, xs, 1)?.execute(y)
 }
 
 /// Compute `y = A · x`, allocating the length-`nrows` result. Thin wrapper over

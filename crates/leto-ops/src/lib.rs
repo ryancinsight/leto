@@ -149,8 +149,9 @@ pub use application::sparse::{
     factor_symbolic_with_ordering, solve_csr_via_dense_lu, sparse_lu_solve, spgemm, spmm,
     spmm_into, spmm_view_into, spmv, spmv_into, spmv_view_into, Canonical, CooMatrix, CscColumn,
     CscMatrix, CscView, CsrArithmetic, CsrIndex, CsrMatrix, CsrOrdering, CsrOutput, CsrProduct,
-    CsrRow, CsrRowTask, CsrView, CsrViewBuilder, NumericLu, OrderingStrategy, OwnedNumericLu,
-    SparseLuSolver, StoredOrder, SymbolicLu, DENSE_LIMIT_DEFAULT,
+    CsrRow, CsrRowTask, CsrView, CsrViewBuilder, DynamicWidth, FixedWidth, NumericLu,
+    OrderingStrategy, OwnedNumericLu, ProductWidth, SparseLuSolver, StoredOrder, SymbolicLu,
+    DENSE_LIMIT_DEFAULT,
 };
 /// Special mathematical functions (sinc, erf, Bessel J₀/J₁/Jₙ, Legendre polynomials).
 pub use application::special::{bessel_k0, erf, j0, j1, jn, sinc};

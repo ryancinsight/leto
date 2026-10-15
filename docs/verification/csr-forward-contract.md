@@ -382,3 +382,25 @@ near-parity observations; they do not establish universal performance
 preservation. The updated proof, exact-value timing tables and source
 fingerprints live in [the consumer review](https://github.com/ryancinsight/Coeus/pull/533).
 No provider runtime changes occur in this record update.
+
+
+## Fixed-width metadata optimization
+
+The inlining-only experiment retains all workloads and 21 paired samples:
+small SpMV ratios become 1.002/1.006 (sequential/Moirai), while large SpMV
+remains 1.034/1.065. Assembly still carries dynamic width in the callback.
+The implementation now encodes checked fixed widths through ProductWidth:
+DynamicWidth stores usize and FixedWidth<N> stores unit. Both use the same
+CSR traversal and arithmetic policy. The law `get(checked(n)?) == n` extends
+all existing pointer-range and disjointness proofs; mismatch rejects before
+binding or writes. Legacy vectors select fixed width one; old generic product
+argument lists retain dynamic defaults. No existing strategy gains Copy.
+
+The new regression first fails against the unchanged API with E0432. After
+implementation all 1201 native core/ops tests pass, zero skipped (`41eb943d`,
+19.918 s), and default-feature strict all-target Clippy passes. All sixteen
+scalar families additionally execute fixed width two; fixed vector witnesses
+preserve separate rounding, stored cancellation, empty rows and complete
+writes. Fixed widths 0/1/3 and wrong-width rejection have exact-value coverage.
+Feature-disabled, API, documentation, both borrow models, ARM32 and coupled
+consumer/performance gates must repeat for this new source before acceptance.

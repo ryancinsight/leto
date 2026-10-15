@@ -251,3 +251,11 @@ production change is justified; future matmul work requires a working profile.
   doc target, while full workspace docs still build. Full Git dependency update
   is still blocked upstream by
   Mnemosyne's `themis ^0.8.0` requirement vs Themis main 0.9.5.
+
+
+## Known-width callback specialization [minor] — Closure optimization
+
+- [x] Specify sealed checked width metadata and reproduce the missing API.
+- [x] Preserve dynamic defaults and one recurrence; run 1201 native tests and strict Clippy.
+- [ ] Repeat feature modes, API/docs, both memory models and ARM32 for this source.
+- [ ] Bind Coeus's known vector width and repeat full consumer/performance gates.

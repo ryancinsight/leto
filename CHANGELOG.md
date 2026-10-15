@@ -8,6 +8,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Added
 
+- [minor] Checked dynamic/fixed RHS width metadata preserves the default
+  product API while representing known widths without runtime storage. Vector
+  entry points use fixed width one through the same provider recurrence.
 - [arch] Accepted ADR 0036: checked borrowed CSR indices (`usize`/`i64`),
   canonical/stored ordering policies, and a prepared CSR product with explicit
   scalar or SIMD arithmetic and a synchronous caller-owned row-dispatch scope.

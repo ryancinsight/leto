@@ -221,3 +221,29 @@ every output before timing, consume results, and retain the same input domain.
 If separate-rounding SpMM costs more than fused SpMM, that comparison does
 not override the Coeus baseline contract. Resolve any regression against
 Coeus's unchanged baseline before claiming the full cutover complete.
+
+
+## Known RHS width and callback specialization
+
+The complete-graph timing repeat finds a 2–8% SpMV cost. Forced adapter
+inlining brings small-vector medians near parity but leaves about 6% in the
+large Moirai case. Native assembly retains a shared dynamic-width adapter and
+width-dependent callback branches. A vector's RHS width is statically one.
+
+A sealed `ProductWidth` representation policy records that fact without a
+second recurrence: `DynamicWidth` stores usize; `FixedWidth<N>` stores unit.
+Preparation checks a supplied width against N before accepting the product.
+All existing product types default to DynamicWidth, preserving their API and runtime
+width representation. Tasks retain the checked policy's value; fixed-width instantiations
+therefore carry no runtime width and expose N to callback monomorphization.
+
+The proof extends product preparation: `checked(n)` implies
+`value(metadata) == n`. The existing checked m*n/k*n and disjoint-row arguments
+then apply unchanged. A mismatch returns typed ShapeMismatch before output
+binding or writes. Width zero retains its no-reference/no-read behavior. The
+existing arithmetic policy remains independent, including legacy SIMD rounding.
+Alternatives are retaining measured overhead or adding separate vector math;
+source duplication does not satisfy the provider ownership contract. Verify
+fixed widths 0/1/3, mismatch rejection, all scalar families, both borrow models,
+32-bit provider execution, old API compatibility and the unchanged paired
+performance workloads before accepting the optimization.

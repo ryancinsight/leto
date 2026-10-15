@@ -77,7 +77,9 @@ pub use lu_sparse::{
     DENSE_LIMIT_DEFAULT,
 };
 pub use lu_symbolic::{factor_symbolic, factor_symbolic_with_ordering, SymbolicLu};
-pub use product::{CsrArithmetic, CsrOutput, CsrProduct, CsrRowTask};
+pub use product::{
+    CsrArithmetic, CsrOutput, CsrProduct, CsrRowTask, DynamicWidth, FixedWidth, ProductWidth,
+};
 pub use spgemm::spgemm;
 pub use spmm::{spmm, spmm_into, spmm_view_into};
 pub use spmv::{spmv, spmv_into, spmv_view_into};

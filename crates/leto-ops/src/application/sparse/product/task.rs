@@ -1,7 +1,7 @@
 //! Lifetime-erased row task, constructible only inside a validated output binding.
 
 use super::super::{csr::address, CsrIndex, CsrOrdering};
-use super::{arithmetic::accumulate, CsrArithmetic, CsrProduct};
+use super::{arithmetic::accumulate, CsrArithmetic, CsrProduct, DynamicWidth, ProductWidth};
 use core::marker::PhantomData;
 use eunomia::NumericElement;
 
@@ -19,20 +19,30 @@ use eunomia::NumericElement;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct CsrRowTask<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> {
+pub struct CsrRowTask<
+    T: NumericElement,
+    I: CsrIndex,
+    A: CsrArithmetic<T>,
+    W: ProductWidth = DynamicWidth,
+> {
     values: *const T,
     columns: *const I,
     offsets: *const I,
     rhs: *const T,
     output: *mut T,
-    width: usize,
+    width: W::Value,
     arithmetic: PhantomData<A>,
 }
 
 // As for CsrProduct, copies duplicate the pointer descriptor, never an A
 // strategy instance or ownership of any input/output allocation.
-impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> Copy for CsrRowTask<T, I, A> {}
-impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> Clone for CsrRowTask<T, I, A> {
+impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>, W: ProductWidth> Copy
+    for CsrRowTask<T, I, A, W>
+{
+}
+impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>, W: ProductWidth> Clone
+    for CsrRowTask<T, I, A, W>
+{
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -40,17 +50,23 @@ impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> Clone for CsrRowTask<T
 }
 
 // SAFETY: private construction retains shared initialized inputs and exclusive
-// output in the dispatch scope. T/I are Send+Sync. The unsafe invocation contract
+// output in the dispatch scope. T/I and checked width metadata are Send+Sync. The unsafe invocation contract
 // restricts each worker to one disjoint row and joins before any borrow ends.
-unsafe impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> Send for CsrRowTask<T, I, A> {}
+unsafe impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>, W: ProductWidth> Send
+    for CsrRowTask<T, I, A, W>
+{
+}
 // SAFETY: sharing the descriptor grants only unsafe row invocation. The same
 // scope, unique-row and input-immutability obligations apply to all its copies.
-unsafe impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> Sync for CsrRowTask<T, I, A> {}
+unsafe impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>, W: ProductWidth> Sync
+    for CsrRowTask<T, I, A, W>
+{
+}
 
-impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> CsrRowTask<T, I, A> {
+impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>, W: ProductWidth> CsrRowTask<T, I, A, W> {
     #[inline]
     pub(super) fn new<O: CsrOrdering>(
-        product: &CsrProduct<'_, T, I, O, A>,
+        product: &CsrProduct<'_, T, I, O, A, W>,
         output: *mut T,
     ) -> Self {
         let (values, columns, offsets) = product.view.as_parts();
@@ -74,7 +90,8 @@ impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> CsrRowTask<T, I, A> {
     ///
     /// # Proof
     /// Construction checks `m*n`, `k*n`, and exact slice lengths. Validated
-    /// offsets give `0 <= start <= end <= nnz`; each column is below `k` and
+    /// width decoding agrees with preparation. Validated offsets give
+    /// `0 <= start <= end <= nnz`; each column is below `k` and
     /// decodes losslessly. Thus all input reads are in bounds. Distinct rows
     /// address disjoint `[r*n,(r+1)*n)` intervals. Initialization establishes
     /// `s_0=ZERO`; each subsequent row update establishes the stored-order
@@ -82,7 +99,8 @@ impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> CsrRowTask<T, I, A> {
     /// arithmetic policy. Width zero forms no references and performs no reads.
     #[inline]
     pub unsafe fn run(self, row: usize) {
-        if self.width == 0 {
+        let width = W::get(self.width);
+        if width == 0 {
             return;
         }
         // SAFETY: the invocation and construction invariants above prove every
@@ -92,7 +110,7 @@ impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> CsrRowTask<T, I, A> {
             let end = address(self.offsets.add(row + 1).read());
             let values = core::slice::from_raw_parts(self.values.add(start), end - start);
             let columns = core::slice::from_raw_parts(self.columns.add(start), end - start);
-            if self.width == 1 {
+            if width == 1 {
                 // A vector has one accumulator. Keep it local so an opaque
                 // backend callback does not force a load/store of output for
                 // every entry. The shared traversal and arithmetic stay exact.
@@ -100,10 +118,9 @@ impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> CsrRowTask<T, I, A> {
                 accumulate_row::<T, I, A>(values, columns, self.rhs, 1, &mut accumulator);
                 self.output.add(row).write(accumulator[0]);
             } else {
-                let output =
-                    core::slice::from_raw_parts_mut(self.output.add(row * self.width), self.width);
+                let output = core::slice::from_raw_parts_mut(self.output.add(row * width), width);
                 output.fill(T::ZERO);
-                accumulate_row::<T, I, A>(values, columns, self.rhs, self.width, output);
+                accumulate_row::<T, I, A>(values, columns, self.rhs, width, output);
             }
         }
     }

@@ -1,5 +1,13 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-15 — Narrow callback metadata optimization [minor]
+
+Fixed/dynamic width metadata implements the same prepared product with no
+runtime width storage for a known vector. New tests first fail on the old API;
+1201 native tests and strict Clippy pass after implementation. Repeat memory,
+feature-mode, API/architecture and coupled performance gates before accepting
+this source. The earlier complete graph below remains revision-scoped evidence.
+
 ## 2026-10-15 — Borrowed forward source contracts close
 
 - Checked signed/stored-order views and one prepared row recurrence replace

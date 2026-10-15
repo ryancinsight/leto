@@ -2,6 +2,7 @@
 
 mod arithmetic;
 mod task;
+mod width;
 
 use super::{Canonical, CsrIndex, CsrOrdering, CsrView};
 use crate::domain::strategy::ScalarStrategy;
@@ -11,6 +12,7 @@ use leto::{LetoError, Result};
 
 pub use arithmetic::CsrArithmetic;
 pub use task::CsrRowTask;
+pub use width::{DynamicWidth, FixedWidth, ProductWidth};
 
 /// Prepared `m*k` CSR times contiguous row-major `k*n` dense multiplication.
 ///
@@ -49,10 +51,11 @@ pub struct CsrProduct<
     I: CsrIndex = usize,
     O: CsrOrdering = Canonical,
     A: CsrArithmetic<T> = ScalarStrategy,
+    W: ProductWidth = DynamicWidth,
 > {
     view: CsrView<'a, T, I, O>,
     rhs: &'a [T],
-    width: usize,
+    width: W::Value,
     output_len: usize,
     arithmetic: PhantomData<A>,
 }
@@ -60,13 +63,13 @@ pub struct CsrProduct<
 // A is a type-level arithmetic selection, never an owned strategy value. A
 // descriptor copy duplicates only shared borrows/dimensions, so it must not
 // require (or add) Copy on the existing public strategy types.
-impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>> Copy
-    for CsrProduct<'_, T, I, O, A>
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth> Copy
+    for CsrProduct<'_, T, I, O, A, W>
 {
 }
 
-impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>> Clone
-    for CsrProduct<'_, T, I, O, A>
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth> Clone
+    for CsrProduct<'_, T, I, O, A, W>
 {
     #[inline]
     fn clone(&self) -> Self {
@@ -74,17 +77,20 @@ impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>> Clone
     }
 }
 
-impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>
-    CsrProduct<'a, T, I, O, A>
+impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth>
+    CsrProduct<'a, T, I, O, A, W>
 {
     /// Check exact dense shape and representable input/output element counts.
     /// No allocation occurs for a valid request.
     ///
     /// # Errors
     /// [`LetoError::StorageError`] for count overflow; [`LetoError::ShapeMismatch`]
-    /// for an RHS length other than `view.ncols() * rhs_columns`.
+    /// for an RHS length other than `view.ncols() * rhs_columns`, or a fixed
+    /// width that differs from `rhs_columns`.
     #[inline]
     pub fn prepare(view: CsrView<'a, T, I, O>, rhs: &'a [T], rhs_columns: usize) -> Result<Self> {
+        let width = W::checked(rhs_columns)?;
+        let rhs_columns = W::get(width);
         let count = |rows: usize| {
             rows.checked_mul(rhs_columns)
                 .ok_or_else(|| LetoError::StorageError {
@@ -102,7 +108,7 @@ impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>
         Ok(Self {
             view,
             rhs,
-            width: rhs_columns,
+            width,
             output_len,
             arithmetic: PhantomData,
         })
@@ -113,7 +119,7 @@ impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>
     /// # Errors
     /// [`LetoError::ShapeMismatch`] unless output has exactly `m*n` elements.
     #[inline]
-    pub fn bind_output<'o>(&self, output: &'o mut [T]) -> Result<CsrOutput<'a, 'o, T, I, O, A>> {
+    pub fn bind_output<'o>(&self, output: &'o mut [T]) -> Result<CsrOutput<'a, 'o, T, I, O, A, W>> {
         if output.len() != self.output_len {
             return Err(LetoError::ShapeMismatch {
                 lhs: vec![output.len()],
@@ -164,13 +170,21 @@ impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>
 /// unsafe { bound.dispatch_with(|_, task| task.run(0)); }
 /// ```
 #[derive(Debug)]
-pub struct CsrOutput<'a, 'o, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>> {
-    product: CsrProduct<'a, T, I, O, A>,
+pub struct CsrOutput<
+    'a,
+    'o,
+    T: NumericElement,
+    I: CsrIndex,
+    O: CsrOrdering,
+    A: CsrArithmetic<T>,
+    W: ProductWidth = DynamicWidth,
+> {
+    product: CsrProduct<'a, T, I, O, A, W>,
     output: &'o mut [T],
 }
 
-impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>
-    CsrOutput<'_, '_, T, I, O, A>
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth>
+    CsrOutput<'_, '_, T, I, O, A, W>
 {
     /// Dispatch the prepared row task within this synchronous borrow scope.
     /// Returns the dispatcher's result unchanged, including errors.
@@ -188,7 +202,7 @@ impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>
     #[inline]
     pub unsafe fn dispatch_with<R>(
         self,
-        dispatch: impl FnOnce(usize, CsrRowTask<T, I, A>) -> R,
+        dispatch: impl FnOnce(usize, CsrRowTask<T, I, A, W>) -> R,
     ) -> R {
         let task = CsrRowTask::new(&self.product, self.output.as_mut_ptr());
         dispatch(self.product.view.nrows(), task)

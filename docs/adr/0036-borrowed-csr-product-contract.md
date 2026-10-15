@@ -125,3 +125,12 @@ cohort as 0.46.0 during implementation. The additive CSR capability therefore
 targets 0.47.0. This changes the version/dependency delivery order, not the
 approved behavior or safety boundary. Preserve that cohort and update consumer
 provider bindings together under ADR 0029's nominal-identity contract.
+
+
+The prepared product also encodes known RHS width through a sealed representation
+policy. DynamicWidth stores usize; FixedWidth<N> stores unit after checking that
+the supplied width equals N. The checked width law preserves the same m*n/k*n
+bounds and row recurrence. Existing APIs default to dynamic width; vectors select
+fixed width one so callback monomorphization carries neither a runtime width nor
+its branches. This addresses the measured narrow-product cost without a second
+kernel, unsafe shape assumption or arithmetic-policy change.
