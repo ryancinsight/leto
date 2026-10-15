@@ -89,6 +89,9 @@ macOS toolchain must build an importable wheel without linker overrides.
 Every release-matrix row also executes nine NumPy-only value, dtype and error
 contracts. The closed-form fixtures cover both float32 and float64 without a
 SciPy dependency on musl; the full 29-case NumPy/SciPy suite runs in native CI.
+Fork and Dependabot pull requests keep the same build and value-validation
+gates. Artifact attestation runs in trusted contexts with its existing write
+permissions; unprivileged verification does not require those credentials.
 
 ## Links
 

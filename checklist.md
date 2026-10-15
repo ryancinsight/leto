@@ -19,12 +19,14 @@ Python repair target: leto-python 0.46.1; Rust packages remain 0.46.0.
 - [x] Diagnose implicit Rust/LLVM stripping, retain the failed artifact and
       pass all 29 installed-wheel parity cases on the corrected default Mac
       toolchain with an aligned string table and no libpython dependency.
-- [x] Pass all nine executed CI checks and all 30 release build/import rows,
-      including consolidated wheel/source-distribution validation, at the
-      [tested candidate](https://github.com/ryancinsight/leto/commit/ee0eeffa2e4f369e221b93881f7c9502f89793b0).
+- [x] Pass 40 same-repository checks, all 30 wheel/value rows and consolidated
+      validation at the [tested candidate](https://github.com/ryancinsight/leto/commit/c861229de52881529dfe2b678e9a7a3954a2863c);
+      retain six configured skips and the 52.823s native slow-case observation.
 - [x] Add nine bounded NumPy-only value/dtype/error cases; reproduce the old
       wheel's mandatory import failure and pass all 38 local installed-wheel
       contracts, zero skips, preserving the full 29-case NumPy/SciPy suite.
+- [x] Record independent review's attestation P2 and select Atlas #542's guarded
+      recipe with 16 passing local regressions; keep the provider graph unchanged.
 - [ ] Close final-head CI/value-matrix evidence, independent review and normal
       gated integration/publication; preserve matrices, fixtures and test limits.
 

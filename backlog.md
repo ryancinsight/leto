@@ -35,12 +35,12 @@
   29 parity cases. The graded-scan native case exceeds the unchanged 30-second
   slow threshold (39.334 seconds) while remaining below its termination limit;
   that existing performance concern is not resolved by this build repair.
-- Complete build/import evidence: the
-  [tested candidate](https://github.com/ryancinsight/leto/commit/ee0eeffa2e4f369e221b93881f7c9502f89793b0)
-  passes all nine executed CI checks and all 30 release wheel rows, plus the
-  consolidated wheel-set/source-distribution validator. Configured event skips
-  are recorded separately; this includes the existing Leto Miri job, while
-  deferred Coeus Miri remains unverified.
+- Complete same-repository evidence: the
+  [tested candidate](https://github.com/ryancinsight/leto/commit/c861229de52881529dfe2b678e9a7a3954a2863c)
+  passes 40 checks, including all 30 wheel rows with nine value cases each and
+  consolidated distribution validation; six configured skips remain separate.
+  Its source rebuild passes all 38 cases. Existing Leto Miri passes; deferred
+  Coeus Miri remains unverified. The unchanged graded-scan case is slow at 52.823s.
 - Additional coverage finding: the shared release matrix only executes value
   tests when its provider selects them. Select nine bounded NumPy-only
   value/dtype/error cases on every platform/interpreter row; keep all 29
@@ -49,6 +49,10 @@
   fixtures were corrected to the existing two-dimensional elementwise contract.
 - Release acceptance still requires final-head CI/value-matrix evidence,
   independent review, normal gated integration and verified publication receipts.
+  Review found one P2: unprivileged PR verification attempted unconditional
+  attestation. [Atlas #542](https://github.com/ryancinsight/atlas/pull/542) adds
+  credential-free context regressions and a trusted-attestation guard. Only the
+  recipe pin advances; provider graph, permission declarations and locks remain.
   No merge/publication yet. Other owner
   branches and the pending Eunomia version decision stay untouched.
 

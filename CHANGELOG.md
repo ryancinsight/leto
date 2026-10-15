@@ -16,6 +16,8 @@
   before a release can attach or publish artifacts.
 - Run nine bounded, closed-form NumPy value/dtype/error contracts against each
   installed release wheel, including musl; retain all 29 NumPy/SciPy parity cases.
+- Preserve fork and Dependabot wheel verification with the shared recipe's
+  trusted-context attestation guard; retain all validation and release attestation.
 
 All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
