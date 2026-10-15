@@ -71,3 +71,36 @@ fn every_signed_index_is_checked_even_for_empty_products() {
     let result = CsrView::builder(&values, &columns, &offsets, 1, usize::MAX).build();
     assert_eq!(result.is_ok(), usize::try_from(large).is_ok());
 }
+
+#[test]
+fn row_validation_retains_multiple_fault_priority() {
+    let _trace = trace();
+    for (offsets, column, reason) in [
+        (
+            [1i64, -1, 0],
+            1,
+            "invalid CSR: row offset is negative or exceeds usize",
+        ),
+        (
+            [1, 0, 1],
+            1,
+            "invalid CSR: row_ptr must start at 0 and end at nnz",
+        ),
+        ([0, 2, 1], 1, "invalid CSR: row_ptr must be non-decreasing"),
+    ] {
+        let _case = tracing::info_span!("row_fault_priority", ?offsets, column).entered();
+        let (values, columns) = {
+            let _phase = tracing::info_span!("arrange").entered();
+            ([7i64], [column])
+        };
+        let error = {
+            let _phase = tracing::info_span!("act").entered();
+            CsrView::builder(&values, &columns, &offsets, 2, 1)
+                .with_order::<StoredOrder>()
+                .build()
+                .expect_err("multiple malformed components")
+        };
+        let _phase = tracing::info_span!("assert").entered();
+        assert!(matches!(error, LetoError::StorageError { reason: actual } if actual == reason));
+    }
+}

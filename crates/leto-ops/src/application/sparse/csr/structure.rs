@@ -30,13 +30,20 @@ pub(super) fn validate_csr_parts<I: CsrIndex, O: CsrOrdering>(
     if col_indices.len() != nnz {
         return Err(bad("col_indices and values lengths differ"));
     }
-    if row_ptr.iter().any(|&index| checked(index).is_none()) {
-        return Err(bad("row offset is negative or exceeds usize"));
+    // Check representation and ordering in one pass. Defer ordering failure until every offset
+    // is representable and endpoints are checked, preserving error priority.
+    let mut previous = 0;
+    let mut non_decreasing = true;
+    for &index in row_ptr {
+        let offset =
+            checked(index).ok_or_else(|| bad("row offset is negative or exceeds usize"))?;
+        non_decreasing &= previous <= offset;
+        previous = offset;
     }
-    if address(row_ptr[0]) != 0 || address(row_ptr[nrows]) != nnz {
+    if address(row_ptr[0]) != 0 || previous != nnz {
         return Err(bad("row_ptr must start at 0 and end at nnz"));
     }
-    if row_ptr.windows(2).any(|w| address(w[0]) > address(w[1])) {
+    if !non_decreasing {
         return Err(bad("row_ptr must be non-decreasing"));
     }
     if col_indices

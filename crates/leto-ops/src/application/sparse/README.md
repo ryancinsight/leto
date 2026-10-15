@@ -247,3 +247,12 @@ source duplication does not satisfy the provider ownership contract. Verify
 fixed widths 0/1/3, mismatch rejection, all scalar families, both borrow models,
 32-bit provider execution, old API compatibility and the unchanged paired
 performance workloads before accepting the optimization.
+
+
+Signed row validation checks representability and monotonicity in one pass.
+A deferred monotonicity flag preserves the existing error order: any invalid
+representation wins, then endpoints, monotonicity and column bounds. With
+nonnegative decoded offsets, the initial lower bound zero is automatic; the
+flag is equivalent to all adjacent offsets being ordered. Endpoints 0/nnz then
+prove the complete offset bound. Multi-fault witnesses characterize that order
+before fusion, so fewer serial index reads do not change diagnostics.

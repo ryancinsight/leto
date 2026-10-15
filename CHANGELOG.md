@@ -21,6 +21,8 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [patch] Fuse row-offset representability and ordering checks while retaining
+  representation/endpoint/monotonicity/column diagnostic precedence.
 - [patch] A one-column product uses one local accumulator before its final
   output write, preserving the shared row traversal and selected arithmetic.
   This removes measured partial-sum load/store overhead in backend callbacks.

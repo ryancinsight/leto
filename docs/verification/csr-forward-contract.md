@@ -404,3 +404,13 @@ preserve separate rounding, stored cancellation, empty rows and complete
 writes. Fixed widths 0/1/3 and wrong-width rejection have exact-value coverage.
 Feature-disabled, API, documentation, both borrow models, ARM32 and coupled
 consumer/performance gates must repeat for this new source before acceptance.
+
+
+The fixed-width source passes nineteen strict cases in both models and nine
+ARM32 cases in each model. Its complete 21-pair repeat gives large sequential
+SpMV 0.968 and large Moirai 1.064; small cases remain near parity. The remaining
+serial validator reads signed row offsets twice. A three-case multiple-fault
+characterization passes the unchanged validator (`53667e4d`) before the
+representability/ordering checks are fused into one pass. Ordering failure is
+deferred until representation and endpoints are checked, retaining exact error
+priority. The recurrence and all public types remain unchanged by fusion.
