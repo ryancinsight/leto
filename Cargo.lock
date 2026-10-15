@@ -691,6 +691,7 @@ dependencies = [
  "hermes-simd",
  "leto",
  "moirai-runtime",
+ "proptest",
  "serde",
  "themis-topology",
  "thiserror 2.0.21",

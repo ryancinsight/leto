@@ -28,7 +28,7 @@ pub use task::CsrRowTask;
 /// };
 /// product.execute(&mut [0]).unwrap();
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct CsrProduct<
     'a,
     T: NumericElement,
@@ -41,6 +41,23 @@ pub struct CsrProduct<
     width: usize,
     output_len: usize,
     arithmetic: PhantomData<A>,
+}
+
+// A is a type-level arithmetic selection, never an owned strategy value. A
+// descriptor copy duplicates only shared borrows/dimensions, so it must not
+// require (or add) Copy on the existing public strategy types.
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>> Copy
+    for CsrProduct<'_, T, I, O, A>
+{
+}
+
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>> Clone
+    for CsrProduct<'_, T, I, O, A>
+{
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>

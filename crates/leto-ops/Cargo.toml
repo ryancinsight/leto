@@ -38,6 +38,7 @@ leto = { workspace = true }
 # precision-generic test batteries need to derive their own error bounds.
 eunomia = { workspace = true }
 criterion = { workspace = true }
+proptest.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

@@ -180,3 +180,46 @@ Before delivery, repeat applicable gates after incorporating the newly merged
 provider dependency update, then execute Tree Borrows, architecture, legacy API,
 fresh-consumer and complete-product performance gates. No Coeus forward cutover
 is certified by this intermediate provider result.
+
+
+## Current provider graph and implementation acceptance
+
+Implementation incorporates main `7172e57343dff9c699e5f51e99b3dd0dfe1105e9`
+through merge `a5262fa`. That main change updates only manifests/lock to the
+Eunomia 0.10 cohort: Eunomia `15fbb94c`, Hermes `7a584238`, Mnemosyne `481c7452`,
+Moirai `44a962f0`. The subsequent candidate removes unintended `Copy` additions
+on the existing strategy markers; only new borrowed descriptors are copyable.
+
+- Full native `-p leto -p leto-ops`: **1198 pass, zero skipped**, run
+  `ed8af077-078a-4c5d-ad5c-0f5ac1781298`, 19.558 s. This includes 256 generated
+  stored-order products with shrinking and independent column oracles.
+- Strict default-feature all-target Clippy passes on that full test graph.
+- Actual-source `cargo semver-checks`, baseline `7172e573`, release type minor:
+  **196 checks pass, 57 tool skips**. The first attempt correctly rejects the
+  unintended strategy `Copy` implementations; removing them restores the
+  compatible API. No SemVer diagnostic is suppressed.
+- Doctests: **32 pass, one pre-existing ignored**, including three new compile-
+  fail contracts for input lifetime, output exclusivity and unsafe invocation.
+- Corrected-API strict Miri, eight representation/product/dispatch/allocation
+  cases, one test process at a time: Stacked run
+  `1ac777e0-1121-4dce-a2fd-d3945d89a7a5` (50.357 s), Tree run
+  `ae8b5593-ffc4-4489-b04c-7b3672bdc2b1` (94.990 s), all pass with no runner
+  handle markers. Earlier concurrent Tree run `87ceb3aa` passes with one late
+  handle marker; serial results do not establish its cause.
+- Added adjacent-value and nonzero-complex-component fixtures at binary32,
+  binary64, F16 and Bf16, plus all 64 empty-dimension triples: Stacked run
+  `c60f40f3-b1f5-4252-9eb7-8e6998df61ee`, **three pass**, 107.213 s. Tree repeat
+  remains in progress at this checkpoint.
+- 32-bit ARM strict Miri signed rejection/representability test passes, run
+  `84a3a075-98f6-4c77-bfd4-a03c424a7909`, 4.565 s. Real Clang cross-compiles the
+  alloca dependency (`CC_armv7_unknown_linux_gnueabihf=clang`, matching target
+  flag); no dependency is replaced. i686 first requires the same compiler
+  configuration, then stops at Eunomia's existing `align_of::<F64>() == 8`
+  assertion, before these tests execute. 32-bit ARM evidence does not claim
+  an executed i686 result.
+
+Commands retain `--locked`, real Git providers, the native 60-second Nextest
+budget, strict provenance, Miri isolation and default arithmetic error injection.
+Full native and strict Clippy repeat after changes; only actual executed checks
+are counted. Provider/consumer performance and fresh exact-Git resolution remain
+completion gates, not conclusions derived from these correctness tests.

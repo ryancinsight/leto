@@ -1,5 +1,18 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-15 — Approved provider implementation
+
+- Checked generic views and the common prepared row product are implemented.
+  All 1198 native tests and default strict Clippy pass on main's 0.10 cohort;
+  actual-source API comparison passes 196 checks after removing an unintended
+  Copy implementation on existing strategy markers.
+- Both borrow models pass eight core cases. New precision/complex/empty tests
+  pass Stacked Borrows; the Tree repeat remains in progress at this checkpoint.
+- 32-bit ARM executes and passes the signed index-width test. i686 still stops
+  in Eunomia's existing F64 alignment assertion; no portability check is faked.
+- Consumer binding and exact-main performance evidence remain open. Current
+  evidence supersedes the specification-only status below, not its history.
+
 ## 2026-10-15 Coeus borrowed CSR forward contracts
 
 - risk: open — current `usize`/canonical-only views, SIMD SpMM rounding and

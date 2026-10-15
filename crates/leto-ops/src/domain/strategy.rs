@@ -9,12 +9,12 @@ mod sealed {
 pub trait ExecutionStrategy: Send + Sync + 'static {}
 
 /// Zero-sized type marker routing operations through scalar execution loops.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct ScalarStrategy;
 impl ExecutionStrategy for ScalarStrategy {}
 
 /// Zero-sized type marker routing operations through SIMD (hermes-simd) execution paths.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct SimdStrategy;
 impl ExecutionStrategy for SimdStrategy {}
 

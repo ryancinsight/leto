@@ -18,10 +18,7 @@ mod sealed {
 /// without contraction, entry reordering, zero dropping or wider arithmetic.
 /// [`SimdStrategy`] preserves [`Scalar::axpy_slice`], including its ISA-dependent
 /// fused multiply/add behavior. The caller selects the numerical contract.
-pub trait CsrArithmetic<T: NumericElement>:
-    sealed::Arithmetic<T> + Copy + Send + Sync + 'static
-{
-}
+pub trait CsrArithmetic<T: NumericElement>: sealed::Arithmetic<T> + Send + Sync + 'static {}
 
 impl<T: NumericElement> sealed::Arithmetic<T> for ScalarStrategy {
     #[inline]

@@ -18,7 +18,7 @@ use eunomia::NumericElement;
 ///     task.run(0);
 /// }
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct CsrRowTask<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> {
     values: *const T,
     columns: *const I,
@@ -27,6 +27,16 @@ pub struct CsrRowTask<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> {
     output: *mut T,
     width: usize,
     arithmetic: PhantomData<A>,
+}
+
+// As for CsrProduct, copies duplicate the pointer descriptor, never an A
+// strategy instance or ownership of any input/output allocation.
+impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> Copy for CsrRowTask<T, I, A> {}
+impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> Clone for CsrRowTask<T, I, A> {
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 // SAFETY: private construction retains shared initialized inputs and exclusive

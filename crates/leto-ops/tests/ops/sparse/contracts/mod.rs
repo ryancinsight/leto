@@ -6,7 +6,9 @@
 mod dispatch;
 mod ordering;
 mod partitions;
+mod precision;
 mod product;
+mod properties;
 mod rounding;
 mod signed;
 

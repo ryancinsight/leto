@@ -5,13 +5,15 @@ use leto_ops::{spmm_view_into, spmv_view_into, CsrProduct, CsrView, RealScalar, 
 
 use super::trace;
 
-trait BinaryWitness: RealScalar + eunomia::RealField {
+pub(super) trait BinaryWitness: RealScalar {
     type Bits: Debug + Eq;
+    const SPACING: Self;
     fn bits(self) -> Self::Bits;
 }
 
 impl BinaryWitness for f32 {
     type Bits = u32;
+    const SPACING: Self = Self::EPSILON;
 
     fn bits(self) -> Self::Bits {
         self.to_bits()
@@ -20,7 +22,24 @@ impl BinaryWitness for f32 {
 
 impl BinaryWitness for f64 {
     type Bits = u64;
+    const SPACING: Self = Self::EPSILON;
 
+    fn bits(self) -> Self::Bits {
+        self.to_bits()
+    }
+}
+
+impl BinaryWitness for eunomia::F16 {
+    type Bits = u16;
+    const SPACING: Self = Self::EPSILON;
+    fn bits(self) -> Self::Bits {
+        self.to_bits()
+    }
+}
+
+impl BinaryWitness for eunomia::Bf16 {
+    type Bits = u16;
+    const SPACING: Self = Self::EPSILON;
     fn bits(self) -> Self::Bits {
         self.to_bits()
     }
@@ -33,12 +52,12 @@ fn compare_product_policies<T: BinaryWitness>() {
         let _phase = tracing::info_span!("arrange").entered();
         // epsilon is the spacing at 1, not unit roundoff. Both inputs are
         // exactly representable; their exact product is 1 - epsilon^2.
-        let values = [-T::ONE, T::ONE + T::EPSILON];
+        let values = [-T::ONE, T::ONE + T::SPACING];
         let x =
-            Array1::from_shape_vec([2], vec![T::ONE, T::ONE - T::EPSILON]).expect("vector shape");
+            Array1::from_shape_vec([2], vec![T::ONE, T::ONE - T::SPACING]).expect("vector shape");
         // A vector body plus a ragged tail; the legacy hook chooses its ISA.
         let mut dense = vec![T::ONE; 34];
-        dense[17..].fill(T::ONE - T::EPSILON);
+        dense[17..].fill(T::ONE - T::SPACING);
         let b = Array2::from_shape_vec([2, 17], dense).expect("matrix shape");
         (values, [0, 1], [0, 2], x, b)
     };
@@ -52,8 +71,8 @@ fn compare_product_policies<T: BinaryWitness>() {
         let mut hook_reference = [T::ZERO; 17];
         T::axpy_slice(-T::ONE, &[T::ONE; 17], &mut hook_reference);
         T::axpy_slice(
-            T::ONE + T::EPSILON,
-            &[T::ONE - T::EPSILON; 17],
+            T::ONE + T::SPACING,
+            &[T::ONE - T::SPACING; 17],
             &mut hook_reference,
         );
         let mut separate = [T::ONE; 17];
@@ -65,7 +84,7 @@ fn compare_product_policies<T: BinaryWitness>() {
             vector,
             matrix,
             hook_reference,
-            -(T::EPSILON * T::EPSILON),
+            -(T::SPACING * T::SPACING),
             separate,
         )
     };

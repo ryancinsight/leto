@@ -26,7 +26,7 @@
 
 <a id="LETO-NOPARALLEL-CLIPPY-2026-10-15"></a>
 
-## LETO-NOPARALLEL-CLIPPY-2026-10-15 — Restore strict diagnostics without parallel [patch] — todo
+## LETO-NOPARALLEL-CLIPPY-2026-10-15 — Restore strict diagnostics without parallel [patch] — fixed
 
 - priority: verification; scope: `application/linalg/lu_batch.rs:112`.
 - Evidence: strict `leto-ops --all-targets --no-default-features` Clippy rejects
@@ -34,7 +34,8 @@
   Default-feature strict Clippy passes; both sparse feature modes pass tests.
 - Next: replace the redundant error branch with `?`, preserve the computed
   decomposition assignment and run the real batched LU tests in both modes.
-  This baseline diagnostic is outside the CSR contract specification.
+  The 0.46.0 implementation replaces the branch with `?`; real batched-LU
+  tests pass in both feature modes.
 
 <a id="LETO-RESCUE-QUEUE"></a>
 

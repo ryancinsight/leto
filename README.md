@@ -28,10 +28,10 @@ conformance (ADR 0022), not production optimizer ownership. Apollo owns
 Fourier, spectral, and transform kernels. `themis` and `melinoe` are consumed
 indirectly via `mnemosyne`/`moirai`, not as direct leto dependencies.
 
-The proposed [borrowed CSR forward contract](docs/adr/0036-borrowed-csr-product-contract.md)
-specifies signed indices, stored entry order, separate rounding and
-caller-scheduled rows for Coeus. It awaits architectural sign-off; current
-borrowed products retain their canonical `usize` interfaces and behavior.
+The accepted [borrowed CSR forward contract](docs/adr/0036-borrowed-csr-product-contract.md)
+provides checked signed indices, stored entry order, separate rounding and
+caller-scheduled rows for Coeus. Existing canonical `usize` constructors and
+legacy scalar/SIMD product behavior remain supported.
 
 ## Naming
 

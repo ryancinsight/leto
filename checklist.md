@@ -15,7 +15,7 @@ Active sprint target: **0.46.0** — approved borrowed CSR integration [arch].
       verification evidence, changelog and lockstep workspace version.
 - [x] [arch] Ryan Clanton approves ADR 0036 in the task conversation on
       2026-10-15; provider target 0.46.0.
-- [ ] [arch] Implement checked generic borrowed CSR and one prepared product
+- [x] [arch] Implement checked generic borrowed CSR and one prepared product
       with scalar/SIMD arithmetic and synchronous row dispatch.
 - [ ] [arch] Verify rejection, exact arithmetic, initialization, allocation,
       dispatch lifetime, architecture and compatibility contracts.
@@ -26,13 +26,13 @@ ADR approval is recorded. Implementation gates remain open; the existing
 characterization evidence below does not certify the new APIs. No release
 or merge is claimed. Coeus preservation draft #531 remains intact.
 
-Evidence: 33 sparse tests pass in each native feature mode; six witnesses pass
-under strict-provenance Stacked/Tree Borrows; default-feature strict Clippy,
-formatting and warning-denied documentation pass. No-parallel strict Clippy
-finds an unchanged LU lint. A Stacked Borrows Nextest handle marker does not
-reproduce in isolation; its cause remains undetermined. Fresh main consumers
-fail the existing Eunomia version bound. See the verification record for
-commands, exclusions and prospective implementation gates.
+Evidence on current main's dependency graph: all 1198 native provider tests
+pass (zero skipped); strict default-feature diagnostics pass; the additive API
+comparison passes 196 checks (57 tool skips). Eight core memory cases pass
+both borrow models; the signed-width case also passes on 32-bit ARM. i686
+stops in an existing Eunomia alignment assertion. Precision and all 64 empty
+shape triples pass Stacked Borrows; the Tree Borrows repeat is in progress.
+Final consumer/performance and hosted gates remain open in the record.
 
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [minor, perf] — Codex
 
