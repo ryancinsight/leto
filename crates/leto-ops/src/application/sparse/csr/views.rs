@@ -33,7 +33,12 @@ impl<'a, T> CsrRow<'a, T> {
     }
 }
 
-/// Borrowed CSR matrix view: the validated [`CsrMatrix`](super::CsrMatrix) triple without owning it.
+/// Checked borrowed CSR matrix, without owning or converting its input slices.
+///
+/// The defaults match [`CsrMatrix`](super::CsrMatrix): `usize` indices with
+/// canonical, strictly increasing row columns. The checked builder also accepts
+/// signed indices and [`StoredOrder`](super::StoredOrder), preserving unsorted
+/// columns, duplicate entries and explicit zeros in their physical order.
 ///
 /// Construct with [`CsrView::from_slices`] (validates the [`CsrMatrix`](super::CsrMatrix)
 /// invariants over borrowed slices — zero-copy, the view aliases its inputs)

@@ -1,6 +1,11 @@
 # Borrowed CSR forward contract verification
 
-## Revisions and scope
+Current target: **0.47.0**, accepted ADR 0036. Checked borrowed representation,
+prepared arithmetic and row dispatch are implemented. The initial tensor
+cutover shows a measured SpMV regression; its resolution and coherent consumer
+bindings remain open. Earlier sections below preserve proposal evidence.
+
+## Original audit revisions and scope
 
 Provider base: Leto main `248fe4f63c674f6fca1f89ac19c1f817e67bc417`
 (0.45.2). The lock selects Eunomia 0.9.1 at
@@ -21,7 +26,7 @@ Its relevant sparse, scalar, backend and CPU storage sources remain identical
 to the original base; validation of the updated dependency graph belongs to
 the independent recovery draft, not this unimplemented provider proposal.
 
-This 0.45.3 [patch] increment contains a proposed [ADR 0036](../adr/0036-borrowed-csr-product-contract.md),
+The initial 0.45.3 [patch] increment contains a proposed [ADR 0036](../adr/0036-borrowed-csr-product-contract.md),
 a [co-located design](../../crates/leto-ops/src/application/sparse/README.md),
 current-API characterization and development tracing dependencies. It adds
 no production Rust change and makes no performance improvement claim. It
@@ -240,3 +245,41 @@ resolution rejects Hephaestus's old `leto ^0.45.2` edge before compilation; this
 is a shared nominal-provider boundary, not a sparse numerical failure. Follow
 provider-first delivery and prepare separate dependency-binding changes rather
 than retaining old pins, duplicating provider types, or adding conversion shims.
+
+
+## Initial performance attribution and one-column correction
+
+A same-graph reference compiles all five sparse/pointer files byte-identically
+from Coeus main `f9ebef34`. Candidate uses provider `752ccc5` with original
+Coeus validation plus the checked provider builder. All dyadic result checks
+pass before and after 21 alternating-order pairs, including width 257.
+
+| Shape / RHS | Sequential candidate / main | Moirai candidate / main |
+| --- | ---: | ---: |
+| 1024x1024 / 1 | 2.401 | 2.418 |
+| 16384x16384 / 1 | 4.204 | 2.013 |
+| 1024x1024 / 16 | 0.101 | 0.102 |
+| 4096x4096 / 64 | 0.080 | 0.205 |
+| 4097x4096 / 257 | 0.214 | 0.326 |
+
+The Moirai large-vector ratio has paired quartiles [1.963, 2.058]; this is a
+blocking regression, not acceptance. Native disassembly of the sequential
+adapter confirms `fmul; ldr partial_sum; fadd; str partial_sum` within its
+inner entry/column walk. The generic dynamic-width row path prevents a vector's
+single accumulator from staying local across entries. Backend dispatch remains
+present, so calling the provider in parallel is insufficient by itself.
+
+The correction retains one CSR traversal in `accumulate_row` and selects a
+single local initialized accumulator for width one. It writes the completed
+value once, preserving both scalar and slice-hook arithmetic; wider rows keep
+the measured contiguous row path. No index/dense copy, per-row allocation,
+reordering or alternate scheduler is introduced. All 104 sparse native tests
+pass after the change (`d4508a93-3291-4b4e-8c8f-448ea37ebc0f`). Repeated paired
+performance and both memory models remain required before accepting this fix.
+
+Additional numerical tests cover least-subnormal halfway ties and stored
+positive/negative zero multiplied by infinity at all four real precisions.
+IEEE requires NaN class for the latter; Rust does not specify its payload.
+The scalar path does not drop those stored entries. A positive public product
+example and all three compile-fail contracts pass within 33 successful
+doctests (one pre-existing ignored example).

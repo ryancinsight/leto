@@ -18,6 +18,9 @@ SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ### Changed
 
+- [patch] A one-column product uses one local accumulator before its final
+  output write, preserving the shared row traversal and selected arithmetic.
+  This removes measured partial-sum load/store overhead in backend callbacks.
 - [patch] Existing SpMV and SpMM entry points share the provider row kernel,
   retaining separate scalar SpMV and slice-hook SpMM arithmetic. The unsigned
   constructor, owned canonical storage and strided RHS behavior stay compatible.

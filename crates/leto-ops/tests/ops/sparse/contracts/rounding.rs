@@ -8,12 +8,14 @@ use super::trace;
 pub(super) trait BinaryWitness: RealScalar {
     type Bits: Debug + Eq;
     const SPACING: Self;
+    const MIN_NORMAL: Self;
     fn bits(self) -> Self::Bits;
 }
 
 impl BinaryWitness for f32 {
     type Bits = u32;
     const SPACING: Self = Self::EPSILON;
+    const MIN_NORMAL: Self = Self::MIN_POSITIVE;
 
     fn bits(self) -> Self::Bits {
         self.to_bits()
@@ -23,6 +25,7 @@ impl BinaryWitness for f32 {
 impl BinaryWitness for f64 {
     type Bits = u64;
     const SPACING: Self = Self::EPSILON;
+    const MIN_NORMAL: Self = Self::MIN_POSITIVE;
 
     fn bits(self) -> Self::Bits {
         self.to_bits()
@@ -32,6 +35,7 @@ impl BinaryWitness for f64 {
 impl BinaryWitness for eunomia::F16 {
     type Bits = u16;
     const SPACING: Self = Self::EPSILON;
+    const MIN_NORMAL: Self = Self::MIN_POSITIVE;
     fn bits(self) -> Self::Bits {
         self.to_bits()
     }
@@ -40,6 +44,7 @@ impl BinaryWitness for eunomia::F16 {
 impl BinaryWitness for eunomia::Bf16 {
     type Bits = u16;
     const SPACING: Self = Self::EPSILON;
+    const MIN_NORMAL: Self = Self::MIN_POSITIVE;
     fn bits(self) -> Self::Bits {
         self.to_bits()
     }

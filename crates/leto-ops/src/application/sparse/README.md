@@ -96,8 +96,9 @@ The caller of `dispatch_with` must prove:
 The provider proves from checked `m*n` and output length that row `r` occupies
 `[r*n, (r+1)*n)`. For `r != s` and `n > 0`, these intervals are disjoint.
 For `n == 0`, no references to an output element are formed and no writes
-occur. Every admitted row invocation fills its destination with `T::ZERO`
-before accumulating; no old output value enters the recurrence. Shared input
+occur. Every row accumulator starts at `T::ZERO`; a vector uses a single local
+accumulator and writes its completed value once. Wider rows initialize the
+destination before accumulating. No old output value enters the recurrence. Shared input
 and output slices obey Rust's aliasing rules before pointer erasure.
 
 Coeus's current unsafe `Backend` documentation states exactly-once,
@@ -197,8 +198,8 @@ write-only `MaybeUninit<T>` API is separate, measured work.
 
 For `m == 0` or `n == 0`, the checked output is empty. For `k == 0`, valid CSR
 has no entries and every output is `T::ZERO`. For an empty row at positive
-`k`, the row's entire output is also `T::ZERO`. Successful execution writes
-all `m*n` slots once initially; later updates read only initialized slots.
+`k`, the row's entire output is also `T::ZERO`. Successful execution writes every `m*n` slot. Accumulation reads only an
+initialized local or destination accumulator, never the old destination value.
 No zero-width chunk iterator, pointer dereference or dense row read is needed
 when `n == 0`.
 

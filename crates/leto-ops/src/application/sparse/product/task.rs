@@ -88,20 +88,44 @@ impl<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>> CsrRowTask<T, I, A> {
         // SAFETY: the invocation and construction invariants above prove every
         // pointer range. No reference to the complete output is reconstructed.
         unsafe {
-            let output =
-                core::slice::from_raw_parts_mut(self.output.add(row * self.width), self.width);
-            output.fill(T::ZERO);
             let start = address(self.offsets.add(row).read());
             let end = address(self.offsets.add(row + 1).read());
             let values = core::slice::from_raw_parts(self.values.add(start), end - start);
             let columns = core::slice::from_raw_parts(self.columns.add(start), end - start);
-            for (&value, &column) in values.iter().zip(columns) {
-                let rhs = core::slice::from_raw_parts(
-                    self.rhs.add(address(column) * self.width),
-                    self.width,
-                );
-                accumulate::<T, A>(value, rhs, output);
+            if self.width == 1 {
+                // A vector has one accumulator. Keep it local so an opaque
+                // backend callback does not force a load/store of output for
+                // every entry. The shared traversal and arithmetic stay exact.
+                let mut accumulator = [T::ZERO];
+                accumulate_row::<T, I, A>(values, columns, self.rhs, 1, &mut accumulator);
+                self.output.add(row).write(accumulator[0]);
+            } else {
+                let output =
+                    core::slice::from_raw_parts_mut(self.output.add(row * self.width), self.width);
+                output.fill(T::ZERO);
+                accumulate_row::<T, I, A>(values, columns, self.rhs, self.width, output);
             }
         }
+    }
+}
+
+/// One CSR traversal for both local and destination-backed row accumulators.
+///
+/// # Safety
+/// `rhs` addresses the checked `k*width` slice; columns decode below k. The
+/// initialized accumulator has exactly width entries and aliases no input.
+#[inline]
+unsafe fn accumulate_row<T: NumericElement, I: CsrIndex, A: CsrArithmetic<T>>(
+    values: &[T],
+    columns: &[I],
+    rhs: *const T,
+    width: usize,
+    output: &mut [T],
+) {
+    for (&value, &column) in values.iter().zip(columns) {
+        // SAFETY: checked product and CSR construction prove this complete
+        // RHS row is in bounds; caller retains its immutable borrow.
+        let rhs = unsafe { core::slice::from_raw_parts(rhs.add(address(column) * width), width) };
+        accumulate::<T, A>(value, rhs, output);
     }
 }

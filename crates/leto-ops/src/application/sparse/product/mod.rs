@@ -18,6 +18,20 @@ pub use task::CsrRowTask;
 /// binding checks output length before any mutation. Each row is computed by
 /// one authoritative provider kernel, independently of the execution policy.
 ///
+/// ```
+/// use leto_ops::{CsrProduct, CsrView, ScalarStrategy, StoredOrder};
+/// let values = [3i64, 5];
+/// let columns = [1i64, 0];
+/// let offsets = [0i64, 2, 2];
+/// let view = CsrView::builder(&values, &columns, &offsets, 2, 2)
+///     .with_order::<StoredOrder>().build()?;
+/// let mut output = [-1; 2];
+/// CsrProduct::<_, _, _, ScalarStrategy>::prepare(view, &[7, 11], 1)?
+///     .execute(&mut output)?;
+/// assert_eq!(output, [68, 0]); // 3*11 + 5*7, followed by an empty row.
+/// # Ok::<(), leto::LetoError>(())
+/// ```
+///
 /// Borrowed RHS storage cannot expire before execution:
 /// ```compile_fail
 /// use leto_ops::{CsrProduct, CsrView, ScalarStrategy};
@@ -135,7 +149,9 @@ impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>>
 /// Exclusively borrowed destination for a prepared CSR product.
 ///
 /// The destination contains initialized `T` values before binding. Computation
-/// overwrites every row with the additive identity before accumulating entries.
+/// initializes every row accumulator with the additive identity and overwrites
+/// every destination slot with its completed value. A vector uses one local
+/// accumulator; wider rows accumulate directly into the destination.
 ///
 /// A live output binding excludes other mutable access:
 /// ```compile_fail
