@@ -84,6 +84,12 @@ codegen-units = 1
 lto = "thin"
 opt-level = 3
 
+# Rust/LLVM stripping can misalign Mach-O LINKEDIT string tables
+# (rust-lang/rust#157750). Retain the extension's symbols while preserving
+# release optimization, the portable target and CPython's normal wheel ABI.
+[profile.release.package.leto-python]
+strip = "none"
+
 [workspace.lints.clippy]
 pedantic = { level = "deny", priority = -1 }
 

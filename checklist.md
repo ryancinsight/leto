@@ -13,10 +13,14 @@ Python repair target: leto-python 0.46.1; Rust packages remain 0.46.0.
       zero skips; keep the initial missing-runtime failure in the evidence.
 - [x] Build/install/import the Python 3.13 wheel with installed ld-classic and
       SDK 15.4; all 29 unchanged parity cases pass, zero skips.
-- [ ] Collect the default Linux wheel gate; retain this Mac default-linker
-      LINKEDIT import failure and keep full release-matrix claims unverified.
-- [ ] Pass exact final-head CI/review; preserve release matrices and test limits.
-- [ ] Verify any later permitted integration; no publication in this repair pass.
+- [x] Pass the default Linux built-wheel import and 29 parity cases at 0f2a325;
+      retain all nine executed CI results and the existing slow-test finding.
+- [x] Diagnose implicit Rust/LLVM stripping, retain the failed artifact and
+      pass all 29 installed-wheel parity cases on the corrected default Mac
+      toolchain with an aligned string table and no libpython dependency.
+- [ ] Pass exact final-head CI and all 30 existing release wheel rows through
+      verification mode; preserve matrices, fixtures and test limits.
+- [ ] Complete independent review and normal gated integration/publication.
 
 **Target Version**: 0.46.0
 

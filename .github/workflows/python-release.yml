@@ -1,6 +1,7 @@
 name: Python Release
 
 on:
+  pull_request:
   release:
     types: [published]
 
@@ -8,12 +9,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: python-release-${{ github.event.release.tag_name }}
+  group: python-release-${{ github.event.release.tag_name || github.ref }}
   cancel-in-progress: false
 
 jobs:
   wheels:
-    if: startsWith(github.event.release.tag_name, 'leto-python-v')
+    if: github.event_name == 'pull_request' || startsWith(github.event.release.tag_name, 'leto-python-v')
     name: Build and attach wheels
     permissions:
       artifact-metadata: write
@@ -29,6 +30,10 @@ jobs:
       tag-prefix: leto-python-v
       abi3: false
       python-versions: '["3.9", "3.10", "3.11", "3.12", "3.13"]'
+      # Exercise the actual release matrix before integration. The shared
+      # verification mode validates/attests artifacts without a release tag,
+      # GitHub Release attachment or PyPI publication.
+      verification: ${{ github.event_name != 'release' }}
 
   publish:
     if: startsWith(github.event.release.tag_name, 'leto-python-v')

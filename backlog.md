@@ -1,9 +1,9 @@
 # Leto Work Backlog
 
 <a id="LETO-PYTHON-NATIVE-LINK"></a>
-## LETO-PYTHON-NATIVE-LINK — Separate native-test and extension linkage [patch] — todo
+## LETO-PYTHON-NATIVE-LINK — Separate native-test and extension linkage [patch] — in-progress
 
-- priority: correctness; status: todo; owner: Codex.
+- priority: correctness; status: in-progress; owner: Codex.
 - Scope: binding linkage/build metadata and CI; independent of provider ranges.
 - Finding: unconditional PyO3 extension-module selection disables libpython
   linkage on Darwin, so the native binding test executable has unresolved
@@ -16,17 +16,27 @@
 - Local evidence: the supported CPython 3.13 baseline fails native linking;
   the repair passes all 1,202 native tests, zero skips. Strict full-feature
   workspace lint, minimal Rust checks, docs/doctests, both API comparisons
-  and ordinary Rust package verification pass. All 531 Rust/test/release files
-  and all 223 external lock records stay unchanged.
+  and ordinary Rust package verification pass. Rust source/test files, native
+  test limits and all 223 external lock records stay unchanged.
 - Wheel/native evidence: all 1,202 native cases also pass on Python 3.11
   after installing its required SciPy runtime. An actual Python 3.13 wheel
   built with installed ld-classic/SDK 15.4 imports and passes all 29 unchanged
   NumPy/SciPy parity tests, zero skips; it does not link libpython.
-- Limitation: this Mac default linker builds a loader-rejected LINKEDIT string
-  pool, as also recorded by the separate storage owner. That failure is retained
-  and not counted green. The default-toolchain Linux wheel gate and existing
-  release matrix still require their own actual results.
-- Remaining: exact-final-head CI and review; no merge/publication. Other owner
+- Additional finding: Rust 1.97/LLVM 22.1.6's implicit release stripping produces
+  a loader-rejected Mach-O string table at offset 1,228,340 (4 modulo 8) with
+  Xcode's SDK 27. The package-scoped `strip = "none"` correction produces an
+  aligned table at 1,263,192 with the same default toolchain and optimized
+  portable target. The actual installed wheel imports and passes all 29 parity
+  cases, zero skips, without libpython linkage or linker/SDK overrides. Both
+  artifacts and compiler flags are retained; see rust-lang/rust#157750.
+- Hosted evidence before that profile correction: PR #365 head 0f2a325 passes
+  all nine executed checks, including 1,202 native cases and the Linux wheel's
+  29 parity cases. The graded-scan native case exceeds the unchanged 30-second
+  slow threshold (39.334 seconds) while remaining below its termination limit;
+  that existing performance concern is not resolved by this build repair.
+- Remaining: exact-final-head CI, the unchanged 30-row release wheel matrix
+  (CPython 3.9–3.13 on six platforms), independent review and gated integration.
+  No merge/publication yet. Other owner
   branches and the pending Eunomia version decision stay untouched.
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>

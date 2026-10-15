@@ -10,6 +10,10 @@
 - Extend native CI to the full workspace and require actual built-wheel import
   before the unchanged NumPy/SciPy parity suite. Existing release matrices,
   native test limits and assertions stay unchanged.
+- Retain the Python extension's release symbol table to avoid the Rust/LLVM
+  Mach-O stripping defect (rust-lang/rust#157750); keep release optimization
+  and wheel ABI unchanged. Verify the full release wheel matrix on pull requests
+  before a release can attach or publish artifacts.
 
 All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to

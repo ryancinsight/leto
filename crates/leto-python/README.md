@@ -82,6 +82,10 @@ interpreter, then build and install a wheel before running the parity suite:
 The explicit imports make a missing or unloadable wheel fail before pytest's
 optional-import guards. The existing release interpreter/platform matrix stays
 unchanged; a local build validates only its actual interpreter and target.
+The package-scoped release profile retains extension symbols to avoid
+[Rust/LLVM's Mach-O stripping defect](https://github.com/rust-lang/rust/issues/157750).
+Release optimization and the CPython wheel ABI are unchanged; the default
+macOS toolchain must build an importable wheel without linker overrides.
 
 ## Links
 

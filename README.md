@@ -56,7 +56,9 @@ wheels for Linux, Windows, and macOS. The workflow installs and imports each
 wheel as `leto_python`, verifies that its `leto-python` metadata version matches
 the release tag, attests and attaches the exact wheel set to the GitHub Release,
 then publishes those same artifacts to PyPI through OIDC Trusted Publishing.
-The tag version must equal the workspace Cargo version.
+The tag version must equal the Python binding's Cargo package version. Pull
+requests run the same 30-row wheel matrix in verification mode, without release
+attachment or PyPI publication.
 
 ## Rust Crate Releases
 
