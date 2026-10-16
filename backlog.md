@@ -1,56 +1,5 @@
 # Leto Work Backlog
 
-<a id="LETO-PYTHON-NATIVE-LINK"></a>
-## LETO-PYTHON-NATIVE-LINK — Separate native-test and extension linkage [patch] — blocked
-
-- priority: correctness; status: blocked; owner: Codex.
-- Scope: binding linkage/build metadata and CI; independent of provider ranges.
-- Finding: unconditional PyO3 extension-module selection disables libpython
-  linkage on Darwin, so the native binding test executable has unresolved
-  CPython symbols. The unchanged main fails on supported CPython 3.13.
-- Implemented: native default dependency linkage and maturin-selected existing
-  pyo3/extension-module feature. Only the unpublished Python binding advances
-  to 0.46.1; public Rust packages stay 0.46.0 with all provider floors preserved.
-- Acceptance: full native workspace, strict lint/docs and actual built-wheel
-  import/parity pass; final-head CI/review and applicable matrix evidence follow.
-- Local evidence: the supported CPython 3.13 baseline fails native linking;
-  the repair passes all 1,202 native tests, zero skips. Strict full-feature
-  workspace lint, minimal Rust checks, docs/doctests, both API comparisons
-  and ordinary Rust package verification pass. Rust source/test files, native
-  test limits and all 223 external lock records stay unchanged.
-- Wheel/native evidence: all 1,202 native cases also pass on Python 3.11
-  after installing its required SciPy runtime. An actual Python 3.13 wheel
-  built with installed ld-classic/SDK 15.4 imports and passes all 29 unchanged
-  NumPy/SciPy parity tests, zero skips; it does not link libpython.
-- Additional finding: Rust 1.97/LLVM 22.1.6's implicit release stripping produces
-  a loader-rejected Mach-O string table at offset 1,228,340 (4 modulo 8) with
-  Xcode's SDK 27. The package-scoped `strip = "none"` correction produces an
-  aligned table at 1,263,192 with the same default toolchain and optimized
-  portable target. The actual installed wheel imports and passes all 29 parity
-  cases, zero skips, without libpython linkage or linker/SDK overrides. Both
-  artifacts and compiler flags are retained; see rust-lang/rust#157750.
-- Earlier [CI](https://github.com/ryancinsight/leto/actions/runs/38802358418) passed 1,202 native and 29 Linux parity cases; its 39.334s graded-scan slow observation remains recorded.
-- Complete same-repository evidence: the
-  [tested candidate](https://github.com/ryancinsight/leto/commit/c861229de52881529dfe2b678e9a7a3954a2863c)
-  passes 40 checks, including all 30 wheel rows with nine value cases each and
-  consolidated distribution validation; six configured skips remain separate.
-  Its source rebuild passes all 38 cases. Existing Leto Miri passes; deferred
-  Coeus Miri remains unverified. The unchanged graded-scan case is slow at 52.823s.
-- Additional coverage finding: the shared release matrix only executes value
-  tests when its provider selects them. Select nine bounded NumPy-only
-  value/dtype/error cases on every platform/interpreter row; keep all 29
-  NumPy/SciPy parity cases. The original default Mac wheel fails mandatory import;
-  the corrected wheel passes all 38 cases locally, zero skips. Initial test
-  fixtures were corrected to the existing two-dimensional elementwise contract.
-- Release acceptance still requires final-head CI/value-matrix evidence,
-  independent review, normal gated integration and verified publication receipts.
-  Review found one P2: unprivileged PR verification attempted unconditional
-  attestation. [Atlas #542](https://github.com/ryancinsight/atlas/pull/542) adds
-  credential-free context regressions and a trusted-attestation guard. Only the
-  recipe pin advances; provider graph, permission declarations and locks remain.
-  No merge/publication yet. Other owner
-  branches and the pending Eunomia version decision stay untouched.
-
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
 

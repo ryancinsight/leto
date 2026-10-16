@@ -1,6 +1,6 @@
 # Leto Development Checklist
 
-Python repair target: leto-python 0.46.1; Rust packages remain 0.46.0.
+Published Python repair: leto-python 0.46.1 (2026-10-16); Rust packages remain 0.46.0.
 
 ## LETO-PYTHON-NATIVE-LINK [patch]
 
@@ -27,8 +27,23 @@ Python repair target: leto-python 0.46.1; Rust packages remain 0.46.0.
       contracts, zero skips, preserving the full 29-case NumPy/SciPy suite.
 - [x] Record independent review's attestation P2 and select Atlas #542's guarded
       recipe with 16 passing local regressions; keep the provider graph unchanged.
-- [ ] Close final-head CI/value-matrix evidence, independent review and normal
-      gated integration/publication; preserve matrices, fixtures and test limits.
+- [x] Pass final reviewed head `95c98778`: 40 executed checks, six configured
+      skips; independent code re-review has no blocking finding. Merge #365
+      normally as `747d0bbb` with the exact reviewed tree; default CI/Miri passes.
+- [x] Publish [leto-python 0.46.1](https://pypi.org/project/leto-python/0.46.1/)
+      from tag `leto-python-v0.46.1` at `747d0bbb`; release run `38835589358`
+      passes 30 rows, 270 value/error cases, consolidated validation/attestation
+      and Trusted Publishing. All 31 registry files match release bytes/hashes;
+      all 32 release assets, including SHA256SUMS, have verified signed provenance.
+- [x] Install the actual registry wheel in a fresh CPython 3.13 environment;
+      all 38 tests from the published sdist pass, zero skips. Validate all ten
+      Mac slices and 534 Rust/Python/TOML/lock payloads against rebuilt source.
+- [x] Verify automatic Pages run `38834105768` builds exact `747d0bbb` and
+      the public site returns HTTP 200. This is the configured legacy Pages
+      deployment; the path-filtered mdBook job did not run.
+- [x] Retain the additional managed scan's unavailable-model failure and the
+      owner's explicit nonblocking decision; actual required policies/checks
+      pass. Preserve source/providers, test coverage and all original limits.
 
 **Target Version**: 0.46.0
 
