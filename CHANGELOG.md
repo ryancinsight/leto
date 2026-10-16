@@ -1,6 +1,6 @@
 # Changelog
 
-## leto-python 0.46.1 — Unreleased
+## leto-python 0.46.1 — 2026-10-16
 
 ### Fixed
 
