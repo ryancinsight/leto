@@ -1,5 +1,35 @@
 # Leto Development Checklist
 
+Python repair target: leto-python 0.46.1; Rust packages remain 0.46.0.
+
+## LETO-PYTHON-NATIVE-LINK [patch]
+
+- [x] Check current main, repository instructions and both active owner patches.
+- [x] Reproduce the native linker regression on supported CPython 3.13.
+- [x] Separate native linkage from maturin's existing dependency feature.
+- [x] Pass all 1,202 CPython 3.13 native cases, zero skips, strict full-feature
+      workspace lint/docs and both unchanged Rust API/package gates.
+- [x] Provide Python 3.11 CI with NumPy/SciPy and pass all 1,202 native cases,
+      zero skips; keep the initial missing-runtime failure in the evidence.
+- [x] Build/install/import the Python 3.13 wheel with installed ld-classic and
+      SDK 15.4; all 29 unchanged parity cases pass, zero skips.
+- [x] Pass the default Linux built-wheel import and 29 parity cases at the
+      [tested head](https://github.com/ryancinsight/leto/commit/0f2a325225a6850030d1b42904c4c5552fe08624);
+      retain all nine executed CI results and the existing slow-test finding.
+- [x] Diagnose implicit Rust/LLVM stripping, retain the failed artifact and
+      pass all 29 installed-wheel parity cases on the corrected default Mac
+      toolchain with an aligned string table and no libpython dependency.
+- [x] Pass 40 same-repository checks, all 30 wheel/value rows and consolidated
+      validation at the [tested candidate](https://github.com/ryancinsight/leto/commit/c861229de52881529dfe2b678e9a7a3954a2863c);
+      retain six configured skips and the 52.823s native slow-case observation.
+- [x] Add nine bounded NumPy-only value/dtype/error cases; reproduce the old
+      wheel's mandatory import failure and pass all 38 local installed-wheel
+      contracts, zero skips, preserving the full 29-case NumPy/SciPy suite.
+- [x] Record independent review's attestation P2 and select Atlas #542's guarded
+      recipe with 16 passing local regressions; keep the provider graph unchanged.
+- [ ] Close final-head CI/value-matrix evidence, independent review and normal
+      gated integration/publication; preserve matrices, fixtures and test limits.
+
 **Target Version**: 0.46.0
 
 ## LETO-EUNOMIA-010-COHORT [minor] — provider compatibility

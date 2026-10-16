@@ -69,6 +69,13 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install the native binding runtime
+        # Both runtimes support this job's existing Python 3.11 interpreter.
+        # The native binding tests compare matrix exponentials against SciPy.
+        run: >-
+          python -m pip install --disable-pip-version-check
+          "numpy==2.2.6" "scipy==1.16.3"
+
       - name: Materialize the pinned Atlas tooling checkout
         # ADR 0067: the bench runner consumes Atlas's process-tree runner from
         # an exact sparse checkout of the pinned commit, never a moving branch.
@@ -103,16 +110,63 @@ jobs:
         run: cargo check --locked -p leto -p leto-ops --no-default-features
 
       - name: Lint all affected targets
-        run: cargo clippy --locked -p leto -p leto-ops --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Run native tests
-        run: cargo nextest run --locked -p leto -p leto-ops
+        run: cargo nextest run --locked --workspace
 
       - name: Run documentation tests
-        run: cargo test --locked -p leto -p leto-ops --doc
+        run: cargo test --locked --workspace --doc
 
       - name: Build documentation
-        run: cargo doc --locked -p leto -p leto-ops --no-deps
+        run: cargo doc --locked --workspace --no-deps
+
+  python-wheel:
+    name: Python wheel import and parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Python 3.13
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install the pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          shared-key: leto-python-wheel
+
+      - name: Install wheel and parity tooling
+        run: >-
+          python -m pip install --disable-pip-version-check
+          "maturin==1.9.4" "numpy==2.5.1" "scipy==1.18.1" "pytest==9.1.1"
+
+      - name: Build the actual extension wheel
+        run: >-
+          maturin build --locked --release
+          --manifest-path crates/leto-python/Cargo.toml
+          --interpreter python --out dist
+
+      - name: Install the built wheel
+        run: python -m pip install --no-deps dist/*.whl
+
+      - name: Require the installed extension and SciPy
+        run: python -c "import leto_python, scipy.linalg; print(leto_python.__file__)"
+
+      - name: Run parity and installed-wheel contracts
+        run: >-
+          python -m pytest crates/leto-python/tests/test_numpy_parity.py
+          crates/leto-python/tests/test_wheel_contract.py
 
   # Miri over the code whose correctness rests on an invariant the native suite
   # cannot see.
