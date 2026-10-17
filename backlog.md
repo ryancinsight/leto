@@ -3,11 +3,12 @@
 <a id="LETO-VECTOR-NORMALIZE-RANGE"></a>
 ## LETO-VECTOR-NORMALIZE-RANGE — Preserve finite directions [patch]
 
-- status: local verification; owner: Codex; target: core0.46.2 stacked on #371.
+- status: blocked
+- owner: Codex; target: core0.46.2 stacked on #371.
 - priority: correctness; smallest basis and maximum equal components lose finite
   unit directions. Preserve20 red regressions/four controls across four scalars.
 - implementation: Retain ordinary native results; scale exceptional finite
-  components before normalization. No widening/new public bound/allocation.
+  components before normalization; no widening, public bound or allocation.
 - verification:39124 vectors/mode in debug/opt2/opt3 across dimensions0/1/2/3/4/8/17;
   native/wrapped parity and37778 ordinary output bits retained. Observed component
   error≤2epsilon, squared-unit residual≤4epsilon; no universal rounding promise.
@@ -19,7 +20,8 @@
 <a id="LETO-UNIT-CHECKED-FINITE"></a>
 ## LETO-UNIT-CHECKED-FINITE — Preserve checked unit invariant [patch]
 
-- status: local verification; owner: Codex; target: core0.46.2 with normalization.
+- status: blocked
+- owner: Codex; target: core0.46.2 with normalization.
 - priority: correctness; reject zero/nonfinite vectors instead of Some invalid Unit.
 - policy: Keep IEEE norm>min_norm comparison, including valid negative thresholds;
   NaN/+infinity thresholds reject. No new threshold-validation API is selected.
@@ -32,15 +34,16 @@
 <a id="LETO-QUATERNION-INVERSE-RANGE"></a>
 ## LETO-QUATERNION-INVERSE-RANGE — Preserve inverse range [patch]
 
-- status: blocked for cohort integration; owner: Codex; ancestor draft #371.
+- status: blocked
+- priority: correctness
 - evidence: Exact core repair independently accepted;40 hosted successes/six
   configured skips. New changes leave that branch and quaternion sources intact.
-- hold: Core-only acceptance does not establish whole-workspace/public cohort.
 
 <a id="LETO-MOIRAI-010-PUBLIC-COHORT"></a>
 ## LETO-MOIRAI-010-PUBLIC-COHORT — Coordinate public cohort [minor]
 
-- status: owner decision pending; existing task: Re-derive sparse kernel integration.
+- status: blocked
+- priority: correctness
 - scope: #362 reserves0.47; Apollo #674 Moirai^0.9.3 and Coeus #533 ^0.9.0 also
   exclude current0.10. Coeus reexports MoiraiBackend. Preserve all owner holds.
 - next: Assign that owner one coordinated0.47 sequence, current-provider typed/API/
