@@ -1,45 +1,52 @@
 # Leto Work Backlog
 
-<a id="LETO-QUATERNION-INVERSE-RANGE"></a>
-## LETO-QUATERNION-INVERSE-RANGE — Preserve representable inverses [patch]
+<a id="LETO-VECTOR-NORMALIZE-RANGE"></a>
+## LETO-VECTOR-NORMALIZE-RANGE — Preserve finite directions [patch]
 
-- status: blocked; owner: Codex; target: core leto 0.46.1.
-- priority: correctness; outcome: representable inverses survive norm range.
-- evidence: Basis 2^±80 f32/2^±600 f64 loses exact inverses on baseline;
-  expanded twelve failures/eight controls become twenty passing tests.
-- implementation: Preserve normal-norm bits; private cold generic recovery scales
-  binary exponents, compensates norm/division in T, then rescales. Scaled norm
-  lies in [1,16). Keep legacy zero/nonfinite and unrepresentable-output policy.
-- P2 repair: Join quaternion payloads before constructing Some once; preserve
-  the guard, arithmetic, helper, public bounds, tolerances and provider lock.
-- verification: 89480 exact cases per debug/opt2/opt3 mode retain returned bits,
-  native/wrapped parity and finite-input Hamilton products. At opt2/opt3 only,
-  128 invalid-input downstream NaN-product payloads differ; inverse bits do not.
-  Fallback error reaches one ulp, ordinary four; no universal rounding promise.
-- diagnostics: Unchanged minimal, strict Clippy, 1222 native passes/zero skips,
-  33 doctests/one ignore and strict docs pass. Final-head API/package pending.
-- performance: Seven alternating triples in ten opt2/opt3 caller contexts show
-  direct f64 mixed opt3 11.97→1.22ns (base1.24), stream1.89→0.94 (base0.94),
-  unwrapped store2.04→0.95 (base0.96). Opaque ordinary costs up to+0.53ns;
-  cold indirect up to+3.89ns. Cold6.10-31.48ns; sampled requested heap zero.
-  Keep all raw samples/limits; independent tradeoff acceptance remains open.
-- scope: Only core0461; ops0460/Python0461 source/versions stay unchanged.
-- holds: Independent exact-head review, final applicable local/hosted gates,
-  fresh release plan AND separate Moirai workspace coherence before release.
+- status: local verification; owner: Codex; target: core0.46.2 stacked on #371.
+- priority: correctness; smallest basis and maximum equal components lose finite
+  unit directions. Preserve20 red regressions/four controls across four scalars.
+- implementation: Retain ordinary native results; scale exceptional finite
+  components before normalization. No widening/new public bound/allocation.
+- verification:39124 vectors/mode in debug/opt2/opt3 across dimensions0/1/2/3/4/8/17;
+  native/wrapped parity and37778 ordinary output bits retained. Observed component
+  error≤2epsilon, squared-unit residual≤4epsilon; no universal rounding promise.
+- costs:1024 warmed heap cases/cohort are zero; ordinary caller overhead reaches
+  +12.05ns/+91.31% at17D. Preserve raw/failed variants; performance acceptance open.
+- next: Finish exact-head package/API/gates,
+  separate draft/independent review and coherent owner integration before release.
+
+<a id="LETO-UNIT-CHECKED-FINITE"></a>
+## LETO-UNIT-CHECKED-FINITE — Preserve checked unit invariant [patch]
+
+- status: local verification; owner: Codex; target: core0.46.2 with normalization.
+- priority: correctness; reject zero/nonfinite vectors instead of Some invalid Unit.
+- policy: Keep IEEE norm>min_norm comparison, including valid negative thresholds;
+  NaN/+infinity thresholds reject. No new threshold-validation API is selected.
+- implementation: Reuse computed norm and canonical normalization; disambiguate
+  finite norm overflow from nonfinite components. Zero/empty inputs reject.
+- verification: Original24 tests plus threshold/invariant test pass; strict native
+  1247 cases/zero skips, lint/minimal/docs and isolated focused Miri both models.
+- next: Final exact-head API/package/performance/gates/review and release scope.
+
+<a id="LETO-QUATERNION-INVERSE-RANGE"></a>
+## LETO-QUATERNION-INVERSE-RANGE — Preserve inverse range [patch]
+
+- status: blocked for cohort integration; owner: Codex; ancestor draft #371.
+- evidence: Exact core repair independently accepted;40 hosted successes/six
+  configured skips. New changes leave that branch and quaternion sources intact.
+- hold: Core-only acceptance does not establish whole-workspace/public cohort.
 
 <a id="LETO-MOIRAI-010-PUBLIC-COHORT"></a>
-## LETO-MOIRAI-010-PUBLIC-COHORT — Admit current public cohort [minor]
+## LETO-MOIRAI-010-PUBLIC-COHORT — Coordinate public cohort [minor]
 
-- status: blocked; priority: correctness; owner: coordination with PR #362.
-- evidence: Unchanged main's Moirai^0.9.3 rejects current0.10.0 in fresh workspace
-  and raw ops API. Locked API/core-only acceptance does not certify workspace.
-- boundary: Public ops runtime/policy/result types change nominal identity.
-  Active #362 owns caller dispatch and reserves workspace0.47.0; do not compete.
-- prerequisite: Agree owner/landing/version with #362, preserve canonical URL and
-  features, admit0.10, refresh coherent defaults without older pins, document
-  breaking pre-1.0 type migration, then test fresh workspace and typed consumers.
-- gates: Exact API/cohort/native/minimal/Miri/wheel/package/release graph and
-  independent final-head review. Rebase/reclassify #371 if provider work lands.
+- status: owner decision pending; existing task: Re-derive sparse kernel integration.
+- scope: #362 reserves0.47; Apollo #674 Moirai^0.9.3 and Coeus #533 ^0.9.0 also
+  exclude current0.10. Coeus reexports MoiraiBackend. Preserve all owner holds.
+- next: Assign that owner one coordinated0.47 sequence, current-provider typed/API/
+  graph/full gates and package scope; no competing release, old pin or owner edit.
+- follow-up: Rebase/reclassify both geometry patches after coherent integration;
+  repeat exact-head review/gates/publication checks. No merge/publication yet.
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo

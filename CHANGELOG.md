@@ -1,5 +1,27 @@
 # Changelog
 
+## leto 0.46.2 — Unreleased
+
+### Fixed
+
+- [patch] Recover finite vector unit directions when scalar length or reciprocal
+  range loses them, using native scaled normalization and retaining ordinary
+  output bits and direct zero/nonfinite IEEE behavior.
+- [patch] Reject zero, empty and nonfinite vectors at Unit::try_new while retaining
+  its existing IEEE threshold comparison. Reuse the computed length and shared
+  normalization without new public bounds, widening or allocation.
+- Preserve original range failures/controls and add exponent/dimension/wrapper,
+  threshold, numerical-oracle, Miri and caller-cost/allocation verification.
+  Retain material caller costs (sampled17D ordinary maximum+12.05ns/+91.31%)
+  for independent acceptance; zero requested heap samples are not resource bounds.
+
+### Scope
+
+Only core advances to0.46.2 in this separate draft stacked on #371. Ops0.46.0,
+Python0.46.1, providers/locks, workflows and owner branches stay unchanged. Both
+patches remain held for coordinated current-Moirai public-cohort integration and
+fresh exact-head review/gates/dependency/publication-scope checks afterward.
+
 ## leto 0.46.1 — Unreleased
 
 ### Fixed

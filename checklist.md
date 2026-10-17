@@ -1,6 +1,25 @@
 # Leto Development Checklist
 
-Active isolated target: **core leto 0.46.1**; ops 0.46.0/Python 0.46.1 unchanged.
+Active isolated target: **core leto0.46.2**, stacked on frozen #371;
+ops0.46.0/Python0.46.1 unchanged. Both geometry releases retain cohort holds.
+
+- [ ] **LETO-VECTOR-NORMALIZE-RANGE [patch]**
+  - [x] Preserve red checkout and20 failures/four controls; verify four supported
+    RealField types and dimensions0/1/2/3/4/8/17 with39124 vectors/mode.
+  - [x] Repair native scaling; preserve ordinary bits and direct IEEE zero/
+    nonfinite classifications. Record numerical bounds without rounding promises.
+  - [x] Run original24 tests, strict native1247/zero skips, minimal/lint/docs and
+   25 focused tests in each isolated strict-provenance Miri borrow model.
+  - [x] Measure eight caller contexts/seven paired samples and1024 heap cases;
+    disclose remaining ordinary+12.05ns/+91.31%17D cost for independent review.
+  - [ ] Assess final source/package/API identity,
+    normal hooks, hosted gates and independent final-head review.
+- [ ] **LETO-UNIT-CHECKED-FINITE [patch]**
+  - [x] Separate threshold policy from input invariants: retain IEEE comparison
+    and reject zero/nonfinite/empty vectors; reuse canonical normalization/norm.
+  - [x] Verify threshold equality/adjacent/negative/NaN/infinite cases and outputs.
+  - [ ] Finish final API/package/performance/review and coordinated release scope.
+
 
 - [ ] **LETO-QUATERNION-INVERSE-RANGE [patch]**
   - [x] Preserve owner work; reproduce twelve baseline failures/eight controls.

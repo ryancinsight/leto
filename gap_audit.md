@@ -1,5 +1,58 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## Unit directions and checked input invariant [patch] — core0.46.2 under review
+
+The smallest positive basis has exact direction[1,0,0] but reciprocal length
+is infinite; equal maximum finite components have finite direction[1/sqrt(3);3]
+but scalar length overflows. Preserve the ordinary native path and normalize
+exceptional finite vectors through v/max(abs(v)); the common scale cancels.
+Reuse Vector::norm rather than widening or cloning algorithms by scalar/dimension.
+Direct zero/nonfinite IEEE results retain their established classifications.
+
+Unit::try_new is documented as the zero-rejecting boundary. Keep its existing
+norm>min_norm IEEE comparison, including valid vectors with negative thresholds;
+NaN/+infinity thresholds reject. Reject zero/empty/nonfinite vectors regardless
+of threshold, preserving the checked unit invariant. A finite norm proves finite
+components; infinite norm requires distinguishing finite overflow from infinite
+input. Share the already computed norm with canonical vector normalization.
+No new public bound, threshold-validation domain, source pin or range-error API.
+
+Preserve the original audit checkout,20 failures/four controls and all prior
+#371/owner evidence. Original24 tests plus the new contract test pass.39124 vectors
+per debug/opt2/opt3 mode span all binary exponents, random IEEE components,
+dimensions0/1/2/3/4/8/17 and native/wrapped f32/f64.37778 ordinary outputs/mode keep
+baseline bits; wrapper parity holds. Decimal100-digit reference from exact input
+components observes≤2epsilon component error and≤4epsilon squared-unit residual.
+Bounds for tested N allow(N+8)epsilon component and(2N+16)epsilon squared-unit
+rounding error; no universal correctly-rounded promise. Unsupported F16/Bf16 are
+not RealField implementations; do not weaken that boundary to expand a test.
+
+Strict minimal/lint/docs,1247 native tests/zero skips and25 isolated focused Miri
+tests per borrow model pass. Seven alternating pairs across opt2/opt3 direct/opaque/indirect/stored callers,
+four scalars and dimensions3/17 retain every raw timing/assembly sample. The
+selected generic helper inline hint improves some initial cases; borrowed,
+eager and in-place alternatives remain preserved. No always-inline/CPU/threshold
+or lint override. Direct opt3 mixed3D f32 normalize2.42→2.57ns, f64 normalize
+2.08→2.78ns and checked unit2.45→2.85ns; stored3D f64 normalize2.60→2.69ns.
+Material costs remain: maximum ordinary+12.05ns/+91.31% for17D stored checked
+unit13.19→25.24ns at opt2. Corrected cold paths4.41-54.03ns; baseline exceptional
+outputs are incorrect.1024 warmed memory cases/cohort request zero allocations,
+peak or retained bytes. These are local ARM64 primitive/caller observations,
+not universal throughput or formal heap/stack/cache bounds. Independent
+performance acceptance remains a hold; do not claim all costs are preserved.
+Final-head package/source/VCS, API, normal hooks, hosted checks and independent
+review remain pending. Only core advances0461→0462; provider records, ops/Python,
+limits, workflows, settings and owner branches retain ancestor bytes.
+
+This separate draft is stacked on frozen #371 and cannot release through the
+unresolved Moirai cohort. Verified existing local task Re-derive sparse kernel
+integration owns #362, Apollo #674 and Coeus #533. It is separate from the active
+geometry/review tasks. Coordinator action: assign that owner the single reserved
+0.47 integration and coordinated Moirai0.10 bindings, or explicitly transfer that
+ownership. No message or owner edit is performed here. Preserve Coeus584/585,
+Apollo LaneBuffer/service and other release holds. Rebase/reclassify and renew
+exact-head validation after coherent integration; do not duplicate reserved0.47.
+
 ## Quaternion inverse intermediate range [patch] — core 0.46.1 held for review
 
 For finite basis q=a, q inverse is 1/a; imaginary bases negate the component.

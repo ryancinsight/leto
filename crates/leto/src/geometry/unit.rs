@@ -55,14 +55,25 @@ impl<T: RealField, const N: usize> Unit<T, N> {
         }
     }
 
-    /// Normalize `v`, returning `None` if `‖v‖ ≤ min_norm`.
+    /// Normalize a finite nonzero `v`, returning `None` otherwise or when
+    /// `‖v‖ ≤ min_norm`.
+    ///
+    /// The threshold uses the scalar's ordinary `>` comparison: NaN or positive
+    /// infinity rejects, while negative thresholds still admit finite nonzero
+    /// vectors. Zero and nonfinite vectors never produce a checked unit value.
     #[inline]
     pub fn try_new(v: Vector<T, N>, min_norm: T) -> Option<Self> {
-        if v.norm() > min_norm {
-            Some(Self::new_normalize(v))
-        } else {
-            None
+        let norm = v.norm();
+        if !(norm > min_norm && norm > T::ZERO) {
+            return None;
         }
+        // A finite length proves finite components. An infinite length may
+        // instead be the representational overflow of a finite vector.
+        if !norm.is_finite() && v.data.iter().any(|value| !value.is_finite()) {
+            return None;
+        }
+        let value = v.normalize_with_norm(norm);
+        Some(Self { value })
     }
 }
 
