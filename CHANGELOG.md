@@ -11,7 +11,9 @@
   a checked invalid/range API or widen arithmetic.
 - Preserve baseline red tests, mixed/subnormal and F32/F64 wrapper controls,
   exact original-component inverse oracles and both Hamilton product orders.
-  Keep full performance samples, including slow caller contexts, for review.
+  Join inverse payloads before constructing Some once to avoid the reviewed
+  aggregate-result caller regression; guard, arithmetic and helper are unchanged.
+  Keep full performance samples and opaque/cold tradeoffs for independent review.
 
 ### Scope
 
@@ -22,6 +24,8 @@ fresh-workspace Moirai requirement conflict remains separately tracked; current
 core providers and the core-only publication/consumer contract are assessed
 independently. Merge/publication requires exact-head independent review and
 current applicable gates plus a freshly verified sole-core release plan.
+The separately owned Moirai public-cohort/workspace prerequisite is also a
+release hold; core-only acceptance does not establish whole-workspace coherence.
 
 ## leto-python 0.46.1 — 2026-10-16
 

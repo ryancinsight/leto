@@ -3,45 +3,43 @@
 <a id="LETO-QUATERNION-INVERSE-RANGE"></a>
 ## LETO-QUATERNION-INVERSE-RANGE — Preserve representable inverses [patch]
 
-- status: blocked
-- priority: correctness
-- owner: Codex; target: core leto 0.46.1.
-- outcome: Finite representable inverses survive intermediate squared-norm range.
-- evidence: Baseline basis 2^±80 f32/2^±600 f64 loses exact inverses; original
-  four failures/four controls and expanded twelve failures/eight controls persist.
-- implementation: Preserve native normal-norm bits; a private cold generic helper
-  scales binary exponents, compensates products/sums/division in T, then rescales.
-  Scaled norm lies in [1,16). Keep zero/nonfinite input results; corrected
-  nonfinite outputs use legacy results. No widening, tolerance or public change.
-- verification: Twenty tests pass and 34936 exact cases/mode check 30973 finite
-  inverses in both Hamilton orders. Fallback error reaches one ulp, ordinary four;
-  no universal correct-rounding claim. Preserve 192 nonfinite/32 zero cases;
-  exclude 3739 unrepresentable inverses from finite certification. Final bits
-  match the immutable nine-file checkpoint in debug/opt2/opt3.
-- diagnostics: Minimal, strict Clippy, 1222 native passes/zero skips, 33 doctests/
-  one ignore and docs pass unchanged. Source budgets hold; core patch API223/30.
-- performance: All sampled paths request zero heap; ordinary1.02-12.46ns,
-  max paired overhead852.62%/10.60ns. f64 direct opt3 is11.75/base1.24ns;
-  stored stream1.91/base0.95ns; f32 stream1.15/base1.15ns. Cold6.07-27.58ns.
-  Retain all contexts/limits and require independent performance acceptance.
-- scope: Only core0461; ops0460/Python0461 retain source/versions. Core providers
-  are current and fresh consumers resolve; wider Moirai scope stays separate.
-- next: Final locked API/package/consumer/plan, normal push/hosted gates and
-  independent exact-head correctness/performance review before merge/publication.
+- status: blocked; owner: Codex; target: core leto 0.46.1.
+- priority: correctness; outcome: representable inverses survive norm range.
+- evidence: Basis 2^±80 f32/2^±600 f64 loses exact inverses on baseline;
+  expanded twelve failures/eight controls become twenty passing tests.
+- implementation: Preserve normal-norm bits; private cold generic recovery scales
+  binary exponents, compensates norm/division in T, then rescales. Scaled norm
+  lies in [1,16). Keep legacy zero/nonfinite and unrepresentable-output policy.
+- P2 repair: Join quaternion payloads before constructing Some once; preserve
+  the guard, arithmetic, helper, public bounds, tolerances and provider lock.
+- verification: 89480 exact cases per debug/opt2/opt3 mode retain returned bits,
+  native/wrapped parity and finite-input Hamilton products. At opt2/opt3 only,
+  128 invalid-input downstream NaN-product payloads differ; inverse bits do not.
+  Fallback error reaches one ulp, ordinary four; no universal rounding promise.
+- diagnostics: Unchanged minimal, strict Clippy, 1222 native passes/zero skips,
+  33 doctests/one ignore and strict docs pass. Final-head API/package pending.
+- performance: Seven alternating triples in ten opt2/opt3 caller contexts show
+  direct f64 mixed opt3 11.97→1.22ns (base1.24), stream1.89→0.94 (base0.94),
+  unwrapped store2.04→0.95 (base0.96). Opaque ordinary costs up to+0.53ns;
+  cold indirect up to+3.89ns. Cold6.10-31.48ns; sampled requested heap zero.
+  Keep all raw samples/limits; independent tradeoff acceptance remains open.
+- scope: Only core0461; ops0460/Python0461 source/versions stay unchanged.
+- holds: Independent exact-head review, final applicable local/hosted gates,
+  fresh release plan AND separate Moirai workspace coherence before release.
 
 <a id="LETO-MOIRAI-010-PUBLIC-COHORT"></a>
-## LETO-MOIRAI-010-PUBLIC-COHORT — Assess current Moirai boundary [minor]
+## LETO-MOIRAI-010-PUBLIC-COHORT — Admit current public cohort [minor]
 
-- status: blocked
-- priority: correctness
-- owner: unclaimed; scope: public ops runtime/policy/error types.
+- status: blocked; priority: correctness; owner: coordination with PR #362.
 - evidence: Unchanged main's Moirai^0.9.3 rejects current0.10.0 in fresh workspace
-  and raw ops API probes. Locked API CI is a separate contract; core fresh
-  consumers pass. Hermes changed docs only and is not a core dependency.
-- outcome: A current unseeded workspace preserves explicitly versioned types.
-- next: Coordinate/version the public cohort with sparse/runtime owners and
-  verify typed callers/API/release graph. No older pin or hidden quaternion
-  dependency change; all external lock records and owner work remain intact.
+  and raw ops API. Locked API/core-only acceptance does not certify workspace.
+- boundary: Public ops runtime/policy/result types change nominal identity.
+  Active #362 owns caller dispatch and reserves workspace0.47.0; do not compete.
+- prerequisite: Agree owner/landing/version with #362, preserve canonical URL and
+  features, admit0.10, refresh coherent defaults without older pins, document
+  breaking pre-1.0 type migration, then test fresh workspace and typed consumers.
+- gates: Exact API/cohort/native/minimal/Miri/wheel/package/release graph and
+  independent final-head review. Rebase/reclassify #371 if provider work lands.
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo

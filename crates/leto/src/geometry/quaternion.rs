@@ -127,11 +127,12 @@ impl<T: RealField> Quaternion<T> {
         let n2 = self.norm_squared();
         // IEEE infinity is also the exponent-bit mask. A zero exponent marks
         // zero/subnormal squared norms; preserve the native normal path.
-        if n2.is_finite() && n2.bitand(T::INFINITY) != T::ZERO {
-            Some(self.conjugate() / n2)
+        let inverse = if n2.is_finite() && n2.bitand(T::INFINITY) != T::ZERO {
+            self.conjugate() / n2
         } else {
-            recover_inverse(self, n2)
-        }
+            recover_inverse(self, n2)?
+        };
+        Some(inverse)
     }
 
     /// Convert to a 4×4 row-major rotation matrix.
