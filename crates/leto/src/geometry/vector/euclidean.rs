@@ -73,13 +73,13 @@ impl<T: RealField, const N: usize> Vector<T, N> {
         self.normalize_with_norm(self.norm())
     }
 
-    /// Reuse the already computed length at the checked-unit boundary.
+    /// Reuse the computed length without moving the caller's vector.
     #[inline]
-    pub(in crate::geometry) fn normalize_with_norm(self, norm: T) -> Self {
+    pub(in crate::geometry) fn normalize_with_norm(&self, norm: T) -> Self {
         if norm.is_finite() && norm.bitand(T::INFINITY) != T::ZERO {
-            self * norm.recip()
+            *self * norm.recip()
         } else {
-            recover_direction(&self, norm)
+            recover_direction(self, norm)
         }
     }
 
@@ -110,7 +110,13 @@ fn recover_direction<T: RealField, const N: usize>(v: &Vector<T, N>, norm: T) ->
         return *v * norm.recip();
     }
     let scaled = *v / scale;
-    scaled * scaled.norm().recip()
+    // Maximum scaled magnitude is exactly one; retain norm's ordered native
+    // FMA sum without another maximum scan or division by one.
+    let mut sum = T::ZERO;
+    for &component in &scaled.data {
+        sum = component.scalar_fmadd(component, sum);
+    }
+    scaled * sum.sqrt().recip()
 }
 
 /// 3-vector cross product and canonical axes.

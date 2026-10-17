@@ -4,22 +4,25 @@ Active isolated target: **core leto0.46.2**, stacked on frozen #371;
 ops0.46.0/Python0.46.1 unchanged. Both geometry releases retain cohort holds.
 
 - [ ] **LETO-VECTOR-NORMALIZE-RANGE [patch]**
-  - [x] Preserve red checkout and20 failures/four controls; verify four supported
-    RealField types and dimensions0/1/2/3/4/8/17 with39124 vectors/mode.
-  - [x] Repair native scaling; preserve ordinary bits and direct IEEE zero/
-    nonfinite classifications. Record numerical bounds without rounding promises.
-  - [x] Run original24 tests, strict native1247/zero skips, minimal/lint/docs and
-   25 focused tests in each isolated strict-provenance Miri borrow model.
-  - [x] Measure eight caller contexts/seven paired samples and1024 heap cases;
-    disclose remaining ordinary+12.05ns/+91.31%17D cost for independent review.
-  - [ ] Assess final source/package/API identity,
-    normal hooks, hosted gates and independent final-head review.
+  - [x] Preserve20 original failures/four controls and all baseline tests.
+  - [x] Preserve ordinary bits, native precision and legacy invalid classifications.
+  - [x] Replace repeated scaled norm with its same ordered FMA sum; share a
+    borrowed cached-norm helper, retaining direct fallback arithmetic.
+  - [x] Pass39124 author vectors and24883 independent threshold cases/mode,
+    O0/2/3 finite bits/status equivalence and the unchanged Decimal/wrapper oracle.
+  - [x] Pass1247 native tests/zero skips, strict minimal/lint/docs,33 doctests/
+    one ignore and25 focused Miri tests in each strict-provenance borrow model.
+  - [x] Preserve nine feasibility layouts and seven final alternating triples in
+    ten O2/O3 contexts;1024 warmed heap cases/cohort request zero allocations.
+  - [ ] Accept performance tradeoffs: O2/indirect costs remain, including f32/N3
+    checked2.71→14.62ns. No global speedup or resource-bound claim.
+  - [ ] Finish exact-head API/package, normal hooks/hosted checks and re-review.
 - [ ] **LETO-UNIT-CHECKED-FINITE [patch]**
-  - [x] Separate threshold policy from input invariants: retain IEEE comparison
-    and reject zero/nonfinite/empty vectors; reuse canonical normalization/norm.
-  - [x] Verify threshold equality/adjacent/negative/NaN/infinite cases and outputs.
-  - [ ] Finish final API/package/performance/review and coordinated release scope.
-
+  - [x] Preserve IEEE threshold comparison and reject zero/empty/nonfinite inputs.
+  - [x] Keep ordinary checked arithmetic visible; borrow only exceptional recovery.
+  - [x] Reject the no-cold Option experiment when the unchanged oracle detects
+    optimized invalid native/wrapped NaN-bit differences; no test weakening.
+  - [ ] Independent exact-head performance acceptance and coordinated release scope.
 
 - [ ] **LETO-QUATERNION-INVERSE-RANGE [patch]**
   - [x] Preserve owner work; reproduce twelve baseline failures/eight controls.

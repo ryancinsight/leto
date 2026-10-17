@@ -2,56 +2,67 @@
 
 ## Unit directions and checked input invariant [patch] — core0.46.2 under review
 
-The smallest positive basis has exact direction[1,0,0] but reciprocal length
-is infinite; equal maximum finite components have finite direction[1/sqrt(3);3]
-but scalar length overflows. Preserve the ordinary native path and normalize
-exceptional finite vectors through v/max(abs(v)); the common scale cancels.
-Reuse Vector::norm rather than widening or cloning algorithms by scalar/dimension.
-Direct zero/nonfinite IEEE results retain their established classifications.
+Finite tiny bases and equal maximum components have finite unit directions even
+when reciprocal length or scalar length overflows. Preserve ordinary reciprocal/
+multiply bits; scale exceptional finite input by max(abs(v)). Scaling cancels.
+The scaled maximum is exactly one, so the second maximum scan, divisions by one
+and rescale are redundant. Use the same ordered native scalar_fmadd sum, sqrt and
+reciprocal; dot/norm_squared have different arithmetic and are not substitutes.
 
-Unit::try_new is documented as the zero-rejecting boundary. Keep its existing
-norm>min_norm IEEE comparison, including valid vectors with negative thresholds;
-NaN/+infinity thresholds reject. Reject zero/empty/nonfinite vectors regardless
-of threshold, preserving the checked unit invariant. A finite norm proves finite
-components; infinite norm requires distinguishing finite overflow from infinite
-input. Share the already computed norm with canonical vector normalization.
-No new public bound, threshold-validation domain, source pin or range-error API.
+Independent review at fed51904 reports two P2 performance issues and no verified
+numerical correctness finding. Keep v*norm.recip() visible at Unit::try_new's
+ordinary boundary. Its exceptional helper borrows v; the shared cached-norm
+helper also borrows its receiver. Existing legacy fallback arithmetic remains
+inside the original vector recovery path. No public signature/bound, precision,
+allocation, provider/lock, test, limit, profile, workflow or setting changes.
 
-Preserve the original audit checkout,20 failures/four controls and all prior
-#371/owner evidence. Original24 tests plus the new contract test pass.39124 vectors
-per debug/opt2/opt3 mode span all binary exponents, random IEEE components,
-dimensions0/1/2/3/4/8/17 and native/wrapped f32/f64.37778 ordinary outputs/mode keep
-baseline bits; wrapper parity holds. Decimal100-digit reference from exact input
-components observes≤2epsilon component error and≤4epsilon squared-unit residual.
-Bounds for tested N allow(N+8)epsilon component and(2N+16)epsilon squared-unit
-rounding error; no universal correctly-rounded promise. Unsupported F16/Bf16 are
-not RealField implementations; do not weaken that boundary to expand a test.
+Keep norm>min_norm IEEE comparison and positive norm requirement. Reject zero,
+empty and nonfinite checked inputs; infinite norm may instead mean finite input
+whose length overflows. Native finite component validation distinguishes those
+cases. NaN/+infinity thresholds reject; valid negative thresholds retain behavior.
+Direct zero/nonfinite classifications and portable-oracle native/wrapped bit
+parity are retained.
 
-Strict minimal/lint/docs,1247 native tests/zero skips and25 isolated focused Miri
-tests per borrow model pass. Seven alternating pairs across opt2/opt3 direct/opaque/indirect/stored callers,
-four scalars and dimensions3/17 retain every raw timing/assembly sample. The
-selected generic helper inline hint improves some initial cases; borrowed,
-eager and in-place alternatives remain preserved. No always-inline/CPU/threshold
-or lint override. Direct opt3 mixed3D f32 normalize2.42→2.57ns, f64 normalize
-2.08→2.78ns and checked unit2.45→2.85ns; stored3D f64 normalize2.60→2.69ns.
-Material costs remain: maximum ordinary+12.05ns/+91.31% for17D stored checked
-unit13.19→25.24ns at opt2. Corrected cold paths4.41-54.03ns; baseline exceptional
-outputs are incorrect.1024 warmed memory cases/cohort request zero allocations,
-peak or retained bytes. These are local ARM64 primitive/caller observations,
-not universal throughput or formal heap/stack/cache bounds. Independent
-performance acceptance remains a hold; do not claim all costs are preserved.
-Final-head package/source/VCS, API, normal hooks, hosted checks and independent
-review remain pending. Only core advances0461→0462; provider records, ops/Python,
-limits, workflows, settings and owner branches retain ancestor bytes.
+Original20 red regressions/four controls and all existing tests remain unchanged.
+Selected source passes39124 author vectors and24883 independent threshold inputs
+per O0/O2/O3 mode, retaining every finite output bit and checked status. The
+unchanged portable Decimal100-digit oracle passes all modes, including its exact
+native/wrapped assertions. Observed component error≤2epsilon and squared-unit
+residual≤4epsilon in its tested dimensions0/1/2/3/4/8/17. Independent dimensions
+also include16/31/64. No exhaustive IEEE or universal correct-rounding promise.
+Nonfinite direct NaN choices can differ from the reviewed head in the independent
+corpus; preserve exact counts and payload/sign classification in the evidence.
 
-This separate draft is stacked on frozen #371 and cannot release through the
-unresolved Moirai cohort. Verified existing local task Re-derive sparse kernel
-integration owns #362, Apollo #674 and Coeus #533. It is separate from the active
-geometry/review tasks. Coordinator action: assign that owner the single reserved
-0.47 integration and coordinated Moirai0.10 bindings, or explicitly transfer that
-ownership. No message or owner edit is performed here. Preserve Coeus584/585,
-Apollo LaneBuffer/service and other release holds. Rebase/reclassify and renew
-exact-head validation after coherent integration; do not duplicate reserved0.47.
+All six local gates pass: strict fmt/minimal/Clippy/docs,1247 native tests/zero
+skips and33 doctests/one ignore. Focused25-case strict-provenance Miri passes with
+isolation in both borrow models. Hosted configured Miri has a different scope.
+Nine feasibility layouts remain in evidence. The no-cold Option layout fails
+its optimized invalid native/wrapped NaN-bit oracle and is rejected unchanged.
+
+Seven alternating baseline/reviewed/selected triples cover O2/O3 direct, opaque,
+indirect, stored and ordinary consumers. O3 stored f64/N17 checked construction
+24.16→13.74ns approaches13.65ns baseline; direct normalization16.67→11.38ns
+versus11.09ns baseline. O3 consumer checked21.61→11.26ns versus10.04ns baseline.
+Material costs remain: O2 stored checked25.35→24.60ns versus13.23ns baseline;
+O2 consumer20.98ns versus10.36ns baseline; O3 stored direct norm16.54ns versus
+10.85ns baseline. New worst ordinary regression is O2 indirect f32/N3 checked
+2.71→14.62ns (baseline2.77ns). Performance acceptance remains open.
+Selected cold recovery spans3.52–39.88ns; incorrect exceptional baseline results
+are not targets.1024 warmed heap cases/cohort request zero calls/peak/retained
+bytes. One local ARM64/Rust1.97 compiler/caller matrix does not establish whole-
+product throughput, cache/stack/RSS or universal resource bounds. Keep every raw
+sample/assembly and all adverse variants; no forced inline or CPU overrides.
+
+Exact-head API/package/hooks, hosted checks and independent re-review must be
+assessed before release. The main-only artifact-budget context does not trigger
+on this stacked PR base; a local hook does not replace that hosted requirement.
+Only core0461→0462 is planned; ops0460/Python0461 and providers retain bytes.
+This draft remains stacked on frozen #371, held for the existing owner's reserved
+0.47/Moirai0.10 cohort. Owner resumption is pending; no contact or owner edit here.
+Preserve Atlas544, Eunomia182, Consus raster authentication, RITK836, Coeus584/585,
+Apollo LaneBuffer/service holds, open Gaia NEXTEST_PIPE and unverified Coeus Miri.
+Renew classification, exact-head gates/review and publication scope after coherent
+owner integration. No merge, publication, credentials or service deployment.
 
 ## Quaternion inverse intermediate range [patch] — core 0.46.1 held for review
 

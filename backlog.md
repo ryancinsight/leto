@@ -5,31 +5,31 @@
 
 - status: blocked
 - owner: Codex; target: core0.46.2 stacked on #371.
-- priority: correctness; smallest basis and maximum equal components lose finite
-  unit directions. Preserve20 red regressions/four controls across four scalars.
-- implementation: Retain ordinary native results; scale exceptional finite
-  components before normalization; no widening, public bound or allocation.
-- verification:39124 vectors/mode in debug/opt2/opt3 across dimensions0/1/2/3/4/8/17;
-  native/wrapped parity and37778 ordinary output bits retained. Observed component
-  error≤2epsilon, squared-unit residual≤4epsilon; no universal rounding promise.
-- costs:1024 warmed heap cases/cohort are zero; ordinary caller overhead reaches
-  +12.05ns/+91.31% at17D. Preserve raw/failed variants; performance acceptance open.
-- next: Finish exact-head package/API/gates,
-  separate draft/independent review and coherent owner integration before release.
+- priority: correctness
+- implementation: Native scaled ordered FMA recovery; borrow cached norm, no new bound.
+- verification: Original24 tests and threshold contract pass;39124 author vectors
+  and24883 independent threshold inputs/mode retain finite bits/statuses at O0/2/3.
+  The unchanged Decimal oracle and native/wrapped bit assertions pass all modes.
+- costs: Seven triples/ten contexts,1024 zero-requested-heap cases/cohort. O3
+  direct17D norm16.67→11.38ns; stored checked24.16→13.74ns. O2/indirect costs
+  remain; worst new ordinary regression is2.71→14.62ns for indirect f32/N3.
+- next: Exact-head API/package/hooks/hosted re-review; performance acceptance open.
 
 <a id="LETO-UNIT-CHECKED-FINITE"></a>
 ## LETO-UNIT-CHECKED-FINITE — Preserve checked unit invariant [patch]
 
 - status: blocked
 - owner: Codex; target: core0.46.2 with normalization.
-- priority: correctness; reject zero/nonfinite vectors instead of Some invalid Unit.
-- policy: Keep IEEE norm>min_norm comparison, including valid negative thresholds;
-  NaN/+infinity thresholds reject. No new threshold-validation API is selected.
-- implementation: Reuse computed norm and canonical normalization; disambiguate
-  finite norm overflow from nonfinite components. Zero/empty inputs reject.
-- verification: Original24 tests plus threshold/invariant test pass; strict native
-  1247 cases/zero skips, lint/minimal/docs and isolated focused Miri both models.
-- next: Final exact-head API/package/performance/gates/review and release scope.
+- priority: correctness
+- policy: Preserve IEEE norm>min_norm and reject zero/empty/nonfinite vectors.
+- implementation: Keep ordinary reciprocal/multiply at checked boundary; borrow
+  exceptional validation and shared cached-norm recovery instead of moving v.
+- verification:1247 native tests/zero skips; minimal/lint/docs,25 focused Miri
+  tests per strict-provenance borrow model; original tests/oracle unchanged.
+- costs: O2 stored17D checked25.35→24.60ns remains above13.23ns baseline;
+  consumer20.98ns versus10.36ns baseline. Preserve all nine feasibility variants.
+- next: Independent correctness/performance re-review and coherent owner release
+  scope; #371 and Moirai/reserved0.47 holds remain. No merge/publication.
 
 <a id="LETO-QUATERNION-INVERSE-RANGE"></a>
 ## LETO-QUATERNION-INVERSE-RANGE — Preserve inverse range [patch]

@@ -10,10 +10,15 @@
 - [patch] Reject zero, empty and nonfinite vectors at Unit::try_new while retaining
   its existing IEEE threshold comparison. Reuse the computed length and shared
   normalization without new public bounds, widening or allocation.
-- Preserve original range failures/controls and add exponent/dimension/wrapper,
-  threshold, numerical-oracle, Miri and caller-cost/allocation verification.
-  Retain material caller costs (sampled17D ordinary maximum+12.05ns/+91.31%)
-  for independent acceptance; zero requested heap samples are not resource bounds.
+- Borrow the private cached-norm/recovery boundaries and keep ordinary checked
+  reciprocal/multiply visible. After maximum scaling establishes magnitude one,
+  reuse the same ordered native FMA sum without a redundant range-safe norm.
+- Preserve all regression/oracle tests, including optimized native/wrapped bits.
+  Nine feasibility variants and seven triples/ten caller contexts disclose
+  remaining O2/indirect costs: a new f32/N3 checked case regresses2.71→14.62ns.
+  O3 stored f64/N17 checked improves24.16→13.74ns; O2 remains24.60ns versus
+  13.23ns baseline. Performance acceptance stays open; zero sampled heap requests
+  are not resource bounds or a global speedup claim.
 
 ### Scope
 

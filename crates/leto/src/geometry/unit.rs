@@ -67,14 +67,25 @@ impl<T: RealField, const N: usize> Unit<T, N> {
         if !(norm > min_norm && norm > T::ZERO) {
             return None;
         }
-        // A finite length proves finite components. An infinite length may
-        // instead be the representational overflow of a finite vector.
-        if !norm.is_finite() && v.data.iter().any(|value| !value.is_finite()) {
-            return None;
-        }
-        let value = v.normalize_with_norm(norm);
+        let value = if norm.is_finite() && norm.bitand(T::INFINITY) != T::ZERO {
+            v * norm.recip()
+        } else {
+            recover_checked(&v, norm)?
+        };
         Some(Self { value })
     }
+}
+
+#[cold]
+#[inline]
+fn recover_checked<T: RealField, const N: usize>(
+    v: &Vector<T, N>,
+    norm: T,
+) -> Option<Vector<T, N>> {
+    if !norm.is_finite() && v.data.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    Some(v.normalize_with_norm(norm))
 }
 
 #[cfg(test)]
