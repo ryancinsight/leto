@@ -1,5 +1,51 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## Quaternion inverse intermediate range [patch] — core 0.46.1 pending review
+
+For a finite basis quaternion q=a, q inverse is 1/a; imaginary bases negate that
+component. f32 powers 2^±80 and f64 powers 2^±600 have exact finite inverses and
+both exact identity products, but the old squared norm over/underflows first.
+Preserve the native normal-norm path; recover other finite inputs by binary
+exponent scaling so the scaled squared norm lies in [1,16), with native product,
+sum and quotient residual compensation. Preserve legacy zero/nonfinite inputs;
+fall back to legacy when the corrected output is nonfinite. No new checked
+invalid/range policy, widening, tolerance or public trait bound is selected.
+
+The original nine-file checkpoint and oracle evidence remain immutable. Move
+the identical helper body into a private module to retain the source-size gate.
+Final outputs remain bit-identical on all 34936 cases in each debug/opt2/opt3
+mode. Twenty regressions pass versus twelve baseline failures/eight controls.
+30973 finite inverses check both Hamilton products; observed residual is at most
+2.5 epsilon. Observed fallback error is one ulp, ordinary four ulp; neither is
+a universal correctly-rounded promise. Preserve 192 nonfinite/32 zero cases;
+3739 unrepresentable inverses are not certified as finite or a new range policy.
+
+Minimal, strict Clippy, 1222 native computed tests/zero skips, 33 doctests/one
+ignore and strict docs pass under unchanged budgets. Published-core strict patch
+API passes 223 checks/30 instrument skips. Preserve complete timing/allocation
+samples and context-sensitive slow cases; a no-allocation observation does not
+establish uniform throughput or a formal resource bound. Final exact-head
+locked API, normalized package/consumer/dry-run, normal hosted gates and
+independent correctness/performance review remain integration requirements.
+Seven alternating pairs per standard Rust1.97 opt2/opt3 direct/opaque/indirect
+context retain repository thin-LTO/codegen1 and unchanged arithmetic. Ordinary
+repair range is 1.02-12.46 ns; maximum sampled overhead852.62%/10.60 ns. f64
+by-value direct opt3 mixed is 11.75 versus1.24 ns baseline; stored-input stream
+is1.91 versus0.95 ns and f32 stream1.15 versus1.15 ns. Cold6.07-27.58 ns;
+64-call samples request zero allocations/live/retained bytes. Observed altered
+scalar/vector grouping and unaligned by-value reloads are not established as
+the sole timing cause; baseline indirect opt3 can also take about12.6 ns.
+Preserve unsuccessful alternative-boundary experiments; do not claim uniform
+throughput preservation or formal allocation bounds from selected fixtures.
+
+Only core leto0.46.1 is selected; ops0.46.0 and Python0.46.1 remain unchanged.
+A fresh actual Git core consumer resolves all current providers. Unchanged main
+fails fresh whole-workspace resolution because Moirai^0.9.3 excludes current
+0.10.0. Public ops signatures expose Moirai runtime/policy/error types; that
+separate cohort needs owner coordination/versioning, not an older pin or hidden
+quaternion dependency change. Existing locked API CI is a separate contract.
+No workflow, credentials, limit, service deployment or protected hold changes.
+
 ## 2026-10-16 Native/extension linkage and macOS wheel loader [patch] — closed
 
 - findings: unconditional PyO3 extension linkage breaks native CPython 3.13 linking; implicit Rust/LLVM stripping misaligns the optimized macOS wheel; unprivileged PR verification previously attempted privileged attestation.

@@ -1,5 +1,8 @@
 //! [`Quaternion`] and the rotation type [`UnitQuaternion`].
 
+mod inverse;
+
+use self::inverse::recover_inverse;
 use super::{Unit, Vector3};
 use core::ops::{Add, Div, Mul, Neg, Sub};
 use eunomia::{NumericElement, RealField};
@@ -122,10 +125,13 @@ impl<T: RealField> Quaternion<T> {
     #[inline]
     pub fn try_inverse(self) -> Option<Self> {
         let n2 = self.norm_squared();
-        if n2 == T::ZERO {
-            return None;
+        // IEEE infinity is also the exponent-bit mask. A zero exponent marks
+        // zero/subnormal squared norms; preserve the native normal path.
+        if n2.is_finite() && n2.bitand(T::INFINITY) != T::ZERO {
+            Some(self.conjugate() / n2)
+        } else {
+            recover_inverse(self, n2)
         }
-        Some(self.conjugate() / n2)
     }
 
     /// Convert to a 4×4 row-major rotation matrix.

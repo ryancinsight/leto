@@ -1,5 +1,69 @@
 # Leto Work Backlog
 
+<a id="LETO-QUATERNION-INVERSE-RANGE"></a>
+## LETO-QUATERNION-INVERSE-RANGE — Preserve representable quaternion inverses [patch]
+
+- status: blocked
+- owner: Codex; target: core leto 0.46.1; priority: correctness.
+- outcome: A finite nonzero quaternion with a representable inverse does not
+  lose that inverse merely because its intermediate squared norm over/underflows.
+- evidence: Unchanged current main returns zero for basis magnitudes 2^80
+  (f32) and 2^600 (f64), and None for their reciprocals, although exact inverse
+  components and both identity products are representable. Original four red
+  tests/four controls persist; expanded tests have twelve failures/eight controls
+  on baseline and twenty passes on the repair in debug/opt2/opt3.
+- implementation: Keep the native normal squared-norm path bit-for-bit. A cold
+  private generic helper scales by the largest binary exponent, compensates
+  scaled squared products/sums and division residuals in T, then scales back.
+  The scaled squared norm lies in [1,16). Preserve zero/nonfinite input results;
+  corrected nonfinite outputs use the legacy result. No widening, epsilon,
+  dependency requirement, checked API or public bound change is introduced.
+- verification: Each client mode checks 34936 exact Fraction/integer cases,
+  including 30973 finite inverses and both Hamilton orders. Sampled fallback
+  errors reach one ulp, unchanged ordinary results four ulp; neither is a
+  universal correctly-rounded promise. All 192 nonfinite and 32 zero cases
+  retain outputs; 3739 unrepresentable inverses are separately excluded from
+  finite-result certification. Final private-module output bits match the
+  preserved nine-file checkpoint in all three modes.
+- diagnostics: Minimal features, strict all-target workspace Clippy, 1222 native
+  computed tests/zero skips, 33 doctests/one ignore and rustdoc pass without
+  changed limits. The new private helper preserves the 500-line source budget.
+  Published-core patch API comparison passes 223 checks/30 instrument skips.
+- performance: Preserve all by-value/reference/streaming and opt2/opt3 samples,
+  including caller-sensitive regressions, for independent review. All sampled
+  paths request zero heap; this is not a formal bound or whole-mesh speed claim.
+  Final ordinary range is 1.02-12.46 ns; maximum sampled paired overhead is
+  852.62%/10.60 ns. f64 direct opt3 mixed is 11.75 versus baseline 1.24 ns;
+  stored-input streaming is 1.91 versus 0.95 ns. f32 streaming is 1.15 versus
+  1.15 ns. Cold recovery is 6.07-27.58 ns. Preserve the slow contexts and
+  require independent performance acceptance before integration.
+- scope: Only core leto increments to 0.46.1; ops 0.46.0 and published Python
+  0.46.1 retain versions and source. Current core providers resolve in a fresh
+  Git consumer. Wider-workspace Moirai resolution stays separately blocked below.
+- next: Complete final-head locked API/package/normalized consumer and publisher
+  scope checks, normal push/hosted gates and independent exact-head review of
+  correctness/performance before any merge/publication. Preserve all owner work.
+
+<a id="LETO-MOIRAI-010-PUBLIC-COHORT"></a>
+## LETO-MOIRAI-010-PUBLIC-COHORT — Assess current public Moirai boundary [minor]
+
+- status: blocked
+- owner: unclaimed; priority: correctness.
+- outcome: The whole current workspace resolves from fresh unseeded Git sources
+  while preserving explicitly versioned runtime/policy/error identities.
+- evidence: Unchanged main's ^0.9.3 Moirai requirement rejects current default
+  0.10.0. The same failure blocks a raw fresh leto-ops API probe. Existing locked
+  comparisons remain a distinct configured contract, not evidence of fresh
+  resolution. Core-only Git consumers resolve current providers successfully.
+- scope: Moirai occurs in public leto-ops runtime, ExecutionPolicy and executor
+  error signatures. Coordinate with sparse/runtime owners before advancing this
+  pre-1.0 type boundary; do not hide it with an older pin or a quaternion patch.
+  Current Hermes differs from its lock only in documentation, and is not a core
+  dependency. No provider requirement or external lock record changes here.
+- next: Version/coordinate the public provider cohort, test direct typed callers,
+  fresh workspace/ops consumers and API compatibility, then select the exact
+  publication graph. Preserve typed-storage and sparse PR ownership.
+
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
 
