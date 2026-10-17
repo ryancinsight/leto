@@ -1,5 +1,33 @@
 # Leto Development Checklist
 
+Active isolated target: **core leto 0.46.1**; ops 0.46.0/Python 0.46.1 unchanged.
+
+- [ ] **LETO-QUATERNION-INVERSE-RANGE [patch]**
+  - [x] Preserve owner work; reproduce twelve baseline failures/eight controls.
+  - [x] Implement native scaled compensated recovery and twenty passing tests.
+  - [x] Repair independent P2 with payload-first Option flow; preserve guard,
+    helper, arithmetic, bounds, tolerances and all external lock records.
+  - [x] Check 89480 exact cases per debug/opt2/opt3 mode, wrapper/returned bits
+    and finite-input products. Record 128 invalid NaN-product differences/mode
+    at opt2/opt3; no inverse-result change or universal rounding claim.
+  - [x] Pass unchanged minimal/strict Clippy, 1222 native cases/zero skips,
+    33 doctests/one ignore and strict docs; preserve source budgets.
+  - [x] Retain seven alternating triples across ten caller contexts and heap
+    samples; disclose opaque ordinary/cold indirect costs for review.
+  - [ ] Verify final-head locked/published-core API, normalized package/dry-run,
+    fresh typed consumers, sole-core release plan and normal hosted gates.
+  - [ ] Obtain independent exact-head correctness/performance acceptance.
+  - [ ] Resolve separate fresh-workspace Moirai prerequisite before release;
+    reassess scope/version after owner integration and preserve all other holds.
+
+- [ ] **LETO-MOIRAI-010-PUBLIC-COHORT [minor]**
+  - [x] Reproduce baseline fresh resolution failure; identify public runtime,
+    policy/result type boundary and #362's dispatch/workspace0.47 ownership.
+  - [x] Prepare separate prerequisite sequence and diagnostic compatibility
+    assessment; keep #371 provider requirements/locks unchanged.
+  - [ ] Agree owner/version/landing; document pre-1.0 breaking migration and
+    verify fresh workspace, typed callers, all applicable gates and release graph.
+
 Published Python repair: leto-python 0.46.1 (2026-10-16); Rust packages remain 0.46.0.
 
 ## LETO-PYTHON-NATIVE-LINK [patch]

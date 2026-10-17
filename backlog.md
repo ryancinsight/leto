@@ -1,5 +1,46 @@
 # Leto Work Backlog
 
+<a id="LETO-QUATERNION-INVERSE-RANGE"></a>
+## LETO-QUATERNION-INVERSE-RANGE — Preserve representable inverses [patch]
+
+- status: blocked; owner: Codex; target: core leto 0.46.1.
+- priority: correctness; outcome: representable inverses survive norm range.
+- evidence: Basis 2^±80 f32/2^±600 f64 loses exact inverses on baseline;
+  expanded twelve failures/eight controls become twenty passing tests.
+- implementation: Preserve normal-norm bits; private cold generic recovery scales
+  binary exponents, compensates norm/division in T, then rescales. Scaled norm
+  lies in [1,16). Keep legacy zero/nonfinite and unrepresentable-output policy.
+- P2 repair: Join quaternion payloads before constructing Some once; preserve
+  the guard, arithmetic, helper, public bounds, tolerances and provider lock.
+- verification: 89480 exact cases per debug/opt2/opt3 mode retain returned bits,
+  native/wrapped parity and finite-input Hamilton products. At opt2/opt3 only,
+  128 invalid-input downstream NaN-product payloads differ; inverse bits do not.
+  Fallback error reaches one ulp, ordinary four; no universal rounding promise.
+- diagnostics: Unchanged minimal, strict Clippy, 1222 native passes/zero skips,
+  33 doctests/one ignore and strict docs pass. Final-head API/package pending.
+- performance: Seven alternating triples in ten opt2/opt3 caller contexts show
+  direct f64 mixed opt3 11.97→1.22ns (base1.24), stream1.89→0.94 (base0.94),
+  unwrapped store2.04→0.95 (base0.96). Opaque ordinary costs up to+0.53ns;
+  cold indirect up to+3.89ns. Cold6.10-31.48ns; sampled requested heap zero.
+  Keep all raw samples/limits; independent tradeoff acceptance remains open.
+- scope: Only core0461; ops0460/Python0461 source/versions stay unchanged.
+- holds: Independent exact-head review, final applicable local/hosted gates,
+  fresh release plan AND separate Moirai workspace coherence before release.
+
+<a id="LETO-MOIRAI-010-PUBLIC-COHORT"></a>
+## LETO-MOIRAI-010-PUBLIC-COHORT — Admit current public cohort [minor]
+
+- status: blocked; priority: correctness; owner: coordination with PR #362.
+- evidence: Unchanged main's Moirai^0.9.3 rejects current0.10.0 in fresh workspace
+  and raw ops API. Locked API/core-only acceptance does not certify workspace.
+- boundary: Public ops runtime/policy/result types change nominal identity.
+  Active #362 owns caller dispatch and reserves workspace0.47.0; do not compete.
+- prerequisite: Agree owner/landing/version with #362, preserve canonical URL and
+  features, admit0.10, refresh coherent defaults without older pins, document
+  breaking pre-1.0 type migration, then test fresh workspace and typed consumers.
+- gates: Exact API/cohort/native/minimal/Miri/wheel/package/release graph and
+  independent final-head review. Rebase/reclassify #371 if provider work lands.
+
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
 

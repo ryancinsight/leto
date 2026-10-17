@@ -1,5 +1,32 @@
 # Changelog
 
+## leto 0.46.1 — Unreleased
+
+### Fixed
+
+- [patch] Recover finite representable quaternion inverses when the native
+  squared norm overflows, underflows or is subnormal. Use native binary scaling
+  and compensated squared norm/division in the private cold helper. Preserve
+  ordinary normal-norm bits and legacy zero/nonfinite input results; do not add
+  a checked invalid/range API or widen arithmetic.
+- Preserve baseline red tests, mixed/subnormal and F32/F64 wrapper controls,
+  exact original-component inverse oracles and both Hamilton product orders.
+  Join inverse payloads before constructing Some once to avoid the reviewed
+  aggregate-result caller regression; guard, arithmetic and helper are unchanged.
+  Keep full performance samples and opaque/cold tradeoffs for independent review.
+
+### Scope
+
+Only core leto advances to 0.46.1. The operations package stays 0.46.0 and the
+already-published Python package stays 0.46.1; their implementations, provider
+requirements, workflows and release settings retain baseline bytes. The existing
+fresh-workspace Moirai requirement conflict remains separately tracked; current
+core providers and the core-only publication/consumer contract are assessed
+independently. Merge/publication requires exact-head independent review and
+current applicable gates plus a freshly verified sole-core release plan.
+The separately owned Moirai public-cohort/workspace prerequisite is also a
+release hold; core-only acceptance does not establish whole-workspace coherence.
+
 ## leto-python 0.46.1 — 2026-10-16
 
 ### Fixed

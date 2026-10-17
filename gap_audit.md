@@ -1,5 +1,87 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## Quaternion inverse intermediate range [patch] — core 0.46.1 held for review
+
+For finite basis q=a, q inverse is 1/a; imaginary bases negate the component.
+f32 powers 2^±80 and f64 powers 2^±600 have exact finite inverses and identity
+products, but baseline squared norm over/underflows first. Preserve the native
+normal-norm path; recover other finite inputs with binary exponent scaling,
+scaled squared norm in [1,16), native product/sum/quotient residual compensation.
+Preserve legacy zero/nonfinite inputs and nonfinite corrected-output fallback.
+No widening, checked range policy, new tolerance or public bound is selected.
+
+Independent review P2 found that joining whole Option values introduces costly
+aggregate stores/reloads in ordinary callers. Select the minimal payload-first
+join: ordinary conjugate/n2 or recover_inverse(self,n2)?, then Some(inverse).
+The predicate, arithmetic and private cold helper stay identical. This removes
+that aggregate join without precision-specific branches or forced inlining.
+Preserve the original checkpoint, unsuccessful alternatives and reviewer patch.
+
+Expanded comparison includes 34936 author and 54544 independent exact cases in
+each debug/opt2/opt3 mode (89480/mode). All returned norm/inverse bits and native/
+wrapped F32/F64 parity match the reviewed head. Finite-input Hamilton product
+bits also match. At opt2/opt3, 128 nonfinite-input downstream product NaN payload/
+sign rows differ; debug has zero. These are not changed inverse return bits or
+finite product errors. The untouched exact Fraction oracle passes; observed
+fallback error is one ulp, ordinary four and product residual four epsilon.
+These samples do not promise universal correct rounding. Twenty regressions
+pass in all modes versus baseline twelve failures/eight controls. Unrepresentable
+inverse outputs retain their separate legacy range policy.
+
+Seven alternating baseline/reviewed-head/repair triples cover opt2/opt3 direct,
+opaque, indirect, stored-input streams and unwrapped-output stores, using Rust
+1.97 and repository thin-LTO/codegen1. No CPU, threshold, inline or lint override.
+Direct mixed f64 opt3 medians: baseline1.24ns, old11.97ns, repair1.22ns. f64 stream
+0.94/1.89/0.94ns and unwrapped store0.96/2.04/0.95ns respectively. Tradeoffs remain:
+maximum ordinary cost versus old+0.53ns (versus baseline+0.53ns/51.06%); opaque
+f32 mixed1.03→1.54ns; indirect f64 cold small quartet27.57→31.46ns. Cold repair
+range6.10-31.48ns. All sampled paths request zero heap after setup. Raw samples,
+assembly and source/flags are preserved. This is warmed local ARM64 evidence,
+not universal latency, whole-mesh throughput or formal heap/stack/cache bounds.
+Independent acceptance of these caller tradeoffs remains a release hold.
+
+Unchanged minimal, strict Clippy, 1222 native tests/zero skips, 33 doctests/one
+ignore and strict docs pass. Final-head locked API, published-core patch API,
+package source/VCS identity, dry-run, fresh typed consumers, normal hosted gates
+and exact-head independent review remain required. Existing hosted locked-source
+API acceptance is not fresh workspace/cohort or publication acceptance.
+
+Only core leto0.46.1 is selected; ops0.46.0/Python0.46.1 retain source/versions.
+No workflow, credentials, limit, service deployment or protected hold changes.
+Both independent performance acceptance and the separate workspace coherence
+prerequisite must be resolved before merge/publication; a sole-core plan alone
+is insufficient. Reassess version/scope if coordinated provider work lands.
+
+## Current Moirai public cohort prerequisite [minor] — owner coordination
+
+Unchanged main requires Moirai^0.9.3 at canonical Git URL; current default is
+0.10.0 (68466225913301d30281b134d42b17c604baf78e). Fresh baseline and reviewed-head
+workspace/raw ops API resolution fails identically. Current core-only consumers
+resolve because they exclude Moirai. Public for_each_task_partition_mut_with and
+for_each_task_partition_mut expose Moirai runtime, policy and ExecutorResult;
+changing their provider's nominal identity is a pre-1.0 breaking cohort boundary.
+
+Active #362 (24a162a1703f14e0a2adc7d647a082d36af09394) owns borrowed CSR/caller
+dispatch and reserves workspace0.47.0, including root requirements and package
+lock versions. #360 (0762c219cbac099f4a158e7e33b5e964a5818b63) also touches shared
+manifests. Prepare a prerequisite, not a competing draft or silent #371 upgrade:
+agree owner and landing/version sequence; preserve canonical URL/features, admit
+0.10 and refresh coherent default providers without older pins; document nominal
+type migration and reconcile Python's already explicit0.46.1 with #362's older
+base. Do not invent another version or automatically republish Python.
+
+A separate copied-main diagnostic changes only the Moirai requirement and drops
+its copied lock for fresh resolution. It is not a versioned release candidate.
+Fresh all-feature workspace metadata and source compilation pass with one
+current Moirai0.10 identity; no Rust edit is needed for that source check. This
+does not establish public typed-consumer/runtime behavior, API or release
+acceptance; preserve the fresh lock/provider evidence and remaining plan.
+Before delivery require fresh whole-workspace checks and positive current-cohort/
+negative old-cohort typed callers; API classification/migration; unchanged full
+native/minimal/Miri/wheel/package gates; dependency identity and provider-first
+release graph; exact-head independent review. Owner coordination is unresolved,
+so production requirements and locks remain untouched in #371.
+
 ## 2026-10-16 Native/extension linkage and macOS wheel loader [patch] — closed
 
 - findings: unconditional PyO3 extension linkage breaks native CPython 3.13 linking; implicit Rust/LLVM stripping misaligns the optimized macOS wheel; unprivileged PR verification previously attempted privileged attestation.
