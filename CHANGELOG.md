@@ -13,12 +13,13 @@
 - Borrow the private cached-norm/recovery boundaries and keep ordinary checked
   reciprocal/multiply visible. After maximum scaling establishes magnitude one,
   reuse the same ordered native FMA sum without a redundant range-safe norm.
-- Preserve all regression/oracle tests, including optimized native/wrapped bits.
-  Nine feasibility variants and seven triples/ten caller contexts disclose
-  remaining O2/indirect costs: a new f32/N3 checked case regresses2.71→14.62ns.
-  O3 stored f64/N17 checked improves24.16→13.74ns; O2 remains24.60ns versus
-  13.23ns baseline. Performance acceptance stays open; zero sampled heap requests
-  are not resource bounds or a global speedup claim.
+- Preserve regression/oracle tests and all nine prior feasibility variants. A
+  bounded follow-up changes only two inlining annotations: O2 stored17D checked
+  24.37→13.57ns (13.27ns baseline), ordinary consumer21.09→12.49ns (10.28ns base).
+  Independent re-review must assess remaining consumer/O3/cold regressions and
+  O2 stored instructions+6336bytes/__TEXT+16KiB. The unchanged PM/image artifact
+  gate does not establish binary acceptance. Zero sampled requested heap is not
+  a resource bound; no global speedup or final performance acceptance claim.
 
 ### Scope
 

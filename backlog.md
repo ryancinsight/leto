@@ -8,7 +8,7 @@
 - priority: correctness
 - implementation: Native scaled ordered FMA recovery; borrow cached norm, no new bound.
 - verification: Original24 tests and threshold contract pass;39124 author vectors and24883 independent threshold inputs/mode retain finite bits/statuses at O0/2/3. The unchanged Decimal oracle and native/wrapped bit assertions pass all modes.
-- costs: Seven triples/ten contexts,1024 zero-requested-heap cases/cohort. O3 direct17D norm16.67→11.38ns; stored checked24.16→13.74ns. O2/indirect costs remain; worst new ordinary regression is2.71→14.62ns for indirect f32/N3.
+- costs: Preserve nine prior variants. Bounded two-annotation follow-up: seven triples/ten contexts,1024 zero-requested-heap cases; O2 stored17D checked24.37→13.57ns versus13.27ns baseline; consumer21.09→12.49ns versus10.28ns. O3 direct normalization and selected cold/ordinary regressions remain; see gap audit.
 - next: Exact-head API/package/hooks/hosted re-review; performance acceptance open.
 
 <a id="LETO-UNIT-CHECKED-FINITE"></a>
@@ -18,9 +18,9 @@
 - owner: Codex; target: core0.46.2 with normalization.
 - priority: correctness
 - policy: Preserve IEEE norm>min_norm and reject zero/empty/nonfinite vectors.
-- implementation: Keep ordinary reciprocal/multiply at checked boundary; borrow exceptional validation and shared cached-norm recovery instead of moving v.
+- implementation: Keep ordinary reciprocal/multiply visible; borrow recovery and apply two reviewed inline(always) annotations to eliminate outlined construction/ordinary recovery-frame cost. Arithmetic and bounds retain bytes.
 - verification:1247 native tests/zero skips; minimal/lint/docs,25 focused Miri tests per strict-provenance borrow model; original tests/oracle unchanged.
-- costs: O2 stored17D checked25.35→24.60ns remains above13.23ns baseline; consumer20.98ns versus10.36ns baseline. Preserve all nine feasibility variants.
+- costs: O2 stored __text+6336bytes, __TEXT+16KiB; consumer __text+1624bytes/segment unchanged. Cold F64/N17 direct O3 checked37.63→44.62ns; ordinary worst new delta+1.17ns. PM/image gate does not accept binary/cache growth; independent performance/resource acceptance stays open.
 - next: Independent correctness/performance re-review and coherent owner release scope; #371 and Moirai/reserved0.47 holds remain. No merge/publication.
 
 <a id="LETO-HISTORICAL-EVIDENCE"></a>

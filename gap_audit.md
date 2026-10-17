@@ -34,13 +34,14 @@ also include16/31/64. No exhaustive IEEE or universal correct-rounding promise.
 Nonfinite direct NaN choices can differ from the reviewed head in the independent
 corpus; preserve exact counts and payload/sign classification in the evidence.
 
-All six local gates pass: strict fmt/minimal/Clippy/docs,1247 native tests/zero
+The prior captured review head passes six local gates: strict fmt/minimal/Clippy/docs,1247 native tests/zero
 skips and33 doctests/one ignore. Focused25-case strict-provenance Miri passes with
 isolation in both borrow models. Hosted configured Miri has a different scope.
-Nine feasibility layouts remain in evidence. The no-cold Option layout fails
+Nine prior feasibility layouts remain in evidence. The no-cold Option layout fails
 its optimized invalid native/wrapped NaN-bit oracle and is rejected unchanged.
 
-Seven alternating baseline/reviewed/selected triples cover O2/O3 direct, opaque,
+The prior captured review head uses seven alternating baseline/reviewed/selected
+triples across O2/O3 direct, opaque,
 indirect, stored and ordinary consumers. O3 stored f64/N17 checked construction
 24.16→13.74ns approaches13.65ns baseline; direct normalization16.67→11.38ns
 versus11.09ns baseline. O3 consumer checked21.61→11.26ns versus10.04ns baseline.
@@ -52,7 +53,39 @@ Selected cold recovery spans3.52–39.88ns; incorrect exceptional baseline resul
 are not targets.1024 warmed heap cases/cohort request zero calls/peak/retained
 bytes. One local ARM64/Rust1.97 compiler/caller matrix does not establish whole-
 product throughput, cache/stack/RSS or universal resource bounds. Keep every raw
-sample/assembly and all adverse variants; no forced inline or CPU overrides.
+sample/assembly and all adverse variants. That prior capture has no production
+forced-inline annotations or CPU overrides.
+
+The bounded follow-up changes only two inlining annotations: checked construction
+and its exceptional validator use inline(always); arithmetic and euclidean.rs are
+unchanged. This intentionally changes the prior inlining decision. Seven fresh
+alternating baseline/prior/candidate triples use the same ten caller contexts,
+Rust1.97 thin-LTO/codegen1 and unchanged harnesses. O2 stored f64/N17 checked
+13.27/24.37/13.57ns and ordinary1024-vector consumer10.28/21.09/12.49ns show the
+constructor-copy boundary improvement. O2 indirect f32/N3 mixed checked
+2.73/11.39/2.71ns removes ordinary recovery-frame cost. These are warmed local samples.
+
+Residuals remain: O3 stored direct f64/N17 normalize10.87/16.29/16.15ns;
+O3 consumer checked10.00/11.40/10.87ns; O3 stored f32/N3 mixed checked
+2.24/2.40/2.73ns. Worst newly measured ordinary delta versus prior is+1.17ns
+(F64/N3 max-axis checked indirect O2); cold F64/N17 largest checked direct O3
+37.63→44.62ns. Cold range3.49–44.62ns; incorrect exceptional baseline is not a
+target. All1024 warmed requested-heap cases remain zero; no stack/RSS bound.
+
+Executable size is a separate open acceptance point. O2 stored instructions grow
+252120→258456bytes (+6336) and __TEXT311296→327680bytes (+16KiB). Ordinary O2
+consumer instructions grow260392→262016bytes (+1624), with __TEXT327680bytes
+unchanged; O3 consumer268240→268156bytes, __TEXT344064bytes unchanged. Ten caller
+sizes and every adverse sample are retained. The actual unchanged artifact gate
+limits PM boards/tracked images, not executable text. No numeric geometry binary
+cap is found; passing that gate cannot accept code growth or cache behavior.
+
+The follow-up preserves25 regressions and39124+24883 inputs/mode at O0/O2/O3:
+finite bits, statuses and invalid classes match the prior captured review head.
+Independent O3 has48 permitted direct NaN payload/sign field differences; other
+mode/corpus pairs have zero. The unchanged Decimal/native-wrapped oracle passes.
+The three inaccurate bare PR-head references now identify captured review/owner
+heads with explicit PR/commit links; four legacy evidence sites remain open.
 
 Exact-head API/package/hooks, hosted checks and independent re-review must be
 assessed before release. The main-only artifact-budget context does not trigger

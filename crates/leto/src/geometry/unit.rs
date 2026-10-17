@@ -61,7 +61,7 @@ impl<T: RealField, const N: usize> Unit<T, N> {
     /// The threshold uses the scalar's ordinary `>` comparison: NaN or positive
     /// infinity rejects, while negative thresholds still admit finite nonzero
     /// vectors. Zero and nonfinite vectors never produce a checked unit value.
-    #[inline]
+    #[inline(always)]
     pub fn try_new(v: Vector<T, N>, min_norm: T) -> Option<Self> {
         let norm = v.norm();
         if !(norm > min_norm && norm > T::ZERO) {
@@ -77,7 +77,7 @@ impl<T: RealField, const N: usize> Unit<T, N> {
 }
 
 #[cold]
-#[inline]
+#[inline(always)]
 fn recover_checked<T: RealField, const N: usize>(
     v: &Vector<T, N>,
     norm: T,

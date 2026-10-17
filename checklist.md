@@ -14,12 +14,13 @@ ops0.46.0/Python0.46.1 unchanged. Both geometry releases retain cohort holds.
     one ignore and25 focused Miri tests in each strict-provenance borrow model.
   - [x] Preserve nine feasibility layouts and seven final alternating triples in
     ten O2/O3 contexts;1024 warmed heap cases/cohort request zero allocations.
-  - [ ] Accept performance tradeoffs: O2/indirect costs remain, including f32/N3
-    checked2.71→14.62ns. No global speedup or resource-bound claim.
+  - [ ] Accept two-annotation follow-up tradeoffs: remaining consumer/O3/cold
+    costs and O2 stored+6336bytes instructions/+16KiB segment; no global speedup.
   - [ ] Finish exact-head API/package, normal hooks/hosted checks and re-review.
 - [ ] **LETO-UNIT-CHECKED-FINITE [patch]**
   - [x] Preserve IEEE threshold comparison and reject zero/empty/nonfinite inputs.
-  - [x] Keep ordinary checked arithmetic visible; borrow only exceptional recovery.
+  - [x] Keep ordinary checked arithmetic visible; inline construction/recovery
+    validation at the two independently diagnosed boundaries without changing math.
   - [x] Reject the no-cold Option experiment when the unchanged oracle detects
     optimized invalid native/wrapped NaN-bit differences; no test weakening.
   - [ ] Independent exact-head performance acceptance and coordinated release scope.
