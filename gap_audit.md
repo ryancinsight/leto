@@ -9,8 +9,9 @@ The scaled maximum is exactly one, so the second maximum scan, divisions by one
 and rescale are redundant. Use the same ordered native scalar_fmadd sum, sqrt and
 reciprocal; dot/norm_squared have different arithmetic and are not substitutes.
 
-Independent review at fed51904 reports two P2 performance issues and no verified
-numerical correctness finding. Keep v*norm.recip() visible at Unit::try_new's
+Independent review of the [prior #372 review head](https://github.com/ryancinsight/leto/pull/372/commits/fed51904f8dbf8a21b0801a401fba857de6860fe)
+reports two P2 performance issues and no verified numerical correctness finding.
+That link identifies the captured PR head, not a landed default/tag revision. Keep v*norm.recip() visible at Unit::try_new's
 ordinary boundary. Its exceptional helper borrows v; the shared cached-norm
 helper also borrows its receiver. Existing legacy fallback arithmetic remains
 inside the original vector recovery path. No public signature/bound, precision,
@@ -125,10 +126,13 @@ resolve because they exclude Moirai. Public for_each_task_partition_mut_with and
 for_each_task_partition_mut expose Moirai runtime, policy and ExecutorResult;
 changing their provider's nominal identity is a pre-1.0 breaking cohort boundary.
 
-Active #362 (24a162a1703f14e0a2adc7d647a082d36af09394) owns borrowed CSR/caller
-dispatch and reserves workspace0.47.0, including root requirements and package
-lock versions. #360 (0762c219cbac099f4a158e7e33b5e964a5818b63) also touches shared
-manifests. Prepare a prerequisite, not a competing draft or silent #371 upgrade:
+At the captured ownership snapshot, [#362](https://github.com/ryancinsight/leto/pull/362)
+at its [review head](https://github.com/ryancinsight/leto/pull/362/commits/24a162a1703f14e0a2adc7d647a082d36af09394)
+owns borrowed CSR/caller dispatch and reserves workspace0.47.0, including root
+requirements and package lock versions. [#360](https://github.com/ryancinsight/leto/pull/360)
+at its [captured PR head](https://github.com/ryancinsight/leto/pull/360/commits/0762c219cbac099f4a158e7e33b5e964a5818b63)
+also touches shared manifests. These links preserve captured PR/head provenance;
+none asserts default-branch or tag reachability. Prepare a prerequisite, not a competing draft or silent #371 upgrade:
 agree owner and landing/version sequence; preserve canonical URL/features, admit
 0.10 and refresh coherent default providers without older pins; document nominal
 type migration and reconcile Python's already explicit0.46.1 with #362's older
@@ -145,6 +149,48 @@ negative old-cohort typed callers; API classification/migration; unchanged full
 native/minimal/Miri/wheel/package gates; dependency identity and provider-first
 release graph; exact-head independent review. Owner coordination is unresolved,
 so production requirements and locks remain untouched in #371.
+
+<a id="leto-historical-evidence-open"></a>
+## Inherited historical evidence [patch] — four sites remain unresolved
+
+The unchanged reference ratchet records four inherited unresolved sites. The
+three PR-head citations above identify review/ownership snapshots as such, rather
+than asserting landed history. All four original bare identifiers remain at their
+historical backlog sites; this preparation neither erases nor resolves them.
+
+- [ ] First [historical integrator-session record](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L325): the source explicitly names a session, not a commit receipt.
+- [ ] Second [historical integrator-session record](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L479): independently retain its unresolved occurrence.
+- [ ] [Windows build-artifact identifier](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L204): the original source names an artifact; the underlying capture is not established here.
+- [ ] [CTC rebuild identifier](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L205): its kind and original evidence are unverified; do not infer a landed commit or recovered receipt.
+
+Earlier CI, package and performance proofs keep their captured heads, including
+this [geometry review snapshot](https://github.com/ryancinsight/leto/commit/bc80e0ae498866e331d7ee41a8671ac9e3293660).
+This unpublished metadata preparation claims no fresh hosted CI, package/VCS or
+performance acceptance; the eventual combined repair head needs its own proofs.
+
+A full-history4→4 result proves only that this detector's count has not grown
+above its recorded baseline. Citation resolution still reports those four sites;
+it is not blanket conformance, historical-provenance, performance or release
+acceptance. The checker, baseline and all required checks remain unchanged.
+
+Ten unique ADR0027 square-transpose raw receipt files are unavailable at their
+documented paths in both checked Atlas trees. Their earlier results and
+limitations remain recorded above/in that ADR; no receipt is recreated or
+claimed present. Recover and verify a relevant original capture, or establish
+fresh applicable evidence, before relying on its historical claim for a current
+decision. The unresolved entry/capture stays open until its actual disposition
+is verified; no claimed historical acceptance transfers to a new graph.
+
+No mandatory historical receipt blocker has been demonstrated for this isolated
+geometry patch: its present numerical/API/package/consumer/performance evidence
+was verified independently of those old CTC/cache/transpose captures. If a
+current release claim depends on an unavailable capture, that missing support
+is a blocker for that claim. Current cohort integration still requires fresh
+whole-workspace/downstream type, value, allocation, performance and release-graph
+proofs. Independent performance acceptance, the required hosted artifact-budget
+context, coherent owner integration and renewed exact-head review/gates remain
+mandatory and open. Owner resumption remains pending; this prepared metadata
+must accompany the next repair head only after the running review returns.
 
 ## 2026-10-16 Native/extension linkage and macOS wheel loader [patch] — closed
 

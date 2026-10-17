@@ -7,12 +7,8 @@
 - owner: Codex; target: core0.46.2 stacked on #371.
 - priority: correctness
 - implementation: Native scaled ordered FMA recovery; borrow cached norm, no new bound.
-- verification: Original24 tests and threshold contract pass;39124 author vectors
-  and24883 independent threshold inputs/mode retain finite bits/statuses at O0/2/3.
-  The unchanged Decimal oracle and native/wrapped bit assertions pass all modes.
-- costs: Seven triples/ten contexts,1024 zero-requested-heap cases/cohort. O3
-  direct17D norm16.67→11.38ns; stored checked24.16→13.74ns. O2/indirect costs
-  remain; worst new ordinary regression is2.71→14.62ns for indirect f32/N3.
+- verification: Original24 tests and threshold contract pass;39124 author vectors and24883 independent threshold inputs/mode retain finite bits/statuses at O0/2/3. The unchanged Decimal oracle and native/wrapped bit assertions pass all modes.
+- costs: Seven triples/ten contexts,1024 zero-requested-heap cases/cohort. O3 direct17D norm16.67→11.38ns; stored checked24.16→13.74ns. O2/indirect costs remain; worst new ordinary regression is2.71→14.62ns for indirect f32/N3.
 - next: Exact-head API/package/hooks/hosted re-review; performance acceptance open.
 
 <a id="LETO-UNIT-CHECKED-FINITE"></a>
@@ -22,14 +18,18 @@
 - owner: Codex; target: core0.46.2 with normalization.
 - priority: correctness
 - policy: Preserve IEEE norm>min_norm and reject zero/empty/nonfinite vectors.
-- implementation: Keep ordinary reciprocal/multiply at checked boundary; borrow
-  exceptional validation and shared cached-norm recovery instead of moving v.
-- verification:1247 native tests/zero skips; minimal/lint/docs,25 focused Miri
-  tests per strict-provenance borrow model; original tests/oracle unchanged.
-- costs: O2 stored17D checked25.35→24.60ns remains above13.23ns baseline;
-  consumer20.98ns versus10.36ns baseline. Preserve all nine feasibility variants.
-- next: Independent correctness/performance re-review and coherent owner release
-  scope; #371 and Moirai/reserved0.47 holds remain. No merge/publication.
+- implementation: Keep ordinary reciprocal/multiply at checked boundary; borrow exceptional validation and shared cached-norm recovery instead of moving v.
+- verification:1247 native tests/zero skips; minimal/lint/docs,25 focused Miri tests per strict-provenance borrow model; original tests/oracle unchanged.
+- costs: O2 stored17D checked25.35→24.60ns remains above13.23ns baseline; consumer20.98ns versus10.36ns baseline. Preserve all nine feasibility variants.
+- next: Independent correctness/performance re-review and coherent owner release scope; #371 and Moirai/reserved0.47 holds remain. No merge/publication.
+
+<a id="LETO-HISTORICAL-EVIDENCE"></a>
+## LETO-HISTORICAL-EVIDENCE — Preserve four unresolved evidence sites [patch]
+
+- status: blocked
+- priority: correctness
+- scope: [Four inherited unresolved sites](gap_audit.md#leto-historical-evidence-open) stay open; ratchet4→4 is only non-increase, not provenance acceptance.
+- next: Preserve originals; recover relevant evidence before dependent claims. Current performance, cohort, hosted-check and exact-head acceptance holds remain.
 
 <a id="LETO-QUATERNION-INVERSE-RANGE"></a>
 ## LETO-QUATERNION-INVERSE-RANGE — Preserve inverse range [patch]

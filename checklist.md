@@ -24,6 +24,15 @@ ops0.46.0/Python0.46.1 unchanged. Both geometry releases retain cohort holds.
     optimized invalid native/wrapped NaN-bit differences; no test weakening.
   - [ ] Independent exact-head performance acceptance and coordinated release scope.
 
+- [ ] **LETO-HISTORICAL-EVIDENCE [patch]**
+  - [ ] First historical integrator-session occurrence remains unresolved.
+  - [ ] Second historical integrator-session occurrence remains unresolved.
+  - [ ] Windows build-artifact identifier's underlying capture remains unverified.
+  - [ ] CTC rebuild identifier's kind/source evidence remains unverified.
+  - [ ] [Verify actual dispositions](gap_audit.md#leto-historical-evidence-open) before closing any item;4→4 only passes the count ratchet.
+  - [ ] Recover relevant original or fresh applicable proof before relying on a
+    dependent historical claim; no unavailable receipt is asserted present.
+
 - [ ] **LETO-QUATERNION-INVERSE-RANGE [patch]**
   - [x] Preserve owner work; reproduce twelve baseline failures/eight controls.
   - [x] Implement native scaled compensated recovery and twenty passing tests.
