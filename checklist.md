@@ -1,6 +1,38 @@
 # Leto Development Checklist
 
-Active isolated target: **core leto 0.46.1**; ops 0.46.0/Python 0.46.1 unchanged.
+Active isolated target: **core leto0.46.2**, stacked on frozen #371;
+ops0.46.0/Python0.46.1 unchanged. Both geometry releases retain cohort holds.
+
+- [ ] **LETO-VECTOR-NORMALIZE-RANGE [patch]**
+  - [x] Preserve20 original failures/four controls and all baseline tests.
+  - [x] Preserve ordinary bits, native precision and legacy invalid classifications.
+  - [x] Replace repeated scaled norm with its same ordered FMA sum; share a
+    borrowed cached-norm helper, retaining direct fallback arithmetic.
+  - [x] Pass39124 author vectors and24883 independent threshold cases/mode,
+    O0/2/3 finite bits/status equivalence and the unchanged Decimal/wrapper oracle.
+  - [x] Pass1247 native tests/zero skips, strict minimal/lint/docs,33 doctests/
+    one ignore and25 focused Miri tests in each strict-provenance borrow model.
+  - [x] Preserve nine feasibility layouts and seven final alternating triples in
+    ten O2/O3 contexts;1024 warmed heap cases/cohort request zero allocations.
+  - [ ] Accept two-annotation follow-up tradeoffs: remaining consumer/O3/cold
+    costs and O2 stored+6336bytes instructions/+16KiB segment; no global speedup.
+  - [ ] Finish exact-head API/package, normal hooks/hosted checks and re-review.
+- [ ] **LETO-UNIT-CHECKED-FINITE [patch]**
+  - [x] Preserve IEEE threshold comparison and reject zero/empty/nonfinite inputs.
+  - [x] Keep ordinary checked arithmetic visible; inline construction/recovery
+    validation at the two independently diagnosed boundaries without changing math.
+  - [x] Reject the no-cold Option experiment when the unchanged oracle detects
+    optimized invalid native/wrapped NaN-bit differences; no test weakening.
+  - [ ] Independent exact-head performance acceptance and coordinated release scope.
+
+- [ ] **LETO-HISTORICAL-EVIDENCE [patch]**
+  - [ ] First historical integrator-session occurrence remains unresolved.
+  - [ ] Second historical integrator-session occurrence remains unresolved.
+  - [ ] Windows build-artifact identifier's underlying capture remains unverified.
+  - [ ] CTC rebuild identifier's kind/source evidence remains unverified.
+  - [ ] [Verify actual dispositions](gap_audit.md#leto-historical-evidence-open) before closing any item;4→4 only passes the count ratchet.
+  - [ ] Recover relevant original or fresh applicable proof before relying on a
+    dependent historical claim; no unavailable receipt is asserted present.
 
 - [ ] **LETO-QUATERNION-INVERSE-RANGE [patch]**
   - [x] Preserve owner work; reproduce twelve baseline failures/eight controls.

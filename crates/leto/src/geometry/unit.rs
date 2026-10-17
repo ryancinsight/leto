@@ -55,15 +55,37 @@ impl<T: RealField, const N: usize> Unit<T, N> {
         }
     }
 
-    /// Normalize `v`, returning `None` if `‖v‖ ≤ min_norm`.
-    #[inline]
+    /// Normalize a finite nonzero `v`, returning `None` otherwise or when
+    /// `‖v‖ ≤ min_norm`.
+    ///
+    /// The threshold uses the scalar's ordinary `>` comparison: NaN or positive
+    /// infinity rejects, while negative thresholds still admit finite nonzero
+    /// vectors. Zero and nonfinite vectors never produce a checked unit value.
+    #[inline(always)]
     pub fn try_new(v: Vector<T, N>, min_norm: T) -> Option<Self> {
-        if v.norm() > min_norm {
-            Some(Self::new_normalize(v))
-        } else {
-            None
+        let norm = v.norm();
+        if !(norm > min_norm && norm > T::ZERO) {
+            return None;
         }
+        let value = if norm.is_finite() && norm.bitand(T::INFINITY) != T::ZERO {
+            v * norm.recip()
+        } else {
+            recover_checked(&v, norm)?
+        };
+        Some(Self { value })
     }
+}
+
+#[cold]
+#[inline(always)]
+fn recover_checked<T: RealField, const N: usize>(
+    v: &Vector<T, N>,
+    norm: T,
+) -> Option<Vector<T, N>> {
+    if !norm.is_finite() && v.data.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    Some(v.normalize_with_norm(norm))
 }
 
 #[cfg(test)]

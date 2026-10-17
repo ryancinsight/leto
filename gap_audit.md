@@ -1,5 +1,103 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## Unit directions and checked input invariant [patch] — core0.46.2 under review
+
+Finite tiny bases and equal maximum components have finite unit directions even
+when reciprocal length or scalar length overflows. Preserve ordinary reciprocal/
+multiply bits; scale exceptional finite input by max(abs(v)). Scaling cancels.
+The scaled maximum is exactly one, so the second maximum scan, divisions by one
+and rescale are redundant. Use the same ordered native scalar_fmadd sum, sqrt and
+reciprocal; dot/norm_squared have different arithmetic and are not substitutes.
+
+Independent review of the [prior #372 review head](https://github.com/ryancinsight/leto/pull/372/commits/fed51904f8dbf8a21b0801a401fba857de6860fe)
+reports two P2 performance issues and no verified numerical correctness finding.
+That link identifies the captured PR head, not a landed default/tag revision. Keep v*norm.recip() visible at Unit::try_new's
+ordinary boundary. Its exceptional helper borrows v; the shared cached-norm
+helper also borrows its receiver. Existing legacy fallback arithmetic remains
+inside the original vector recovery path. No public signature/bound, precision,
+allocation, provider/lock, test, limit, profile, workflow or setting changes.
+
+Keep norm>min_norm IEEE comparison and positive norm requirement. Reject zero,
+empty and nonfinite checked inputs; infinite norm may instead mean finite input
+whose length overflows. Native finite component validation distinguishes those
+cases. NaN/+infinity thresholds reject; valid negative thresholds retain behavior.
+Direct zero/nonfinite classifications and portable-oracle native/wrapped bit
+parity are retained.
+
+Original20 red regressions/four controls and all existing tests remain unchanged.
+Selected source passes39124 author vectors and24883 independent threshold inputs
+per O0/O2/O3 mode, retaining every finite output bit and checked status. The
+unchanged portable Decimal100-digit oracle passes all modes, including its exact
+native/wrapped assertions. Observed component error≤2epsilon and squared-unit
+residual≤4epsilon in its tested dimensions0/1/2/3/4/8/17. Independent dimensions
+also include16/31/64. No exhaustive IEEE or universal correct-rounding promise.
+Nonfinite direct NaN choices can differ from the reviewed head in the independent
+corpus; preserve exact counts and payload/sign classification in the evidence.
+
+The prior captured review head passes six local gates: strict fmt/minimal/Clippy/docs,1247 native tests/zero
+skips and33 doctests/one ignore. Focused25-case strict-provenance Miri passes with
+isolation in both borrow models. Hosted configured Miri has a different scope.
+Nine prior feasibility layouts remain in evidence. The no-cold Option layout fails
+its optimized invalid native/wrapped NaN-bit oracle and is rejected unchanged.
+
+The prior captured review head uses seven alternating baseline/reviewed/selected
+triples across O2/O3 direct, opaque,
+indirect, stored and ordinary consumers. O3 stored f64/N17 checked construction
+24.16→13.74ns approaches13.65ns baseline; direct normalization16.67→11.38ns
+versus11.09ns baseline. O3 consumer checked21.61→11.26ns versus10.04ns baseline.
+Material costs remain: O2 stored checked25.35→24.60ns versus13.23ns baseline;
+O2 consumer20.98ns versus10.36ns baseline; O3 stored direct norm16.54ns versus
+10.85ns baseline. New worst ordinary regression is O2 indirect f32/N3 checked
+2.71→14.62ns (baseline2.77ns). Performance acceptance remains open.
+Selected cold recovery spans3.52–39.88ns; incorrect exceptional baseline results
+are not targets.1024 warmed heap cases/cohort request zero calls/peak/retained
+bytes. One local ARM64/Rust1.97 compiler/caller matrix does not establish whole-
+product throughput, cache/stack/RSS or universal resource bounds. Keep every raw
+sample/assembly and all adverse variants. That prior capture has no production
+forced-inline annotations or CPU overrides.
+
+The bounded follow-up changes only two inlining annotations: checked construction
+and its exceptional validator use inline(always); arithmetic and euclidean.rs are
+unchanged. This intentionally changes the prior inlining decision. Seven fresh
+alternating baseline/prior/candidate triples use the same ten caller contexts,
+Rust1.97 thin-LTO/codegen1 and unchanged harnesses. O2 stored f64/N17 checked
+13.27/24.37/13.57ns and ordinary1024-vector consumer10.28/21.09/12.49ns show the
+constructor-copy boundary improvement. O2 indirect f32/N3 mixed checked
+2.73/11.39/2.71ns removes ordinary recovery-frame cost. These are warmed local samples.
+
+Residuals remain: O3 stored direct f64/N17 normalize10.87/16.29/16.15ns;
+O3 consumer checked10.00/11.40/10.87ns; O3 stored f32/N3 mixed checked
+2.24/2.40/2.73ns. Worst newly measured ordinary delta versus prior is+1.17ns
+(F64/N3 max-axis checked indirect O2); cold F64/N17 largest checked direct O3
+37.63→44.62ns. Cold range3.49–44.62ns; incorrect exceptional baseline is not a
+target. All1024 warmed requested-heap cases remain zero; no stack/RSS bound.
+
+Executable size is a separate open acceptance point. O2 stored instructions grow
+252120→258456bytes (+6336) and __TEXT311296→327680bytes (+16KiB). Ordinary O2
+consumer instructions grow260392→262016bytes (+1624), with __TEXT327680bytes
+unchanged; O3 consumer268240→268156bytes, __TEXT344064bytes unchanged. Ten caller
+sizes and every adverse sample are retained. The actual unchanged artifact gate
+limits PM boards/tracked images, not executable text. No numeric geometry binary
+cap is found; passing that gate cannot accept code growth or cache behavior.
+
+The follow-up preserves25 regressions and39124+24883 inputs/mode at O0/O2/O3:
+finite bits, statuses and invalid classes match the prior captured review head.
+Independent O3 has48 permitted direct NaN payload/sign field differences; other
+mode/corpus pairs have zero. The unchanged Decimal/native-wrapped oracle passes.
+The three inaccurate bare PR-head references now identify captured review/owner
+heads with explicit PR/commit links; four legacy evidence sites remain open.
+
+Exact-head API/package/hooks, hosted checks and independent re-review must be
+assessed before release. The main-only artifact-budget context does not trigger
+on this stacked PR base; a local hook does not replace that hosted requirement.
+Only core0461→0462 is planned; ops0460/Python0461 and providers retain bytes.
+This draft remains stacked on frozen #371, held for the existing owner's reserved
+0.47/Moirai0.10 cohort. Owner resumption is pending; no contact or owner edit here.
+Preserve Atlas544, Eunomia182, Consus raster authentication, RITK836, Coeus584/585,
+Apollo LaneBuffer/service holds, open Gaia NEXTEST_PIPE and unverified Coeus Miri.
+Renew classification, exact-head gates/review and publication scope after coherent
+owner integration. No merge, publication, credentials or service deployment.
+
 ## Quaternion inverse intermediate range [patch] — core 0.46.1 held for review
 
 For finite basis q=a, q inverse is 1/a; imaginary bases negate the component.
@@ -61,10 +159,13 @@ resolve because they exclude Moirai. Public for_each_task_partition_mut_with and
 for_each_task_partition_mut expose Moirai runtime, policy and ExecutorResult;
 changing their provider's nominal identity is a pre-1.0 breaking cohort boundary.
 
-Active #362 (24a162a1703f14e0a2adc7d647a082d36af09394) owns borrowed CSR/caller
-dispatch and reserves workspace0.47.0, including root requirements and package
-lock versions. #360 (0762c219cbac099f4a158e7e33b5e964a5818b63) also touches shared
-manifests. Prepare a prerequisite, not a competing draft or silent #371 upgrade:
+At the captured ownership snapshot, [#362](https://github.com/ryancinsight/leto/pull/362)
+at its [review head](https://github.com/ryancinsight/leto/pull/362/commits/24a162a1703f14e0a2adc7d647a082d36af09394)
+owns borrowed CSR/caller dispatch and reserves workspace0.47.0, including root
+requirements and package lock versions. [#360](https://github.com/ryancinsight/leto/pull/360)
+at its [captured PR head](https://github.com/ryancinsight/leto/pull/360/commits/0762c219cbac099f4a158e7e33b5e964a5818b63)
+also touches shared manifests. These links preserve captured PR/head provenance;
+none asserts default-branch or tag reachability. Prepare a prerequisite, not a competing draft or silent #371 upgrade:
 agree owner and landing/version sequence; preserve canonical URL/features, admit
 0.10 and refresh coherent default providers without older pins; document nominal
 type migration and reconcile Python's already explicit0.46.1 with #362's older
@@ -81,6 +182,48 @@ negative old-cohort typed callers; API classification/migration; unchanged full
 native/minimal/Miri/wheel/package gates; dependency identity and provider-first
 release graph; exact-head independent review. Owner coordination is unresolved,
 so production requirements and locks remain untouched in #371.
+
+<a id="leto-historical-evidence-open"></a>
+## Inherited historical evidence [patch] — four sites remain unresolved
+
+The unchanged reference ratchet records four inherited unresolved sites. The
+three PR-head citations above identify review/ownership snapshots as such, rather
+than asserting landed history. All four original bare identifiers remain at their
+historical backlog sites; this preparation neither erases nor resolves them.
+
+- [ ] First [historical integrator-session record](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L325): the source explicitly names a session, not a commit receipt.
+- [ ] Second [historical integrator-session record](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L479): independently retain its unresolved occurrence.
+- [ ] [Windows build-artifact identifier](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L204): the original source names an artifact; the underlying capture is not established here.
+- [ ] [CTC rebuild identifier](https://github.com/ryancinsight/leto/blob/bc80e0ae498866e331d7ee41a8671ac9e3293660/backlog.md#L205): its kind and original evidence are unverified; do not infer a landed commit or recovered receipt.
+
+Earlier CI, package and performance proofs keep their captured heads, including
+this [geometry review snapshot](https://github.com/ryancinsight/leto/commit/bc80e0ae498866e331d7ee41a8671ac9e3293660).
+This unpublished metadata preparation claims no fresh hosted CI, package/VCS or
+performance acceptance; the eventual combined repair head needs its own proofs.
+
+A full-history4→4 result proves only that this detector's count has not grown
+above its recorded baseline. Citation resolution still reports those four sites;
+it is not blanket conformance, historical-provenance, performance or release
+acceptance. The checker, baseline and all required checks remain unchanged.
+
+Ten unique ADR0027 square-transpose raw receipt files are unavailable at their
+documented paths in both checked Atlas trees. Their earlier results and
+limitations remain recorded above/in that ADR; no receipt is recreated or
+claimed present. Recover and verify a relevant original capture, or establish
+fresh applicable evidence, before relying on its historical claim for a current
+decision. The unresolved entry/capture stays open until its actual disposition
+is verified; no claimed historical acceptance transfers to a new graph.
+
+No mandatory historical receipt blocker has been demonstrated for this isolated
+geometry patch: its present numerical/API/package/consumer/performance evidence
+was verified independently of those old CTC/cache/transpose captures. If a
+current release claim depends on an unavailable capture, that missing support
+is a blocker for that claim. Current cohort integration still requires fresh
+whole-workspace/downstream type, value, allocation, performance and release-graph
+proofs. Independent performance acceptance, the required hosted artifact-budget
+context, coherent owner integration and renewed exact-head review/gates remain
+mandatory and open. Owner resumption remains pending; this prepared metadata
+must accompany the next repair head only after the running review returns.
 
 ## 2026-10-16 Native/extension linkage and macOS wheel loader [patch] — closed
 

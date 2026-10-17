@@ -66,10 +66,21 @@ impl<T: RealField, const N: usize> Vector<T, N> {
     /// Unit vector in the same direction, `self / ‖self‖`.
     ///
     /// Matches `leto::normalize`: a zero-length input yields a non-finite
-    /// result rather than panicking.
+    /// result rather than panicking. Finite nonzero inputs use scaled
+    /// components when the length is subnormal or outside the scalar range.
     #[inline]
     pub fn normalize(self) -> Self {
-        self * self.norm().recip()
+        self.normalize_with_norm(self.norm())
+    }
+
+    /// Reuse the computed length without moving the caller's vector.
+    #[inline]
+    pub(in crate::geometry) fn normalize_with_norm(&self, norm: T) -> Self {
+        if norm.is_finite() && norm.bitand(T::INFINITY) != T::ZERO {
+            *self * norm.recip()
+        } else {
+            recover_direction(self, norm)
+        }
     }
 
     /// Distance to `other`.
@@ -83,6 +94,29 @@ impl<T: RealField, const N: usize> Vector<T, N> {
     pub fn distance_squared(self, other: Self) -> T {
         (self - other).norm_squared()
     }
+}
+
+/// Scaling cancels in v/|v|, so neither |v| nor its reciprocal must fit in T.
+#[inline]
+fn recover_direction<T: RealField, const N: usize>(v: &Vector<T, N>, norm: T) -> Vector<T, N> {
+    let mut scale = T::ZERO;
+    for value in v.data {
+        if !value.is_finite() {
+            return *v * norm.recip();
+        }
+        scale = scale.max(value.abs());
+    }
+    if scale == T::ZERO {
+        return *v * norm.recip();
+    }
+    let scaled = *v / scale;
+    // Maximum scaled magnitude is exactly one; retain norm's ordered native
+    // FMA sum without another maximum scan or division by one.
+    let mut sum = T::ZERO;
+    for &component in &scaled.data {
+        sum = component.scalar_fmadd(component, sum);
+    }
+    scaled * sum.sqrt().recip()
 }
 
 /// 3-vector cross product and canonical axes.
