@@ -20,7 +20,7 @@ use pyo3::prelude::*;
 pub(crate) fn det_py(py: Python<'_>, a: PyReadonlyArray2<'_, f64>) -> PyResult<f64> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    py.allow_threads(|| det(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))
+    py.detach(|| det(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))
 }
 
 #[pyfunction]
@@ -31,8 +31,7 @@ pub(crate) fn inv_py<'py>(
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let out_arr =
-        py.allow_threads(|| inv(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let out_arr = py.detach(|| inv(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let shape = [out_arr.shape()[0], out_arr.shape()[1]];
     array_into_numpy2(py, out_arr, shape)
 }
@@ -48,9 +47,8 @@ pub(crate) fn solve_py<'py>(
     require_contiguous_1d(&b, "b")?;
     let a_view = view_from_numpy(&a)?;
     let b_view = view_from_numpy_1d(&b)?;
-    let out_arr = py.allow_threads(|| {
-        solve(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let out_arr =
+        py.detach(|| solve(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     array_into_numpy1(py, out_arr)
 }
 
@@ -62,9 +60,8 @@ pub(crate) fn cholesky_py<'py>(
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py.allow_threads(|| {
-        cholesky_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let decomp = py
+        .detach(|| cholesky_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let lower = decomp.lower().clone();
     let shape = [lower.shape()[0], lower.shape()[1]];
     array_into_numpy2(py, lower, shape)
@@ -82,7 +79,7 @@ pub(crate) fn cholesky_solve_py<'py>(
     require_contiguous_1d(&b, "b")?;
     let a_view = view_from_numpy(&a)?;
     let b_view = view_from_numpy_1d(&b)?;
-    let out_arr = py.allow_threads(|| {
+    let out_arr = py.detach(|| {
         cholesky_solve(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
     array_into_numpy1(py, out_arr)
@@ -97,9 +94,8 @@ pub(crate) fn cholesky_inv_py<'py>(
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let out_arr = py.allow_threads(|| {
-        cholesky_inv(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let out_arr =
+        py.detach(|| cholesky_inv(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let shape = [out_arr.shape()[0], out_arr.shape()[1]];
     array_into_numpy2(py, out_arr, shape)
 }
@@ -112,9 +108,8 @@ pub(crate) fn qr_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py.allow_threads(|| {
-        qr_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let decomp =
+        py.detach(|| qr_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let q = decomp.q();
     let r = decomp.r();
     let q_shape = [q.shape()[0], q.shape()[1]];
@@ -137,7 +132,7 @@ pub(crate) fn col_piv_qr_py<'py>(
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp =
-        py.allow_threads(|| col_piv_qr(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+        py.detach(|| col_piv_qr(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let q = decomp.q();
     let r = decomp.r();
     let perm = decomp
@@ -165,9 +160,8 @@ pub(crate) fn svd_py<'py>(
 )> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py.allow_threads(|| {
-        svd_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let decomp =
+        py.detach(|| svd_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
 
     let u = decomp.left_singular_vectors;
     let s = Array1::from_shape_vec([decomp.singular_values.len()], decomp.singular_values)
@@ -197,7 +191,7 @@ pub(crate) fn symmetric_eigen_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray2<f64>>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py.allow_threads(|| {
+    let decomp = py.detach(|| {
         symmetric_eigen_jacobi(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
 
@@ -220,9 +214,8 @@ pub(crate) fn singular_values_py<'py>(
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let s_vals = py.allow_threads(|| {
-        singular_values(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let s_vals =
+        py.detach(|| singular_values(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let s = Array1::from_shape_vec([s_vals.len()], s_vals)
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
     array_into_numpy1(py, s)
@@ -237,7 +230,7 @@ pub(crate) fn norm_py(
 ) -> PyResult<f64> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    py.allow_threads(|| {
+    py.detach(|| {
         let ord_str = ord.unwrap_or("fro");
         match ord_str {
             "1" | "l1" => norm_l1(&a_view).map_err(|e| PyValueError::new_err(e.to_string())),
@@ -260,8 +253,7 @@ pub(crate) fn schur_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp =
-        py.allow_threads(|| schur(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let decomp = py.detach(|| schur(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let q = decomp.q();
     let t = decomp.t();
     let q_shape = [q.shape()[0], q.shape()[1]];
@@ -283,9 +275,8 @@ pub(crate) fn bunch_kaufman_py<'py>(
 )> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py.allow_threads(|| {
-        bunch_kaufman(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let decomp =
+        py.detach(|| bunch_kaufman(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let l = decomp.l();
     let d = decomp.d();
     let perm = decomp
@@ -310,7 +301,7 @@ pub(crate) fn matexp_py<'py>(
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let out_arr =
-        py.allow_threads(|| matexp(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+        py.detach(|| matexp(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let shape = [out_arr.shape()[0], out_arr.shape()[1]];
     array_into_numpy2(py, out_arr, shape)
 }
@@ -326,9 +317,8 @@ pub(crate) fn kron_py<'py>(
     require_contiguous_2d(&b, "b")?;
     let a_view = view_from_numpy(&a)?;
     let b_view = view_from_numpy(&b)?;
-    let out_arr = py.allow_threads(|| {
-        kron(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let out_arr =
+        py.detach(|| kron(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let shape = [out_arr.shape()[0], out_arr.shape()[1]];
     array_into_numpy2(py, out_arr, shape)
 }
@@ -338,7 +328,7 @@ pub(crate) fn kron_py<'py>(
 pub(crate) fn trace_py(py: Python<'_>, a: PyReadonlyArray2<'_, f64>) -> PyResult<f64> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    py.allow_threads(|| trace(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))
+    py.detach(|| trace(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))
 }
 
 /// Hessenberg reduction `A = Q H Qᵀ`. Returns `(Q, H)`.
@@ -351,7 +341,7 @@ pub(crate) fn hessenberg_py<'py>(
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
     let decomp =
-        py.allow_threads(|| hessenberg(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+        py.detach(|| hessenberg(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let q = decomp.q().clone();
     let h = decomp.h().clone();
     let q_shape = [q.shape()[0], q.shape()[1]];
@@ -370,8 +360,8 @@ pub(crate) fn eigenvalues_py<'py>(
 ) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let vals = py
-        .allow_threads(|| eigenvalues(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let vals =
+        py.detach(|| eigenvalues(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let out: Vec<Complex64> = vals
         .into_iter()
         .map(|c| Complex64::new(c.re, c.im))
@@ -393,8 +383,8 @@ pub(crate) fn full_piv_lu_py<'py>(
 )> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py
-        .allow_threads(|| full_piv_lu(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
+    let decomp =
+        py.detach(|| full_piv_lu(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let l = decomp.l();
     let u = decomp.u();
     let row: Vec<u64> = decomp.row_permutation().iter().map(|&x| x as u64).collect();
@@ -420,9 +410,8 @@ pub(crate) fn udu_py<'py>(
 ) -> PyResult<(Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>)> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py.allow_threads(|| {
-        udu_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let decomp =
+        py.detach(|| udu_decompose(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let u = decomp.u();
     let u_shape = [u.shape()[0], u.shape()[1]];
     let d = decomp.diagonal().to_vec();
@@ -443,9 +432,8 @@ pub(crate) fn bidiagonalize_py<'py>(
 )> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    let decomp = py.allow_threads(|| {
-        bidiagonalize(&a_view).map_err(|e| PyValueError::new_err(e.to_string()))
-    })?;
+    let decomp =
+        py.detach(|| bidiagonalize(&a_view).map_err(|e| PyValueError::new_err(e.to_string())))?;
     let u = decomp.u().clone();
     let b = decomp.b().clone();
     let v = decomp.v().clone();

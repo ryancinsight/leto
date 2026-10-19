@@ -6,7 +6,7 @@ and `nalgebra` usage as the shared non-differentiable memory, layout, and
 dense-linear-algebra vocabulary between Atlas spectral transforms (`apollo`)
 and tensor/autodiff systems (`coeus`, the Atlas replacement for `burn`).
 
-Leto/Leto-ops 0.46 follows the Eunomia 0.10 provider cohort. Direct Rust
+Leto/Leto-ops 0.47 follows the Eunomia 0.10 and Moirai 0.10 provider cohort. Direct Rust
 consumers advance numeric, SIMD, comparison and allocation requirements
 alongside Leto; numerical kernels and layouts remain unchanged. The
 [source-identity decision](docs/adr/0029-provider-source-identity-during-coevolution.md)
@@ -33,6 +33,11 @@ selection; accelerator attention kernels belong to Hephaestus. Leto's
 conformance (ADR 0022), not production optimizer ownership. Apollo owns
 Fourier, spectral, and transform kernels. `themis` and `melinoe` are consumed
 indirectly via `mnemosyne`/`moirai`, not as direct leto dependencies.
+
+The accepted [borrowed CSR forward contract](docs/adr/0036-borrowed-csr-product-contract.md)
+provides checked signed indices, stored entry order, separate rounding and
+caller-scheduled rows for Coeus. Existing canonical `usize` constructors and
+legacy scalar/SIMD product behavior remain supported.
 
 ## Naming
 
@@ -364,7 +369,7 @@ comparisons remain in the Criterion targets.
   (`gap_audit.md` §D).
 
 The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
-`gap_audit.md`; the tracked migration plan lives in `checklist.md` and
+`gap_audit.md`; the tracked migration plan lives in `docs/verification/provider-migration-checklist.md` and
 `backlog.md`.
 
 ## Dependency Policy

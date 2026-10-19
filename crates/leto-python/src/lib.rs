@@ -13,7 +13,9 @@ mod support;
 
 use pyo3::prelude::*;
 
-#[pymodule]
+// Preserve the GIL-required module contract from PyO3 0.23. The new PyO3
+// default advertises free-threaded support, which needs a separate audit.
+#[pymodule(gil_used = true)]
 fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     elementwise::register(m)?;
     linalg::register(m)?;

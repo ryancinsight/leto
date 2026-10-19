@@ -1,0 +1,203 @@
+//! Prepared borrowed CSR descriptors and their scoped output bindings.
+
+use super::{CsrArithmetic, CsrRowTask, DynamicWidth, ProductWidth};
+use crate::application::sparse::{Canonical, CsrIndex, CsrOrdering, CsrView};
+use crate::domain::strategy::ScalarStrategy;
+use core::marker::PhantomData;
+use eunomia::NumericElement;
+use leto::{LetoError, Result};
+
+/// Prepared `m*k` CSR times contiguous row-major `k*n` dense multiplication.
+///
+/// Borrows all original input slices. Preparation checks all shape arithmetic;
+/// binding checks output length before any mutation. Each row is computed by
+/// one authoritative provider kernel, independently of the execution policy.
+///
+/// ```
+/// use leto_ops::{CsrProduct, CsrView, ScalarStrategy, StoredOrder};
+/// let values = [3i64, 5];
+/// let columns = [1i64, 0];
+/// let offsets = [0i64, 2, 2];
+/// let view = CsrView::builder(&values, &columns, &offsets, 2, 2)
+///     .with_order::<StoredOrder>().build()?;
+/// let mut output = [-1; 2];
+/// CsrProduct::<_, _, _, ScalarStrategy>::prepare(view, &[7, 11], 1)?
+///     .execute(&mut output)?;
+/// assert_eq!(output, [68, 0]); // 3*11 + 5*7, followed by an empty row.
+/// # Ok::<(), leto::LetoError>(())
+/// ```
+///
+/// Borrowed RHS storage cannot expire before execution:
+/// ```compile_fail
+/// use leto_ops::{CsrProduct, CsrView, ScalarStrategy};
+/// let view = CsrView::from_slices(&[3i64], &[0], &[0, 1], 1, 1).unwrap();
+/// let product = {
+///     let rhs = vec![7i64];
+///     CsrProduct::<_, _, _, ScalarStrategy>::prepare(view, &rhs, 1).unwrap()
+/// };
+/// product.execute(&mut [0]).unwrap();
+/// ```
+#[derive(Debug)]
+pub struct CsrProduct<
+    'a,
+    T: NumericElement,
+    I: CsrIndex = usize,
+    O: CsrOrdering = Canonical,
+    A: CsrArithmetic<T> = ScalarStrategy,
+    W: ProductWidth = DynamicWidth,
+> {
+    pub(super) view: CsrView<'a, T, I, O>,
+    pub(super) rhs: &'a [T],
+    pub(super) width: W::Value,
+    pub(super) output_len: usize,
+    pub(super) arithmetic: PhantomData<A>,
+}
+
+// A is a type-level arithmetic selection, never an owned strategy value. A
+// descriptor copy duplicates only shared borrows/dimensions, so it must not
+// require (or add) Copy on the existing public strategy types.
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth> Copy
+    for CsrProduct<'_, T, I, O, A, W>
+{
+}
+
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth> Clone
+    for CsrProduct<'_, T, I, O, A, W>
+{
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<'a, T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth>
+    CsrProduct<'a, T, I, O, A, W>
+{
+    /// Check exact dense shape and representable input/output element counts.
+    /// No allocation occurs for a valid request.
+    ///
+    /// # Errors
+    /// [`LetoError::StorageError`] for count overflow; [`LetoError::ShapeMismatch`]
+    /// for an RHS length other than `view.ncols() * rhs_columns`, or a fixed
+    /// width that differs from `rhs_columns`.
+    #[inline]
+    pub fn prepare(view: CsrView<'a, T, I, O>, rhs: &'a [T], rhs_columns: usize) -> Result<Self> {
+        let width = W::checked(rhs_columns)?;
+        let rhs_columns = W::get(width);
+        let count = |rows: usize| {
+            rows.checked_mul(rhs_columns)
+                .ok_or_else(|| LetoError::StorageError {
+                    reason: "CSR product element count overflows usize".into(),
+                })
+        };
+        let output_len = count(view.nrows())?;
+        let rhs_len = count(view.ncols())?;
+        if rhs.len() != rhs_len {
+            return Err(LetoError::ShapeMismatch {
+                lhs: vec![rhs.len()],
+                rhs: vec![rhs_len],
+            });
+        }
+        Ok(Self {
+            view,
+            rhs,
+            width,
+            output_len,
+            arithmetic: PhantomData,
+        })
+    }
+
+    /// Bind initialized output storage exclusively without writing it.
+    ///
+    /// # Errors
+    /// [`LetoError::ShapeMismatch`] unless output has exactly `m*n` elements.
+    #[inline]
+    pub fn bind_output<'o>(&self, output: &'o mut [T]) -> Result<CsrOutput<'a, 'o, T, I, O, A, W>> {
+        if output.len() != self.output_len {
+            return Err(LetoError::ShapeMismatch {
+                lhs: vec![output.len()],
+                rhs: vec![self.output_len],
+            });
+        }
+        Ok(CsrOutput {
+            product: *self,
+            output,
+        })
+    }
+
+    /// Overwrite the complete output serially through the common row task.
+    ///
+    /// # Errors
+    /// [`LetoError::ShapeMismatch`] on a wrong output length, before any write.
+    #[inline]
+    pub fn execute(&self, output: &mut [T]) -> Result<()> {
+        let bound = self.bind_output(output)?;
+        // SAFETY: the loop invokes each in-range row once synchronously. Task
+        // copies never escape; the binding keeps inputs/output borrowed.
+        unsafe {
+            bound.dispatch_with(|rows, task| {
+                for row in 0..rows {
+                    task.run(row);
+                }
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Exclusively borrowed destination for a prepared CSR product.
+///
+/// The destination contains initialized `T` values before binding. Computation
+/// initializes every row accumulator with the additive identity and overwrites
+/// every destination slot with its completed value. A vector uses one local
+/// accumulator; wider rows accumulate directly into the destination.
+///
+/// A live output binding excludes other mutable access:
+/// ```compile_fail
+/// use leto_ops::{CsrProduct, CsrView, ScalarStrategy};
+/// let view = CsrView::from_slices(&[3i64], &[0], &[0, 1], 1, 1).unwrap();
+/// let product = CsrProduct::<_, _, _, ScalarStrategy>::prepare(view, &[7], 1).unwrap();
+/// let mut output = [0];
+/// let bound = product.bind_output(&mut output).unwrap();
+/// output[0] = 9;
+/// unsafe { bound.dispatch_with(|_, task| task.run(0)); }
+/// ```
+#[derive(Debug)]
+pub struct CsrOutput<
+    'a,
+    'o,
+    T: NumericElement,
+    I: CsrIndex,
+    O: CsrOrdering,
+    A: CsrArithmetic<T>,
+    W: ProductWidth = DynamicWidth,
+> {
+    pub(super) product: CsrProduct<'a, T, I, O, A, W>,
+    pub(super) output: &'o mut [T],
+}
+
+impl<T: NumericElement, I: CsrIndex, O: CsrOrdering, A: CsrArithmetic<T>, W: ProductWidth>
+    CsrOutput<'_, '_, T, I, O, A, W>
+{
+    /// Dispatch the prepared row task within this synchronous borrow scope.
+    /// Returns the dispatcher's result unchanged, including errors.
+    ///
+    /// # Safety
+    /// On success invoke every row in `0..m` exactly once, and no other row.
+    /// On error/panic any subset may run, at most once per row. All admitted
+    /// callbacks must finish before this call returns **or unwinds**, and no
+    /// task copy may be used afterward. Keep shared inputs immutable/alive and
+    /// do not access output through another alias until dispatch completes.
+    /// This obligation includes joining workers whose callbacks unwind.
+    ///
+    /// The erased task lifetime accommodates `'static` backend callbacks; it
+    /// does not extend any allocation's lifetime. See [`CsrRowTask::run`].
+    #[inline]
+    pub unsafe fn dispatch_with<R>(
+        self,
+        dispatch: impl FnOnce(usize, CsrRowTask<T, I, A, W>) -> R,
+    ) -> R {
+        let task = CsrRowTask::new(&self.product, self.output.as_mut_ptr());
+        dispatch(self.product.view.nrows(), task)
+    }
+}

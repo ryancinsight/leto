@@ -1,6 +1,6 @@
 //! Fixtures shared by the binding test modules.
 //!
-//! `pyo3::prepare_freethreaded_python` must run exactly once per process and
+//! `pyo3::Python::initialize` must run exactly once per process and
 //! before any test touches the interpreter, which is why it lives here rather
 //! than being repeated: nextest runs test binaries in parallel processes, but
 //! the tests within one binary share an interpreter.
@@ -12,7 +12,7 @@ use std::sync::Once;
 static INIT_PYTHON: Once = Once::new();
 
 pub(crate) fn prepare_python() {
-    INIT_PYTHON.call_once(pyo3::prepare_freethreaded_python);
+    INIT_PYTHON.call_once(pyo3::Python::initialize);
 }
 
 pub(crate) fn array2<'py>(py: Python<'py>, values: &[Vec<f32>]) -> Bound<'py, PyArray2<f32>> {

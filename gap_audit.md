@@ -1,5 +1,36 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-19 — Python provider continuation [minor] — review
+
+Current PyO3/NumPy migration retains the owner CSR/Moirai/linkage changes and
+explicit GIL contract. Python3.14 joins the guarded matrix; the old forward
+compatibility suppression is removed. Binding target0.47.0 preserves the
+published0.46.1 identity. All1,223 native and39 wheel tests per3.9/3.14 endpoint
+pass; [scope and remaining gates](docs/verification/python-030-cohort.md) retain
+exact-head review, hosted/platform acceptance and Aequitas141 renewal.
+
+## 2026-10-15 — Borrowed CSR source contracts close
+
+Checked signed/stored-order views, separate native arithmetic, complete row
+writes and synchronous dispatch replace duplicated consumer forward math.
+Checked fixed metadata and fused row validation preserve error priority and
+one recurrence. The complete original source record is retained in the
+[historical diagnostic record](docs/verification/native-diagnostics-history.md).
+Its native, strict-feature, docs/API, memory and ARM32 results and the consumer
+timings below remain historical, scoped to the recorded CSR revisions.
+[CSR verification](docs/verification/csr-forward-contract.md) retains the original
+acceptance evidence; current Moirai 0.10 provider gates remain revision-scoped.
+
+Coeus retains exact selected-backend row dispatch. Its final tested SpMV cost
+is about 2–3% in three cases, with large sequential SpMV near parity; Moirai
+SpMM ratios span 0.093–0.299. Earlier adverse timing remains revision-scoped.
+Full consumer ARM32/i686 still stops at upstream alignment assertions. Fresh
+final Leto executes real borrowed products, but Coeus defaults still reject
+unmerged Apollo ^0.29.2. Review, final hosted receipts and provider-first
+availability remain concrete actions in LETO-CSR-FORWARD-CONTRACT. No main
+merge, release, hidden safety-option change or owned-CSR representation change
+is part of this increment. Coeus #531 stays intact.
+
 ## 2026-10-16 Native/extension linkage and macOS wheel loader [patch] — closed
 
 - findings: unconditional PyO3 extension linkage breaks native CPython 3.13 linking; implicit Rust/LLVM stripping misaligns the optimized macOS wheel; unprivileged PR verification previously attempted privileged attestation.

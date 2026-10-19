@@ -109,10 +109,7 @@ pub fn lu_batch<T: RealScalar>(matrices: &ArrayView3<'_, T>) -> Result<Vec<LuDec
                 SliceArg::All,
                 SliceArg::All,
             ])?;
-            match lu_decompose(&mat) {
-                Ok(lu) => *slot = Some(lu),
-                Err(e) => return Err(e),
-            }
+            *slot = Some(lu_decompose(&mat)?);
         }
         Ok(results
             .into_iter()

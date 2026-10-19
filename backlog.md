@@ -1,15 +1,53 @@
 # Leto Work Backlog
 
-<a id="LETO-EUNOMIA-010-COHORT"></a>
-## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
+<a id="LETO-MOIRAI-010-COHORT"></a>
+## LETO-MOIRAI-010-COHORT — Admit the current runtime provider [minor] — blocked
 
-- priority: correctness
-- scope: dependency requirements, canonical source lock, 0.46 version/migration records and exact-source API gate; all Rust sources stay unchanged.
-- Outcome: one Eunomia 0.10 identity across Aequitas 0.3, Hermes 0.9, Mnemosyne-memory 0.10 and Moirai 0.9.3.
-- Acceptance: standalone lock and identity checks, strict Clippy, complete native value tests, doctests/docs, exact-source API comparison, hosted CI and a fresh consumer after upstream integration.
-- Dependency: Mnemosyne #237, Hermes #260 and Moirai #623 are merged/published. Main #364 adopts their Git cohort; 0.46 supplies the distinct published boundary required by downstream consumers.
-- Evidence: earlier source `ed231333` passes 1,181 native cases, strict Clippy, docs and hosted Miri. The merged-default refresh requires new exact-head gates and an unseeded consumer.
-- Next step: finish PR #363's refreshed gates, then obtain approval for the existing publisher and legacy Pages effects; preserve separate sparse-contract ownership.
+- Priority: correctness; target: reserved 0.47.0 in #362; require Moirai 0.10.
+- Preserve approved CSR code, Python 0.46.1, canonical URLs, gates and owner/release holds.
+- Native/default/minimal, strict, docs, source/package and explicit API checks pass: `docs/verification/moirai-010-cohort.md`; hosted receipts remain required.
+
+<a id="LETO-CSR-FORWARD-CONTRACT"></a>
+
+## LETO-CSR-FORWARD-CONTRACT — Borrowed CSR tensor-forward provider contract [arch] — blocked
+
+- Owner: Codex `/root`; updated 2026-10-15; priority: correctness.
+- Driver: Coeus preservation #531 and independent compatible bridge recovery
+  #533; the tensor adapter now consumes the checked prepared product.
+- Foundation [patch], target 0.45.3: ADR 0036, co-located sparse design and six
+  current-API witnesses specify signed portable borrowing, stored entry order,
+  separate rounding, complete writes and caller-owned row scheduling.
+- Decision: Ryan Clanton approves ADR 0036 on 2026-10-15 in the task
+  conversation. Provider implementation target: 0.47.0; main 0.46 carries the numeric cohort.
+- Outcome: one provider row kernel, no CSR slice reinterpretation or index
+  copies, no new Coeus scalar bound, preserved typed validation/allocation
+  failures and backend scheduling. Owned `usize` storage remains unchanged.
+- Acceptance: `docs/verification/csr-forward-contract.md` and the co-located
+  provider migration checklist retain revision-scoped numerical, allocation,
+  memory, architecture and performance receipts. Current hosted gates remain open.
+- Dependency order: checked borrowed representation and arithmetic, validated
+  output/dispatch scope, then Coeus backend unwind-contract clarification and
+  adapter. The clarification is a reviewed implementor-contract change even
+  without a method-signature change.
+- Performance boundary: the final same-workload repeat retains about 2–3% median
+  SpMV overhead in three cases; large sequential SpMV is near parity. Moirai
+  SpMM ratios span 0.093–0.299. Earlier adverse observations stay revision-
+  scoped; retained dispatch does not establish a universal throughput bound.
+- Next action: review #362 with Coeus #533 and compatible Hephaestus #497 /
+  Apollo #674. The latter retain 0.46 while admitting 0.47, allowing ordered
+  source/publication integration. Unseeded Coeus defaults remain unavailable
+  until those provider reviews integrate. Keep Coeus #531 intact.
+
+<a id="LETO-EUNOMIA-010-COHORT"></a>
+## LETO-EUNOMIA-010-COHORT — Current numeric provider cohort [minor] — blocked
+- Priority: correctness; merged0.46 cohort keeps one Eunomia0.10/Aequitas0.3 identity; historical evidence: `docs/verification/moirai-010-cohort.md`.
+- Needs: final hosted and provider-first fresh-consumer availability; retain separate CSR ownership and release/Pages approval boundary.
+
+<a id="LETO-PYTHON-030-COHORT"></a>
+## LETO-PYTHON-030-COHORT — Current binding and Python3.14 [minor] — blocked
+- Priority: correctness; scope: PyO3/NumPy0.30 APIs, explicit GIL contract, interpreter checks and existing guarded matrix; preserve all owner CSR/linkage/packaging work.
+- Evidence: `docs/verification/python-030-cohort.md`;1,223 native cases and39 wheel cases at each3.9/3.14 endpoint pass with zero skips.
+- Needs: exact-head review, full hosted wheel matrix and accepted Aequitas141 consumer renewal; no merge or publication.
 
 <a id="LETO-RESCUE-QUEUE"></a>
 
@@ -748,7 +786,7 @@ no unmeasured "optimization" per performance_engineering.
   parity before any replacement claim. **Owner:** Codex `/root` (complete).
   **Claimed files:** `crates/leto-ops/src/application/matrix.rs`,
   `crates/leto-ops/benches/kernels.rs`,
-  `gap_audit.md`, and `checklist.md`.
+  `gap_audit.md`, and `docs/verification/provider-migration-checklist.md`.
   The 0.19.7 fused multi-row AXPY improves Leto but still trails
   ndarray/nalgebra at 64x64, 128x128, and 256x256. Current medians:
   Leto 17.430 µs / 108.98 µs / 1.0631 ms; ndarray 8.4923 µs / 66.527 µs /
@@ -775,7 +813,7 @@ no unmeasured "optimization" per performance_engineering.
   `crates/leto-ops/src/application/reduction.rs`,
   `crates/leto-ops/tests/ops/reduction.rs`,
   `crates/leto-ops/benches/kernels.rs`,
-  `gap_audit.md`, and `checklist.md`. Acceptance: one canonical generic
+  `gap_audit.md`, and `docs/verification/provider-migration-checklist.md`. Acceptance: one canonical generic
   fallback preserves logical values and the existing reduction contract for
   positive and negative strides, performs no allocation or materialization,
   and shows a value-preserving benchmark improvement for the existing
@@ -835,7 +873,7 @@ no unmeasured "optimization" per performance_engineering.
 - [x] [patch] `LETO-KERNEL-BENCHMARKS-1`: Add contiguous fast paths and
   strided fallback benchmarks for elementwise ops, reductions, and matmul.
   **Owner:** Codex `/root`. **Claimed files:**
-  `crates/leto-ops/benches/kernels.rs`, `checklist.md`, and the matching
+  `crates/leto-ops/benches/kernels.rs`, `docs/verification/provider-migration-checklist.md`, and the matching
   performance-audit evidence in `gap_audit.md`. The new rows use prepared
   C-dense and step-2 256×256 f64 views; the elementwise and sum rows are
   stable coverage evidence, while matmul remains noisy and is explicitly not

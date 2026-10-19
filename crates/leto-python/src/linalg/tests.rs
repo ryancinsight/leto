@@ -19,7 +19,7 @@ use pyo3::prelude::*;
 #[test]
 fn det_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![3.0, 8.0], vec![4.0, 6.0]]);
         let det_val = det_py(py, a.readonly()).unwrap();
 
@@ -40,7 +40,7 @@ fn det_matches_numpy() {
 #[test]
 fn inv_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, 2.0], vec![3.0, 4.0]]);
         let inv_val = inv_py(py, a.readonly()).unwrap();
 
@@ -64,7 +64,7 @@ fn inv_matches_numpy() {
 #[test]
 fn solve_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![3.0, 1.0], vec![1.0, 2.0]]);
         let b = PyArray1::from_vec(py, vec![9.0, 8.0]);
         let x_val = solve_py(py, a.readonly(), b.readonly()).unwrap();
@@ -89,7 +89,7 @@ fn solve_matches_numpy() {
 #[test]
 fn cholesky_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![4.0, 12.0], vec![12.0, 37.0]]);
         let l_val = cholesky_py(py, a.readonly()).unwrap();
 
@@ -113,7 +113,7 @@ fn cholesky_matches_numpy() {
 #[test]
 fn qr_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, 2.0], vec![3.0, 4.0]]);
         let (q_val, r_val) = qr_py(py, a.readonly()).unwrap();
 
@@ -130,7 +130,7 @@ fn qr_matches_numpy() {
 #[test]
 fn col_piv_qr_matches_numpy_reconstruction() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![2.0, 3.0], vec![5.0, 7.0]]);
         let (q_val, r_val, perm_val) = col_piv_qr_py(py, a.readonly()).unwrap();
 
@@ -159,7 +159,7 @@ fn col_piv_qr_matches_numpy_reconstruction() {
 #[test]
 fn svd_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, 2.0], vec![3.0, 4.0]]);
         let (u_val, s_val, vt_val) = svd_py(py, a.readonly()).unwrap();
 
@@ -204,7 +204,7 @@ fn svd_matches_numpy() {
 #[test]
 fn singular_values_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, 2.0], vec![3.0, 4.0]]);
         let s_val = singular_values_py(py, a.readonly()).unwrap();
 
@@ -230,7 +230,7 @@ fn singular_values_matches_numpy() {
 #[test]
 fn norm_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, -2.0], vec![3.0, 4.0]]);
 
         let norm_l1 = norm_py(py, a.readonly(), Some("1")).unwrap();
@@ -278,7 +278,7 @@ fn norm_matches_numpy() {
 #[test]
 fn schur_matches_scipy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, 2.0], vec![3.0, 4.0]]);
         let (q_val, t_val) = schur_py(py, a.readonly()).unwrap();
 
@@ -301,7 +301,7 @@ fn schur_matches_scipy() {
 #[test]
 fn bunch_kaufman_matches_scipy_reconstruction() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![2.0, 3.0], vec![3.0, 5.0]]);
         let (l_val, d_val, perm_val) = bunch_kaufman_py(py, a.readonly()).unwrap();
 
@@ -336,7 +336,7 @@ fn bunch_kaufman_matches_scipy_reconstruction() {
 #[test]
 fn matexp_matches_scipy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![0.0, 1.0], vec![-1.0, 0.0]]);
         let exp_val = matexp_py(py, a.readonly()).unwrap();
 
@@ -360,7 +360,7 @@ fn matexp_matches_scipy() {
 #[test]
 fn kron_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, 2.0]]);
         let b = array2_f64(py, &[vec![3.0, 4.0], vec![5.0, 6.0]]);
 
@@ -386,7 +386,7 @@ fn kron_matches_numpy() {
 #[test]
 fn trace_matches_numpy() {
     prepare_python();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let a = array2_f64(py, &[vec![1.0, 2.0], vec![3.0, 4.0]]);
         let trace_val = trace_py(py, a.readonly()).unwrap();
 

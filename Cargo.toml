@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.46.0"
+version = "0.47.0"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -17,8 +17,8 @@ readme = "README.md"
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──
-leto = { version = "0.46.0", path = "crates/leto" }
-leto-ops = { version = "0.46.0", path = "crates/leto-ops" }
+leto = { version = "0.47.0", path = "crates/leto" }
+leto-ops = { version = "0.47.0", path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
 # Canonical provider URLs preserve one nominal type identity (ADR 0029).
@@ -44,12 +44,14 @@ serde_json = "1"
 
 # ── Python FFI ──
 # Native test executables embed Python; maturin alone selects extension linkage.
-pyo3 = "0.23"
-numpy = "0.23"
+pyo3 = "0.30"
+numpy = "0.30"
 
 # ── Testing / Benchmarking ──
 proptest = "1.11"
 criterion = "0.8"
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = "0.3.23"
 
 # Debuginfo budget, matching the stack's shared `.cargo/config.toml`.
 #
