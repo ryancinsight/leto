@@ -52,8 +52,8 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aequitas"
-version = "0.3.0"
-source = "git+https://github.com/ryancinsight/aequitas#84c5f03514ebe69473bbaa7cd51828f1ed3ca068"
+version = "0.3.1"
+source = "git+https://github.com/ryancinsight/aequitas#1bc917c4c909596b4fb16b4b6c239587f442c1a1"
 dependencies = [
  "eunomia",
  "typenum",
@@ -719,7 +719,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "leto"
-version = "0.46.0"
+version = "0.46.1"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -732,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.46.0"
+version = "0.46.1"
 dependencies = [
  "aequitas",
  "criterion",
@@ -747,7 +747,7 @@ dependencies = [
 
 [[package]]
 name = "leto-python"
-version = "0.46.1"
+version = "0.46.2"
 dependencies = [
  "anyhow",
  "leto",

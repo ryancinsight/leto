@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.46.1] - Unreleased
+
+### Changed
+
+- [patch] Admit Eunomia 0.10 and 0.11 during the coordinated provider transition.
+  Keep the current locked 0.10 graph buildable; tighten final provider floors
+  after the approved releases and canonical consumer checks complete.
+- Require the Aequitas 0.3.1 compatibility bridge and admit the approved 0.4 cohort.
+- Advance the native libraries to 0.46.1 and the existing binding to 0.46.2.
+  Python linkage, release matrices, numerical behavior and CSR work stay unchanged.
+
 ## leto-python 0.46.1 — 2026-10-16
 
 ### Fixed
