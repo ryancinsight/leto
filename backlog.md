@@ -1,16 +1,11 @@
 # Leto Work Backlog
 
 <a id="LETO-MOIRAI-010-COHORT"></a>
-## LETO-MOIRAI-010-COHORT — Admit the current runtime provider [minor] — in progress
+## LETO-MOIRAI-010-COHORT — Admit the current runtime provider [minor] — review
 
-- priority: correctness; target: the reserved 0.47.0 release in #362.
-- Preserve the approved borrowed-CSR implementation, current main's Python
-  0.46.1 linkage/release work, canonical provider URLs and existing test gates.
-- Require Moirai 0.10, refresh the standalone source graph and inspect every
-  public provider identity. Keep shared tensor/spectral consumers on one line.
-- Acceptance: current-cohort native and scoped dispatch/unwind checks, both
-  feature modes, strict diagnostics, exact package/source and API checks.
-- No owner checkout, release reservation, publication or service hold changes.
+- Priority: correctness; target: reserved 0.47.0 in #362; require Moirai 0.10.
+- Preserve approved CSR code, Python 0.46.1, canonical URLs, gates and owner/release holds.
+- Native/default/minimal, strict, docs, source/package and explicit API checks pass: `docs/verification/moirai-010-cohort.md`; hosted receipts remain required.
 
 <a id="LETO-CSR-FORWARD-CONTRACT"></a>
 
