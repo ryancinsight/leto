@@ -87,7 +87,11 @@ fn partial_dispatch_failure_and_unwind_join_before_borrow_returns() {
     };
     let _phase = tracing::info_span!("assert").entered();
     assert_eq!(result, Err("admission stopped"));
-    assert!(panic.is_err());
+    let payload = panic.expect_err("dispatcher must propagate its panic after joining");
+    let message = payload
+        .downcast_ref::<&str>()
+        .expect("the dispatch witness carries a string literal");
+    assert_eq!(*message, "dispatch unwind witness");
     assert_eq!(output, [21, 35]);
     output.fill(11); // The exclusive borrow is usable again after both scopes.
     assert_eq!(output, [11, 11]);

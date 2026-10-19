@@ -2,6 +2,15 @@
 
 Active sprint target: **0.47.0** — approved borrowed CSR integration [arch].
 
+## LETO-PYTHON-030-COHORT [minor] — binding target0.47.0
+
+- [x] Preserve latest owner362, all CSR/core/ops bytes and merged packaging fixes.
+- [x] Resolve current PyO3/NumPy0.30; retain old GIL contract and3.9 floor.
+- [x] Remove interpreter forward-compat suppression; add3.14 to guarded matrix.
+- [x] Pass1,223 native cases, strict/docs/MSRV and39 wheel tests per endpoint.
+- [ ] Complete exact-head independent review and full hosted wheel matrix.
+- [ ] Renew typed consumers against accepted Aequitas141; preserve release holds.
+
 ## LETO-MOIRAI-010-COHORT [minor]
 
 - [x] Preserve the owner head and merge current main without replacing its code.

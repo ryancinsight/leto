@@ -183,3 +183,11 @@ MIRIFLAGS=-Zmiri-strict-provenance cargo +nightly miri nextest run --locked \
 # --target armv7-unknown-linux-gnueabihf --no-default-features --test ops_tests
 # and selects signed::, product:: and partitions:: contract modules.
 ```
+
+## Original provider acceptance record
+
+- Acceptance: `docs/verification/csr-forward-contract.md` records complete
+  provider/consumer native, strict, memory, arithmetic, allocation, architecture
+  and current-main performance evidence. Final source `b7670636` passes 1202
+  native cases, strict/docs/API, twenty memory cases and ten ARM32 cases per
+  model. Current-head hosted receipts remain an explicit integration gate.

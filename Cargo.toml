@@ -44,8 +44,8 @@ serde_json = "1"
 
 # ── Python FFI ──
 # Native test executables embed Python; maturin alone selects extension linkage.
-pyo3 = "0.23"
-numpy = "0.23"
+pyo3 = "0.30"
+numpy = "0.30"
 
 # ── Testing / Benchmarking ──
 proptest = "1.11"

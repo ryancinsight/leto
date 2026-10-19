@@ -323,3 +323,23 @@ def test_batched_matmul_broadcasts_batch_one() -> None:
     got = np.asarray(leto.batched_matmul(a, b))
     assert got.shape == (2, 2, 4)
     _close("batched_matmul_bcast", got.ravel(), np.matmul(a, b).ravel(), atol=1e-4)
+
+
+def test_thread_attached_callers_preserve_computed_values() -> None:
+    """The current attach/detach APIs retain real concurrent caller results."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    a = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    b = np.array([[2.0, 0.0], [0.0, 2.0]], dtype=np.float32)
+    diagonal = np.diag(np.array([2.0, 3.0], dtype=np.float64))
+    expected = a @ b
+
+    def evaluate(_: int):
+        return leto.matmul(a, b), leto.det(diagonal)
+
+    with ThreadPoolExecutor(max_workers=4) as workers:
+        results = list(workers.map(evaluate, range(32)))
+    assert len(results) == 32
+    for product, determinant in results:
+        np.testing.assert_array_equal(product, expected)
+        assert determinant == 6.0

@@ -12,7 +12,7 @@ use pyo3::prelude::*;
 fn add_returns_numpy_array_with_value_semantics() {
     prepare_python();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let lhs = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
         let rhs = array2(py, &[vec![10.0, 20.0, 30.0], vec![40.0, 50.0, 60.0]]);
 
@@ -30,7 +30,7 @@ fn add_returns_numpy_array_with_value_semantics() {
 fn matmul_returns_numpy_array_with_value_semantics() {
     prepare_python();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let lhs = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
         let rhs = array2(py, &[vec![7.0, 8.0], vec![9.0, 10.0], vec![11.0, 12.0]]);
 
@@ -48,7 +48,7 @@ fn matmul_returns_numpy_array_with_value_semantics() {
 fn sum_releases_boundary_and_returns_scalar_value() {
     prepare_python();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let input = array2(py, &[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
 
         let total = sum_py(py, input.readonly()).unwrap();
@@ -61,7 +61,7 @@ fn sum_releases_boundary_and_returns_scalar_value() {
 fn matmul_rejects_shape_mismatch() {
     prepare_python();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let lhs = array2(py, &[vec![1.0, 2.0, 3.0]]);
         let rhs = array2(py, &[vec![4.0, 5.0, 6.0]]);
 
@@ -78,7 +78,7 @@ fn matmul_rejects_shape_mismatch() {
 fn sum_dyn_handles_multiple_ranks() {
     prepare_python();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         // Rank 1: arange(5) → 0+1+2+3+4 = 10.
         let r1 = PyArray1::from_vec(py, vec![0.0f32, 1.0, 2.0, 3.0, 4.0]);
         assert_eq!(sum_dyn_py(py, r1.to_dyn().readonly()).unwrap(), 10.0);
@@ -105,7 +105,7 @@ fn sum_dyn_handles_multiple_ranks() {
 fn sum_dyn_rejects_non_contiguous() {
     prepare_python();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let view = py
             .eval(
                 c_str!("__import__('numpy').arange(6, dtype='float32').reshape(2, 3).T"),
@@ -123,7 +123,7 @@ fn sum_dyn_rejects_non_contiguous() {
 fn operations_reject_non_contiguous_numpy_inputs() {
     prepare_python();
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let view = py
             .eval(
                 c_str!("__import__('numpy').arange(6, dtype='float32').reshape(2, 3).T"),

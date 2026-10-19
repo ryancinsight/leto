@@ -369,7 +369,7 @@ comparisons remain in the Criterion targets.
   (`gap_audit.md` §D).
 
 The full gap analysis against `ndarray` 0.16 and `nalgebra` lives in
-`gap_audit.md`; the tracked migration plan lives in `checklist.md` and
+`gap_audit.md`; the tracked migration plan lives in `docs/verification/provider-migration-checklist.md` and
 `backlog.md`.
 
 ## Dependency Policy

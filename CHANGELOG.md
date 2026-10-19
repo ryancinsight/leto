@@ -1,5 +1,20 @@
 # Changelog
 
+## leto-python 0.47.0 — Unreleased
+
+### Breaking
+
+- [minor] Advance Rust binding dependencies to PyO3.30/NumPy.30. Rust extension
+  consumers must coordinate those nominal types. Python APIs and3.9 floor stay.
+
+### Changed
+
+- Use current interpreter initialize/attach/detach APIs, explicitly preserve the
+  GIL-required contract, and remove ABI3 forward-compatibility suppression.
+- Add Python3.14 to the existing guarded wheel matrix and a concurrent computed
+  value regression. Preserve owner CSR code,0.47 core/ops, packaging fixes,
+  release gates and the already published0.46.1 artifacts.
+
 ## leto-python 0.46.1 — 2026-10-16
 
 ### Fixed

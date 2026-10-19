@@ -1,11 +1,20 @@
 # Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
 
+## 2026-10-19 — Python provider continuation [minor] — review
+
+Current PyO3/NumPy migration retains the owner CSR/Moirai/linkage changes and
+explicit GIL contract. Python3.14 joins the guarded matrix; the old forward
+compatibility suppression is removed. Binding target0.47.0 preserves the
+published0.46.1 identity. All1,223 native and39 wheel tests per3.9/3.14 endpoint
+pass; [scope and remaining gates](docs/verification/python-030-cohort.md) retain
+exact-head review, hosted/platform acceptance and Aequitas141 renewal.
+
 ## 2026-10-15 — Borrowed CSR source contracts close
 
 Checked signed/stored-order views, separate native arithmetic, complete row
 writes and synchronous dispatch replace duplicated consumer forward math.
 Checked fixed metadata and fused row validation preserve error priority and
-one recurrence. Final source `b7670636` passes 1202 native cases, both strict
+The original CSR source evidence is retained in `docs/verification/native-diagnostics-history.md`; final current-provider gates remain revision-scoped.
 feature modes, docs/API, twenty memory cases in each strict/isolation model
 and ten ARM32 cases per model. [Current evidence](docs/verification/csr-forward-contract.md)
 replaces superseded proposal-only and intermediate acceptance claims.

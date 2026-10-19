@@ -36,7 +36,7 @@ where
     let shape = [a.shape()[0], a.shape()[1]];
     let mut out_arr = output_array(shape)?;
 
-    py.allow_threads(|| {
+    py.detach(|| {
         op(&a_view, &b_view, &mut out_arr.view_mut())
             .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
@@ -95,7 +95,7 @@ pub(crate) fn dot_py(
     require_contiguous_1d(&b, "b")?;
     let a_view = view_from_numpy_1d(&a)?;
     let b_view = view_from_numpy_1d(&b)?;
-    py.allow_threads(|| dot(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string())))
+    py.detach(|| dot(&a_view, &b_view).map_err(|e| PyValueError::new_err(e.to_string())))
 }
 
 #[pyfunction]
@@ -103,7 +103,7 @@ pub(crate) fn dot_py(
 pub(crate) fn sum_py(py: Python<'_>, a: PyReadonlyArray2<'_, f32>) -> PyResult<f32> {
     require_contiguous_2d(&a, "a")?;
     let a_view = view_from_numpy(&a)?;
-    Ok(py.allow_threads(|| sum(&a_view)))
+    Ok(py.detach(|| sum(&a_view)))
 }
 
 #[pyfunction]
@@ -131,7 +131,7 @@ pub(crate) fn matmul_py<'py>(
     let out_shape = [shape_a[0], shape_b[1]];
     let mut out_arr = output_array(out_shape)?;
 
-    py.allow_threads(|| {
+    py.detach(|| {
         matmul(&a_view, &b_view, &mut out_arr.view_mut())
             .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
@@ -164,7 +164,7 @@ pub(crate) fn batched_matmul_py<'py>(
     let out_shape = [batch, sa[1], sb[2]];
     let mut out_arr = output_array_3d(out_shape)?;
 
-    py.allow_threads(|| {
+    py.detach(|| {
         batched_matmul(&a_view, &b_view, &mut out_arr.view_mut())
             .map_err(|e| PyValueError::new_err(e.to_string()))
     })?;
@@ -204,7 +204,7 @@ pub(crate) fn sum_dyn_py(py: Python<'_>, a: PyReadonlyArrayDyn<'_, f32>) -> PyRe
     let slice = a.as_slice().map_err(|_| {
         PyValueError::new_err("Failed to extract contiguous slice from NumPy array")
     })?;
-    py.allow_threads(|| sum_dynamic(&shape, slice))
+    py.detach(|| sum_dynamic(&shape, slice))
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

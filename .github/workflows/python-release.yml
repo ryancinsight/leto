@@ -30,7 +30,7 @@ jobs:
       atlas-ref: 227ff172612b8aff553be22be89fabdf71838a03
       tag-prefix: leto-python-v
       abi3: false
-      python-versions: '["3.9", "3.10", "3.11", "3.12", "3.13"]'
+      python-versions: '["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]'
       python-test-path: crates/leto-python/tests/test_wheel_contract.py
       pytest-version: "8.4.2"
       # Exercise the actual release matrix before integration. The shared
