@@ -14,10 +14,12 @@ exact-head review, hosted/platform acceptance and Aequitas141 renewal.
 Checked signed/stored-order views, separate native arithmetic, complete row
 writes and synchronous dispatch replace duplicated consumer forward math.
 Checked fixed metadata and fused row validation preserve error priority and
-The original CSR source evidence is retained in `docs/verification/native-diagnostics-history.md`; final current-provider gates remain revision-scoped.
-feature modes, docs/API, twenty memory cases in each strict/isolation model
-and ten ARM32 cases per model. [Current evidence](docs/verification/csr-forward-contract.md)
-replaces superseded proposal-only and intermediate acceptance claims.
+one recurrence. The complete original source record is retained in the
+[historical diagnostic record](docs/verification/native-diagnostics-history.md).
+Its native, strict-feature, docs/API, memory and ARM32 results and the consumer
+timings below remain historical, scoped to the recorded CSR revisions.
+[CSR verification](docs/verification/csr-forward-contract.md) retains the original
+acceptance evidence; current Moirai 0.10 provider gates remain revision-scoped.
 
 Coeus retains exact selected-backend row dispatch. Its final tested SpMV cost
 is about 2–3% in three cases, with large sequential SpMV near parity; Moirai
