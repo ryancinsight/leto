@@ -2,6 +2,8 @@
 
 ## [0.46.1] - Unreleased
 
+- Require the published Hermes 0.9.1 compatibility bridge when admitting Eunomia 0.11; normalized packages must exclude the incompatible Hermes 0.9.0 family.
+
 ### Changed
 
 - [patch] Admit Eunomia 0.10 and 0.11 during the coordinated provider transition.
