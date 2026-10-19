@@ -25,7 +25,7 @@ leto-ops = { version = "0.46.0", path = "crates/leto-ops" }
 # Cargo.lock records reviewed sources; integration proceeds provider first.
 mnemosyne = { package = "mnemosyne-memory", version = "0.10.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 # Moirai keeps the allocator 0.10 dependency private.
-moirai = { package = "moirai-runtime", version = "0.9.3", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+moirai = { package = "moirai-runtime", version = "0.10.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 # The numeric, SIMD and comparison providers share the Eunomia 0.10 cohort.
 hermes-simd = { version = "0.9.0", git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { package = "eunomia", version = "0.10.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
