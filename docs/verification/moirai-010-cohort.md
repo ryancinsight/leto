@@ -28,7 +28,13 @@ to this dependency migration. The original CSR memory/performance receipts
 remain scoped to their recorded revisions; they are not new Moirai 0.10 memory
 or universal performance certification.
 
-The exact-source API comparison, final hosted receipts and ordered provider /
-consumer integration remain release gates. No merge, release, credential or
+The canonical locked-source API gate passes its declared pre-1.0 major
+allowance (zero compatibility checks, not comparison coverage). Additional
+explicit minor comparisons of the complete, actual locked base/head JSON
+execute 196 applicable checks per package: both pass, with 57 tool skips each.
+No baseline lock or gate is changed to obtain those results.
+
+Final hosted receipts and ordered provider / consumer integration remain
+release gates. No merge, release, credential or
 service action is implied by these local checks. Coeus Miri remains deferred
 and unverified in the shared downstream migration.
