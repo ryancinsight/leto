@@ -62,6 +62,37 @@ SVD) are checked by their mathematical invariants — reconstruction,
 orthonormality, sorted spectra — because a factorization is unique only up to
 signs and permutations, so raw factor equality would be the wrong oracle.
 
+## Build and test
+
+Native Cargo tests link libpython so their executable can initialize an
+interpreter. Maturin selects the existing pyo3/extension-module dependency
+feature from pyproject.toml when building a wheel, preserving extension linkage.
+Select the interpreter with PYO3_PYTHON when the default is not the intended
+Python installation.
+
+From the repository root, run native tests with NumPy and SciPy installed in the selected
+interpreter, then build and install a wheel before running the parity suite:
+
+    cargo nextest run --locked --workspace
+    maturin build --locked --release --manifest-path crates/leto-python/Cargo.toml
+    python -m pip install --no-deps target/wheels/leto_python-*.whl
+    python -c "import leto_python, scipy.linalg"
+    python -m pytest crates/leto-python/tests/test_numpy_parity.py
+
+The explicit imports make a missing or unloadable wheel fail before pytest's
+optional-import guards. The existing release interpreter/platform matrix stays
+unchanged; a local build validates only its actual interpreter and target.
+The package-scoped release profile retains extension symbols to avoid
+[Rust/LLVM's Mach-O stripping defect](https://github.com/rust-lang/rust/issues/157750).
+Release optimization and the CPython wheel ABI are unchanged; the default
+macOS toolchain must build an importable wheel without linker overrides.
+Every release-matrix row also executes nine NumPy-only value, dtype and error
+contracts. The closed-form fixtures cover both float32 and float64 without a
+SciPy dependency on musl; the full 29-case NumPy/SciPy suite runs in native CI.
+Fork and Dependabot pull requests keep the same build and value-validation
+gates. Artifact attestation runs in trusted contexts with its existing write
+permissions; unprivileged verification does not require those credentials.
+
 ## Links
 
 - [Source and issues](https://github.com/ryancinsight/leto)

@@ -20,6 +20,14 @@ availability remain concrete actions in LETO-CSR-FORWARD-CONTRACT. No main
 merge, release, hidden safety-option change or owned-CSR representation change
 is part of this increment. Coeus #531 stays intact.
 
+## 2026-10-16 Native/extension linkage and macOS wheel loader [patch] — closed
+
+- findings: unconditional PyO3 extension linkage breaks native CPython 3.13 linking; implicit Rust/LLVM stripping misaligns the optimized macOS wheel; unprivileged PR verification previously attempted privileged attestation.
+- delivery: #365 merges as `747d0bbb` with its reviewed tree unchanged; Atlas #542's immutable recipe guard is selected. [Python 0.46.1](https://pypi.org/project/leto-python/0.46.1/) publishes from that exact source in run `38835589358`; Rust packages stay 0.46.0 and all 223 external lock records are unchanged.
+- evidence: default native 1,202 passed, zero skips; release 30 rows/270 cases, zero skips; all 31 registry files match release bytes and verified provenance. Actual registry wheel passes all 38 published-source tests; all ten Mac slices align; 534 critical source payloads equal rebuilt source. Automatic Pages run `38834105768` builds the same commit and serves HTTP 200.
+- residual: the unchanged graded-scan correctness case remains slow at 38.885s under the existing 30/60s policy; no performance work or limit change occurred. The additional non-required managed scan cannot start its configured model and is explicitly accepted as nonblocking; no security setting changes.
+- re-open: a supported native linker, wheel loader, value/error contract, release identity or source/registry hash check fails. Existing unrelated numerical findings below remain open.
+
 ## 2026-10-15 Provider-default resolution [minor]
 
 - risk: published 0.45.2 belongs to the older provider line. Main #364 now admits the new Git cohort; 0.46 must expose that published boundary without changing Rust sources or numerical assertions.

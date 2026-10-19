@@ -6,7 +6,7 @@ and `nalgebra` usage as the shared non-differentiable memory, layout, and
 dense-linear-algebra vocabulary between Atlas spectral transforms (`apollo`)
 and tensor/autodiff systems (`coeus`, the Atlas replacement for `burn`).
 
-Leto/Leto-ops 0.46 follows the Eunomia 0.10 provider cohort. Direct Rust
+Leto/Leto-ops 0.47 follows the Eunomia 0.10 and Moirai 0.10 provider cohort. Direct Rust
 consumers advance numeric, SIMD, comparison and allocation requirements
 alongside Leto; numerical kernels and layouts remain unchanged. The
 [source-identity decision](docs/adr/0029-provider-source-identity-during-coevolution.md)
@@ -61,7 +61,9 @@ wheels for Linux, Windows, and macOS. The workflow installs and imports each
 wheel as `leto_python`, verifies that its `leto-python` metadata version matches
 the release tag, attests and attaches the exact wheel set to the GitHub Release,
 then publishes those same artifacts to PyPI through OIDC Trusted Publishing.
-The tag version must equal the workspace Cargo version.
+The tag version must equal the Python binding's Cargo package version. Pull
+requests run the same 30-row wheel matrix in verification mode, without release
+attachment or PyPI publication.
 
 ## Rust Crate Releases
 

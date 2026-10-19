@@ -1,10 +1,36 @@
 # Changelog
 
+## leto-python 0.46.1 — 2026-10-16
+
+### Fixed
+
+- [patch] Native binding tests link libpython; maturin explicitly selects
+  extension-module linkage for wheels using PyO3's existing dependency feature.
+  Rust library versions, scalar behavior and provider requirements stay unchanged.
+- Extend native CI to the full workspace and require actual built-wheel import
+  before the unchanged NumPy/SciPy parity suite. Existing release matrices,
+  native test limits and assertions stay unchanged.
+- Retain the Python extension's release symbol table to avoid the Rust/LLVM
+  Mach-O stripping defect (rust-lang/rust#157750); keep release optimization
+  and wheel ABI unchanged. Verify the full release wheel matrix on pull requests
+  before a release can attach or publish artifacts.
+- Run nine bounded, closed-form NumPy value/dtype/error contracts against each
+  installed release wheel, including musl; retain all 29 NumPy/SciPy parity cases.
+- Preserve fork and Dependabot wheel verification with the shared recipe's
+  trusted-context attestation guard; retain all validation and release attestation.
+
 All notable changes to Leto are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 SemVer 2.0.0. Pre-1.0 minor bumps may include additive API surface.
 
 ## [0.47.0] - Unreleased
+
+### Breaking
+
+- [minor] Advance the shared runtime provider to Moirai 0.10. Direct consumers
+  of public runtime, scope, policy or executor types must use the same canonical
+  provider identity (ADR 0029). Preserve the reserved 0.47.0 borrowed-CSR release
+  and the independently published Python 0.46.1 repair.
 
 ### Added
 

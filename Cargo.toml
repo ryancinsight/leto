@@ -25,7 +25,7 @@ leto-ops = { version = "0.47.0", path = "crates/leto-ops" }
 # Cargo.lock records reviewed sources; integration proceeds provider first.
 mnemosyne = { package = "mnemosyne-memory", version = "0.10.0", git = "https://github.com/ryancinsight/Mnemosyne.git", features = ["eunomia"] }
 # Moirai keeps the allocator 0.10 dependency private.
-moirai = { package = "moirai-runtime", version = "0.9.3", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
+moirai = { package = "moirai-runtime", version = "0.10.0", git = "https://github.com/ryancinsight/Moirai.git", default-features = false, features = ["async", "iter", "parallel", "local", "melinoe"] }
 # The numeric, SIMD and comparison providers share the Eunomia 0.10 cohort.
 hermes-simd = { version = "0.9.0", git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { package = "eunomia", version = "0.10.0", git = "https://github.com/ryancinsight/eunomia", default-features = false }
@@ -43,7 +43,8 @@ anyhow = "1.0"
 serde_json = "1"
 
 # ── Python FFI ──
-pyo3 = { version = "0.23", features = ["extension-module"] }
+# Native test executables embed Python; maturin alone selects extension linkage.
+pyo3 = "0.23"
 numpy = "0.23"
 
 # ── Testing / Benchmarking ──
@@ -84,6 +85,12 @@ debug = false
 codegen-units = 1
 lto = "thin"
 opt-level = 3
+
+# Rust/LLVM stripping can misalign Mach-O LINKEDIT string tables
+# (rust-lang/rust#157750). Retain the extension's symbols while preserving
+# release optimization, the portable target and CPython's normal wheel ABI.
+[profile.release.package.leto-python]
+strip = "none"
 
 [workspace.lints.clippy]
 pedantic = { level = "deny", priority = -1 }
