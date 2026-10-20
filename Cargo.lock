@@ -719,7 +719,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "leto"
-version = "0.46.1"
+version = "0.46.2"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -732,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.46.1"
+version = "0.46.2"
 dependencies = [
  "aequitas",
  "criterion",

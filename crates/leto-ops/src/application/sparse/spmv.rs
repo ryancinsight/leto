@@ -62,13 +62,37 @@ fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<(
         let (start, end) = (window[0], window[1]);
         let cols = &col_indices[start..end];
         let vals = &values[start..end];
-        let mut acc = T::ZERO;
-        for (&value, &col) in vals.iter().zip(cols) {
-            acc = acc.add(value.mul(xs[col]));
-        }
-        *slot = acc;
+        *slot = gather_dot(vals, cols, xs);
     }
     Ok(())
+}
+
+/// Gather-dot `sum(vals[p] * xs[cols[p]])` over one CSR row.
+///
+/// Four independent accumulators over stride-4 lanes keep several
+/// multiply-add chains and gather loads in flight: the single-accumulator
+/// form serializes each nonzero behind the previous add's latency and issues
+/// one outstanding gather at a time. The reduction order
+/// `(acc0 + acc1) + (acc2 + acc3)` with the sub-4 tail folded into `acc0` is
+/// fixed for all row lengths, so results are deterministic; summation order
+/// differs from a strictly sequential accumulation (identical for exact
+/// integer-valued data, rounding-level otherwise).
+fn gather_dot<T: Scalar>(vals: &[T], cols: &[usize], xs: &[T]) -> T {
+    let mut acc0 = T::ZERO;
+    let mut acc1 = T::ZERO;
+    let mut acc2 = T::ZERO;
+    let mut acc3 = T::ZERO;
+    let full = vals.len() & !3;
+    for k in (0..full).step_by(4) {
+        acc0 = acc0.add(vals[k].mul(xs[cols[k]]));
+        acc1 = acc1.add(vals[k + 1].mul(xs[cols[k + 1]]));
+        acc2 = acc2.add(vals[k + 2].mul(xs[cols[k + 2]]));
+        acc3 = acc3.add(vals[k + 3].mul(xs[cols[k + 3]]));
+    }
+    for k in full..vals.len() {
+        acc0 = acc0.add(vals[k].mul(xs[cols[k]]));
+    }
+    acc0.add(acc1).add(acc2.add(acc3))
 }
 
 /// Compute `y = A · x`, allocating the length-`nrows` result. Thin wrapper over

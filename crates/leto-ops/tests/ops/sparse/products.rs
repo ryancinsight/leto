@@ -30,6 +30,36 @@ fn spmv_matches_closed_form_and_overwrites_output() {
 }
 
 #[test]
+fn spmv_unrolled_gather_matches_closed_form_on_long_rows() {
+    // Integer-valued fixture: exact arithmetic makes summation order
+    // irrelevant, so `assert_eq!` pins the unrolled chunk/tail/reduce logic
+    // itself. Row lengths 9 (two chunks + tail), 5 (one chunk + tail), and 3
+    // (tail only) cover every path through the gather kernel.
+    let a = CsrMatrix::from_parts(
+        vec![
+            1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, -1.0, 3.0,
+        ],
+        vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 3, 5, 7, 9, 0, 4, 9],
+        vec![0, 9, 14, 17],
+        3,
+        10,
+    )
+    .unwrap();
+    let x = Array::from_shape_vec(
+        [10],
+        vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+    )
+    .unwrap();
+    let mut y = vec![99.0; 3];
+
+    spmv_into(&a, &x.view(), &mut y).unwrap();
+    let allocated = spmv(&a, &x.view()).unwrap();
+
+    assert_eq!(y, &[285.0, 30.0, 27.0]);
+    assert_eq!(allocated.storage().as_slice(), &[285.0, 30.0, 27.0]);
+}
+
+#[test]
 fn spmm_matches_closed_form_with_strided_dense_rhs() {
     let a =
         CsrMatrix::from_parts(vec![2.0f64, -1.0, 3.0], vec![0, 2, 1], vec![0, 2, 3], 2, 3).unwrap();
