@@ -393,3 +393,12 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+
+### CSR reduction range
+
+CSR products retain their four-lane native rounding when the result is finite.
+A nonfinite result retries the original stored-order row fold, recovering
+cases where lanes overflow before cancellation. This does not promise every
+representable real sum is recovered or correctly rounded. See the
+[finite-range verification](docs/verification/spmv-finite-range.md).

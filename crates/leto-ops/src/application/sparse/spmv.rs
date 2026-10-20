@@ -74,9 +74,16 @@ fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<(
 /// form serializes each nonzero behind the previous add's latency and issues
 /// one outstanding gather at a time. The reduction order
 /// `(acc0 + acc1) + (acc2 + acc3)` with the sub-4 tail folded into `acc0` is
-/// fixed for all row lengths, so results are deterministic; summation order
-/// differs from a strictly sequential accumulation (identical for exact
-/// integer-valued data, rounding-level otherwise).
+/// fixed for all row lengths. A finite result keeps this native rounding
+/// order unchanged. If it is nonfinite, retry the original stored-order
+/// fold: parallel lanes can overflow before opposite signs cancel, while
+/// that fold stays finite. This does not guarantee a finite result whenever
+/// the exact real sum is representable; the stored fold may overflow too.
+///
+/// Different finite orders can lose different small terms under cancellation.
+/// Integer-valued inputs alone do not imply bitwise equality: products and
+/// every partial sum must also be exactly representable. No compensated sum,
+/// widened accumulator or universal correctly-rounded result is promised.
 fn gather_dot<T: Scalar>(vals: &[T], cols: &[usize], xs: &[T]) -> T {
     let mut acc0 = T::ZERO;
     let mut acc1 = T::ZERO;
@@ -92,7 +99,17 @@ fn gather_dot<T: Scalar>(vals: &[T], cols: &[usize], xs: &[T]) -> T {
     for k in full..vals.len() {
         acc0 = acc0.add(vals[k].mul(xs[cols[k]]));
     }
-    acc0.add(acc1).add(acc2.add(acc3))
+    let result = acc0.add(acc1).add(acc2.add(acc3));
+    if result.is_finite() {
+        result
+    } else {
+        // Reassociation can overflow lanes even when the stored-order fold
+        // stays finite. Retry that original native order without allocation;
+        // genuinely nonfinite inputs/results retain its nonfinite outcome.
+        vals.iter()
+            .zip(cols)
+            .fold(T::ZERO, |acc, (&value, &col)| acc.add(value.mul(xs[col])))
+    }
 }
 
 /// Compute `y = A · x`, allocating the length-`nrows` result. Thin wrapper over

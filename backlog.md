@@ -1,4 +1,4 @@
-# Leto Work Backlog
+# Leto Work Backlog — active patch **0.46.3**, [SpMV finite-range recovery](backlog/leto-spmv-finite-range-20261020.md)
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo

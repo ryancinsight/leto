@@ -719,7 +719,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "leto"
-version = "0.46.2"
+version = "0.46.3"
 dependencies = [
  "aequitas",
  "eunomia",
@@ -732,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.46.2"
+version = "0.46.3"
 dependencies = [
  "aequitas",
  "criterion",
@@ -743,6 +743,8 @@ dependencies = [
  "serde",
  "themis-topology",
  "thiserror 2.0.21",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1851,7 +1853,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

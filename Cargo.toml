@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.46.2"
+version = "0.46.3"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -17,8 +17,8 @@ readme = "README.md"
 
 [workspace.dependencies]
 # ── Local Workspace Crates ──
-leto = { version = "0.46.2", path = "crates/leto" }
-leto-ops = { version = "0.46.2", path = "crates/leto-ops" }
+leto = { version = "0.46.3", path = "crates/leto" }
+leto-ops = { version = "0.46.3", path = "crates/leto-ops" }
 
 # ── Systems and Parallelization ──
 # Canonical provider URLs preserve one nominal type identity (ADR 0029).
@@ -50,6 +50,8 @@ numpy = "0.23"
 # ── Testing / Benchmarking ──
 proptest = "1.11"
 criterion = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
 
 # Debuginfo budget, matching the stack's shared `.cargo/config.toml`.
 #
