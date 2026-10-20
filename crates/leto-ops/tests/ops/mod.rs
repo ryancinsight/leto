@@ -27,6 +27,7 @@ pub mod parity;
 pub mod properties;
 pub mod qr_cholesky;
 pub mod reduction;
+pub mod scalar_slice;
 pub mod scale_range;
 pub mod schur;
 pub mod sparse;

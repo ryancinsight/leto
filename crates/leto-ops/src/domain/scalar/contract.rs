@@ -91,6 +91,47 @@ pub trait Scalar: NumericElement {
         }
     }
 
+    /// Fused dual-output update over equal-length slices:
+    /// `out_a[i] += alpha_a * x_a[i]` and `out_b[i] += alpha_b * x_b[i]`,
+    /// in one traversal. Bit-identical to two `axpy_slice` calls for the
+    /// SIMD-routed types (the Hermes kernel keeps the same `fmadd` order);
+    /// the scalar default keeps the same per-element operation order as
+    /// `axpy_slice`.
+    #[inline]
+    fn axpy_pair_slice(
+        alpha_a: Self,
+        x_a: &[Self],
+        out_a: &mut [Self],
+        alpha_b: Self,
+        x_b: &[Self],
+        out_b: &mut [Self],
+    ) {
+        assert_eq!(
+            x_a.len(),
+            out_a.len(),
+            "axpy_pair_slice: x_a.len() != out_a.len()"
+        );
+        assert_eq!(
+            x_b.len(),
+            out_b.len(),
+            "axpy_pair_slice: x_b.len() != out_b.len()"
+        );
+        assert_eq!(
+            out_a.len(),
+            out_b.len(),
+            "axpy_pair_slice: output length mismatch"
+        );
+        for (((oa, &xa), ob), &xb) in out_a
+            .iter_mut()
+            .zip(x_a.iter())
+            .zip(out_b.iter_mut())
+            .zip(x_b.iter())
+        {
+            *oa += alpha_a * xa;
+            *ob += alpha_b * xb;
+        }
+    }
+
     /// Fused multi-row update: `out[row, i] += alphas[row] * x[i]`.
     #[inline]
     fn axpy_rows(
