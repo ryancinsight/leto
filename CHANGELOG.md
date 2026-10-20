@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.46.2] - Unreleased
+
+### Changed
+
+- [patch] Unroll the CSR SpMV gather-dot over four accumulators
+  (`crates/leto-ops/src/application/sparse/spmv.rs`). Back-to-back
+  criterion (banded-7): n=4096 -10.0%, n=65536 -11.9%, n=1048576 -8.1%.
+  Fixed reduction order; bitwise-identical for exact integer data,
+  rounding-level otherwise. Advance the native libraries to 0.46.2.
+
 ## [0.46.1] - Unreleased
 
 - Require the published Hermes 0.9.1 compatibility bridge when admitting Eunomia 0.11; normalized packages must exclude the incompatible Hermes 0.9.0 family.
