@@ -127,3 +127,38 @@ fn spmv_nonfinite_propagation_single_precision() {
 fn spmv_nonfinite_propagation_double_precision() {
     with_trace(|| genuine_nonfinite::<f64>(f64::MAX));
 }
+
+// (1+eps)*(1-eps) is exactly 1-eps^2 over the reals, but its native
+// product rounds to one. The accepted multiply-then-add lane therefore
+// returns zero for row one; a fused/widened calculation would keep -eps^2.
+fn separate_product_rounding<T: RealScalar + RealField + FloatElement + Debug>() {
+    let arrange = tracing::info_span!("arrange", scalar = core::any::type_name::<T>()).entered();
+    let zero = <T as NumericElement>::ZERO;
+    let one = <T as NumericElement>::ONE;
+    let epsilon = <T as RealField>::EPSILON;
+    let value = one + epsilon;
+    let mut values = vec![-one, zero, zero, zero, value, zero, zero, zero];
+    values.extend_from_within(..);
+    values[8] = -(one + one);
+    let matrix = CsrMatrix::from_parts(values, (0..8).chain(0..8).collect(), vec![0, 8, 16], 2, 8)
+        .expect("sorted native rounding controls");
+    let mut input = vec![one; 8];
+    input[4] = one - epsilon;
+    let input = Array1::from_shape_vec([8], input).expect("matching input");
+    drop(arrange);
+    let result = {
+        let _act = tracing::info_span!("act").entered();
+        spmv(&matrix, &input.view()).expect("native product")
+    };
+    let _assert = tracing::info_span!("assert", ?result).entered();
+    assert_eq!(result.storage().as_slice(), &[zero, -one]);
+}
+
+#[test]
+fn spmv_separate_product_rounding_single_precision() {
+    with_trace(separate_product_rounding::<f32>);
+}
+#[test]
+fn spmv_separate_product_rounding_double_precision() {
+    with_trace(separate_product_rounding::<f64>);
+}

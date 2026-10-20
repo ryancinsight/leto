@@ -125,3 +125,58 @@ publishable graph pass advisories and source checks; neither graph contains
 PyO3/NumPy. No advisory is ignored and no policy is changed. The private Python
 package remains publish=false at its existing version; its upgrade remains
 with the separate common-FFI owner and does not gain acceptance from this patch.
+
+## Fixed-group loop refinement
+
+The initial numerical contract is independently accepted at the original
+candidate; its measured guard cost remains a performance hold. The refinement
+keeps the same four native chains, zero additions, tail-to-lane-zero updates,
+final reduction tree and conditional stored-order fold. For each group k and
+lane j, the update still uses stored index 4k+j. CsrView row slices give equal
+value/index lengths; borrowed arrays of four express within-group bounds to the
+compiler. No new allocation, precision conversion or input/shape rule is added.
+
+The controlled experiment covers all eight combinations of indexed/grouped
+lanes, fold/explicit-loop recovery and cold hints, plus unrepaired and retained
+original-binary controls. All 165,120 native cases preserve the accepted finite
+bits, recovery and nonfinite outcomes; 640,000 measured calls retain strict
+zero-allocation windows with positive controls. Two analytical rounding tests
+also pass before/after: (1+eps)*(1-eps) rounds to one before addition, so a lane
+starting at minus one returns zero; fused/widened arithmetic would keep -eps².
+
+A cold hint alone outlines the iterator fold and increases the recorded stack
+frame from 96 to 176 bytes on the measured build. Grouped loops are consistently
+faster in exploration. The selected source uses grouping with the original fold
+and no cold hint. Stack sampling attributes both retained/selected runs to the
+actual CSR kernel; profiling samples are not benchmark acceptance timings.
+
+Eight repetitions of the exact original binary use the original 10-sample
+profile and all three sizes. The small-kernel medians span 11.267–11.534us; the
+historical whole 24.453–24.594us run is not reproduced. It is retained in full.
+Historical core/frequency/thermal telemetry is unavailable, so no causal claim
+or outlier removal follows. Shared-host sensitivity remains a measurement limit.
+
+Fresh confirmation uses the unchanged kernels and real Athena Poisson sources,
+identical paired locks, all 100 samples and balanced ABBA processes. The latest
+provisional Athena manifests admit public Hephaestus 0.23; all 132 Athena Rust
+files match the reviewed numerical repair. Both sides use that same graph;
+absolute times must not be compared across different campaigns/cohorts.
+
+| Confirmation | Before run medians | Selected run medians | Change |
+| --- | --- | --- | ---: |
+| kernel/4096 vs unrepaired | 11.300, 11.387 us | 9.864, 9.901 us | -12.88% |
+| kernel/65536 vs unrepaired | 182.038, 182.614 us | 159.553, 160.711 us | -12.17% |
+| kernel/1048576 vs unrepaired | 2930.657, 2926.948 us | 2588.740, 2558.896 us | -12.12% |
+| kernel/4096 vs accepted-original | 11.437, 11.517 us | 9.907, 9.852 us | -13.92% |
+| kernel/65536 vs accepted-original | 184.663, 186.760 us | 161.145, 161.374 us | -13.17% |
+| kernel/1048576 vs accepted-original | 2963.052, 2985.271 us | 2578.666, 2586.990 us | -13.16% |
+| CG/64 | 1.624, 1.633 ms | 1.470, 1.466 ms | -9.85% |
+| CG/128 | 13.177, 13.230 ms | 11.842, 11.855 ms | -10.26% |
+| GMRES/64 | 9.353, 9.643 ms | 9.312, 9.127 ms | -2.93% |
+| GMRES/128 | 264.017, 266.351 ms | 257.287, 257.366 ms | -2.96% |
+
+These bounded controls show no remaining net slowdown. They neither create a
+new acceptance threshold nor infer f32/fallback-heavy/other-shape throughput,
+universal performance, or permission to merge/publish. The changed head needs
+fresh independent numerical/performance review and applicable hosted gates.
+All earlier source receipts, raw timing datasets and release holds remain.

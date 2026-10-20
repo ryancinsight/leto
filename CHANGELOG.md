@@ -11,6 +11,11 @@
 
 ### Changed
 
+- Keep the four-lane arithmetic and conditional stored fold unchanged while
+  exposing exact groups of four through borrowed arrays. This removes indexed
+  loop bookkeeping and within-group bound checks without allocating or widening.
+  Paired kernel/application controls and the retained whole-run anomaly remain
+  subject to exact-head numerical/performance acceptance.
 - Qualify the 0.46.2 numerical-order description: integer-valued inputs alone
   do not imply exact partial arithmetic, and cancellation can amplify relative
   rounding error. Recovery promises neither universal finite sums nor correct

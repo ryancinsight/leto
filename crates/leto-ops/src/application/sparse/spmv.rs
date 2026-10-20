@@ -89,15 +89,20 @@ fn gather_dot<T: Scalar>(vals: &[T], cols: &[usize], xs: &[T]) -> T {
     let mut acc1 = T::ZERO;
     let mut acc2 = T::ZERO;
     let mut acc3 = T::ZERO;
-    let full = vals.len() & !3;
-    for k in (0..full).step_by(4) {
-        acc0 = acc0.add(vals[k].mul(xs[cols[k]]));
-        acc1 = acc1.add(vals[k + 1].mul(xs[cols[k + 1]]));
-        acc2 = acc2.add(vals[k + 2].mul(xs[cols[k + 2]]));
-        acc3 = acc3.add(vals[k + 3].mul(xs[cols[k + 3]]));
+    // CsrView validation gives equal value/column lengths. Fixed array
+    // groups express the four-element bounds directly without changing any
+    // per-lane update, zero addition, tail update or final reduction order.
+    debug_assert_eq!(vals.len(), cols.len());
+    let (value_groups, value_tail) = vals.as_chunks::<4>();
+    let (column_groups, column_tail) = cols.as_chunks::<4>();
+    for (values, columns) in value_groups.iter().zip(column_groups) {
+        acc0 = acc0.add(values[0].mul(xs[columns[0]]));
+        acc1 = acc1.add(values[1].mul(xs[columns[1]]));
+        acc2 = acc2.add(values[2].mul(xs[columns[2]]));
+        acc3 = acc3.add(values[3].mul(xs[columns[3]]));
     }
-    for k in full..vals.len() {
-        acc0 = acc0.add(vals[k].mul(xs[cols[k]]));
+    for (&value, &column) in value_tail.iter().zip(column_tail) {
+        acc0 = acc0.add(value.mul(xs[column]));
     }
     let result = acc0.add(acc1).add(acc2.add(acc3));
     if result.is_finite() {
