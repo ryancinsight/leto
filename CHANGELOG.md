@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.47.0] - Unreleased
+
+### Breaking
+
+- [minor] `leto-ops`' op-marker traits (`ScanOp`, `BinaryOp`,
+  `AxisReduction`, `NormKind`, `UnaryOp`) are now sealed through one
+  crate-private `private::Sealed` point and spell their bounds via the
+  `OpMarker` supertrait. `BinaryOp`/`AxisReduction` were already sealed
+  per-module; `ScanOp`, `NormKind`, and `UnaryOp` close to downstream
+  implementors (none exist in the Atlas stack). No function signatures
+  change.
+
+### Changed
+
+- [minor] `leto`/`leto-ops` internal hierarchy: oversized `mod.rs` files
+  split into one-concern leaves (linalg decompositions, quadrature rules,
+  statistics metrics, layout core/serde, vector core, assign methods,
+  reduction elements/tests, attention types, leapfrog operator).
+  Public paths and re-exports are unchanged. Redundant
+  `RealField + FloatElement` bounds collapse to `RealField`.
+
 ## [0.46.4] - Unreleased
 
 ### Added

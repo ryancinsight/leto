@@ -1,5 +1,5 @@
 //! Native range recovery without replacing finite four-lane rounding.
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{Array1, SliceArg, Storage};
 use leto_ops::{spmv, spmv_into, spmv_view_into, CsrMatrix, RealScalar};
 use std::fmt::Debug;
@@ -13,7 +13,7 @@ fn with_trace(run: impl FnOnce()) {
     tracing::subscriber::with_default(subscriber, run);
 }
 
-fn recovery<T: RealScalar + RealField + FloatElement + Debug>(maximum: T) {
+fn recovery<T: RealScalar + RealField + Debug>(maximum: T) {
     let arrange = tracing::info_span!("arrange", scalar = core::any::type_name::<T>()).entered();
     let zero = <T as NumericElement>::ZERO;
     let one = <T as NumericElement>::ONE;
@@ -54,7 +54,7 @@ fn recovery<T: RealScalar + RealField + FloatElement + Debug>(maximum: T) {
     assert_eq!(gathered, expected);
 }
 
-fn finite_lane_results<T: RealScalar + RealField + FloatElement + Debug>(maximum: T) {
+fn finite_lane_results<T: RealScalar + RealField + Debug>(maximum: T) {
     let arrange = tracing::info_span!("arrange", scalar = core::any::type_name::<T>()).entered();
     let zero = <T as NumericElement>::ZERO;
     let one = <T as NumericElement>::ONE;
@@ -80,7 +80,7 @@ fn finite_lane_results<T: RealScalar + RealField + FloatElement + Debug>(maximum
     assert_eq!(result.storage().as_slice(), &[zero, T::from_f64(4.0)]);
 }
 
-fn genuine_nonfinite<T: RealScalar + RealField + FloatElement + Debug>(maximum: T) {
+fn genuine_nonfinite<T: RealScalar + RealField + Debug>(maximum: T) {
     let arrange = tracing::info_span!("arrange", scalar = core::any::type_name::<T>()).entered();
     let one = <T as NumericElement>::ONE;
     let large = maximum * T::from_f64(0.75);
@@ -131,7 +131,7 @@ fn spmv_nonfinite_propagation_double_precision() {
 // (1+eps)*(1-eps) is exactly 1-eps^2 over the reals, but its native
 // product rounds to one. The accepted multiply-then-add lane therefore
 // returns zero for row one; a fused/widened calculation would keep -eps^2.
-fn separate_product_rounding<T: RealScalar + RealField + FloatElement + Debug>() {
+fn separate_product_rounding<T: RealScalar + RealField + Debug>() {
     let arrange = tracing::info_span!("arrange", scalar = core::any::type_name::<T>()).entered();
     let zero = <T as NumericElement>::ZERO;
     let one = <T as NumericElement>::ONE;

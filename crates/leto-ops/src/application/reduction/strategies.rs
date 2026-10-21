@@ -3,12 +3,8 @@
 use crate::domain::scalar::Scalar;
 use eunomia::FloatElement;
 
-mod sealed {
-    pub trait Sealed {}
-}
-
 /// Zero-sized axis-reduction contract.
-pub trait AxisReduction<T: Scalar>: sealed::Sealed + Copy + Send + Sync + 'static {
+pub trait AxisReduction<T: Scalar>: crate::private::OpMarker {
     /// Initial accumulator for non-empty reductions.
     fn initial(first: T) -> T;
     /// Fold one value into the accumulator.
@@ -54,11 +50,11 @@ pub struct MinAxis;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MaxAxis;
 
-impl sealed::Sealed for SumAxis {}
-impl sealed::Sealed for ProductAxis {}
-impl sealed::Sealed for MeanAxis {}
-impl sealed::Sealed for MinAxis {}
-impl sealed::Sealed for MaxAxis {}
+impl crate::private::Sealed for SumAxis {}
+impl crate::private::Sealed for ProductAxis {}
+impl crate::private::Sealed for MeanAxis {}
+impl crate::private::Sealed for MinAxis {}
+impl crate::private::Sealed for MaxAxis {}
 
 impl<T: Scalar> AxisReduction<T> for SumAxis {
     #[inline(always)]

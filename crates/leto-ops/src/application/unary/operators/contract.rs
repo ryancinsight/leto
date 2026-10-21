@@ -8,7 +8,7 @@ use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
 ///
 /// Implementors route through the shared [`map_into`](crate::application::unary::map_into)/[`mapv`](crate::application::unary::mapv) traversal via
 /// [`unary_map_into`]/[`unary_map`]; no implementor defines its own traversal.
-pub trait UnaryOp<T: RealScalar>: Copy + Send + Sync + 'static {
+pub trait UnaryOp<T: RealScalar>: crate::private::OpMarker {
     /// Apply the scalar operation.
     fn apply(&self, x: T) -> T;
 

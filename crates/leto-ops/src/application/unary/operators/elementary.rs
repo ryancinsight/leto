@@ -13,6 +13,8 @@ macro_rules! define_unary_op {
         #[derive(Clone, Copy, Debug, Default)]
         pub struct $name;
 
+        impl crate::private::Sealed for $name {}
+
         impl<T: RealScalar> UnaryOp<T> for $name {
             const COMPUTE_BOUND: bool = $compute_bound;
             #[inline(always)]
@@ -85,6 +87,7 @@ define_unary_op!(/// Truncation operation marker.
 /// Negated exponential `e^-x` operation marker, matching hephaestus `ExpNegOp`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ExpNegOp;
+impl crate::private::Sealed for ExpNegOp {}
 impl<T: RealScalar> UnaryOp<T> for ExpNegOp {
     #[inline(always)]
     fn apply(&self, x: T) -> T {
@@ -97,6 +100,7 @@ impl<T: RealScalar> UnaryOp<T> for ExpNegOp {
 /// the GPU renderings cannot propagate NaN, so NaN reads back as zero.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SignOp;
+impl crate::private::Sealed for SignOp {}
 impl<T: RealScalar> UnaryOp<T> for SignOp {
     const COMPUTE_BOUND: bool = false;
     #[inline(always)]
@@ -119,6 +123,7 @@ pub struct PowfOp<T: RealScalar> {
     /// The exponent applied to every element.
     pub exponent: T,
 }
+impl<T: RealScalar> crate::private::Sealed for PowfOp<T> {}
 impl<T: RealScalar> UnaryOp<T> for PowfOp<T> {
     #[inline(always)]
     fn apply(&self, x: T) -> T {
@@ -135,6 +140,7 @@ impl<T: RealScalar> UnaryOp<T> for PowfOp<T> {
 /// for direct scalar calls.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SincOp;
+impl crate::private::Sealed for SincOp {}
 impl<T: RealScalar> UnaryOp<T> for SincOp {
     #[inline(always)]
     fn apply(&self, x: T) -> T {
