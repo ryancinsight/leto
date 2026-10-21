@@ -6,9 +6,9 @@
 
 - [patch] `Scalar::axpy_pair_slice` computes `out_a += alpha_a * x_a` and
   `out_b += alpha_b * x_b` in one traversal, routed through Hermes 0.9.2's
-  `axpy_pair` SIMD kernel for the floating-point types and bit-identical to
-  two `axpy_slice` calls. Driver: athena's fused CG update
-  (ATHENA-FUSED-UPDATE-20261020).
+  `axpy_pair` SIMD kernel for the floating-point types, with the same
+  per-element `fmadd` order as two `axpy_slice` calls on that path.
+  Driver: athena's fused CG update (ATHENA-FUSED-UPDATE-20261020).
 
 ## [0.46.3] - Unreleased
 

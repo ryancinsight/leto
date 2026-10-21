@@ -93,10 +93,13 @@ pub trait Scalar: NumericElement {
 
     /// Fused dual-output update over equal-length slices:
     /// `out_a[i] += alpha_a * x_a[i]` and `out_b[i] += alpha_b * x_b[i]`,
-    /// in one traversal. Bit-identical to two `axpy_slice` calls for the
-    /// SIMD-routed types (the Hermes kernel keeps the same `fmadd` order);
-    /// the scalar default keeps the same per-element operation order as
-    /// `axpy_slice`.
+    /// in one traversal. On the accepted Hermes SIMD path this is
+    /// bit-identical to two `axpy_slice` calls: both kernels use the same
+    /// per-element `fmadd` order, and Hermes reports only the length
+    /// mismatch asserted against below. The scalar expression used by
+    /// non-SIMD types (and by a hypothetical declined-strategy fallback) is
+    /// exactly `axpy_slice`'s unfused multiply then add, whose rounding may
+    /// differ from an FMA-routed `axpy_slice`.
     #[inline]
     fn axpy_pair_slice(
         alpha_a: Self,
