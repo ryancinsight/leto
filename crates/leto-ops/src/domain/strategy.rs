@@ -42,6 +42,16 @@ pub trait SimdOperations<T: Scalar>: sealed::Sealed {
     fn dot_slice(a: &[T], b: &[T]) -> Option<T>;
     /// Vectorized fused row update: `out[i] += alpha * x[i]`.
     fn axpy_slice(alpha: T, x: &[T], out: &mut [T]) -> Result<(), &'static str>;
+    /// Vectorized fused dual-output update: `out_a[i] += alpha_a * x_a[i]`
+    /// and `out_b[i] += alpha_b * x_b[i]` in one traversal.
+    fn axpy_pair_slice(
+        alpha_a: T,
+        x_a: &[T],
+        out_a: &mut [T],
+        alpha_b: T,
+        x_b: &[T],
+        out_b: &mut [T],
+    ) -> Result<(), &'static str>;
     /// Vectorized fused multi-row update: `out[row, i] += alphas[row] * x[i]`.
     fn axpy_rows(
         alphas: &[T],
@@ -140,6 +150,18 @@ macro_rules! impl_simd_ops_native {
             #[inline(always)]
             fn axpy_slice(alpha: $t, x: &[$t], out: &mut [$t]) -> Result<(), &'static str> {
                 hermes_simd::axpy::<$t>(alpha, x, out).map_err(|_| "simd axpy failed")
+            }
+            #[inline(always)]
+            fn axpy_pair_slice(
+                alpha_a: $t,
+                x_a: &[$t],
+                out_a: &mut [$t],
+                alpha_b: $t,
+                x_b: &[$t],
+                out_b: &mut [$t],
+            ) -> Result<(), &'static str> {
+                hermes_simd::axpy_pair::<$t>(alpha_a, x_a, out_a, alpha_b, x_b, out_b)
+                    .map_err(|_| "simd axpy pair failed")
             }
             #[inline(always)]
             fn axpy_rows(
