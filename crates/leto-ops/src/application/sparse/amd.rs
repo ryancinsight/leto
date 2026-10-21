@@ -112,9 +112,18 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
     // for every nonzero (i, j), i and j are neighbors (unless i == j).
     // |Aᵀ| contributes the symmetric edge, so iterating A's nonzeros once
     // and writing both directions fully constructs the undirected graph.
-    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
     let col_ptr = csc.col_ptr();
     let row_indices = csc.row_indices();
+    let mut raw_deg = vec![0usize; n];
+    for j in 0..n {
+        for &i in &row_indices[col_ptr[j]..col_ptr[j + 1]] {
+            if i != j {
+                raw_deg[i] += 1;
+                raw_deg[j] += 1;
+            }
+        }
+    }
+    let mut adj: Vec<Vec<usize>> = raw_deg.into_iter().map(Vec::with_capacity).collect();
     for j in 0..n {
         for &i in &row_indices[col_ptr[j]..col_ptr[j + 1]] {
             if i == j {
@@ -150,6 +159,10 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
         heap.push(Reverse((degree, v)));
     }
 
+    // Reusable scratch for the active vertex's uneliminated neighbors, avoiding
+    // a per-step heap allocation across the n elimination steps.
+    let mut neighbors_v: Vec<usize> = Vec::with_capacity(n);
+
     // Step 4 — elimination loop.
     while perm.len() < n {
         // Pop the next valid minimum-degree vertex.
@@ -174,14 +187,12 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
         perm.push(v);
 
         // Collect v's uneliminated neighbors (those still part of the
-        // active graph; edges to eliminated vertices are notiterated on
+        // active graph; edges to eliminated vertices are not iterated on
         // for fill — they would have introduced their fill edges at their
         // own elimination).
-        let neighbors_v: Vec<usize> = adj[v]
-            .iter()
-            .copied()
-            .filter(|&u| !eliminated[u])
-            .collect::<Vec<_>>();
+        neighbors_v.clear();
+        neighbors_v.extend(adj[v].iter().copied().filter(|&u| !eliminated[u]));
+        adj[v] = Vec::new();
 
         // For every unordered pair (u, w) of v's uneliminated neighbors
         // with u < w and edge (u, w) absent: add it (fill edge), and
