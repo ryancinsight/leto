@@ -1,6 +1,9 @@
 #![warn(missing_docs)]
 //! Leto Operations contains performance-tuned math and reduction kernels for Leto arrays.
 
+/// Crate-private sealing point: `Sealed` and the `OpMarker` supertrait.
+pub(crate) mod private;
+
 /// Application-level operation entry points.
 pub mod application;
 /// Operation scalar and strategy contracts.
@@ -36,87 +39,20 @@ pub use application::convolution::{
 };
 pub use application::embedding::{embedding_gather, embedding_gather_into};
 pub use application::linalg::{
-    bidiagonalize,
-    bunch_kaufman,
-    cholesky_decompose,
-    cholesky_det,
-    cholesky_inv,
-    cholesky_solve,
-    col_piv_qr,
-    // ── Complex linear algebra ────────────────────────────────────────────────
-    complex_inv,
-    complex_solve,
-    det,
-    eigenvalues,
-    full_piv_lu,
-    // ── Hermitian eigensolvers ─────────────────────────────────────────────────
-    hermitian_eigen_jacobi,
-    hermitian_eigen_qr,
-    hessenberg,
-    inv,
-    kron,
-    l2_normalize,
-    l2_normalize_into,
-    lu_decompose,
-    matexp,
-    matpow,
-    matrix_rank,
-    matrix_rank_with_tolerance,
-    nnls,
-    norm,
-    norm_l1,
-    norm_l2,
-    norm_max,
-    pinv,
-    qr_decompose,
-    schur,
-    singular_values,
-    solve,
-    solve_least_squares,
-    svd_decompose,
-    symmetric_eigen_jacobi,
-    symmetric_eigen_jacobi_with_tolerance,
-    symmetric_eigen_qr,
-    symmetric_eigenvalues_jacobi,
-    symmetric_eigenvalues_jacobi_with_tolerance,
-    take_dbdsqr_counts,
-    take_francis_steps,
-    take_ql_sweeps,
-    trace,
-    udu_decompose,
-    AsMatrixView,
-
-    BidiagonalDecomposition,
-    BunchKaufmanDecomposition,
-    CholeskyDecomposition,
-    ColPivQrDecomposition,
-
-    FullPivLuDecomposition,
-    HermitianEigenConfig,
-    HermitianEigenResult,
-    HessenbergDecomposition,
-
-    LuDecomposition,
-    MatrixDecompose,
-    MatrixFunction,
-    MatrixNorm,
-    MatrixProduct,
-    MatrixProperties,
-    MatrixSolve,
-    NnlsConfig,
-    NnlsResult,
-    NormKind,
-    NormL1,
-    NormL2,
-    NormMax,
-
-    QrDecomposition,
-    RealSchur,
-
-    SvdDecomposition,
-    SymmetricEigenDecomposition,
-    SymmetricEigenWorkspace,
-    UduDecomposition,
+    bidiagonalize, bunch_kaufman, cholesky_decompose, cholesky_det, cholesky_inv, cholesky_solve,
+    col_piv_qr, complex_inv, complex_solve, det, eigenvalues, full_piv_lu, hermitian_eigen_jacobi,
+    hermitian_eigen_qr, hessenberg, inv, kron, l2_normalize, l2_normalize_into, lu_decompose,
+    matexp, matpow, matrix_rank, matrix_rank_with_tolerance, nnls, norm, norm_l1, norm_l2,
+    norm_max, pinv, qr_decompose, schur, singular_values, solve, solve_least_squares,
+    svd_decompose, symmetric_eigen_jacobi, symmetric_eigen_jacobi_with_tolerance,
+    symmetric_eigen_qr, symmetric_eigenvalues_jacobi, symmetric_eigenvalues_jacobi_with_tolerance,
+    take_dbdsqr_counts, take_francis_steps, take_ql_sweeps, trace, udu_decompose, AsMatrixView,
+    BidiagonalDecomposition, BunchKaufmanDecomposition, CholeskyDecomposition,
+    ColPivQrDecomposition, FullPivLuDecomposition, HermitianEigenConfig, HermitianEigenResult,
+    HessenbergDecomposition, LuDecomposition, MatrixDecompose, MatrixFunction, MatrixNorm,
+    MatrixProduct, MatrixProperties, MatrixSolve, NnlsConfig, NnlsResult, NormKind, NormL1, NormL2,
+    NormMax, QrDecomposition, RealSchur, SvdDecomposition, SymmetricEigenDecomposition,
+    SymmetricEigenWorkspace, UduDecomposition,
 };
 pub use application::loss::{
     cross_entropy_backward_accumulate, cross_entropy_forward_into, ctc, CrossEntropyError,

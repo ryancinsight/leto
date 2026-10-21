@@ -32,7 +32,7 @@
 //! rectangular (`n → n−1`), so its adjoint fans an `n−1`-lane upstream back
 //! out to `n` lanes.
 
-use eunomia::{FloatElement, NumericElement, RealField};
+use eunomia::{NumericElement, RealField};
 use leto::{ArrayView3, ArrayViewMut3, LetoError, Result};
 
 use super::f;
@@ -47,7 +47,7 @@ struct Scales<T> {
     inv_60h: T,
 }
 
-fn scales<T: RealField + FloatElement + Copy>(h: T) -> Scales<T> {
+fn scales<T: RealField + Copy>(h: T) -> Scales<T> {
     let one = <T as NumericElement>::ONE;
     Scales {
         inv_h: one / h,
@@ -73,7 +73,7 @@ fn is_central4_fourth(n: usize, i: usize) -> bool {
 /// Central-2 adjoint lane: wall taps plus the interior's negated stencil.
 fn adjoint2_lane<T, F>(u: F, n: usize, j: usize, scales: &Scales<T>) -> T
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField + Copy,
     F: Fn(usize) -> T,
 {
     let zero = <T as NumericElement>::ZERO;
@@ -103,7 +103,7 @@ where
 /// row taps. A singleton axis is flat, since the forward sweep is zero.
 fn adjoint4_lane<T, F>(u: F, n: usize, j: usize, scales: &Scales<T>) -> T
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField + Copy,
     F: Fn(usize) -> T,
 {
     let zero = <T as NumericElement>::ZERO;
@@ -149,7 +149,7 @@ where
 /// taps in canonical order.
 fn adjoint6_lane<T, F>(u: F, n: usize, j: usize, scales: &Scales<T>) -> T
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField + Copy,
     F: Fn(usize) -> T,
 {
     let zero = <T as NumericElement>::ZERO;
@@ -215,7 +215,7 @@ where
 /// `n−1`-lane upstream back out to `n` lanes.
 fn adjoint_forward_lane<T, F>(u: F, n: usize, j: usize, inv_h: T) -> T
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField + Copy,
     F: Fn(usize) -> T,
 {
     let zero = <T as NumericElement>::ZERO;
@@ -233,7 +233,7 @@ where
 /// rows' transposed taps.
 fn adjoint_backward_lane<T, F>(u: F, n: usize, j: usize, inv_h: T) -> T
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField + Copy,
     F: Fn(usize) -> T,
 {
     let zero = <T as NumericElement>::ZERO;
@@ -273,7 +273,7 @@ pub(super) fn adjoint_into<T>(
     h: T,
 ) -> Result<()>
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField + Copy,
 {
     let shape = grad.shape();
     let n = shape[axis.index()];
@@ -333,7 +333,7 @@ where
 /// traversal inlines its strided read.
 fn lane<T, F>(scheme: FiniteDifference3DScheme, n: usize, j: usize, read: F, s: &Scales<T>) -> T
 where
-    T: RealField + FloatElement + Copy,
+    T: RealField + Copy,
     F: Fn(usize) -> T,
 {
     match scheme {

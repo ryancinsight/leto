@@ -21,6 +21,7 @@ use eunomia::RealField;
 /// lanewise oracle note in `tests/ops/unary_math/special.rs`).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct J0Op;
+impl crate::private::Sealed for J0Op {}
 impl<T: RealScalar + RealField> UnaryOp<T> for J0Op {
     #[inline(always)]
     fn apply(&self, x: T) -> T {
@@ -33,6 +34,7 @@ impl<T: RealScalar + RealField> UnaryOp<T> for J0Op {
 /// (libm-routed). Same scalar-oracle relationship as [`J0Op`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct J1Op;
+impl crate::private::Sealed for J1Op {}
 impl<T: RealScalar + RealField> UnaryOp<T> for J1Op {
     #[inline(always)]
     fn apply(&self, x: T) -> T {
@@ -47,6 +49,7 @@ impl<T: RealScalar + RealField> UnaryOp<T> for J1Op {
 /// same nested formulation in the lane precision.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct K0Op;
+impl crate::private::Sealed for K0Op {}
 impl<T: RealScalar + RealField> UnaryOp<T> for K0Op {
     #[inline(always)]
     fn apply(&self, x: T) -> T {

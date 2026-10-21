@@ -65,6 +65,31 @@ const GELU_TANH_GRAD_CROSSOVER: f64 = 2.47;
 const MISH_GRAD_CROSSOVER: f64 = 1.55;
 /// Largest `|y|` for which `TanhGradOp` forms `1 − y²` directly.
 const TANH_GRAD_CROSSOVER: f64 = 0.75;
+
+impl crate::private::Sealed for ReluOp {}
+impl crate::private::Sealed for ReluGradOp {}
+impl crate::private::Sealed for EluOp {}
+impl crate::private::Sealed for EluGradOp {}
+impl crate::private::Sealed for SigmoidOp {}
+impl crate::private::Sealed for SigmoidGradOp {}
+impl crate::private::Sealed for TanhGradOp {}
+impl crate::private::Sealed for SoftplusOp {}
+impl crate::private::Sealed for SoftplusGradOp {}
+impl crate::private::Sealed for SoftsignOp {}
+impl crate::private::Sealed for SoftsignGradOp {}
+impl crate::private::Sealed for HardsigmoidOp {}
+impl crate::private::Sealed for HardsigmoidGradOp {}
+impl crate::private::Sealed for HardswishOp {}
+impl crate::private::Sealed for HardswishGradOp {}
+impl crate::private::Sealed for GeluOp {}
+impl crate::private::Sealed for GeluGradOp {}
+impl crate::private::Sealed for GeluTanhOp {}
+impl crate::private::Sealed for GeluTanhGradOp {}
+impl crate::private::Sealed for SiluOp {}
+impl crate::private::Sealed for SiluGradOp {}
+impl crate::private::Sealed for MishOp {}
+impl crate::private::Sealed for MishGradOp {}
+
 /// ReLU operation marker: `max(x, 0)`, propagating NaN (eunomia's `max`
 /// ignores a NaN operand, so the explicit check comes first).
 #[derive(Clone, Copy, Debug, Default)]

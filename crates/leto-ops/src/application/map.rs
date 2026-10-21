@@ -5,12 +5,8 @@ use crate::infrastructure::cache::{cached_cache_geometry, CacheGeometry};
 use crate::infrastructure::parallel::parallelize_bandwidth_bound;
 use leto::{Array, ArrayView, ArrayViewMut, Result, VecStorage};
 
-mod sealed {
-    pub trait Sealed {}
-}
-
 /// Zero-sized binary operation contract for element-wise kernels.
-pub trait BinaryOp<T: Scalar>: sealed::Sealed + Copy + Send + Sync + 'static {
+pub trait BinaryOp<T: Scalar>: crate::private::OpMarker {
     /// Apply the scalar operation.
     fn apply(lhs: T, rhs: T) -> T;
 
@@ -34,10 +30,10 @@ pub struct MulOp;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DivOp;
 
-impl sealed::Sealed for AddOp {}
-impl sealed::Sealed for SubOp {}
-impl sealed::Sealed for MulOp {}
-impl sealed::Sealed for DivOp {}
+impl crate::private::Sealed for AddOp {}
+impl crate::private::Sealed for SubOp {}
+impl crate::private::Sealed for MulOp {}
+impl crate::private::Sealed for DivOp {}
 
 macro_rules! define_comparison_op {
     ($name:ident, $comparison:tt) => {
@@ -45,7 +41,7 @@ macro_rules! define_comparison_op {
         #[derive(Clone, Copy, Debug, Default)]
         pub struct $name;
 
-        impl sealed::Sealed for $name {}
+        impl crate::private::Sealed for $name {}
 
         impl<T: Scalar> BinaryOp<T> for $name {
             #[inline(always)]

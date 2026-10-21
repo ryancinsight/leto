@@ -1,0 +1,153 @@
+use super::decompose;
+use crate::application::linalg::scaling::{self, GateBound};
+use crate::application::linalg::thresholds;
+use crate::domain::real::RealScalar;
+use leto::{Array1, Array2, ArrayView1, ArrayView2, LetoError, Result};
+
+/// Column-pivoted QR decomposition `A P = Q R`.
+#[derive(Debug, Clone)]
+pub struct ColPivQrDecomposition<T> {
+    q: Vec<T>,
+    r: Vec<T>,
+    perm: Vec<usize>,
+    rank: usize,
+    m: usize,
+    n: usize,
+}
+
+impl<T: RealScalar> ColPivQrDecomposition<T> {
+    /// Numerical rank (count of above-threshold `R` diagonal entries).
+    #[must_use]
+    pub fn rank(&self) -> usize {
+        self.rank
+    }
+
+    /// Orthogonal factor `Q` (`m × m`).
+    #[must_use]
+    pub fn q(&self) -> Array2<T> {
+        Array2::from_shape_vec([self.m, self.m], self.q.clone()).expect("Q shape matches storage")
+    }
+
+    /// Upper-triangular factor `R` (`m × n`).
+    #[must_use]
+    pub fn r(&self) -> Array2<T> {
+        Array2::from_shape_vec([self.m, self.n], self.r.clone()).expect("R shape matches storage")
+    }
+
+    /// Column permutation: `permutation()[k]` is the original column at position `k`.
+    #[must_use]
+    pub fn permutation(&self) -> &[usize] {
+        &self.perm
+    }
+
+    /// Least-squares solution of `min ‖A x − b‖₂` for full-column-rank `A`.
+    ///
+    /// `A = Q R Pᵀ`, so `min‖Ax−b‖ = min‖R(Pᵀx) − Qᵀb‖`; with full column rank
+    /// the top `n×n` of `R` is invertible — back-substitute `R y = (Qᵀb)[0..n]`,
+    /// then `x = P y`.
+    ///
+    /// # Errors
+    /// [`LetoError`] on a rank-deficient matrix (rank-deficient
+    /// least squares is a follow-up) or shape mismatch.
+    pub fn solve_least_squares(&self, rhs: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+        let (m, n) = (self.m, self.n);
+        if rhs.shape() != [m] {
+            return Err(LetoError::ShapeMismatch {
+                lhs: rhs.shape().to_vec(),
+                rhs: vec![m],
+            });
+        }
+        if self.rank < n {
+            return Err(LetoError::StorageError {
+                reason: "ColPivQR least squares requires full column rank".to_string(),
+            });
+        }
+
+        let mut qtb_stack = [T::ZERO; 128];
+        let mut qtb_vec = Vec::new();
+        let qtb = if m <= 128 {
+            &mut qtb_stack[..m]
+        } else {
+            qtb_vec.resize(m, T::ZERO);
+            &mut qtb_vec[..]
+        };
+
+        let mut rhs_stack = [T::ZERO; 128];
+        let mut rhs_vec = Vec::new();
+        let rhs_slice = if let Some(slice) = rhs.as_slice() {
+            slice
+        } else {
+            if m <= 128 {
+                for (k, slot) in rhs_stack[..m].iter_mut().enumerate() {
+                    *slot = *rhs.get([k])?;
+                }
+                &rhs_stack[..m]
+            } else {
+                rhs_vec.reserve_exact(m);
+                for k in 0..m {
+                    rhs_vec.push(*rhs.get([k])?);
+                }
+                &rhs_vec[..]
+            }
+        };
+
+        // qtb = Qᵀ b (Qᵀ[i][k] = q[k][i]).
+        for (i, slot) in qtb.iter_mut().enumerate() {
+            let mut acc = T::ZERO;
+            for (k, &rhs_val) in rhs_slice.iter().enumerate() {
+                acc = acc.add(rhs_val.mul(self.q[k * m + i]));
+            }
+            *slot = acc;
+        }
+
+        // Back-substitute R y = qtb[0..n] in place in qtb.
+        for i in (0..n).rev() {
+            let mut s = qtb[i];
+            for (j, &qtb_j) in qtb.iter().enumerate().take(n).skip(i + 1) {
+                s = s.sub(self.r[i * n + j].mul(qtb_j));
+            }
+            qtb[i] = s.div(self.r[i * n + i]);
+        }
+
+        // x = P y.
+        let mut x = vec![T::ZERO; n];
+        for k in 0..n {
+            x[self.perm[k]] = qtb[k];
+        }
+        Array1::from_shape_vec([n], x)
+    }
+}
+
+/// Factor a matrix with column-pivoted (rank-revealing) Householder QR.
+///
+/// # Errors
+/// [`LetoError::StorageError`] for a non-finite entry.
+pub fn col_piv_qr<T: RealScalar>(matrix: &ArrayView2<'_, T>) -> Result<ColPivQrDecomposition<T>> {
+    // Balance by an exact power of two: `Q`, the permutation and the rank are
+    // scale-invariant (the rank threshold is relative to the largest column
+    // norm); `R` scales.
+    //
+    // Matrix-tier gate, degree 2, bound `2^⌈log₂ rows⌉`: pivot selection
+    // compares cached squared tail norms (`decompose/column_norms.rs`), each a
+    // raw `Σrᵢ²` over at most `rows` entries of a trailing column, whose 2-norm
+    // the reflectors preserve — so `Σrᵢ² ≤ rows·‖A‖_max²`.
+    let rows = matrix.shape()[0];
+    let f = match scaling::balanced(matrix, 2, |_, _| {
+        GateBound::factor(thresholds::ceil_log2_count(rows))
+    })? {
+        Some((scaled, exponent)) => {
+            let mut f = decompose::factor(&scaled.view())?;
+            scaling::restore(&mut f.r, exponent, "R entry exceeds the scalar range")?;
+            f
+        }
+        None => decompose::factor(matrix)?,
+    };
+    Ok(ColPivQrDecomposition {
+        q: f.q,
+        r: f.r,
+        perm: f.perm,
+        rank: f.rank,
+        m: f.m,
+        n: f.n,
+    })
+}

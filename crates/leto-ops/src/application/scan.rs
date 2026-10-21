@@ -18,7 +18,7 @@ pub enum ScanDirection {
 ///
 /// Implemented by zero-sized markers so `scan_axis` monomorphizes to a direct
 /// inlined accumulation with no indirection.
-pub trait ScanOp<T: Scalar>: Copy + Send + Sync + 'static {
+pub trait ScanOp<T: Scalar>: crate::private::OpMarker {
     /// The scan identity (`0` for sum, `1` for product).
     fn identity() -> T;
     /// Combine the running accumulator with the next element.
@@ -32,6 +32,9 @@ pub struct CumSumOp;
 /// Cumulative-product scan marker.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CumProdOp;
+
+impl crate::private::Sealed for CumSumOp {}
+impl crate::private::Sealed for CumProdOp {}
 
 impl<T: Scalar> ScanOp<T> for CumSumOp {
     #[inline(always)]

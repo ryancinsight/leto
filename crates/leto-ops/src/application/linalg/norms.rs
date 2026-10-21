@@ -10,7 +10,7 @@ use leto::{Array, ArrayView, ArrayViewMut, LetoError, Result, VecStorage};
 ///
 /// Elementwise norms are traversal-order independent, so the contiguous fast
 /// path may run in physical memory order over any dense block.
-pub trait NormKind<T: RealScalar>: Copy + Send + Sync + 'static {
+pub trait NormKind<T: RealScalar>: crate::private::OpMarker {
     /// Optional dense-slice fast path for norms with a fused reduction kernel.
     #[inline]
     fn accumulate_slice(_slice: &[T]) -> Option<T> {
@@ -40,6 +40,10 @@ pub struct NormL2;
 /// Max (infinity) norm marker: `max |x|`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NormMax;
+
+impl crate::private::Sealed for NormL1 {}
+impl crate::private::Sealed for NormL2 {}
+impl crate::private::Sealed for NormMax {}
 
 impl<T: RealScalar> NormKind<T> for NormL1 {
     #[inline]
