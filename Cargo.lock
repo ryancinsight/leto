@@ -747,7 +747,7 @@ dependencies = [
 
 [[package]]
 name = "leto-ops"
-version = "0.46.4"
+version = "0.46.5"
 dependencies = [
  "aequitas",
  "criterion",
