@@ -1,6 +1,11 @@
 [package]
 name = "leto-ops"
-version.workspace = true
+# Explicit rather than `workspace = true`: the optional `parallel` feature's
+# published dependency on moirai moved from ^0.10 to ^0.11, which changes this
+# crate's manifest contract without changing its API, so it takes a patch
+# release while the cohort stays at 0.46.4. Callers requiring `>=0.46.1,
+# <0.48.0` -- coeus and hephaestus among them -- keep resolving.
+version = "0.46.5"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
