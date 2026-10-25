@@ -2,6 +2,7 @@
 //!
 //! Exposes Leto and `leto-ops` operations to Python via PyO3.
 
+#![deny(missing_docs)]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(test, allow(clippy::unwrap_used, reason = "test scope"))]
 
@@ -13,6 +14,7 @@ mod support;
 
 use pyo3::prelude::*;
 
+/// Python module entry point for Leto bindings.
 #[pymodule]
 fn leto_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     elementwise::register(m)?;

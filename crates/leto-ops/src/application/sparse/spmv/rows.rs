@@ -1,6 +1,13 @@
-//! Sparse matrix–vector product `y = A · x` over CSR, in `O(nnz)` time.
+//! The CSR SpMV product entries, the row walk and the gather-dot kernel.
+//!
+//! One walk serves the serial entry and every parallel task: a caller hands
+//! it a `y` run and the matching `row_ptr` window, so the parallel driver
+//! never re-derives row boundaries and the row arithmetic stays identical in
+//! both paths.
 
-use super::{CsrMatrix, CsrView};
+#[cfg(feature = "parallel")]
+use super::parallel;
+use crate::application::sparse::{CsrMatrix, CsrView};
 use crate::domain::scalar::Scalar;
 use leto::{Array1, ArrayView1, LetoError, Result, Storage};
 
@@ -9,6 +16,9 @@ use leto::{Array1, ArrayView1, LetoError, Result, Storage};
 /// theorem for correctness and complexity. Borrowed-CSR SSOT: [`spmv_into`]
 /// delegates here through [`CsrMatrix::as_view`], so owned and borrowed
 /// matrices share one kernel with zero copies either way.
+///
+/// Rows are independent, so past the cache gate the pass spreads them over
+/// the runtime's workers without changing any row's result.
 ///
 /// # Errors
 /// [`LetoError::ShapeMismatch`] if `x` is not length `ncols` or `y` is not
@@ -38,6 +48,21 @@ pub fn spmv_view_into<T: Scalar>(a: &CsrView<T>, x: &ArrayView1<'_, T>, y: &mut 
     spmv_slice_into(a, x_contiguous.storage().as_slice(), y)
 }
 
+/// Dispatch one contiguous-`x` row pass: the gated parallel row driver past
+/// its nonzero gate, the serial row walk otherwise. Every row keeps its fixed
+/// reduction order in both paths, so the choice changes only which thread
+/// walks the row.
+fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<()> {
+    let (values, col_indices, row_ptr) = a.as_parts();
+    #[cfg(feature = "parallel")]
+    if parallel::should_parallelize(values.len()) {
+        parallel::spmv_rows_parallel(values, col_indices, row_ptr, xs, y);
+        return Ok(());
+    }
+    spmv_row_window_into(values, col_indices, row_ptr, xs, y);
+    Ok(())
+}
+
 /// Compute `y = A · x` over an owned matrix. Thin wrapper over
 /// [`spmv_view_into`] (SSOT) through [`CsrMatrix::as_view`] (zero-copy).
 ///
@@ -48,9 +73,36 @@ pub fn spmv_into<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>, y: &mut [T]
     spmv_view_into(&a.as_view(), x, y)
 }
 
-fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<()> {
-    let (values, col_indices, row_ptr) = a.as_parts();
+/// Compute `y = A · x`, allocating the length-`nrows` result. Thin wrapper
+/// over [`spmv_into`] (SSOT).
+///
+/// # Errors
+/// [`LetoError::ShapeMismatch`] if `x` is not length `ncols`.
+pub fn spmv<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>) -> Result<Array1<T>> {
+    let (nrows, _) = a.shape();
+    let mut y = vec![T::ZERO; nrows];
+    spmv_into(a, x, &mut y)?;
+    Array1::from_shape_vec([nrows], y)
+}
 
+/// Compute one row per `y` slot from the matching `row_ptr` window.
+///
+/// `row_ptr` must hold one more entry than `y` (the rows' start and end
+/// offsets); the caller keeps that identity — the whole matrix in the serial
+/// path, one task's rows in the parallel one.
+///
+/// # Panics
+/// Debug builds assert the `row_ptr` window length; release builds slice with
+/// it, so a mismatch is an out-of-bounds panic rather than a wrong result.
+#[inline]
+pub(super) fn spmv_row_window_into<T: Scalar>(
+    values: &[T],
+    col_indices: &[usize],
+    row_ptr: &[usize],
+    xs: &[T],
+    y: &mut [T],
+) {
+    debug_assert_eq!(row_ptr.len(), y.len() + 1);
     // Iterate rows through `row_ptr.windows(2)` zipped with `y` — eliding the
     // `y[i]`/`row_ptr[i]`/`row_ptr[i+1]` bounds checks — and slice each row's
     // value/column runs so the per-nonzero `values[p]`/`col_indices[p]` checks
@@ -64,7 +116,6 @@ fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<(
         let vals = &values[start..end];
         *slot = gather_dot(vals, cols, xs);
     }
-    Ok(())
 }
 
 /// Gather-dot `sum(vals[p] * xs[cols[p]])` over one CSR row.
@@ -84,6 +135,9 @@ fn spmv_slice_into<T: Scalar>(a: &CsrView<T>, xs: &[T], y: &mut [T]) -> Result<(
 /// Integer-valued inputs alone do not imply bitwise equality: products and
 /// every partial sum must also be exactly representable. No compensated sum,
 /// widened accumulator or universal correctly-rounded result is promised.
+///
+/// The order is row-local, so a row produces the same bits whichever thread
+/// walks it.
 fn gather_dot<T: Scalar>(vals: &[T], cols: &[usize], xs: &[T]) -> T {
     let mut acc0 = T::ZERO;
     let mut acc1 = T::ZERO;
@@ -115,16 +169,4 @@ fn gather_dot<T: Scalar>(vals: &[T], cols: &[usize], xs: &[T]) -> T {
             .zip(cols)
             .fold(T::ZERO, |acc, (&value, &col)| acc.add(value.mul(xs[col])))
     }
-}
-
-/// Compute `y = A · x`, allocating the length-`nrows` result. Thin wrapper over
-/// [`spmv_into`] (SSOT).
-///
-/// # Errors
-/// [`LetoError::ShapeMismatch`] if `x` is not length `ncols`.
-pub fn spmv<T: Scalar>(a: &CsrMatrix<T>, x: &ArrayView1<'_, T>) -> Result<Array1<T>> {
-    let (nrows, _) = a.shape();
-    let mut y = vec![T::ZERO; nrows];
-    spmv_into(a, x, &mut y)?;
-    Array1::from_shape_vec([nrows], y)
 }
