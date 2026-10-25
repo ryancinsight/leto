@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 //! Leto Operations contains performance-tuned math and reduction kernels for Leto arrays.
 
 /// Crate-private sealing point: `Sealed` and the `OpMarker` supertrait.
