@@ -5,6 +5,7 @@ use super::{
     pinned_values, qr_decompose, spmv_into, svd_decompose, symmetric_eigen_qr, udu_decompose,
     Array, Criterion, CscMatrix, CsrMatrix,
 };
+use eunomia::FloatElement;
 
 /// LU scaling instrument. The factorization is a rank-1 (BLAS-2) trailing
 /// update; on a large-L3 host it stays cache-resident (and fast) until the
@@ -133,8 +134,37 @@ fn banded_csc(n: usize, half_bw: usize) -> CscMatrix<f64> {
     CscMatrix::from_parts(values, row_indices, col_ptr, n, n).expect("banded CSC is valid")
 }
 
+/// Long-column CSC matrix: `n` columns, each covering `degree` consecutive
+/// rows starting at twice its own index. The rows run past the last column's
+/// start, so no column is clipped and every column holds exactly `degree`
+/// entries — that average is what decides whether the row-range split pays,
+/// since the column walk each task pays is amortized by the scatter-adds the
+/// column owns. The columns overlap heavily (2n + degree rows over n columns),
+/// which is the shape a column-major operator with long coupling takes.
+fn long_column_csc(n: usize, degree: usize) -> CscMatrix<f64> {
+    let mut values = Vec::new();
+    let mut row_indices = Vec::new();
+    let mut col_ptr = Vec::with_capacity(n + 1);
+    col_ptr.push(0);
+    for j in 0..n {
+        let lo = 2 * j;
+        for i in lo..lo + degree {
+            row_indices.push(i);
+            values.push(if i == lo {
+                f64::from_count(degree)
+            } else {
+                -1.0
+            });
+        }
+        col_ptr.push(values.len());
+    }
+    CscMatrix::from_parts(values, row_indices, col_ptr, 2 * n + degree, n)
+        .expect("long-column CSC is valid")
+}
+
 /// CSC SpMV  scaling instrument — the scatter-add, column-major
-/// analogue of bench_spmv across the same L2/L3/DRAM size ladder.
+/// analogue of bench_spmv across the same L2/L3/DRAM size ladder, plus the
+/// long-column ladder that straddles the row-range split's degree gate.
 pub(super) fn bench_csc_spmv(c: &mut Criterion) {
     let mut group = c.benchmark_group("csc_spmv");
     for &n in &[4096usize, 65536, 1 << 20] {
@@ -142,6 +172,28 @@ pub(super) fn bench_csc_spmv(c: &mut Criterion) {
         let x = Array::from_shape_vec([n], pinned_values(n, 1.0e-3)).unwrap();
         let mut y = vec![0.0f64; n];
         group.bench_function(format!("banded7_{n}"), |bencher| {
+            bencher.iter(|| {
+                csc_spmv_into(
+                    black_box(&a),
+                    black_box(&x.view()),
+                    black_box(y.as_mut_slice()),
+                )
+                .unwrap();
+            });
+        });
+    }
+    for &(n, degree) in &[
+        (32_768usize, 16usize),
+        (32_768, 32),
+        (32_768, 64),
+        (32_768, 128),
+        (65_536, 128),
+        (32_768, 384),
+    ] {
+        let a = long_column_csc(n, degree);
+        let x = Array::from_shape_vec([n], pinned_values(n, 1.0e-3)).unwrap();
+        let mut y = vec![0.0f64; a.shape().0];
+        group.bench_function(format!("longcols{degree}_{n}"), |bencher| {
             bencher.iter(|| {
                 csc_spmv_into(
                     black_box(&a),
