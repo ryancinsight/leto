@@ -13,7 +13,7 @@ impl<T: RealField> Quadrature<T> for TrapezoidalRule {
         (b - a) * (g(a) + g(b)) / f(2.0)
     }
     fn order(&self) -> usize {
-        2
+        1
     }
     fn num_points(&self) -> usize {
         2
@@ -30,7 +30,7 @@ impl<T: RealField> Quadrature<T> for SimpsonsRule {
         (b - a) * (g(a) + f::<T>(4.0) * g(mid) + g(b)) / f(6.0)
     }
     fn order(&self) -> usize {
-        4
+        3
     }
     fn num_points(&self) -> usize {
         3
@@ -53,5 +53,13 @@ mod tests {
         let s = SimpsonsRule;
         let v: f64 = s.integrate(|x: f64| x.powi(3), 0.0, 2.0);
         assert!((v - 4.0).abs() < 1e-10);
+    }
+
+    /// `order()` is the polynomial degree of exactness (Burden & Faires):
+    /// trapezoid exact through degree 1, Simpson through degree 3.
+    #[test]
+    fn order_matches_exactness_degree() {
+        assert_eq!(Quadrature::<f64>::order(&TrapezoidalRule), 1);
+        assert_eq!(Quadrature::<f64>::order(&SimpsonsRule), 3);
     }
 }

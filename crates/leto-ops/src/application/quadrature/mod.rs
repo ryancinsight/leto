@@ -7,12 +7,12 @@
 //!
 //! | Type | Order | Points |
 //! |------|-------|--------|
-//! | [Trapezoidal](crate::application::quadrature::TrapezoidalRule) | 2 | 2 |
-//! | [Simpson](crate::application::quadrature::SimpsonsRule) | 4 | 3 |
-//! | [Gauss-Legendre 2](crate::application::quadrature::GaussLegendre2) | 4 (exact for deg ≤ 3) | 2 |
-//! | [Gauss-Legendre 3](crate::application::quadrature::GaussLegendre3) | 6 (exact for deg ≤ 5) | 3 |
-//! | [Gauss-Legendre 5](crate::application::quadrature::GaussLegendre5) | 10 (exact for deg ≤ 9) | 5 |
-//! | [Gauss-Legendre n](crate::application::quadrature::GaussLegendreN) | 2n−1 (exact for deg ≤ 2n−1) | n (arbitrary) |
+//! | [Trapezoidal](crate::application::quadrature::TrapezoidalRule) | 1 | 2 |
+//! | [Simpson](crate::application::quadrature::SimpsonsRule) | 3 | 3 |
+//! | [Gauss-Legendre 2](crate::application::quadrature::GaussLegendre2) | 3 | 2 |
+//! | [Gauss-Legendre 3](crate::application::quadrature::GaussLegendre3) | 5 | 3 |
+//! | [Gauss-Legendre 5](crate::application::quadrature::GaussLegendre5) | 9 | 5 |
+//! | [Gauss-Legendre n](crate::application::quadrature::GaussLegendreN) | 2n−1 | n (arbitrary) |
 //! | [Composite](crate::application::quadrature::CompositeQuadrature) | variable | n panels |
 //!
 //! ## Arbitrary-order Gauss-Legendre
