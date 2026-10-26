@@ -21,7 +21,7 @@ impl<T: RealField> Quadrature<T> for GaussLegendre2 {
         hw * (g(mid - hw * t) + g(mid + hw * t))
     }
     fn order(&self) -> usize {
-        4
+        3
     }
     fn num_points(&self) -> usize {
         2
@@ -80,7 +80,7 @@ impl<T: RealField> Quadrature<T> for GaussLegendre3 {
         hw * (w1 * g(mid) + w2 * g(mid - hw * t) + w2 * g(mid + hw * t))
     }
     fn order(&self) -> usize {
-        6
+        5
     }
     fn num_points(&self) -> usize {
         3
@@ -118,7 +118,7 @@ impl<T: RealField> Quadrature<T> for GaussLegendre5 {
         hw * s
     }
     fn order(&self) -> usize {
-        10
+        9
     }
     fn num_points(&self) -> usize {
         5
@@ -255,7 +255,19 @@ impl Quadrature<f64> for GaussLegendreN {
 
 #[cfg(test)]
 mod tests {
-    use super::{gauss_legendre_nodes_weights, GaussLegendre3, GaussLegendreN, Quadrature};
+    use super::{
+        gauss_legendre_nodes_weights, GaussLegendre2, GaussLegendre3, GaussLegendre5,
+        GaussLegendreN, Quadrature,
+    };
+
+    /// `order()` is the polynomial degree of exactness: 2n−1 for n-point
+    /// Gauss–Legendre (A&S Table 25.4).
+    #[test]
+    fn order_matches_exactness_degree() {
+        assert_eq!(Quadrature::<f64>::order(&GaussLegendre2), 3);
+        assert_eq!(Quadrature::<f64>::order(&GaussLegendre3), 5);
+        assert_eq!(Quadrature::<f64>::order(&GaussLegendre5), 9);
+    }
 
     #[test]
     fn gauss2_exact_for_degree3() {
