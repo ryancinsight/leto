@@ -16,9 +16,10 @@
 - Evidence: analytic half/integer anchors, transposed input and output, empty
   shapes, signed zeros, poles, special values and native doubles outside the
   f32 range, each executed against the provider's own scalar contract.
-- Provider: Eunomia 0.11.0 is published and 0.12.0 follows it; Leto's
-  requirement admits `>=0.11.0, <0.13.0`, and the lock resolves the cohort
-  intersection the consumers require.
+- Provider: Eunomia 0.11.0 is published and 0.12.0 follows it. Leto keeps
+  `>=0.11.0, <0.12.0` because Aequitas 0.3.1 caps the same cohort; a wider
+  Leto range resolves two Eunomia versions in one packaged graph and fails the
+  packaging verification, so the cohort moves together.
 - Hardware remains partial until Hephaestus implements and validates its own
   device kernels; CPU results cannot establish device parity.
 
