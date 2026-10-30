@@ -266,12 +266,12 @@ mod tests {
     use aequitas::systems::si::units::{Centimeter, Meter};
     use eunomia::{Bf16, Bf4, Bf8, UnitScalar, F16, F32, F4, F64, F8};
 
-    fn assert_si_boundary_contract<T>()
+    fn assert_si_spacing<T>()
     where
         T: FloatElement,
     {
         let one = <T as NumericElement>::ONE;
-        let contract = Laplacian2D::new(
+        let stencil = Laplacian2D::new(
             4,
             4,
             Length::from_base(one),
@@ -279,7 +279,7 @@ mod tests {
             BoundaryCondition::Dirichlet,
         )
         .expect("unit SI spacing must be accepted");
-        assert_eq!(contract.signed_inverse_spacing_squared(), [one, one]);
+        assert_eq!(stencil.signed_inverse_spacing_squared(), [one, one]);
 
         for invalid in [
             <T as NumericElement>::ZERO,
@@ -302,36 +302,40 @@ mod tests {
         assert!(matches!(error, LaplacianError::InvalidSpacing { .. }));
     }
 
-    fn assert_centimeter_contract<T>()
+    fn assert_centimeter_spacing<T>()
     where
         T: FloatElement + UnitScalar,
     {
-        let contract = Laplacian2D::new(
+        let one = <T as NumericElement>::ONE;
+        let two = one + one;
+        let four = two + two;
+        let five = four + one;
+        let twenty_five = five * five;
+        let fifty = two * twenty_five;
+        let sixteen = four * four;
+        let stencil = Laplacian2D::new(
             4,
             4,
-            Length::from_unit::<Centimeter>(T::from_f32(50.0)),
-            Length::from_unit::<Centimeter>(T::from_f32(25.0)),
+            Length::from_unit::<Centimeter>(fifty),
+            Length::from_unit::<Centimeter>(twenty_five),
             BoundaryCondition::Dirichlet,
         )
         .expect("positive finite spacing must be accepted");
-        assert_eq!(
-            contract.signed_inverse_spacing_squared(),
-            [T::from_f32(4.0), T::from_f32(16.0)]
-        );
+        assert_eq!(stencil.signed_inverse_spacing_squared(), [four, sixteen]);
     }
 
     #[test]
     fn spacing_uses_si_base_values_for_every_float_element() {
-        assert_si_boundary_contract::<f32>();
-        assert_si_boundary_contract::<f64>();
-        assert_si_boundary_contract::<F4>();
-        assert_si_boundary_contract::<F8>();
-        assert_si_boundary_contract::<F16>();
-        assert_si_boundary_contract::<F32>();
-        assert_si_boundary_contract::<F64>();
-        assert_si_boundary_contract::<Bf4>();
-        assert_si_boundary_contract::<Bf8>();
-        assert_si_boundary_contract::<Bf16>();
+        assert_si_spacing::<f32>();
+        assert_si_spacing::<f64>();
+        assert_si_spacing::<F4>();
+        assert_si_spacing::<F8>();
+        assert_si_spacing::<F16>();
+        assert_si_spacing::<F32>();
+        assert_si_spacing::<F64>();
+        assert_si_spacing::<Bf4>();
+        assert_si_spacing::<Bf8>();
+        assert_si_spacing::<Bf16>();
     }
 
     #[test]
@@ -347,10 +351,10 @@ mod tests {
 
     #[test]
     fn centimeter_spacing_preserves_wider_values() {
-        assert_centimeter_contract::<f32>();
-        assert_centimeter_contract::<f64>();
-        assert_centimeter_contract::<F32>();
-        assert_centimeter_contract::<F64>();
+        assert_centimeter_spacing::<f32>();
+        assert_centimeter_spacing::<f64>();
+        assert_centimeter_spacing::<F32>();
+        assert_centimeter_spacing::<F64>();
     }
 
     /// Rebuilding from the signed inverse squared spacings reproduces the
