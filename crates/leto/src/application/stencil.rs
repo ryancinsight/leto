@@ -1,7 +1,7 @@
 //! Typed contracts shared by CPU and accelerator finite-difference stencils.
 
-use aequitas::systems::si::{quantities::Length, units::Meter};
-use eunomia::{FloatElement, NumericElement, UnitScalar};
+use aequitas::systems::si::quantities::Length;
+use eunomia::{FloatElement, NumericElement};
 use thiserror::Error;
 
 /// Boundary condition applied by a Cartesian finite-difference stencil.
@@ -109,7 +109,7 @@ pub struct Laplacian2D<T> {
 
 impl<T> Laplacian2D<T>
 where
-    T: FloatElement + UnitScalar,
+    T: FloatElement,
 {
     /// Validate a uniform endpoint-inclusive Cartesian grid.
     ///
@@ -125,8 +125,8 @@ where
         boundary: BoundaryCondition,
     ) -> Result<Self, LaplacianError> {
         let len = Self::validated_len(nx, ny)?;
-        let dx_m = dx.in_unit::<Meter>();
-        let dy_m = dy.in_unit::<Meter>();
+        let dx_m = dx.into_base();
+        let dy_m = dy.into_base();
         if !dx_m.is_finite()
             || dx_m <= <T as NumericElement>::ZERO
             || !dy_m.is_finite()
@@ -263,19 +263,98 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aequitas::systems::si::units::{Centimeter, Meter};
+    use eunomia::{Bf16, Bf4, Bf8, UnitScalar, F16, F32, F4, F64, F8};
 
-    #[test]
-    fn rejects_non_positive_spacing() {
+    fn assert_si_spacing<T>()
+    where
+        T: FloatElement,
+    {
+        let one = <T as NumericElement>::ONE;
+        let stencil = Laplacian2D::new(
+            4,
+            4,
+            Length::from_base(one),
+            Length::from_base(one),
+            BoundaryCondition::Dirichlet,
+        )
+        .expect("unit SI spacing must be accepted");
+        assert_eq!(stencil.signed_inverse_spacing_squared(), [one, one]);
+
+        for invalid in [
+            <T as NumericElement>::ZERO,
+            <T as NumericElement>::ZERO - one,
+            <T as NumericElement>::NAN,
+        ] {
+            assert_invalid_spacing(invalid);
+        }
+    }
+
+    fn assert_invalid_spacing<T: FloatElement>(invalid: T) {
         let error = Laplacian2D::new(
             4,
             4,
-            Length::from_unit::<Meter>(0.0f32),
-            Length::from_unit::<Meter>(1.0f32),
+            Length::from_base(invalid),
+            Length::from_base(<T as NumericElement>::ONE),
             BoundaryCondition::Dirichlet,
         )
-        .expect_err("zero spacing must be rejected");
-
+        .expect_err("non-positive or non-finite spacing must be rejected");
         assert!(matches!(error, LaplacianError::InvalidSpacing { .. }));
+    }
+
+    fn assert_centimeter_spacing<T>()
+    where
+        T: FloatElement + UnitScalar,
+    {
+        let one = <T as NumericElement>::ONE;
+        let two = one + one;
+        let four = two + two;
+        let five = four + one;
+        let twenty_five = five * five;
+        let fifty = two * twenty_five;
+        let sixteen = four * four;
+        let stencil = Laplacian2D::new(
+            4,
+            4,
+            Length::from_unit::<Centimeter>(fifty),
+            Length::from_unit::<Centimeter>(twenty_five),
+            BoundaryCondition::Dirichlet,
+        )
+        .expect("positive finite spacing must be accepted");
+        assert_eq!(stencil.signed_inverse_spacing_squared(), [four, sixteen]);
+    }
+
+    #[test]
+    fn spacing_uses_si_base_values_for_every_float_element() {
+        assert_si_spacing::<f32>();
+        assert_si_spacing::<f64>();
+        assert_si_spacing::<F4>();
+        assert_si_spacing::<F8>();
+        assert_si_spacing::<F16>();
+        assert_si_spacing::<F32>();
+        assert_si_spacing::<F64>();
+        assert_si_spacing::<Bf4>();
+        assert_si_spacing::<Bf8>();
+        assert_si_spacing::<Bf16>();
+    }
+
+    #[test]
+    fn infinite_spacing_is_rejected_when_representable() {
+        assert_invalid_spacing(<f32 as NumericElement>::INFINITY);
+        assert_invalid_spacing(<f64 as NumericElement>::INFINITY);
+        assert_invalid_spacing(<F16 as NumericElement>::INFINITY);
+        assert_invalid_spacing(<F32 as NumericElement>::INFINITY);
+        assert_invalid_spacing(<F64 as NumericElement>::INFINITY);
+        assert_invalid_spacing(<Bf8 as NumericElement>::INFINITY);
+        assert_invalid_spacing(<Bf16 as NumericElement>::INFINITY);
+    }
+
+    #[test]
+    fn centimeter_spacing_preserves_wider_values() {
+        assert_centimeter_spacing::<f32>();
+        assert_centimeter_spacing::<f64>();
+        assert_centimeter_spacing::<F32>();
+        assert_centimeter_spacing::<F64>();
     }
 
     /// Rebuilding from the signed inverse squared spacings reproduces the
