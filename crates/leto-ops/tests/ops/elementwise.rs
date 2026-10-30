@@ -31,3 +31,5 @@ mod reduced_precision;
 mod scalar_traits;
 mod unary;
 mod zip;
+
+mod digamma;

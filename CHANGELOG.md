@@ -2,6 +2,21 @@
 
 ## [0.47.0] - Unreleased
 
+### Added
+
+- `DigammaOp` delegates real CPU digamma to Eunomia 0.11 through the existing
+  layout-aware unary traversal. Tests cover transposed inputs/outputs, empty
+  shapes, signed zeros, poles, special values and double-precision range.
+- Pre-merge package-cohort verification reuses the canonical Atlas planner;
+  pending registry prerequisites remain explicit release gates.
+
+### Fixed
+
+- Preserve main PR #385's quadrature contract correction: `order()` reports
+  polynomial exactness degrees 3/5/9 for the fixed Gauss-Legendre rules and
+  1/3 for trapezoidal/Simpson rules. Composite rules inherit their base rule's
+  degree. Abscissae, weights and integration formulas are unchanged.
+
 ### Breaking
 
 - [minor] `leto-ops`' op-marker traits (`ScanOp`, `BinaryOp`,

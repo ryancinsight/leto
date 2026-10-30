@@ -37,6 +37,34 @@ jobs:
     permissions:
       contents: read
 
+  package-plan:
+    name: Release package plan
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CARGO_BUILD_JOBS: "1"
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      # Canonical read-only packaging verification. A wait/empty ready set
+      # remains a release prerequisite, not proof that this cohort verifies.
+      - name: Verify the pending workspace package cohort
+        uses: ryancinsight/atlas/.github/actions/crates-pending@0e074f34e4ca63423c4e4ba86a39734269492555
+        with:
+          command: plan
+          owner: ryancinsight
+
   adr-index:
     name: ADR index is current
     # atlas owns the one generator (ATLAS-ADR-FORM-NORMALIZATION-2026-09-02); strict: the ADRs carry the canonical heading form and numbering.

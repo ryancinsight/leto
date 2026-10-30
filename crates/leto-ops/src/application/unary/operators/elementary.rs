@@ -34,6 +34,8 @@ define_unary_op!(/// Complementary error function operation marker.
     ErfcOp => erfc);
 define_unary_op!(/// Natural logarithm of the absolute gamma function operation marker.
     LgammaOp => lgamma);
+define_unary_op!(/// Real digamma operation marker, with Eunomia scalar semantics.
+    DigammaOp => digamma);
 define_unary_op!(/// Sine operation marker.
     SinOp => sin);
 define_unary_op!(/// Cosine operation marker.
