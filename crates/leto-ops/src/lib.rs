@@ -102,8 +102,8 @@ pub use application::stencil::laplacian_2d_into;
 pub use application::triangular::{triangular, triangular_into, triangular_keeps, TriangularMode};
 pub use application::unary::{
     map, map_inplace, map_into, map_into_with_cache_geometry, mapv, unary_map, unary_map_into,
-    AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, EluGradOp,
-    EluOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluGradOp, GeluOp,
+    AbsOp, AcosOp, AcoshOp, AsinOp, AsinhOp, AtanOp, AtanhOp, CeilOp, CosOp, CoshOp, DigammaOp,
+    EluGradOp, EluOp, ErfOp, ErfcOp, Exp2Op, ExpNegOp, ExpOp, Expm1Op, FloorOp, GeluGradOp, GeluOp,
     GeluTanhGradOp, GeluTanhOp, HardsigmoidGradOp, HardsigmoidOp, HardswishGradOp, HardswishOp,
     J0Op, J1Op, K0Op, LgammaOp, LnOp, Log10Op, Log1pOp, Log2Op, MishGradOp, MishOp, NegOp, PowfOp,
     RecipOp, ReluGradOp, ReluOp, RoundOp, SigmoidGradOp, SigmoidOp, SignOp, SiluGradOp, SiluOp,

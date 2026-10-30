@@ -1,6 +1,10 @@
 # Leto Development Checklist
 
-Published Python repair: leto-python 0.46.1 (2026-10-16); Rust packages remain 0.46.0.
+Target version: 0.47.0 (additive digamma CPU slice; final release gates pending).
+
+Published Python repair receipt: leto-python 0.46.1 (2026-10-16).
+Current Rust candidate: 0.47.0; publication is conditionally authorized after
+final provider, review, CI and package-verification gates.
 
 ## LETO-PYTHON-NATIVE-LINK [patch]
 

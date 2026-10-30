@@ -1,4 +1,12 @@
-# Leto Gap Audit: ndarray / nalgebra Replacement for Atlas
+## Digamma device parity — 2026-10-30 [minor]
+
+The CPU digamma path is delivered and provider-owned, but no device kernel
+exists: Hephaestus owns the accelerator implementation and its own validation.
+CPU acceptance cannot establish device parity, and no device-to-host fallback
+is permitted in the Coeus consumer.
+
+Re-open trigger: the Hephaestus device kernel lands with its own differential
+acceptance against the provider's scalar contract.
 
 ## 2026-10-16 Native/extension linkage and macOS wheel loader [patch] — closed
 

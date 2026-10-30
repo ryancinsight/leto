@@ -1,3 +1,27 @@
+<a id="LETO-DIGAMMA"></a>
+## LETO-DIGAMMA [minor]
+
+- status: blocked; priority: verification; needs: none; integrator: pi:01a1885f-3f38-73dd-a2f0-7e3fde63b66a
+- Blocker: `leto-ops` 0.47.0 publication waits on `moirai-runtime` 0.11 on
+  crates.io, and the Coeus optional backend capability belongs to its owner.
+- Re-open trigger: the pending publisher reports the cohort published, or the
+  Coeus owner lands the backend capability.
+- Outcome: `DigammaOp` is a zero-sized `UnaryOp<T: RealScalar>` marker that
+  calls Eunomia's single `FloatElement::digamma`; Leto keeps its layout-aware
+  traversal, so contiguous, strided, offset, transposed and empty views stay
+  copy-free and no scalar formula is duplicated in Leto.
+- Delivered: provider delegation, the `leto`/`leto-ops` 0.47.0 cohort, the
+  design note and the acceptance regressions. The design note is the contract:
+  [digamma](docs/design/digamma.md).
+- Evidence: analytic half/integer anchors, transposed input and output, empty
+  shapes, signed zeros, poles, special values and native doubles outside the
+  f32 range, each executed against the provider's own scalar contract.
+- Provider: Eunomia 0.11.0 is published and 0.12.0 follows it; Leto's
+  requirement admits `>=0.11.0, <0.13.0`, and the lock resolves the cohort
+  intersection the consumers require.
+- Hardware remains partial until Hephaestus implements and validates its own
+  device kernels; CPU results cannot establish device parity.
+
 # Leto Work Backlog — active patch **0.46.3**, [SpMV finite-range recovery](backlog/leto-spmv-finite-range-20261020.md)
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>
