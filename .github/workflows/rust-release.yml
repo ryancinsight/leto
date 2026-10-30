@@ -60,16 +60,16 @@ jobs:
       dispatch-package: ${{ inputs.package }}
       dispatch-version: ${{ inputs.version }}
 
-  # Version-change publishing (ADR 0068, ATLAS-PUB-010): a merged version bump
-  # or the daily schedule publishes every package whose manifest version the
-  # registry lacks and tags a release per version. This job alone may create
-  # tags and mint the OIDC token.
+  # Automatic publishing is intentionally unarmed: pushes and schedules pass
+  # an empty cohort, so the publisher plans zero packages before authentication.
+  # This job alone may create tags and mint the OIDC token.
   publish-pending:
     name: Publish pending crate versions
     if: github.event_name == 'push' || github.event_name == 'schedule'
-    uses: ryancinsight/atlas/.github/workflows/crates-publish-pending.yml@50802ef4c975bdb1e668b94a700d8310f0348e9c
+    uses: ryancinsight/atlas/.github/workflows/crates-publish-pending.yml@0227830912a12dbae0ff62b3f16575899fc9087e
     permissions:
       contents: write # creates the release tags
       id-token: write # OIDC trusted publishing; no stored registry token.
     with:
       rust-toolchain: "1.97.0"
+      cohort-json: '{}'
