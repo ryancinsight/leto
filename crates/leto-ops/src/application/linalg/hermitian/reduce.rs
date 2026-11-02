@@ -10,6 +10,22 @@ use crate::application::linalg::scaling::hypot;
 use crate::domain::real::RealScalar;
 use eunomia::Complex;
 
+fn phase_and_norm<T: RealScalar>(z: Complex<T>) -> (Complex<T>, T) {
+    let scale = if z.re.abs() > z.im.abs() {
+        z.re.abs()
+    } else {
+        z.im.abs()
+    };
+    if scale == T::ZERO {
+        return (Complex::new(T::ONE, T::ZERO), T::ZERO);
+    }
+    // Normalize before taking the norm: rounding a subnormal norm first can
+    // turn (min_subnormal, min_subnormal) into the non-unit phase (1, 1).
+    let unit = z / scale;
+    let norm = hypot(unit.re, unit.im);
+    (unit / norm, norm.mul(scale))
+}
+
 /// Reduce a finite, safely scaled Hermitian matrix in row-major storage.
 /// Return the real diagonal/off-diagonal and the unitary factor as columns.
 pub(super) fn tridiagonalize<T: RealScalar>(
@@ -26,20 +42,27 @@ pub(super) fn tridiagonalize<T: RealScalar>(
     let mut w = vec![zero; n];
     for k in 0..n.saturating_sub(2) {
         let first = k + 1;
-        let mut norm = T::ZERO;
+        let mut scale = T::ZERO;
         for i in first..n {
             u[i] = h[i * n + k];
-            norm = hypot(hypot(norm, u[i].re), u[i].im);
+            for component in [u[i].re.abs(), u[i].im.abs()] {
+                if component > scale {
+                    scale = component;
+                }
+            }
         }
-        if norm == T::ZERO {
+        if scale == T::ZERO {
             continue;
         }
-        let leading = hypot(u[first].re, u[first].im);
-        let phase = if leading == T::ZERO {
-            Complex::new(T::ONE, T::ZERO)
-        } else {
-            u[first] / leading
-        };
+        let phase = phase_and_norm(u[first]).0;
+        for value in &mut u[first..] {
+            *value /= scale;
+        }
+        let norm = u[first..]
+            .iter()
+            .fold(T::ZERO, |acc, z| hypot(hypot(acc, z.re), z.im));
+        // Form the reflector at column scale, even when the complete matrix
+        // is normal but this column contains only subnormal couplings.
         let beta = -phase * norm;
         u[first] -= beta;
         let unorm = u[first..]
@@ -80,8 +103,8 @@ pub(super) fn tridiagonalize<T: RealScalar>(
                 q[i * n + j] -= (dot * two) * u[j].conj();
             }
         }
-        h[first * n + k] = beta;
-        h[k * n + first] = beta.conj();
+        h[first * n + k] = beta * scale;
+        h[k * n + first] = beta.conj() * scale;
         for i in first + 1..n {
             h[i * n + k] = zero;
             h[k * n + i] = zero;
@@ -93,13 +116,13 @@ pub(super) fn tridiagonalize<T: RealScalar>(
     let mut phase = Complex::new(T::ONE, T::ZERO);
     for i in 1..n {
         let beta = h[i * n + i - 1];
-        let magnitude = hypot(beta.re, beta.im);
+        let (edge_phase, magnitude) = phase_and_norm(beta);
         off_diagonal[i - 1] = magnitude;
         // Dᴴ T D has real non-negative subdiagonals; Q becomes Q D.
         phase = if magnitude == T::ZERO {
             Complex::new(T::ONE, T::ZERO)
         } else {
-            (beta / magnitude) * phase
+            edge_phase * phase
         };
         for row in 0..n {
             q[row * n + i] *= phase;

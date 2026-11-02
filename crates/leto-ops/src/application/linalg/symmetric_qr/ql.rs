@@ -1,7 +1,7 @@
 //! Implicit-shift QL iteration on a symmetric tridiagonal matrix
 //! (`tql2`, Bowdler, Martin, Reinsch & Wilkinson 1968).
 
-use crate::application::linalg::scaling::hypot;
+use crate::application::linalg::scaling::{hypot, scaled_norm};
 use crate::application::linalg::thresholds::machine_epsilon;
 use crate::domain::real::RealScalar;
 use leto::{LetoError, Result};
@@ -25,6 +25,22 @@ fn negligible<T: RealScalar>(value: T, scale: T, absolute: Option<T>) -> bool {
         || scale.add(value.abs()) == scale,
         |limit| value.abs() <= limit,
     )
+}
+
+/// Unit rotation even when its physical radius rounds to a subnormal value.
+fn absolute_rotation<T: RealScalar>(p: T, edge: T) -> (T, T, T) {
+    let scale = if p.abs() > edge.abs() {
+        p.abs()
+    } else {
+        edge.abs()
+    };
+    if scale == T::ZERO {
+        return (T::ZERO, T::ONE, T::ZERO);
+    }
+    let x = p.div(scale);
+    let y = edge.div(scale);
+    let radius = hypot(x, y);
+    (scale.mul(radius), x.div(radius), y.div(radius))
 }
 
 /// Completed shifts and a bound on the discarded off-diagonal Frobenius norm.
@@ -132,9 +148,7 @@ fn diagonalize_with_policy<T: RealScalar>(
             loop {
                 if sweeps == budget {
                     let remaining = absolute_tolerance.map(|_| {
-                        let norm = off_diagonal[l..]
-                            .iter()
-                            .fold(T::ZERO, |acc, &value| hypot(acc, value));
+                        let norm = scaled_norm(off_diagonal[l..].iter().copied());
                         discarded_norm.add(two.sqrt().mul(norm))
                     });
                     if let (Some(norm), Some(tolerance)) = (remaining, absolute_tolerance) {
@@ -201,10 +215,16 @@ fn diagonalize_with_policy<T: RealScalar>(
                     s2 = s;
                     let g = c.mul(off_diagonal[i]);
                     h = c.mul(p);
-                    r = hypot(p, off_diagonal[i]);
+                    let (radius, cosine, sine) = if absolute_tolerance.is_some() {
+                        absolute_rotation(p, off_diagonal[i])
+                    } else {
+                        let radius = hypot(p, off_diagonal[i]);
+                        (radius, p.div(radius), off_diagonal[i].div(radius))
+                    };
+                    r = radius;
                     off_diagonal[i + 1] = s.mul(r);
-                    s = off_diagonal[i].div(r);
-                    c = p.div(r);
+                    s = sine;
+                    c = cosine;
                     p = c.mul(diagonal[i]).sub(s.mul(g));
                     diagonal[i + 1] = h.add(s.mul(c.mul(g).add(s.mul(diagonal[i]))));
                     rotate_adjacent_rows(vectors, n, i, c, s);

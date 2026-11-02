@@ -36,6 +36,7 @@
 
 mod gate;
 mod kernel_window;
+mod norm;
 mod norm_ratio;
 #[cfg(test)]
 #[expect(
@@ -46,4 +47,5 @@ mod tests;
 
 pub(crate) use gate::{balanced, gate_exponent, restore, scale_by_power_of_two, GateBound};
 pub(crate) use kernel_window::{hypot, KernelWindow};
+pub(crate) use norm::scaled_norm;
 pub(crate) use norm_ratio::{norm_ratio_floor_log2, norm_ratio_log2};

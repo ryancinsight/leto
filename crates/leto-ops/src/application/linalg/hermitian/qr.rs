@@ -1,6 +1,7 @@
 //! Hermitian reduction and the shared implicit-shift tridiagonal iteration.
 
 use super::{complex_eye, sort_eig, HermitianEigenConfig, HermitianEigenResult, C64};
+use crate::application::linalg::scaling::scaled_norm;
 use leto::{Array1, Array2, LetoError, Result};
 
 pub(super) fn decompose(
@@ -14,7 +15,6 @@ pub(super) fn decompose(
         ));
     }
     let mut parts = Vec::with_capacity(2 * n * n);
-    let mut off_norm = 0.0_f64;
     for i in 0..n {
         for j in 0..n {
             let z = a[[i, j]];
@@ -31,11 +31,15 @@ pub(super) fn decompose(
             // Resolve accepted roundoff asymmetry by the lower triangle.
             let z = if j > i { a[[j, i]].conj() } else { z };
             parts.extend([z.re, z.im]);
-            if i != j {
-                off_norm = off_norm.hypot(z.re).hypot(z.im);
-            }
         }
     }
+    let off_norm = scaled_norm(
+        parts
+            .chunks_exact(2)
+            .enumerate()
+            .filter(|(index, _)| index / n != index % n)
+            .flat_map(|(_, z)| z.iter().copied()),
+    );
     if off_norm <= config.tolerance {
         let values = Array1::from_shape_vec([n], (0..n).map(|i| a[[i, i]].re).collect())?;
         return finish(values, complex_eye(n), 0, off_norm, config);

@@ -41,6 +41,11 @@ results and error diagnostics to input units. An absolute policy may retain
 edges below the relative rounding floor: its shift and closing correction
 avoid overflow/underflow without substituting a looser convergence threshold.
 Exhaustion reports the global residual bound and tolerance in the same units.
+Reflectors and complex phases are normalized at their own column/component
+scale; absolute-policy Givens ratios are formed before restoring a physical
+radius. This preserves unitary transformations for minimum-subnormal
+couplings beside normal diagonals. Global norms accumulate scaled squares,
+so a sequence of subnormal edges cannot stagnate at one rounded edge norm.
 
 Sorting enabled returns descending eigenpairs. With sorting disabled, the
 iterative path is ascending and the diagonal shortcut retains input order.
