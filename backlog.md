@@ -1,3 +1,12 @@
+<a id="LETO-HERMITIAN-QR-CONVERGENCE"></a>
+## LETO-HERMITIAN-QR-CONVERGENCE [patch]
+
+- status: todo; priority: correctness; needs: final qualification
+- scope: the QR path above order 32, its shared QL absolute policy and numerical regressions; direct Jacobi and other owners' work are preserved.
+- Finding: baseline 32d11f7 returns success with relative eigenpair residual 0.434, and on zero-budget non-diagonal input. Complex phase and basis accumulation are incorrect.
+- Outcome: one unitary reduction, shared QL iteration, truthful global convergence errors and completed shift counts. [Contract and evidence](docs/design/hermitian-qr.md).
+- Acceptance: analytic and consumer Gram eigenpairs, residual/orthogonality, range and budget controls, unchanged real-QL tests, normal workspace/hooks, independent final-source review and required hosted checks. Existing release prerequisites remain separate.
+
 <a id="LETO-DIGAMMA"></a>
 ## LETO-DIGAMMA [minor]
 

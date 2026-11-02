@@ -1,5 +1,22 @@
 # Changelog
 
+## leto-ops [0.47.1] - Unreleased
+
+### Fixed
+
+- [patch] Above order 32, Hermitian QR now uses a phase-correct unitary
+  reduction and the shared tridiagonal QL iteration. It returns a convergence
+  error on exhaustion, counts completed shifts, and reports the global
+  discarded-norm bound and errors in input units. Direct Jacobi and the
+  small-matrix delegation retain their existing behavior.
+- Regression coverage includes analytic complex spectra, the exact Kwavers
+  120-by-120 Gram fixture, rank deficiency, residuals, orthogonality, absolute
+  tiny-edge tolerances and extreme scales. See the
+  [numerical contract](docs/design/hermitian-qr.md).
+- The provider dependency lock, existing core/Python versions and unarmed
+  automatic publisher are preserved; this patch does not establish release
+  readiness for the unpublished provider cohort.
+
 ## Unreleased
 
 ### Changed

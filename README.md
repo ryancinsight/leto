@@ -282,6 +282,8 @@ trait layer below exposes the same kernels as rank-2 methods.
   one order (row eigenvectors, lower triangle read).
 - Eigen, Hermitian: `hermitian_eigen_jacobi` and `hermitian_eigen_qr`
   (`f64`/`C64`), configured by `HermitianEigenConfig`, descending by default.
+  Above order 32, QR uses unitary tridiagonal reduction and a shared QL chase;
+  exhaustion is an error. [Tolerance and numerical contract](docs/design/hermitian-qr.md).
 - Eigen, general: `eigenvalues` returns all eigenvalues of a general real
   matrix as `Complex<T>` (real ones with zero imaginary part, complex ones as
   conjugate pairs). Order is unspecified.

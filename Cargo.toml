@@ -18,7 +18,7 @@ readme = "README.md"
 [workspace.dependencies]
 # â”€â”€ Local Workspace Crates â”€â”€
 leto = { version = "0.47.1", path = "crates/leto" }
-leto-ops = { version = "0.47.0", path = "crates/leto-ops" }
+leto-ops = { version = "0.47.1", path = "crates/leto-ops" }
 
 # â”€â”€ Systems and Parallelization â”€â”€
 # Canonical provider URLs preserve one nominal type identity (ADR 0029).

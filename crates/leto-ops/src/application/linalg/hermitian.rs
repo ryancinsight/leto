@@ -3,8 +3,8 @@
 //! Provides two algorithms:
 //! - [`hermitian_eigen_jacobi`] — classical Jacobi rotations, O(n³–n⁴), best for
 //!   small (n ≤ 200) or ill-conditioned matrices.
-//! - [`hermitian_eigen_qr`] — implicit QR with Wilkinson shift, O(n³), better for
-//!   larger matrices (delegates to Jacobi for n ≤ 32).
+//! - [`hermitian_eigen_qr`] — unitary Householder reduction and shared implicit
+//!   QL with Wilkinson shifts, O(n³), for larger matrices (Jacobi for n ≤ 32).
 //!
 //! Both algorithms assume the input is Hermitian (`A[i,j] = conj(A[j,i])`).
 //! They complement the [real symmetric solver](crate::application::linalg::eigen).
@@ -15,6 +15,12 @@
 
 use eunomia::Complex;
 use leto::{Array1, Array2, LetoError, Result};
+
+mod kernel;
+mod qr;
+mod reduce;
+#[cfg(test)]
+mod tests;
 
 type C64 = Complex<f64>;
 
@@ -27,7 +33,9 @@ pub struct HermitianEigenResult {
     pub eigenvectors: Array2<C64>,
     /// Number of sweeps / iterations performed.
     pub iterations: usize,
-    /// Final off-diagonal Frobenius norm (convergence indicator).
+    /// Final off-diagonal Frobenius norm for Jacobi. For QR above order 32,
+    /// a bound on the accumulated discarded tridiagonal norm; floating-point
+    /// reduction/rotation error is separate from this convergence indicator.
     pub off_diagonal_norm: f64,
     /// Condition number estimate κ = |λ_max| / |λ_min|, or `None` if λ_min ≈ 0.
     pub condition_number: Option<f64>,
@@ -89,23 +97,6 @@ fn off_diag_norm(a: &Array2<C64>, n: usize) -> f64 {
     s.sqrt()
 }
 
-/// Wilkinson shift for the trailing 2×2 sub-block.
-fn wilkinson_shift(a: &Array2<C64>, n: usize) -> f64 {
-    let a_val = a[[n - 2, n - 2]].re;
-    let b = a[[n - 2, n - 1]].norm();
-    let d = a[[n - 1, n - 1]].re;
-    let tr = a_val + d;
-    let det = a_val.mul_add(d, -(b * b));
-    let disc = (tr * tr / 4.0 - det).sqrt();
-    let l1 = tr / 2.0 + disc;
-    let l2 = tr / 2.0 - disc;
-    if (l1 - d).abs() < (l2 - d).abs() {
-        l1
-    } else {
-        l2
-    }
-}
-
 fn sort_eig(ev: Array1<f64>, vecs: Array2<C64>, descending: bool) -> (Array1<f64>, Array2<C64>) {
     let n = ev.len();
     let mut idx: Vec<usize> = (0..n).collect();
@@ -125,71 +116,12 @@ fn sort_eig(ev: Array1<f64>, vecs: Array2<C64>, descending: bool) -> (Array1<f64
     (sev, svec)
 }
 
-fn complex_matmul(lhs: &Array2<C64>, rhs: &Array2<C64>) -> Array2<C64> {
-    let [r, k] = lhs.shape();
-    let [_, c] = rhs.shape();
-    let mut out = Array2::from_elem([r, c], C64::new(0.0, 0.0));
-    for i in 0..r {
-        for j in 0..c {
-            let mut s = C64::new(0.0, 0.0);
-            for l in 0..k {
-                s += lhs[[i, l]] * rhs[[l, j]];
-            }
-            out[[i, j]] = s;
-        }
-    }
-    out
-}
-
 fn complex_eye(n: usize) -> Array2<C64> {
     let mut eye = Array2::from_elem([n, n], C64::new(0.0, 0.0));
     for i in 0..n {
         eye[[i, i]] = C64::new(1.0, 0.0);
     }
     eye
-}
-
-/// Complex QR factorisation via Householder reflectors, returning `(Q, R)`.
-fn complex_qr(a: &Array2<C64>, n: usize) -> (Array2<C64>, Array2<C64>) {
-    let mut h = a.clone();
-    let mut q = complex_eye(n);
-    for k in 0..n.saturating_sub(1) {
-        let x: Vec<C64> = (k..n).map(|i| h[[i, k]]).collect();
-        let sigma = x.iter().map(|z| z.norm_sqr()).sum::<f64>().sqrt();
-        let sigma = if h[[k, k]].re >= 0.0 { sigma } else { -sigma };
-        if sigma.abs() < 1e-14 {
-            continue;
-        }
-        let mut u = x.clone();
-        u[0] += C64::new(sigma, 0.0);
-        let u_norm_sq: f64 = u.iter().map(|z| z.norm_sqr()).sum();
-        if u_norm_sq < 1e-28 {
-            continue;
-        }
-        // Apply reflector to H from the left.
-        for j in k..n {
-            let mut dot = C64::new(0.0, 0.0);
-            for i in k..n {
-                dot += u[i - k].conj() * h[[i, j]];
-            }
-            let fac = 2.0 * dot / u_norm_sq;
-            for i in k..n {
-                h[[i, j]] -= fac * u[i - k];
-            }
-        }
-        // Accumulate Q.
-        for i in 0..n {
-            let mut dot = C64::new(0.0, 0.0);
-            for j in k..n {
-                dot += u[j - k].conj() * q[[j, i]];
-            }
-            let fac = 2.0 * dot / u_norm_sq;
-            for j in k..n {
-                q[[j, i]] -= fac * u[j - k];
-            }
-        }
-    }
-    (q.mapv(|z| z.conj()), h)
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -306,13 +238,27 @@ pub fn hermitian_eigen_jacobi(
     })
 }
 
-/// Compute eigendecomposition of a complex Hermitian matrix via implicit QR
-/// with Wilkinson shift.
+/// Compute eigendecomposition of a complex Hermitian matrix via unitary
+/// Householder reduction and implicit-shift tridiagonal QL (the QR family).
 ///
 /// Delegates to [`hermitian_eigen_jacobi`] for `n ≤ 32`.
+/// Above that boundary the accepted lower triangle defines the Hermitian
+/// matrix, the diagonal must be real, and every entry must be finite.
+/// `max_iterations` bounds completed shifts across the entire matrix.
+/// `tolerance` is the absolute Frobenius budget for discarded off-diagonal
+/// entries; the real-symmetric solver retains its own rounding-based policy.
+/// Exhaustion diagnostics use that global bound and the original input units.
+/// A zero budget succeeds only if no shifts are needed. With sorting disabled,
+/// ordering is algorithm-dependent (ascending after tridiagonal iteration;
+/// input order for an already-converged diagonal shortcut).
+/// The Jacobi entry and its small-matrix delegation retain their existing
+/// convergence/ordering behavior.
 ///
 /// # Errors
-/// Same as [`hermitian_eigen_jacobi`].
+/// Same input shape/symmetry errors as [`hermitian_eigen_jacobi`]. Above order
+/// 32, also rejects invalid tolerances, non-finite entries and non-real
+/// diagonals, reports [`LetoError::ConvergenceError`] on exhausted budgets,
+/// and reports numerical breakdown or overflow instead of non-finite results.
 pub fn hermitian_eigen_qr(
     a: &Array2<C64>,
     config: HermitianEigenConfig,
@@ -331,61 +277,5 @@ pub fn hermitian_eigen_qr(
         return hermitian_eigen_jacobi(a, config);
     }
 
-    let mut h = a.clone();
-    let mut q = complex_eye(n);
-    let mut eigenvalues = Array1::<f64>::zeros([n]);
-    let mut iters = 0usize;
-
-    for iter in 0..config.max_iterations {
-        iters = iter;
-        let shift = if iter % 10 == 0 {
-            h[[n - 1, n - 1]].re
-        } else {
-            wilkinson_shift(&h, n)
-        };
-
-        for i in 0..n {
-            h[[i, i]] -= C64::new(shift, 0.0);
-        }
-        let (q_iter, r) = complex_qr(&h, n);
-        h = complex_matmul(&r, &q_iter);
-        for i in 0..n {
-            h[[i, i]] += C64::new(shift, 0.0);
-        }
-        q = complex_matmul(&q, &q_iter);
-
-        if off_diag_norm(&h, n) < config.tolerance {
-            break;
-        }
-    }
-
-    for i in 0..n {
-        eigenvalues[i] = h[[i, i]].re;
-    }
-
-    let od_norm = off_diag_norm(&h, n);
-    let (eigenvalues, eigenvectors) = if config.sort_descending {
-        sort_eig(eigenvalues, q, true)
-    } else {
-        (eigenvalues, q)
-    };
-
-    let condition_number = if config.estimate_condition && n > 0 {
-        let lo = eigenvalues[n - 1].abs();
-        if lo > 1e-14 {
-            Some(eigenvalues[0].abs() / lo)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    Ok(HermitianEigenResult {
-        eigenvalues,
-        eigenvectors,
-        iterations: iters,
-        off_diagonal_norm: od_norm,
-        condition_number,
-    })
+    qr::decompose(a, config)
 }
