@@ -1,3 +1,10 @@
+## 2026-11-02 Hermitian QR correctness [patch]
+
+- finding: n > 32 returned inaccurate eigenpairs and Ok on exhaustion; the old factor reconstruction used conjugation instead of the required adjoint and a real-only Householder phase.
+- repair: unitary Hermitian reduction plus the shared QL kernel with an absolute convergence policy. Global discarded-norm accounting, safe tiny-edge shift arithmetic and original-unit diagnostics are exercised by regressions.
+- evidence: baseline 33x33 relative residual 0.4336969091139751; repaired analytic and exact 120x120 consumer Gram eigenpairs pass. [Numerical contract](docs/design/hermitian-qr.md) separates convergence from roundoff and records the assertions.
+- boundary: final normal gates and independent source review remain required; existing provider publication and protected owner holds are unchanged. The original reported 80% benchmark error is not claimed as independently reproduced.
+
 ## Digamma device parity — 2026-10-30 [minor]
 
 The CPU digamma path is delivered and provider-owned, but no device kernel

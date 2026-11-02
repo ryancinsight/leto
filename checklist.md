@@ -1,10 +1,18 @@
 # Leto Development Checklist
 
-Target version: 0.47.0 (additive digamma CPU slice; final release gates pending).
+Target version: leto-ops 0.47.1 (Hermitian correctness patch; existing release prerequisites retained).
 
 Published Python repair receipt: leto-python 0.46.1 (2026-10-16).
 Current Rust candidate: 0.47.0; publication is conditionally authorized after
 final provider, review, CI and package-verification gates.
+
+## LETO-HERMITIAN-QR-CONVERGENCE [patch]
+
+- [x] Reproduce incorrect eigenpairs and false success above the Jacobi boundary.
+- [x] Preserve Jacobi; share the existing QL kernel and native scalar arithmetic.
+- [x] Pass analytic, exact consumer Gram, residual, orthogonality, range, budget and error-unit regressions; preserve existing real symmetric controls.
+- [ ] Complete final normal local/hosted gates and independent source review before delivery acceptance.
+- [ ] Establish the existing provider-first package closure before any publication; do not arm the automatic publisher as part of this repair.
 
 ## LETO-PYTHON-NATIVE-LINK [patch]
 

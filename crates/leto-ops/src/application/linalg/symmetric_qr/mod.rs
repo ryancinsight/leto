@@ -55,7 +55,7 @@
 //!
 //! Every operation runs in the precision of `T`.
 
-mod ql;
+pub(super) mod ql;
 mod reduce;
 mod workspace;
 
