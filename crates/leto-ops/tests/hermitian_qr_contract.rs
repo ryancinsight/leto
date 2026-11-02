@@ -1,5 +1,5 @@
 //! Hermitian QR contracts above the Jacobi delegation boundary.
-use eunomia::Complex;
+use eunomia::{Complex, FloatElement};
 use leto::{Array2, LetoError};
 use leto_ops::{
     hermitian_eigen_jacobi, hermitian_eigen_qr, HermitianEigenConfig, HermitianEigenResult,
@@ -85,13 +85,13 @@ fn complex_toeplitz_above_jacobi_boundary_has_analytic_eigenpairs() {
     let (residual, orthogonality) = errors(&a, &result);
     let max_value_error = (0..n)
         .map(|i| {
-            let angle = std::f64::consts::PI * (i + 1) as f64 / (n + 1) as f64;
+            let angle = std::f64::consts::PI * f64::from_count(i + 1) / f64::from_count(n + 1);
             (result.eigenvalues[i] - (4.0 + 2.0 * angle.cos())).abs()
         })
         .fold(0.0_f64, f64::max);
     eprintln!("n={n} shifts={} offdiag={} value_error={max_value_error:e} residual={residual:e} orthogonality={orthogonality:e}", result.iterations, result.off_diagonal_norm);
     // Absolute stopping tolerance plus a dimension-scaled roundoff allowance.
-    let bound = config.tolerance + 64.0 * n as f64 * f64::EPSILON;
+    let bound = config.tolerance + 64.0 * f64::from_count(n) * f64::EPSILON;
     assert!(
         max_value_error <= bound,
         "eigenvalue error {max_value_error:e} > {bound:e}"
@@ -112,7 +112,7 @@ fn diagonal_matrix_needs_no_qr_steps() {
     let n = 33;
     let mut a = Array2::from_elem([n, n], C::new(0.0, 0.0));
     for i in 0..n {
-        a[[i, i]] = C::new(i as f64, 0.0);
+        a[[i, i]] = C::new(f64::from_count(i), 0.0);
     }
     let result = hermitian_eigen_qr(
         &a,
@@ -125,7 +125,7 @@ fn diagonal_matrix_needs_no_qr_steps() {
     assert_eq!(result.iterations, 0);
     assert_eq!(result.off_diagonal_norm, 0.0);
     for i in 0..n {
-        assert_eq!(result.eigenvalues[i], (n - i - 1) as f64);
+        assert_eq!(result.eigenvalues[i], f64::from_count(n - i - 1));
     }
     assert_eq!(errors(&a, &result), (0.0, 0.0));
 }
@@ -157,7 +157,7 @@ fn dense_repeated_spectrum_survives_complex_phases_and_extreme_scales() {
         let mut a = Array2::from_elem([n, n], C::new(0.0, 0.0));
         for i in 0..n {
             for j in 0..n {
-                a[[i, j]] = phases[i % 4] * phases[j % 4].conj() * (8.0 / n as f64);
+                a[[i, j]] = phases[i % 4] * phases[j % 4].conj() * (8.0 / f64::from_count(n));
                 if i == j {
                     a[[i, j]] -= C::new(4.0, 0.0);
                 }
@@ -276,7 +276,8 @@ fn zero_diagonal_indefinite_toeplitz_retains_its_zero_eigenvalue() {
     let result =
         hermitian_eigen_qr(&a, HermitianEigenConfig::default()).expect("indefinite Toeplitz");
     for i in 0..n {
-        let expected = 2.0 * (std::f64::consts::PI * (i + 1) as f64 / (n + 1) as f64).cos();
+        let expected =
+            2.0 * (std::f64::consts::PI * f64::from_count(i + 1) / f64::from_count(n + 1)).cos();
         assert!((result.eigenvalues[i] - expected).abs() < 1e-10);
     }
     let (residual, orthogonality) = errors(&a, &result);
@@ -305,7 +306,7 @@ fn absolute_tolerance_resolves_a_tiny_block_beside_unit_scale() {
         assert_eq!(result.eigenvalues[i], 1.0);
     }
     for i in 0..3 {
-        let expected = 4.0 + 2.0 * (std::f64::consts::PI * (i + 1) as f64 / 4.0).cos();
+        let expected = 4.0 + 2.0 * (std::f64::consts::PI * f64::from_count(i + 1) / 4.0).cos();
         let actual = result.eigenvalues[n - 3 + i] / tiny;
         assert!(
             (actual - expected).abs() < 1e-10,
@@ -351,7 +352,7 @@ fn kwavers_120_gram_fixture_converges_with_correct_eigenpairs() {
         .map(|i| (result.eigenvalues[i] - jacobi.eigenvalues[i]).abs())
         .fold(0.0_f64, f64::max);
     eprintln!("Gram n={n} shifts={} offdiag={} max_jacobi_difference={value_difference:e} residual={residual:e} orthogonality={orthogonality:e}", result.iterations, result.off_diagonal_norm);
-    let roundoff = 64.0 * n as f64 * f64::EPSILON;
+    let roundoff = 64.0 * f64::from_count(n) * f64::EPSILON;
     assert!(value_difference <= config.tolerance + roundoff * largest);
     assert!(result.eigenvalues[n - 1] >= 0.5 - roundoff * largest);
     assert!(residual <= config.tolerance / largest + roundoff);

@@ -1,4 +1,5 @@
 use super::{errors, toeplitz, C};
+use eunomia::FloatElement;
 use leto::{Array2, LetoError};
 use leto_ops::{hermitian_eigen_qr, HermitianEigenConfig};
 
@@ -33,7 +34,7 @@ fn absolute_policy_handles_an_overflowing_shift_ratio() {
     let edge = 1e-310;
     let mut a = Array2::from_elem([n, n], C::new(0.0, 0.0));
     for i in 0..n {
-        a[[i, i]] = C::new(if i < 2 { (i + 1) as f64 } else { 4.0 }, 0.0);
+        a[[i, i]] = C::new(if i < 2 { f64::from_count(i + 1) } else { 4.0 }, 0.0);
     }
     a[[0, 1]] = C::new(0.0, edge);
     a[[1, 0]] = C::new(0.0, -edge);
@@ -79,7 +80,7 @@ fn dense_rank_two_gram_has_analytic_spectrum_and_eigenpairs() {
     }
     let config = HermitianEigenConfig::default();
     let result = hermitian_eigen_qr(&a, config).expect("rank-two Gram");
-    let value_bound = config.tolerance + 64.0 * n as f64 * f64::EPSILON * 480.0;
+    let value_bound = config.tolerance + 64.0 * f64::from_count(n) * f64::EPSILON * 480.0;
     assert!((result.eigenvalues[0] - 480.0).abs() < value_bound);
     assert!((result.eigenvalues[1] - 120.0).abs() < value_bound);
     assert!(result
@@ -88,7 +89,7 @@ fn dense_rank_two_gram_has_analytic_spectrum_and_eigenpairs() {
         .skip(2)
         .all(|v| v.abs() < value_bound));
     let (residual, orthogonality) = errors(&a, &result);
-    assert!(residual < 64.0 * n as f64 * f64::EPSILON);
-    assert!(orthogonality < 64.0 * n as f64 * f64::EPSILON);
+    assert!(residual < 64.0 * f64::from_count(n) * f64::EPSILON);
+    assert!(orthogonality < 64.0 * f64::from_count(n) * f64::EPSILON);
     assert!(result.off_diagonal_norm <= config.tolerance);
 }
