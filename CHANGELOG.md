@@ -1,6 +1,6 @@
 # Changelog
 
-## leto-ops [0.47.1] - Unreleased
+## [0.48.0] - Unreleased
 
 ### Added
 
@@ -27,6 +27,8 @@
   bounds, and no per-vertex heap headers or rounding are paid. The
   AMD contract (permutation validity, fill reduction on Poisson,
   no regression on tridiagonal) is preserved; tests pass unchanged.
+
+## leto-ops [0.47.1] - Unreleased
 
 ### Fixed
 
