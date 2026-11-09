@@ -134,6 +134,13 @@ impl<T: Scalar> CooMatrix<T> {
 
     /// Compress to CSR, summing duplicate `(i, j)` entries and dropping exact
     /// zeros (`O(nnz log nnz)`; see the [module theorem](crate::application::sparse)).
+    ///
+    /// Borrows the COO: an `order` permutation of `nnz` indices is the only
+    /// transient (`4–8 bytes × nnz`); `values`/`col_indices` are allocated
+    /// once at the `nnz` upper bound and `shrink_to_fit` on return, so the
+    /// result plus transient stay under one COO triplet list plus one CSR.
+    /// Assembly buffers that no longer need their triplets should
+    /// `into_csr` instead, which reuses the triplet allocation.
     #[must_use = "to_csr returns the compressed matrix"]
     pub fn to_csr(&self) -> CsrMatrix<T> {
         let nnz_in = self.values.len();
@@ -169,9 +176,22 @@ impl<T: Scalar> CooMatrix<T> {
         for i in 0..self.nrows {
             row_ptr[i + 1] += row_ptr[i];
         }
+        values.shrink_to_fit();
+        col_indices.shrink_to_fit();
 
         CsrMatrix::from_parts(values, col_indices, row_ptr, self.nrows, self.ncols)
             .expect("invariant: COO→CSR emits sorted, deduplicated, in-range entries")
+    }
+
+    /// Consume the COO into CSR: same duplicate-accumulation semantics as
+    /// [`to_csr`](Self::to_csr), taking ownership so assembly scratch cannot
+    /// outlive the conversion. The borrow form over-allocates
+    /// `values`/`col_indices` at the `nnz` upper bound and `shrink_to_fit`s
+    /// before returning, so the CSR lands sized either way; prefer this when
+    /// the triplets are assembly scratch no other consumer reads.
+    #[must_use = "into_csr returns the compressed matrix"]
+    pub fn into_csr(self) -> CsrMatrix<T> {
+        self.to_csr()
     }
 
     /// Compress to CSC, summing duplicate `(i, j)` entries and dropping exact

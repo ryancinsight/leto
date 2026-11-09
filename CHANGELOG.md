@@ -2,6 +2,23 @@
 
 ## leto-ops [0.47.1] - Unreleased
 
+### Added
+
+- [minor] `concat_into` / `stack_into` — caller-owned-output duals of
+  `concat` / `stack` for zero-copy assembly: elements flow directly into the
+  supplied `ArrayViewMut` with no intermediate owned array, so peak working
+  memory is the output itself. C-dense inputs/outputs copy block-wise;
+  strided or transposed views fall back to logical row-major traversal.
+  `stack` / `stack_into` remain const-generic on output rank `M` for
+  monomorphization over rank.
+
+- [minor] `CooMatrix::into_csr` — consuming CSR compression that takes
+  ownership of the COO triplets for assembly scratch buffers; `to_csr`
+  now `shrink_to_fit`s its result. Docs now state the steady-state
+  memory bound (`order` permutation + one COO list + one CSR) and
+  corrects `csr_to_coo_view` / `csc_to_coo_view` to triplet
+  materialization, not a view.
+
 ### Fixed
 
 - [patch] Above order 32, Hermitian QR now uses a phase-correct unitary
