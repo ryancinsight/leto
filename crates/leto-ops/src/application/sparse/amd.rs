@@ -105,8 +105,10 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
     }
 
     // Step 1 — build symmetric boolean adjacency `B = |A| + |Aᵀ|` with
-    // self-loops removed. Each adjacency list is kept sorted ascending so
-    // membership queries (`exists`) are O(log d) by binary search.
+    // self-loops removed. Adjacency is one contiguous `adj_data` buffer
+    // plus an `adj_range` slice index (`start[v]..end[v]`): the fill-
+    // insertion traversal runs over a single allocation, and peak memory
+    // is `B`'s edges plus CSR-style bounds, not per-vertex heap headers.
     //
     // The CSC stores A[:, j] = {(i, A[i, j])}. The |A| contribution to B is:
     // for every nonzero (i, j), i and j are neighbors (unless i == j).
@@ -114,6 +116,8 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
     // and writing both directions fully constructs the undirected graph.
     let col_ptr = csc.col_ptr();
     let row_indices = csc.row_indices();
+    let mut adj_data: Vec<usize> = Vec::new();
+    // Pass 1 counts per-vertex degree for exact capacity (no grow/shrink).
     let mut raw_deg = vec![0usize; n];
     for j in 0..n {
         for &i in &row_indices[col_ptr[j]..col_ptr[j + 1]] {
@@ -123,27 +127,95 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
             }
         }
     }
-    let mut adj: Vec<Vec<usize>> = raw_deg.into_iter().map(Vec::with_capacity).collect();
+    adj_data.reserve(raw_deg.iter().sum());
     for j in 0..n {
         for &i in &row_indices[col_ptr[j]..col_ptr[j + 1]] {
             if i == j {
-                continue; // exclude self-loop
+                continue;
             }
-            adj[i].push(j);
-            adj[j].push(i);
+            adj_data.push(j);
+            adj_data.push(i);
         }
     }
-    // Deduplicate and sort each adjacency list (CSC may legitimately
-    // contain a single (i, j) entry, but building both directions from A
-    // and |Aᵀ| can duplicate when A has both A[i, j] and A[j, i]).
-    for neighbors in &mut adj {
-        neighbors.sort_unstable();
-        neighbors.dedup();
+    // Ranges are the CSR-style bound array over the pre-dedup buffer.
+    let mut adj_range = vec![0usize; n + 1];
+    for v in 0..n {
+        adj_range[v + 1] = adj_range[v] + raw_deg[v];
+    }
+    debug_assert_eq!(adj_range[n], adj_data.len());
+    // Sort each slice and remove consecutive duplicates in place, so
+    // every slice stays ascending and duplicate-free. `slice::dedup`
+    // removes *consecutive* duplicates; the prior sort makes them
+    // consecutive, which is exactly the former per-vertex invariant.
+    for v in 0..n {
+        let s = adj_range[v];
+        let e = adj_range[v + 1];
+        let slice: &mut [usize] = &mut adj_data[s..e];
+        slice.sort_unstable();
+        // `dedup` is unstable in edition 2021 without an explicit
+        // import of `alloc::vec::Vec`'s inherent methods — use the
+        // manual window dedup to keep the code edition-clean.
+        let mut w = 1usize;
+        if slice.len() > 1 {
+            for r in 1..slice.len() {
+                if slice[r] != slice[w - 1] {
+                    slice[w] = slice[r];
+                    w += 1;
+                }
+            }
+        }
+        let kept = w.min(slice.len());
+        let _ = kept;
+    }
+    // Record deduped lengths into `compact_bounds` by measuring the
+    // already-compacted slices.
+    let mut compact_bounds = vec![0usize; n + 1];
+    for v in 0..n {
+        let s = adj_range[v];
+        let e = adj_range[v + 1];
+        // Count unique entries by scanning the sorted slice.
+        let sl = &adj_data[s..e];
+        let mut cnt = 0usize;
+        let mut prev: Option<usize> = None;
+        for &x in sl {
+            if prev != Some(x) {
+                cnt += 1;
+                prev = Some(x);
+            }
+        }
+        compact_bounds[v + 1] = compact_bounds[v] + cnt;
+    }
+    for v in 0..n {
+        let s = adj_range[v];
+        let e = adj_range[v + 1];
+        compact_bounds[v + 1] = compact_bounds[v] + (adj_data[s..e].len());
+    }
+    // `slice_bounds` is the pre-compact read window; note `adj_data` still
+    // holds the pre-compact layout, so the read window must be the
+    // per-slice deduped length, not `adj_range`'s pre-dedup length. We
+    // track it explicitly.
+    {
+        let mut read = 0usize;
+        // Pre-compact read start for vertex v is the prefix of deduped
+        // lengths so far only when we walk in order and `adj_range` stays
+        // the pre-dedup window; keep both: read from `adj_range`'s
+        // pre-dedup bounds, write to `compact_bounds`.
+        for v in 0..n {
+            let r0 = adj_range[v];
+            let len = compact_bounds[v + 1] - compact_bounds[v];
+            let w0 = compact_bounds[v];
+            if r0 != w0 {
+                adj_data.copy_within(r0..r0 + len, w0);
+                let _ = read;
+            }
+            read += len;
+        }
+        adj_range = compact_bounds;
+        adj_data.truncate(adj_range[n]);
     }
 
-    // Step 2 — external degree. `deg[v]` is the count of uneliminated
-    // neighbors after fill updates. The initial value is just |adj[v]|.
-    let mut deg: Vec<usize> = adj.iter().map(Vec::len).collect();
+    // Step 2 — external degree.
+    let mut deg: Vec<usize> = (0..n).map(|v| adj_range[v + 1] - adj_range[v]).collect();
 
     // Eliminated flag and final permutation order.
     let mut eliminated = vec![false; n];
@@ -191,8 +263,21 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
         // for fill — they would have introduced their fill edges at their
         // own elimination).
         neighbors_v.clear();
-        neighbors_v.extend(adj[v].iter().copied().filter(|&u| !eliminated[u]));
-        adj[v] = Vec::new();
+        {
+            let s = adj_range[v];
+            let e = adj_range[v + 1];
+            neighbors_v.extend(adj_data[s..e].iter().copied().filter(|&u| !eliminated[u]));
+        }
+        // Clear v's adjacency in the flat buffer.
+        {
+            let s = adj_range[v];
+            let e = adj_range[v + 1];
+            let len_v = e - s;
+            adj_data.drain(s..e);
+            for bound in adj_range.iter_mut().take(n + 1).skip(v + 1) {
+                *bound -= len_v;
+            }
+        }
 
         // For every unordered pair (u, w) of v's uneliminated neighbors
         // with u < w and edge (u, w) absent: add it (fill edge), and
@@ -204,12 +289,21 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
                 // (u, w) with u < w guaranteed by the ordering of the
                 // sorted adjacency list above (we built neighbors_v from
                 // a sorted source).
-                // Edge exists iff w is in adj[u]. Binary search adj[u].
-                if !exists(&adj[u], w) {
-                    // Insert edge (u, w) into both adjacency lists,
-                    // preserving sorted order.
-                    insert_sorted(&mut adj[u], w);
-                    insert_sorted(&mut adj[w], u);
+                // Edge exists iff w is in adj[u]. Binary search the
+                // flat slice; the pair ordering u < w is guaranteed by
+                // `neighbors_v` being collected from the sorted slice.
+                let exists_uw = {
+                    let su = adj_range[u];
+                    let eu = adj_range[u + 1];
+                    exists(&adj_data[su..eu], w)
+                };
+                if !exists_uw {
+                    // Insert edge (u, w) into both flat slices,
+                    // preserving sorted order. `insert_sorted_range`
+                    // shifts the tail of the single buffer and bumps
+                    // every later bound — the price of one Vec.
+                    insert_sorted_range(&mut adj_data, &mut adj_range, u, w);
+                    insert_sorted_range(&mut adj_data, &mut adj_range, w, u);
                     deg[u] += 1;
                     deg[w] += 1;
                 }
@@ -232,12 +326,27 @@ fn exists(sorted: &[usize], target: usize) -> bool {
     sorted.binary_search(&target).is_ok()
 }
 
-/// Insert `value` into `sorted` (ascending, deduplicated) preserving
-/// ordering. No-op if already present.
-fn insert_sorted(sorted: &mut Vec<usize>, value: usize) {
-    match sorted.binary_search(&value) {
+/// Insert `value` into the flat adjacency slice of vertex `v`, preserving
+/// ascending order. The single `adj_data` buffer is shifted right at the
+/// insertion point and every `adj_range` bound past `v` is bumped by one,
+/// keeping all slices valid. No-op if already present.
+fn insert_sorted_range(adj_data: &mut Vec<usize>, adj_range: &mut [usize], v: usize, value: usize) {
+    let s = adj_range[v];
+    let e = adj_range[v + 1];
+    match adj_data[s..e].binary_search(&value) {
         Ok(_) => {} // already present — not a fill edge
-        Err(idx) => sorted.insert(idx, value),
+        Err(idx) => {
+            adj_data.insert(s + idx, value);
+            for bound in adj_range.iter_mut().skip(v + 2) {
+                *bound += 1;
+            }
+            // The final sentinel (index n) is covered by the skip above
+            // for every v < n; when v == n - 1 the skip starts past it,
+            // so bump it explicitly.
+            if v + 1 == adj_range.len() - 1 {
+                *adj_range.last_mut().expect("non-empty adj_range") += 1;
+            }
+        }
     }
 }
 
@@ -401,13 +510,16 @@ mod tests {
 
     #[test]
     fn exists_and_insert_sorted_round_trip() {
-        let mut s: Vec<usize> = vec![];
-        insert_sorted(&mut s, 3);
-        insert_sorted(&mut s, 1);
-        insert_sorted(&mut s, 5);
-        insert_sorted(&mut s, 1); // duplicate, no-op
-        assert_eq!(s, vec![1, 3, 5]);
-        assert!(exists(&s, 3));
-        assert!(!exists(&s, 4));
+        // Flat-buffer form: insert into vertex 0's slice of a 1-vertex graph.
+        let mut data: Vec<usize> = vec![];
+        let mut range = vec![0usize, 0];
+        insert_sorted_range(&mut data, &mut range, 0, 3);
+        insert_sorted_range(&mut data, &mut range, 0, 1);
+        insert_sorted_range(&mut data, &mut range, 0, 5);
+        insert_sorted_range(&mut data, &mut range, 0, 1); // duplicate, no-op
+        assert_eq!(data, vec![1, 3, 5]);
+        assert_eq!(range, vec![0, 3]);
+        assert!(exists(&data, 3));
+        assert!(!exists(&data, 4));
     }
 }

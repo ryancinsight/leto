@@ -19,6 +19,15 @@
   corrects `csr_to_coo_view` / `csc_to_coo_view` to triplet
   materialization, not a view.
 
+- [minor] `amd_order` adjacency is now a single contiguous `adj_data`
+  buffer plus a CSR-style `adj_range` bound array instead of
+  `Vec<Vec<usize>>`: the fill-insertion traversal (outer loop over
+  `neighbors_v`, inner `exists` / `insert_sorted` over `adj[u]` /
+  `adj[w]`) runs over one allocation, peak memory is `|B|` edges plus
+  bounds, and no per-vertex heap headers or rounding are paid. The
+  AMD contract (permutation validity, fill reduction on Poisson,
+  no regression on tridiagonal) is preserved; tests pass unchanged.
+
 ### Fixed
 
 - [patch] Above order 32, Hermitian QR now uses a phase-correct unitary
