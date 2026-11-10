@@ -104,9 +104,9 @@ where
 /// Stack equal-shaped rank-`N` views along a new `axis` into caller-owned
 /// rank-`M` `output`, where `M = N + 1`.
 ///
-/// The single-allocation dual of [`stack`]: elements flow directly from the
-/// inputs into `output` with no intermediate owned array, so peak working
-/// memory is the output itself rather than twice it. Every input must share
+/// The direct-output dual of [`stack`]: elements flow from the inputs into
+/// `output` without an intermediate owned element array. Auxiliary metadata
+/// uses O(input count) space. Every input must share
 /// the same shape; `axis` ranges over `0..=N`; `output`'s `axis` extent must
 /// equal the input count and every other output dimension must match the
 /// inputs' shared shape with the `axis` lane skipped. `output`'s layout must

@@ -5,21 +5,21 @@
 ### Added
 
 - [minor] `concat_into` / `stack_into` — caller-owned-output duals of
-  `concat` / `stack` for zero-copy assembly: elements flow directly into the
-  supplied `ArrayViewMut` with no intermediate owned array, so peak working
-  memory is the output itself. C-dense inputs/outputs copy block-wise;
+  `concat` / `stack` for direct-output assembly: elements flow directly into the
+  supplied `ArrayViewMut` with no intermediate owned element array and
+  O(input count) auxiliary metadata. C-dense inputs/outputs copy block-wise;
   strided or transposed views fall back to logical row-major traversal.
   `stack` / `stack_into` remain const-generic on output rank `M` for
   monomorphization over rank.
 
-- [minor] `CooMatrix::into_csr` — consuming CSR compression that takes
-  ownership of the COO triplets so assembly scratch cannot outlive the
-  conversion; `to_csr` now `shrink_to_fit`s its result. Docs now state
-  the steady-state memory bound (`order` permutation + one COO list +
-  one CSR) and corrects `csr_to_coo_view` / `csc_to_coo_view` to triplet
-  materialization, not a view.
+### Changed
 
-- [minor] `amd_order` uses a shared adjacency arena with geometrically
+- [patch] `CooMatrix::to_csr` requests removal of spare result capacity after
+  coalescing. Documentation describes its borrowed-input allocation behavior
+  and identifies `csr_to_coo_view` / `csc_to_coo_view` as triplet materialization,
+  not borrowed views.
+
+- [patch] `amd_order` uses a shared adjacency arena with geometrically
   growing row segments. Fill insertion shifts only its endpoint row, rather
   than the whole graph or every later offset. Compaction reclaims retired
   segments when they exceed half of live capacity, moving live rows in place. Memory scales with peak live
@@ -32,10 +32,6 @@
 - Assembly into empty outputs skips irrelevant prefix products after shape
   validation. Concatenation reports typed overflow for unrepresentable axis
   extents instead of panicking or wrapping.
-
-## leto-ops [0.47.1] - Unreleased
-
-### Fixed
 
 - [patch] Above order 32, Hermitian QR now uses a phase-correct unitary
   reduction and the shared tridiagonal QL iteration. It returns a convergence

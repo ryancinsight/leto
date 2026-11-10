@@ -135,13 +135,11 @@ impl<T: Scalar> CooMatrix<T> {
     /// Compress to CSR, summing duplicate `(i, j)` entries and dropping exact
     /// zeros (`O(nnz log nnz)`; see the [module theorem](crate::application::sparse)).
     ///
-    /// Borrows the COO: an `order` permutation of `nnz` indices is the only
-    /// transient (`4–8 bytes × nnz`); `values`/`col_indices` are allocated
-    /// once at the `nnz` upper bound and `shrink_to_fit` on return, so the
-    /// result plus transient stay under one COO triplet list plus one CSR.
-    /// Assembly buffers that no longer need their triplets should
-    /// `into_csr` instead, which takes ownership so scratch cannot outlive
-    /// the conversion.
+    /// Borrows the COO and allocates an `order` permutation plus CSR output
+    /// buffers. Values and column indices start at the `nnz` upper bound;
+    /// after coalescing, `shrink_to_fit` requests removal of spare capacity.
+    /// The allocator may retain capacity. The input triplets remain borrowed
+    /// throughout and are not reused for the output.
     #[must_use = "to_csr returns the compressed matrix"]
     pub fn to_csr(&self) -> CsrMatrix<T> {
         let nnz_in = self.values.len();
@@ -182,17 +180,6 @@ impl<T: Scalar> CooMatrix<T> {
 
         CsrMatrix::from_parts(values, col_indices, row_ptr, self.nrows, self.ncols)
             .expect("invariant: COO→CSR emits sorted, deduplicated, in-range entries")
-    }
-
-    /// Consume the COO into CSR: same duplicate-accumulation semantics as
-    /// [`to_csr`](Self::to_csr), taking ownership so assembly scratch cannot
-    /// outlive the conversion. The conversion sorts an index permutation and
-    /// builds sized CSR buffers either way (no triplet allocation is reused);
-    /// prefer this when the triplets are assembly scratch no other consumer
-    /// reads.
-    #[must_use = "into_csr returns the compressed matrix"]
-    pub fn into_csr(self) -> CsrMatrix<T> {
-        self.to_csr()
     }
 
     /// Compress to CSC, summing duplicate `(i, j)` entries and dropping exact
