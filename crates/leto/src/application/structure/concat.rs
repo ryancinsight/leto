@@ -125,7 +125,7 @@ pub fn concat<T: Clone, const N: usize>(
 
 /// Concatenate views along an existing `axis` into caller-owned `output`.
 ///
-/// The single-allocation dual of [`concat`]: elements flow directly from the
+/// The single-allocation dual of [`concat()`]: elements flow directly from the
 /// inputs into `output` with no intermediate owned array, so peak working
 /// memory is the output itself rather than twice it. `output`'s shape must
 /// equal the concatenated shape (inputs agreeing on every axis but `axis`,
