@@ -3,7 +3,9 @@
     reason = "test scope: failed precondition = test failure"
 )]
 
-use leto::{concat, pad, pad_into, padded_shape, split, stack, Array, Layout, Storage, VecStorage};
+use leto::{
+    concat, concat_into, pad, pad_into, padded_shape, split, Array, Layout, Storage, VecStorage,
+};
 
 fn array2(rows: usize, cols: usize, data: Vec<i32>) -> Array<i32, VecStorage<i32>, 2> {
     Array::new(
@@ -158,128 +160,6 @@ fn test_split_rejects_bad_sizes() {
     assert!(split(&a.view(), 0, &[1, 2]).is_err());
 }
 
-fn array1(data: Vec<i32>) -> Array<i32, VecStorage<i32>, 1> {
-    Array::new(
-        Layout::c_contiguous([data.len()]).unwrap(),
-        VecStorage::new(data),
-    )
-    .unwrap()
-}
-
-#[test]
-fn test_stack_new_leading_axis() {
-    let a = array1(vec![1, 2, 3]);
-    let b = array1(vec![4, 5, 6]);
-    let out = stack::<i32, 1, 2>(&[a.view(), b.view()], 0).unwrap();
-    assert_eq!(out.shape(), [2, 3]);
-    assert_eq!(out.storage().as_slice(), &[1, 2, 3, 4, 5, 6]);
-}
-
-#[test]
-fn test_stack_new_trailing_axis() {
-    let a = array1(vec![1, 2, 3]);
-    let b = array1(vec![4, 5, 6]);
-    // Inserting the new axis last interleaves the inputs column-wise.
-    let out = stack::<i32, 1, 2>(&[a.view(), b.view()], 1).unwrap();
-    assert_eq!(out.shape(), [3, 2]);
-    assert_eq!(out.storage().as_slice(), &[1, 4, 2, 5, 3, 6]);
-}
-
-#[test]
-fn test_stack_rank2_into_rank3() {
-    let a = array2(2, 2, vec![1, 2, 3, 4]);
-    let b = array2(2, 2, vec![5, 6, 7, 8]);
-    let out = stack::<i32, 2, 3>(&[a.view(), b.view()], 0).unwrap();
-    assert_eq!(out.shape(), [2, 2, 2]);
-    assert_eq!(out.storage().as_slice(), &[1, 2, 3, 4, 5, 6, 7, 8]);
-}
-
-#[test]
-fn test_stack_rejects_shape_mismatch() {
-    let a = array1(vec![1, 2, 3]);
-    let b = array1(vec![4, 5]);
-    assert!(stack::<i32, 1, 2>(&[a.view(), b.view()], 0).is_err());
-}
-
-#[test]
-fn test_stack_of_transposed_views_uses_logical_order() {
-    let src = array2(2, 3, vec![1, 2, 3, 4, 5, 6]);
-    let t = src.transpose([1, 0]).unwrap(); // logical [[1,4],[2,5],[3,6]] shape [3,2]
-    let z = array2(3, 2, vec![0, 0, 0, 0, 0, 0]);
-    let out = stack::<i32, 2, 3>(&[t, z.view()], 0).unwrap();
-    assert_eq!(out.shape(), [2, 3, 2]);
-    assert_eq!(
-        out.storage().as_slice(),
-        &[1, 4, 2, 5, 3, 6, 0, 0, 0, 0, 0, 0]
-    );
-}
-
-#[test]
-fn test_stack_panic_cleanup() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
-
-    #[derive(Debug)]
-    struct PanicClone {
-        _id: usize,
-        drop_count: Arc<AtomicUsize>,
-        panic_on_clone: bool,
-    }
-
-    impl Clone for PanicClone {
-        fn clone(&self) -> Self {
-            if self.panic_on_clone {
-                panic!("clone panic!");
-            }
-            Self {
-                _id: self._id,
-                drop_count: self.drop_count.clone(),
-                panic_on_clone: self.panic_on_clone,
-            }
-        }
-    }
-
-    impl Drop for PanicClone {
-        fn drop(&mut self) {
-            self.drop_count.fetch_add(1, Ordering::SeqCst);
-        }
-    }
-
-    let drop_count = Arc::new(AtomicUsize::new(0));
-
-    let item1 = PanicClone {
-        _id: 1,
-        drop_count: drop_count.clone(),
-        panic_on_clone: false,
-    };
-    let item2 = PanicClone {
-        _id: 2,
-        drop_count: drop_count.clone(),
-        panic_on_clone: false,
-    };
-    let item3 = PanicClone {
-        _id: 3,
-        drop_count: drop_count.clone(),
-        panic_on_clone: true,
-    };
-
-    let shape = [3];
-    let a_layout = Layout::c_contiguous(shape).unwrap();
-    let a_storage = VecStorage::new(vec![item1, item2, item3]);
-    let a = Array::new(a_layout, a_storage).unwrap();
-
-    let inputs = &[a.view(), a.view()];
-    let res = std::panic::catch_unwind(|| {
-        let _ = stack::<PanicClone, 1, 2>(inputs, 1);
-    });
-    let payload = res.expect_err("a panicking clone must unwind to the caller");
-    assert_eq!(payload.downcast_ref::<&str>(), Some(&"clone panic!"));
-
-    std::mem::drop(a);
-
-    assert_eq!(drop_count.load(Ordering::SeqCst), 7);
-}
-
 #[test]
 fn test_concat_panic_cleanup() {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -343,4 +223,138 @@ fn test_concat_panic_cleanup() {
     std::mem::drop(a);
 
     assert_eq!(drop_count.load(Ordering::SeqCst), 5);
+}
+
+#[test]
+fn test_concat_into_axis0_matches_allocating_concat() {
+    let a = array2(1, 3, vec![1, 2, 3]);
+    let b = array2(2, 3, vec![4, 5, 6, 7, 8, 9]);
+    let expected = concat(&[a.view(), b.view()], 0).unwrap();
+    let mut out = Array::new(
+        Layout::c_contiguous([3, 3]).unwrap(),
+        VecStorage::fill(9, -1),
+    )
+    .unwrap();
+    concat_into(&[a.view(), b.view()], 0, &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), expected.storage().as_slice());
+}
+
+#[test]
+fn test_concat_into_axis1_matches_allocating_concat() {
+    let a = array2(2, 1, vec![1, 4]);
+    let b = array2(2, 2, vec![2, 3, 5, 6]);
+    let expected = concat(&[a.view(), b.view()], 1).unwrap();
+    let mut out = Array::new(
+        Layout::c_contiguous([2, 3]).unwrap(),
+        VecStorage::fill(6, -1),
+    )
+    .unwrap();
+    concat_into(&[a.view(), b.view()], 1, &mut out.view_mut()).unwrap();
+    assert_eq!(out.storage().as_slice(), expected.storage().as_slice());
+}
+
+#[test]
+fn test_concat_into_transposed_input_uses_logical_order() {
+    // The strided path must read logical row-major order, not memory order.
+    let a = array2(2, 3, vec![1, 2, 3, 4, 5, 6]);
+    let at = a.transpose([1, 0]).unwrap();
+    let b = array2(3, 2, vec![10, 11, 12, 13, 14, 15]);
+    let mut out = Array::new(
+        Layout::c_contiguous([3, 4]).unwrap(),
+        VecStorage::fill(12, -1),
+    )
+    .unwrap();
+    concat_into(&[at, b.view()], 1, &mut out.view_mut()).unwrap();
+    assert_eq!(
+        out.storage().as_slice(),
+        &[1, 4, 10, 11, 2, 5, 12, 13, 3, 6, 14, 15]
+    );
+}
+
+#[test]
+fn test_concat_into_strided_output_writes_logical_order() {
+    // Column-major output of a 2x1 concatenation: memory order is the
+    // transpose of the logical order, so a memory-order write would show.
+    let a = array2(2, 1, vec![1, 2]);
+    let b = array2(2, 1, vec![3, 4]);
+    let mut out = Array::new(
+        Layout::f_contiguous([2, 2]).unwrap(),
+        VecStorage::fill(4, -1),
+    )
+    .unwrap();
+    concat_into(&[a.view(), b.view()], 1, &mut out.view_mut()).unwrap();
+    let logical: Vec<i32> = out.view().indexed_iter().map(|(_, &v)| v).collect();
+    assert_eq!(logical, vec![1, 3, 2, 4]);
+    assert_eq!(out.storage().as_slice(), &[1, 2, 3, 4]);
+}
+
+#[test]
+fn test_concat_into_rejects_output_shape_and_offaxis_mismatch() {
+    let a = array2(1, 2, vec![1, 2]);
+    let mut wide = Array::new(
+        Layout::c_contiguous([3, 3]).unwrap(),
+        VecStorage::fill(9, 0),
+    )
+    .unwrap();
+    let err = concat_into(&[a.view()], 0, &mut wide.view_mut())
+        .expect_err("output misses the concatenated shape");
+    assert!(
+        matches!(err, leto::LetoError::ShapeMismatch { .. }),
+        "unexpected error: {err:?}"
+    );
+
+    let b = array2(1, 3, vec![1, 2, 3]);
+    let mut square = Array::new(
+        Layout::c_contiguous([2, 2]).unwrap(),
+        VecStorage::fill(4, 0),
+    )
+    .unwrap();
+    let err = concat_into(&[a.view(), b.view()], 0, &mut square.view_mut())
+        .expect_err("inputs disagree off the concatenated axis");
+    assert!(
+        matches!(err, leto::LetoError::ShapeMismatch { .. }),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[test]
+fn test_concat_into_rejects_empty_inputs_and_out_of_range_axis() {
+    let a = array2(1, 2, vec![1, 2]);
+    let mut out = array2(1, 2, vec![0, 0]);
+    let err = concat_into::<i32, 2>(&[], 0, &mut out.view_mut()).expect_err("no inputs");
+    assert!(
+        matches!(err, leto::LetoError::StorageError { .. }),
+        "unexpected error: {err:?}"
+    );
+    let err = concat_into(&[a.view()], 2, &mut out.view_mut()).expect_err("axis out of bounds");
+    assert!(
+        matches!(err, leto::LetoError::StorageError { .. }),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[test]
+fn concat_into_rejects_axis_overflow_for_empty_views() {
+    let a = leto::ArrayView::<i32, 2>::try_new(
+        Layout::try_new([usize::MAX, 0], [0, 0], 0).unwrap(),
+        &[],
+    )
+    .unwrap();
+    let b = leto::ArrayView::<i32, 2>::try_new(Layout::c_contiguous([1, 0]).unwrap(), &[]).unwrap();
+    let mut output =
+        leto::ArrayViewMut::try_new(Layout::c_contiguous([0, 0]).unwrap(), &mut []).unwrap();
+    assert!(matches!(
+        concat_into(&[a, b], 0, &mut output),
+        Err(leto::LetoError::Overflow { .. })
+    ));
+}
+
+#[test]
+fn concat_into_empty_output_skips_overflowing_prefix() {
+    let n = 1usize << (usize::BITS / 2);
+    let a =
+        leto::ArrayView::<i32, 3>::try_new(Layout::c_contiguous([n, n, 0]).unwrap(), &[]).unwrap();
+    let mut output =
+        leto::ArrayViewMut::try_new(Layout::c_contiguous([n, n, 0]).unwrap(), &mut []).unwrap();
+    concat_into(&[a], 2, &mut output).unwrap();
 }

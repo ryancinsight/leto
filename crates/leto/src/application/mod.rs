@@ -46,5 +46,7 @@ pub use reduction::{
 };
 pub use statistics::{covariance, pearson_correlation};
 pub use stencil::{BoundaryCondition, Laplacian2D, LaplacianError, LaplacianPolarity};
-pub use structure::{concat, pad, pad_into, padded_shape, split, stack, PadWidth};
+pub use structure::{
+    concat, concat_into, pad, pad_into, padded_shape, split, stack, stack_into, PadWidth,
+};
 pub use view::{ArrayView, ArrayViewMut};

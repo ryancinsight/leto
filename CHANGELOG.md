@@ -1,8 +1,37 @@
 # Changelog
 
-## leto-ops [0.47.1] - Unreleased
+## [0.48.0] - Unreleased
+
+### Added
+
+- [minor] `concat_into` / `stack_into` — caller-owned-output duals of
+  `concat` / `stack` for direct-output assembly: elements flow directly into the
+  supplied `ArrayViewMut` with no intermediate owned element array and
+  O(input count) auxiliary metadata. C-dense inputs/outputs copy block-wise;
+  strided or transposed views fall back to logical row-major traversal.
+  `stack` / `stack_into` remain const-generic on output rank `M` for
+  monomorphization over rank.
+
+### Changed
+
+- [patch] `CooMatrix::to_csr` requests removal of spare result capacity after
+  coalescing. Documentation describes its borrowed-input allocation behavior
+  and identifies `csr_to_coo_view` / `csc_to_coo_view` as triplet materialization,
+  not borrowed views.
+
+- [patch] `amd_order` uses a shared adjacency arena with geometrically
+  growing row segments. Fill insertion shifts only its endpoint row, rather
+  than the whole graph or every later offset. Compaction reclaims retired
+  segments when they exceed half of live capacity, moving live rows in place. Memory scales with peak live
+  adjacency including fill, with bounded arena slack and row metadata;
+  it is not bounded solely by the initial graph's edge count. No per-vertex
+  heap allocation is required, and permutation ordering remains unchanged.
 
 ### Fixed
+
+- Assembly into empty outputs skips irrelevant prefix products after shape
+  validation. Concatenation reports typed overflow for unrepresentable axis
+  extents instead of panicking or wrapping.
 
 - [patch] Above order 32, Hermitian QR now uses a phase-correct unitary
   reduction and the shared tridiagonal QL iteration. It returns a convergence

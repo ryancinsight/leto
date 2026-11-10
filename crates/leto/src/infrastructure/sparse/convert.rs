@@ -42,9 +42,15 @@ pub fn csc_to_csr_transpose<T: NumericElement>(csc: &CscArray<T>) -> CsrArray<T>
 
 /// Converts COO to CSR with duplicate handling.
 ///
-/// # Arguments
-/// * `coo` - COO matrix
-/// * `sum_duplicates` - If true, duplicate entries are summed; if false, the last value is kept
+/// Takes ownership of `coo`: the triplets are sorted in place and (when
+/// `sum_duplicates` is set) compacted in place before the CSR is built from
+/// them, so no second triplet copy is held. Callers holding a borrowed COO
+/// keep paying the one `clone` that ownership transfer requires
+/// (`coo.to_csr()` and `sparse_lu`'s symbolic path included) — the clone is
+/// the price of a by-value API on borrowed data, not of this conversion.
+///
+/// Zero-valued summed duplicates are dropped during compaction, so the
+/// returned CSR holds exactly its nonzero count.
 pub fn coo_to_csr_with_duplicates<T: NumericElement>(
     mut coo: CooArray<T>,
     sum_duplicates: bool,
@@ -107,10 +113,12 @@ mod duplicate_contract {
     }
 }
 
-/// Converts CSR to COO (zero-copy view where possible).
+/// Converts CSR to COO (triplet materialization, not a view).
 ///
-/// This creates a COO matrix that shares data with the CSR matrix
-/// when the underlying storage allows it.
+/// Every CSR entry is expanded into an owned `(row, col, value)` triplet: the
+/// caller-visible `CooArray` owns fresh index/value vectors, so peak memory is
+/// roughly the CSR plus one COO. Prefer the CSR directly when the consumer
+/// only reads entries.
 pub fn csr_to_coo_view<T: NumericElement>(csr: &CsrArray<T>) -> CooArray<T> {
     let mut triplets = Vec::with_capacity(csr.nnz());
 
@@ -123,10 +131,10 @@ pub fn csr_to_coo_view<T: NumericElement>(csr: &CsrArray<T>) -> CooArray<T> {
     CooArray::from_triplets(csr.nrows(), csr.ncols(), triplets)
 }
 
-/// Converts CSC to COO (zero-copy view where possible).
+/// Converts CSC to COO (triplet materialization, not a view).
 ///
-/// This creates a COO matrix that shares data with the CSC matrix
-/// when the underlying storage allows it.
+/// Same ownership as [`csr_to_coo_view`]: the returned `CooArray` owns fresh
+/// index/value vectors sized to the nonzero count.
 pub fn csc_to_coo_view<T: NumericElement>(csc: &CscArray<T>) -> CooArray<T> {
     let mut triplets = Vec::with_capacity(csc.nnz());
 

@@ -1,6 +1,6 @@
 # Leto Development Checklist
 
-Target version: leto-ops 0.47.1 (Hermitian correctness patch; existing release prerequisites retained).
+Target version: leto/leto-ops 0.48.0 (assembly and AMD candidate; existing release prerequisites retained).
 
 Published Python repair receipt: leto-python 0.46.1 (2026-10-16).
 Current Rust candidate: 0.47.0; publication is conditionally authorized after
