@@ -17,6 +17,7 @@ pub mod stack_storage;
 pub mod statistics;
 pub mod storage;
 pub mod structure;
+pub mod structure_stack;
 pub mod transform;
 pub mod variance;
 pub mod windows;
