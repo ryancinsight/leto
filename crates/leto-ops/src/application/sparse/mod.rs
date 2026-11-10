@@ -50,6 +50,7 @@
 //! assembly→CSR step. ∎
 
 mod amd;
+mod amd_adjacency;
 mod coo;
 mod csc;
 mod csc_spmv;

@@ -980,3 +980,11 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   (no-split regresses; naïve splitting breaks rank-deficient). DoD: differential parity
   across the battery + adversarial clustered/tiny/zero/wide-range inputs, AND a measured
   64²/256² win before merge (asymptotic-only is insufficient at n=64).
+
+## LETO-AMD-ARENA-SHIFTS [patch]
+
+- status: todo; priority: verification
+- Outcome: retain the flat adjacency representation without global movement on each fill edge.
+- Implemented in isolated continuation: row-local geometric capacity and bounded-slack compaction; row-state regression tests.
+- Evidence: exact-head Poisson comparison reproduces the original 7.4x n=1600 slowdown; the continuation returns near the prior main cost.
+- Remaining: complete exact-source native/API/package gates, independent review and owner integration; existing release prerequisites remain.

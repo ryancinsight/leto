@@ -19,14 +19,13 @@
   one CSR) and corrects `csr_to_coo_view` / `csc_to_coo_view` to triplet
   materialization, not a view.
 
-- [minor] `amd_order` adjacency is now a single contiguous `adj_data`
-  buffer plus a CSR-style `adj_range` bound array instead of
-  `Vec<Vec<usize>>`: the fill-insertion traversal (outer loop over
-  `neighbors_v`, inner `exists` / `insert_sorted` over `adj[u]` /
-  `adj[w]`) runs over one allocation, peak memory is `|B|` edges plus
-  bounds, and no per-vertex heap headers or rounding are paid. The
-  AMD contract (permutation validity, fill reduction on Poisson,
-  no regression on tridiagonal) is preserved; tests pass unchanged.
+- [minor] `amd_order` uses a shared adjacency arena with geometrically
+  growing row segments. Fill insertion shifts only its endpoint row, rather
+  than the whole graph or every later offset. Compaction reclaims retired
+  segments when they exceed half of live capacity, moving live rows in place. Memory scales with peak live
+  adjacency including fill, with bounded arena slack and row metadata;
+  it is not bounded solely by the initial graph's edge count. No per-vertex
+  heap allocation is required, and permutation ordering remains unchanged.
 
 ## leto-ops [0.47.1] - Unreleased
 

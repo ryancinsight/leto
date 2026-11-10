@@ -1,6 +1,6 @@
 # Leto Development Checklist
 
-Target version: leto-ops 0.47.1 (Hermitian correctness patch; existing release prerequisites retained).
+Target version: leto/leto-ops 0.48.0 (assembly and AMD candidate; existing release prerequisites retained).
 
 Published Python repair receipt: leto-python 0.46.1 (2026-10-16).
 Current Rust candidate: 0.47.0; publication is conditionally authorized after
@@ -269,3 +269,10 @@ production change is justified; future matmul work requires a working profile.
   doc target, while full workspace docs still build. Full Git dependency update
   is still blocked upstream by
   Mnemosyne's `themis ^0.8.0` requirement vs Themis main 0.9.5.
+
+## LETO-AMD-ARENA-SHIFTS [patch]
+
+- [x] Reproduce global-buffer shift cost against main with identical public-API inputs.
+- [x] Replace global insertion with row-local arena segments and compaction.
+- [ ] Complete exact-source validation, independent review and owner integration.
+- [ ] Complete provider-first release gates before publication.
