@@ -226,3 +226,13 @@ fn test_stack_into_rejects_shape_mismatch_output_shape_and_empty_inputs() {
         "unexpected error: {err:?}"
     );
 }
+
+#[test]
+fn stack_into_empty_output_skips_overflowing_prefix() {
+    let n = 1usize << (usize::BITS / 2);
+    let a =
+        leto::ArrayView::<i32, 3>::try_new(Layout::c_contiguous([n, n, 0]).unwrap(), &[]).unwrap();
+    let mut output =
+        leto::ArrayViewMut::try_new(Layout::c_contiguous([n, n, 0, 1]).unwrap(), &mut []).unwrap();
+    stack_into(&[a], 3, &mut output).unwrap();
+}

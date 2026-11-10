@@ -154,6 +154,11 @@ where
         });
     }
 
+    // Empty shapes contain no addressed elements; avoid irrelevant prefix products.
+    if out_shape.contains(&0) {
+        return Ok(());
+    }
+
     // Dense fast path: each input's logical order is its physical order and
     // so is the output's, so input `i` lands as lane `i`'s block copies.
     if let Some(dst) = output.as_mut_slice() {

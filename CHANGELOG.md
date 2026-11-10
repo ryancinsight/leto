@@ -27,6 +27,12 @@
   it is not bounded solely by the initial graph's edge count. No per-vertex
   heap allocation is required, and permutation ordering remains unchanged.
 
+### Fixed
+
+- Assembly into empty outputs skips irrelevant prefix products after shape
+  validation. Concatenation reports typed overflow for unrepresentable axis
+  extents instead of panicking or wrapping.
+
 ## leto-ops [0.47.1] - Unreleased
 
 ### Fixed

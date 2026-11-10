@@ -332,3 +332,29 @@ fn test_concat_into_rejects_empty_inputs_and_out_of_range_axis() {
         "unexpected error: {err:?}"
     );
 }
+
+#[test]
+fn concat_into_rejects_axis_overflow_for_empty_views() {
+    let a = leto::ArrayView::<i32, 2>::try_new(
+        Layout::try_new([usize::MAX, 0], [0, 0], 0).unwrap(),
+        &[],
+    )
+    .unwrap();
+    let b = leto::ArrayView::<i32, 2>::try_new(Layout::c_contiguous([1, 0]).unwrap(), &[]).unwrap();
+    let mut output =
+        leto::ArrayViewMut::try_new(Layout::c_contiguous([0, 0]).unwrap(), &mut []).unwrap();
+    assert!(matches!(
+        concat_into(&[a, b], 0, &mut output),
+        Err(leto::LetoError::Overflow { .. })
+    ));
+}
+
+#[test]
+fn concat_into_empty_output_skips_overflowing_prefix() {
+    let n = 1usize << (usize::BITS / 2);
+    let a =
+        leto::ArrayView::<i32, 3>::try_new(Layout::c_contiguous([n, n, 0]).unwrap(), &[]).unwrap();
+    let mut output =
+        leto::ArrayViewMut::try_new(Layout::c_contiguous([n, n, 0]).unwrap(), &mut []).unwrap();
+    concat_into(&[a], 2, &mut output).unwrap();
+}

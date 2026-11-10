@@ -36,7 +36,11 @@ pub fn concat<T: Clone, const N: usize>(
                 });
             }
         }
-        axis_total += shape[axis];
+        axis_total = axis_total
+            .checked_add(shape[axis])
+            .ok_or(LetoError::Overflow {
+                reason: "concatenated axis extent",
+            })?;
     }
     out_shape[axis] = axis_total;
 
@@ -140,7 +144,8 @@ pub fn concat<T: Clone, const N: usize>(
 ///
 /// Returns [`LetoError::StorageError`] when `axis` is out of bounds or no
 /// input is given, [`LetoError::ShapeMismatch`] when the inputs disagree off
-/// `axis` or `output`'s shape misses the concatenated shape, and whatever
+/// `axis` or `output`'s shape misses the concatenated shape, [`LetoError::Overflow`]
+/// when the concatenated extent is unrepresentable, and whatever
 /// [`ArrayViewMut::indexed_iter_mut`] reports when `output`'s layout aliases.
 pub fn concat_into<T: Clone, const N: usize>(
     inputs: &[ArrayView<'_, T, N>],
@@ -170,7 +175,11 @@ pub fn concat_into<T: Clone, const N: usize>(
                 });
             }
         }
-        axis_total += shape[axis];
+        axis_total = axis_total
+            .checked_add(shape[axis])
+            .ok_or(LetoError::Overflow {
+                reason: "concatenated axis extent",
+            })?;
     }
     out_shape[axis] = axis_total;
 
@@ -179,6 +188,11 @@ pub fn concat_into<T: Clone, const N: usize>(
             lhs: out_shape.to_vec(),
             rhs: output.shape().to_vec(),
         });
+    }
+
+    // Empty shapes contain no addressed elements; avoid irrelevant prefix products.
+    if out_shape.contains(&0) {
+        return Ok(());
     }
 
     // Dense fast path: every input's row-major order is its physical order
