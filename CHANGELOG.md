@@ -13,10 +13,10 @@
   monomorphization over rank.
 
 - [minor] `CooMatrix::into_csr` — consuming CSR compression that takes
-  ownership of the COO triplets for assembly scratch buffers; `to_csr`
-  now `shrink_to_fit`s its result. Docs now state the steady-state
-  memory bound (`order` permutation + one COO list + one CSR) and
-  corrects `csr_to_coo_view` / `csc_to_coo_view` to triplet
+  ownership of the COO triplets so assembly scratch cannot outlive the
+  conversion; `to_csr` now `shrink_to_fit`s its result. Docs now state
+  the steady-state memory bound (`order` permutation + one COO list +
+  one CSR) and corrects `csr_to_coo_view` / `csc_to_coo_view` to triplet
   materialization, not a view.
 
 - [minor] `amd_order` adjacency is now a single contiguous `adj_data`

@@ -116,7 +116,6 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
     // and writing both directions fully constructs the undirected graph.
     let col_ptr = csc.col_ptr();
     let row_indices = csc.row_indices();
-    let mut adj_data: Vec<usize> = Vec::new();
     // Pass 1 counts per-vertex degree for exact capacity (no grow/shrink).
     let mut raw_deg = vec![0usize; n];
     for j in 0..n {
@@ -127,91 +126,52 @@ pub fn amd_order<T: Scalar>(csc: &CscMatrix<T>) -> Vec<usize> {
             }
         }
     }
-    adj_data.reserve(raw_deg.iter().sum());
-    for j in 0..n {
-        for &i in &row_indices[col_ptr[j]..col_ptr[j + 1]] {
-            if i == j {
-                continue;
-            }
-            adj_data.push(j);
-            adj_data.push(i);
-        }
-    }
-    // Ranges are the CSR-style bound array over the pre-dedup buffer.
+    // CSR-style bound array over the pre-dedup buffer.
     let mut adj_range = vec![0usize; n + 1];
     for v in 0..n {
         adj_range[v + 1] = adj_range[v] + raw_deg[v];
     }
+    // Grouped fill: each incident half-edge lands in its endpoint's slice
+    // via a cursor, so slice `v` holds exactly `v`'s neighbors.
+    let mut adj_data = vec![0usize; adj_range[n]];
+    {
+        let mut cursor = adj_range[..n].to_vec();
+        for j in 0..n {
+            for &i in &row_indices[col_ptr[j]..col_ptr[j + 1]] {
+                if i == j {
+                    continue;
+                }
+                adj_data[cursor[i]] = j;
+                cursor[i] += 1;
+                adj_data[cursor[j]] = i;
+                cursor[j] += 1;
+            }
+        }
+    }
     debug_assert_eq!(adj_range[n], adj_data.len());
-    // Sort each slice and remove consecutive duplicates in place, so
-    // every slice stays ascending and duplicate-free. `slice::dedup`
-    // removes *consecutive* duplicates; the prior sort makes them
-    // consecutive, which is exactly the former per-vertex invariant.
-    for v in 0..n {
-        let s = adj_range[v];
-        let e = adj_range[v + 1];
-        let slice: &mut [usize] = &mut adj_data[s..e];
-        slice.sort_unstable();
-        // `dedup` is unstable in edition 2021 without an explicit
-        // import of `alloc::vec::Vec`'s inherent methods — use the
-        // manual window dedup to keep the code edition-clean.
-        let mut w = 1usize;
-        if slice.len() > 1 {
-            for r in 1..slice.len() {
-                if slice[r] != slice[w - 1] {
+    // Sort each slice, dedup in place, and compact the single buffer
+    // forward (write positions never pass read positions).
+    {
+        let mut write = 0usize;
+        let mut new_range = vec![0usize; n + 1];
+        for v in 0..n {
+            let s = adj_range[v];
+            let e = adj_range[v + 1];
+            let slice = &mut adj_data[s..e];
+            slice.sort_unstable();
+            let mut w = 0usize;
+            for r in 0..slice.len() {
+                if r == 0 || slice[r] != slice[w - 1] {
                     slice[w] = slice[r];
                     w += 1;
                 }
             }
+            adj_data.copy_within(s..s + w, write);
+            write += w;
+            new_range[v + 1] = write;
         }
-        let kept = w.min(slice.len());
-        let _ = kept;
-    }
-    // Record deduped lengths into `compact_bounds` by measuring the
-    // already-compacted slices.
-    let mut compact_bounds = vec![0usize; n + 1];
-    for v in 0..n {
-        let s = adj_range[v];
-        let e = adj_range[v + 1];
-        // Count unique entries by scanning the sorted slice.
-        let sl = &adj_data[s..e];
-        let mut cnt = 0usize;
-        let mut prev: Option<usize> = None;
-        for &x in sl {
-            if prev != Some(x) {
-                cnt += 1;
-                prev = Some(x);
-            }
-        }
-        compact_bounds[v + 1] = compact_bounds[v] + cnt;
-    }
-    for v in 0..n {
-        let s = adj_range[v];
-        let e = adj_range[v + 1];
-        compact_bounds[v + 1] = compact_bounds[v] + (adj_data[s..e].len());
-    }
-    // `slice_bounds` is the pre-compact read window; note `adj_data` still
-    // holds the pre-compact layout, so the read window must be the
-    // per-slice deduped length, not `adj_range`'s pre-dedup length. We
-    // track it explicitly.
-    {
-        let mut read = 0usize;
-        // Pre-compact read start for vertex v is the prefix of deduped
-        // lengths so far only when we walk in order and `adj_range` stays
-        // the pre-dedup window; keep both: read from `adj_range`'s
-        // pre-dedup bounds, write to `compact_bounds`.
-        for v in 0..n {
-            let r0 = adj_range[v];
-            let len = compact_bounds[v + 1] - compact_bounds[v];
-            let w0 = compact_bounds[v];
-            if r0 != w0 {
-                adj_data.copy_within(r0..r0 + len, w0);
-                let _ = read;
-            }
-            read += len;
-        }
-        adj_range = compact_bounds;
-        adj_data.truncate(adj_range[n]);
+        adj_range = new_range;
+        adj_data.truncate(write);
     }
 
     // Step 2 — external degree.
@@ -337,14 +297,9 @@ fn insert_sorted_range(adj_data: &mut Vec<usize>, adj_range: &mut [usize], v: us
         Ok(_) => {} // already present — not a fill edge
         Err(idx) => {
             adj_data.insert(s + idx, value);
-            for bound in adj_range.iter_mut().skip(v + 2) {
+            // Slices after `v` shift right by one element.
+            for bound in adj_range.iter_mut().skip(v + 1) {
                 *bound += 1;
-            }
-            // The final sentinel (index n) is covered by the skip above
-            // for every v < n; when v == n - 1 the skip starts past it,
-            // so bump it explicitly.
-            if v + 1 == adj_range.len() - 1 {
-                *adj_range.last_mut().expect("non-empty adj_range") += 1;
             }
         }
     }

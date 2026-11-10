@@ -140,7 +140,8 @@ impl<T: Scalar> CooMatrix<T> {
     /// once at the `nnz` upper bound and `shrink_to_fit` on return, so the
     /// result plus transient stay under one COO triplet list plus one CSR.
     /// Assembly buffers that no longer need their triplets should
-    /// `into_csr` instead, which reuses the triplet allocation.
+    /// `into_csr` instead, which takes ownership so scratch cannot outlive
+    /// the conversion.
     #[must_use = "to_csr returns the compressed matrix"]
     pub fn to_csr(&self) -> CsrMatrix<T> {
         let nnz_in = self.values.len();
@@ -185,10 +186,10 @@ impl<T: Scalar> CooMatrix<T> {
 
     /// Consume the COO into CSR: same duplicate-accumulation semantics as
     /// [`to_csr`](Self::to_csr), taking ownership so assembly scratch cannot
-    /// outlive the conversion. The borrow form over-allocates
-    /// `values`/`col_indices` at the `nnz` upper bound and `shrink_to_fit`s
-    /// before returning, so the CSR lands sized either way; prefer this when
-    /// the triplets are assembly scratch no other consumer reads.
+    /// outlive the conversion. The conversion sorts an index permutation and
+    /// builds sized CSR buffers either way (no triplet allocation is reused);
+    /// prefer this when the triplets are assembly scratch no other consumer
+    /// reads.
     #[must_use = "into_csr returns the compressed matrix"]
     pub fn into_csr(self) -> CsrMatrix<T> {
         self.to_csr()
