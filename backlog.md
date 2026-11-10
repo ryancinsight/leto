@@ -1,7 +1,6 @@
 <a id="LETO-HERMITIAN-QR-CONVERGENCE"></a>
 ## LETO-HERMITIAN-QR-CONVERGENCE [patch]
-
-- status: todo; priority: correctness; needs: final qualification
+- status: todo; priority: correctness; milestone: M-ops-linalg; needs: final qualification
 - scope: the QR path above order 32, its shared QL absolute policy and numerical regressions; direct Jacobi and other owners' work are preserved.
 - Finding: baseline 32d11f7 returns success with relative eigenpair residual 0.434, and on zero-budget non-diagonal input. Complex phase and basis accumulation are incorrect.
 - Outcome: one unitary reduction, shared QL iteration, truthful global convergence errors and completed shift counts. [Contract and evidence](docs/design/hermitian-qr.md).
@@ -9,8 +8,7 @@
 
 <a id="LETO-DIGAMMA"></a>
 ## LETO-DIGAMMA [minor]
-
-- status: blocked; priority: verification; needs: none; integrator: pi:01a1885f-3f38-73dd-a2f0-7e3fde63b66a
+- status: blocked; priority: verification; milestone: M-ops-linalg; needs: none; integrator: pi:01a1885f-3f38-73dd-a2f0-7e3fde63b66a
 - Blocker: `leto-ops` 0.47.0 publication waits on `moirai-runtime` 0.11 on
   crates.io, and the Coeus optional backend capability belongs to its owner.
 - Re-open trigger: the pending publisher reports the cohort published, or the
@@ -36,8 +34,8 @@
 
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
-
 - priority: correctness
+- milestone: M-1.0
 - scope: dependency requirements, canonical source lock, 0.46 version/migration records and exact-source API gate; all Rust sources stay unchanged.
 - Outcome: one Eunomia 0.10 identity across Aequitas 0.3, Hermes 0.9, Mnemosyne-memory 0.10 and Moirai 0.9.3.
 - Acceptance: standalone lock and identity checks, strict Clippy, complete native value tests, doctests/docs, exact-source API comparison, hosted CI and a fresh consumer after upstream integration.
@@ -48,7 +46,6 @@
 <a id="LETO-RESCUE-QUEUE"></a>
 
 ## LETO-RESCUE-QUEUE — Complete or close the open rescue PRs [patch] — todo
-
 - priority: correctness
 - needs: none
 - scope: `crates/leto-ops/` (code: 62 paths each, linalg/attention/sparse/benches), `backlog.md`
@@ -62,7 +59,6 @@
 <a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
 
 ## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow CSR index storage from usize to u32 [major] [arch] — todo
-
 - priority: tightening
 - needs: none
 - scope: `crates/leto-ops/src/application/sparse/csr.rs` and every CSR constructor/consumer (public format change)
@@ -73,7 +69,6 @@
 <a id="LETO-BLOCKED-LU-L3-GATE-2026-09-27"></a>
 
 ## LETO-BLOCKED-LU-L3-GATE-2026-09-27 — Cache-aware gate for blocked (BLAS-3) LU [patch] — todo
-
 - priority: tightening
 - needs: none
 - scope: `crates/leto-ops/src/application/linalg/lu/decompose.rs`, `crates/leto-ops/benches/kernels.rs`
@@ -85,7 +80,6 @@
 <a id="LETO-SPARSE-DIRECT-1"></a>
 
 ## LETO-SPARSE-DIRECT-1 — Own sparse direct (LU) factorization over CSR [feature] — todo
-
 - priority: feature
 - needs: none
 - scope: `crates/leto-ops/src/application/sparse/` (new direct-factorization module)
@@ -108,7 +102,6 @@
 
 ## LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25 — `MatrixDecompose::symmetric_eigen` still runs classical Jacobi [minor] — todo
 - priority: performance
-
 - Evidence: `symmetric_eigen_qr` landed in #233 (CHANGELOG [Unreleased]) for ritk's 60×60 MP-PCA Gram matrices, which cost 6.2 ms each under Jacobi's pivot scans, but `MatrixDecompose::symmetric_eigen` in `leto-ops/src/application/linalg/matrix.rs` still calls `symmetric_eigen_jacobi`.
 - Outcome: route `MatrixDecompose::symmetric_eigen` through the QL solver, keeping Jacobi as the high-relative-accuracy option.
 - Acceptance: existing `symmetric_eigen` tests pass unchanged within their tolerances; a 60×60 benchmark shows the QL cost.
@@ -116,7 +109,6 @@
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
-
 - Status: in-progress; priority: safety; integrator: root; updated: 2026-09-10.
 - **Why it matters.** `reduce_axis` writes its output through
   `VecStorage::uninit` and raw pointers (PR #157, `d16e3b2`). That is sound only
@@ -131,7 +123,6 @@
 - **Measured 2026-09-10 (local Windows host, Miri `0.1.0` / nightly
   `2026-08-26`).** Miri interprets every instruction, so cost tracks suite size,
   not the code under test:
-
   | Target | Tests | Stacked | Tree | Gated |
   |---|---:|---:|---:|---|
   | `leto --lib` | 130 | 206s | 363s | yes |
@@ -139,7 +130,6 @@
   | `leto-ops --lib` | 216 | >10m | — | no |
   | `leto-ops --test ops_tests` (full binary) | 352 | >10m | — | no |
   | `leto layout_property_tests` | proptest | >10m | — | no |
-
 - **Scope, stated so it is not mistaken for a clean bill.** The gated pair is
   the storage substrate and the uninitialized-output caller, which are the
   contracts the job exists for. The excluded surfaces are excluded because they
@@ -172,7 +162,6 @@
 <a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
 
 ## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
-
 - Status: review; priority: correctness; integrator: root; branch: `codex/leto-wasm-tolerance`; updated: 2026-09-10.
 - Outcome: `rank_pivot_ratio` converts the shared `1e-12` denominator through `FloatElement::from_f64`, so ColPivQR, Jacobi eigen, FullPivLU, SVD pseudoinverse, and UDU compile on 32-bit targets without changing the native threshold. The duplicate literal is deleted.
 - Acceptance evidence: Atlas-overlay `cargo check --offline -p leto-ops --target wasm32-unknown-unknown`, standalone strict Clippy, 585/585 `leto-ops` nextest, and the new f32/f64 threshold contract test pass. PR pending.
@@ -204,7 +193,6 @@
 - Dependency closure: `68745ef` includes landed CTC and requires Moirai 0.6. Apollo's old Hephaestus `242520e` requires Moirai ^0.5; adoption must advance Leto together with landed Hephaestus `1481a37`. Fresh consumer graph/size/allocation/census gates remain required; provider merge does not establish their result.
 
 ## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
-
 - **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
   `crates/leto-ops/src/application/diff/three_dimensional/`,
   `crates/leto-ops/src/lib.rs`, `backlog.md` — 2026-09-04.
@@ -256,7 +244,6 @@
 - **Last-update:** 2026-09-04.
 
 ## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
-
 - **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.
 - **Outcome:** remove the obsolete Mnemosyne PR #123 pin after confirming its
   Eunomia source correction already exists on reviewed `main`.
@@ -270,7 +257,6 @@
   already valid on `main`.
 
 ## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
-
 - **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**
   `Cargo.toml`, `Cargo.lock`, `backlog.md`.
 - **Outcome:** Advance Leto's workspace Hermes edge to PR #155 so consumers
@@ -285,7 +271,6 @@
 - **Dependency:** Hermes PR #155 (`5a399ee`); **Last-update:** 2026-09-04.
 
 ## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress
-
 - **Outcome:** extend `LayoutDyn` with checked physical-span bounds, exact
   injectivity validation, and zero-copy-compatible broadcasting so Hephaestus
   fusion can validate runtime-rank views through Leto's canonical layout seam.
@@ -304,16 +289,13 @@
   **last-update:** 2026-09-03.
 
 ## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
-
 - **Integrator:** claude-fable session 03d80d33 subagent.
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.
 - **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS` (done, `62a0434`),
   `ATLAS-LETO-REDUCE-SINGLE-WRITE` (stays filed — see its entry).
-
 ### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo
-
 - Owner: unclaimed (examined 2026-08-28 under `ATLAS-LETO-OP-PERF-2026-08-28`;
   deliberately not implemented). Original evidence: audit 2026-08-27 —
   `reduce_axis` allocates `VecStorage::fill(size, T::ZERO)` then
@@ -353,17 +335,13 @@
   model above — the win may not justify the unsafe surface.
 
 ## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, blocked]
-
 **Owner:** Codex; implementation metadata reconciled 2026-08-17.
-
 **Outcome:** give both publishable packages precise crates.io descriptions so
 the registry can validate the current 0.42.0 archives.
-
 **Acceptance:** locked metadata and package dry runs pass; `leto` and
 `leto-ops` 0.42.0 are verified for publication; trusted-publishing-only
 enforcement and exact GitHub Releases are configured by the release authority;
 and the dependent publication queue resumes.
-
 **Status:** both package manifests carry bounded-context descriptions, complete
 registry metadata, and the current workspace version `0.42.0`; locked
 no-dependency metadata confirms those fields. The locked package gate is
@@ -376,19 +354,15 @@ merge, indexing, trusted-publisher registration, and publication remain
 external release work; this task does not authorize registry mutation.
 
 ## LETO-PYTHON-RELEASE-1 — Python release wheels [patch, in progress]
-
 **Owner:** Codex `/root`
-
 **Scope:** the `leto-python` release workflow, protected GitHub environment,
 distribution documentation, and PyPI trusted publisher. Python binding behavior
 is a non-goal.
-
 **Acceptance:** a GitHub Release tagged `leto-python-v<version>` builds locked
 Linux, Windows, and universal macOS wheels for CPython 3.9–3.13, installs and
 imports each wheel as `leto_python`, validates Cargo-owned distribution identity,
 attests and attaches the exact artifacts, then publishes the same wheels to the
 `leto-python` PyPI project through OIDC.
-
 **Current evidence:** the release workflow and synchronized distribution
 contract are implemented, and GitHub environment `pypi` accepts only
 `leto-python-v*` tags. A historical locked CPython 3.13 wheel built as
@@ -398,7 +372,6 @@ current-release proof. Hosted CI and pending-publisher registration remain
 open.
 
 ## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no intensity gate [minor] — blocked (re-open: first bandwidth-bound in-place caller)
-
 - **Outcome:** give bandwidth-bound ops an in-place path that reaches the
   cache-residency gate, as `unary_map_into` already does for the into-output
   form. `UnaryOp::COMPUTE_BOUND` has no in-place consumer: `unary_map_into`
@@ -415,7 +388,6 @@ open.
   monomorphized from the same generic `F: Fn(T) -> T`, best-of-9 blocks). The
   control reads ratio 1.00 at every sub-threshold length, which is what
   establishes that the comparison isolates dispatch:
-
   | elems | KiB (f64) | f64 ratio | f32 ratio | dispatch |
   |---|---|---|---|---|
   | 16384-49152 | 128-384 | 1.00 | 1.00 | sequential |
@@ -426,7 +398,6 @@ open.
   | 524288 | 4096 | 1.09 | 3.71 | parallel |
   | 1048576 | 8192 | 0.29 | 0.35 | parallel |
   | 4194304 | 32768 | 0.16 | 0.31 | parallel |
-
   Ratios above 1.0 are parallel losing. The bandwidth-bound crossover sits near
   **1M elements for both scalars** here. **Correction (2026-09-01):** this
   originally read as evidence against the LLC-byte model the `_into` and binary
@@ -462,16 +433,13 @@ open.
 - **Integrator:** Claude session 03d80d33. **Last-update:** 2026-09-01.
 
 ## Atlas in-house replacement roadmap — leto slice [arch]
-
 Cross-repo program to eliminate ndarray, nalgebra, rayon, tokio, std::simd, and
 burn from the Atlas stack using monomorphized zero-cost in-house crates. SSOT
 map: ndarray→leto, nalgebra→leto-ops linalg, rayon/tokio→moirai, std::simd→hermes,
 burn→coeus, alloc→mnemosyne, capabilities→melinoe, GPU=wgpu+cuda-oxide behind
 coeus `ComputeBackend`. leto owns the CPU array substrate and stays CPU-only; GPU
 backends live in coeus/apollo and index leto-style host-side layout metadata.
-
 ### Stage S0 — scalar SSOT audit
-
 - [x] [patch] Add the Atlas special-functions provider lane:
   `leto_ops::{ErfOp,ErfcOp,LgammaOp}` over Eunomia `FloatElement`, with f64
   value-semantic coverage against known `erf`/`erfc`/`lgamma` values. Driver:
@@ -487,9 +455,7 @@ backends live in coeus/apollo and index leto-style host-side layout metadata.
   re-enable the corresponding `leto-ops::Scalar` impls through the Eunomia
   supertrait contract. Platform-sized scalar support remains upstream-owned; no
   Leto compatibility shims.
-
 ### Stage A0 — consumer-driven geometry and array surface
-
 - [x] [minor] Add the Helios-driven checked rotation-column constructor:
   `UnitQuaternion::try_from_rotation_columns` validates finite, right-handed,
   orthonormal world-space axes without silently projecting an affine basis to a
@@ -498,7 +464,6 @@ backends live in coeus/apollo and index leto-style host-side layout metadata.
   package fmt/check/clippy/nextest/doc, and repository-baseline SemVer checks.
   The downstream oblique DICOM-grid test remains Helios-owned and is sequenced
   behind RITK's named `ImageOrientationPatient` attribute contract.
-
 - [x] [patch] Add the CFDrs sparse-extension CSR utility provider surface:
   `CsrMatrix::diagonal`, `scale_values`, `scale_rows`, `scale_columns`,
   `frobenius_norm`, `is_strictly_diagonally_dominant`, and
@@ -623,7 +588,6 @@ backends live in coeus/apollo and index leto-style host-side layout metadata.
   `Array1` profile/factor storage at the provider boundary. Verification:
   focused value tests for mutation, shape-sensitive equality, downstream
   CPML/PSTD/PML nextest, and downstream boundary/GPU compile/lint gates.
-
 ### Stage A1 — nalgebra linalg completion (leto-ops `application/linalg/`)
 Each routine generic over `T: RealScalar`, native-precision accumulation (wider
 accumulator only via a trait-encoded associated type with numerical justification),
@@ -639,7 +603,6 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [x] [major] Rank-revealing SVD via one-sided Jacobi plus rank-deficient pseudoinverse; ADR 0005 records the selected algorithm and verification plan. Verification: reconstruction, right-vector orthonormality, nalgebra singular-value parity, nalgebra `pseudo_inverse` parity, and Moore-Penrose identities.
 - [x] [minor] Non-symmetric eigenvalues (real + complex) through Hessenberg + shifted complex QR; ADR 0006 records the staged eigensolver track. Verification: nalgebra `complex_eigenvalues` battery and exact spectra. Schur vectors remain a separate open surface.
 - [x] [minor] Unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`) with solve/inverse/determinant helpers. Verification: reconstruction, determinant/solve/inverse parity with nalgebra, invalid-input and zero-pivot rejection. Pivoted Bunch-Kaufman remains open for matrices requiring symmetric pivoting.
-
 ### Stage A2 — ndarray consolidation (support coeus/apollo)
 - [x] [patch] Extend stack fixed primitives for RITK spatial metadata:
   `FixedVector::iter`, `FixedMatrix::iter`, and 3-D row-major/column-major
@@ -668,7 +631,6 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   as coeus integration surfaces them).
 - [ ] [patch] Keep ndarray strictly a dev-dependency differential oracle; core
   crates never depend on it in production.
-
 ### Stage C2 — hermes SIMD coverage audit
 - [x] [patch] Audit leto-ops hot kernels (matmul inner loop, reductions, scans,
   unary math) to ensure they dispatch through hermes `SimdOps` rather than
@@ -717,7 +679,6 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   matmul still trails nalgebra's recorded 128x128 median, so parity remains
   open. Broad depth-batched routing across 64x64/256x256 was rejected after
   regression.
-
 ### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
 Criterion baselines recorded in `gap_audit.md` (2026-06-11); every
 item below must show a statistically significant improvement against them —
@@ -907,7 +868,6 @@ while Hephaestus owns accelerator attention.
 - [ ] [arch] Re-base Coeus's CPU storage/layout layer onto Leto types (or thin adapters) and delete the duplicate, as a coordinated cross-repo unit per the co-evolution protocol; file the consumer-side item in the Coeus backlog naming Leto as provider.
 
 ## Phase 7: ndarray Parity Completion (Apollo hot kernels) [minor]
-
 `LETO-FFT-LAYOUT-THROUGHPUT` [minor] is in progress. It provides the measured,
 caller-owned layout-movement primitive required by Apollo's non-contiguous 2-D
 and 3-D FFT axis passes. The implementation profiles the existing cache-tiled
@@ -970,7 +930,6 @@ reflectors as `tiled_gemm` (BLAS-3). Phased, each verified against the unblocked
   Phase-0 backward-error tolerance fix. 64² confinement 2.69 → restriction 0.69 ms
   (3.9×). The full multishift (`dlaqr5`) GEMM rewrite is no longer needed to close
   the disparity; it remains an optional future lever for very large `n` only.
-
 - [ ] [major] SVD values-only **dqds** fast path (ADR 0012). Replace the implicit-shift
   Givens sweep in `singular_values` with a full `dlasq`-class dqds (block splitting +
   Fernando–Parlett shift cases + ping-pong). NOTE: the 64² ~1.9× nalgebra gap is NOT
