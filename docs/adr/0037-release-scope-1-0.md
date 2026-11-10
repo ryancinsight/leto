@@ -1,7 +1,9 @@
-# ADR 0020: Leto release scope for 1.0
+# ADR 0037: Leto release scope for 1.0
 
 - Status: Accepted
 - Date: 2026-11-10
+- Revision: 2026-11-10 - Renumber to preserve the existing generic-zip ADR.
+- Driver: [Leto PR #399](https://github.com/ryancinsight/leto/pull/399)
 - Class: `[arch]` `[minor]`
 
 ## Context

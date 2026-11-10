@@ -1,4 +1,4 @@
-# Milestone ladder ([ADR 0020](../docs/adr/0020-release-scope-1-0.md))
+# Milestone ladder ([ADR 0037](../docs/adr/0037-release-scope-1-0.md))
 <a id="M-array-core"></a> **M-array-core** (0.49.0) needs: (none) — array layout, storage, and view contracts.
 - exit: run array basics example (`cargo run -p leto --example book_array_basics --locked --all-features` exits successfully).
 - exit: run statistics example (`cargo run -p leto --example book_statistics --locked --all-features` exits successfully).
