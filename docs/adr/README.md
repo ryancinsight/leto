@@ -28,6 +28,7 @@
 | [0017](0017-retire-ndarray-compatibility.md) | Retire public ndarray compatibility | Accepted |
 | [0018](0018-finite-difference-3d-extension.md) | Adopt the typed Cartesian 3-D finite-difference provider in leto-ops | Accepted |
 | [0019](0019-convolution-provider-contract.md) | Own CPU convolution in leto-ops | Accepted |
+| [0020](0020-release-scope-1-0.md) | Leto release scope for 1.0 | Accepted |
 | [0020](0020-generic-zip-sources.md) | Generic tuple source sets for multi-input zips | Accepted |
 | [0021](0021-generic-mutable-zip-outputs.md) | Generic mutable zip output families | Accepted |
 | [0022](0022-provider-owned-stateful-updates.md) | Provider-owned CPU stateful updates | Accepted |
