@@ -109,7 +109,7 @@
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
-- Status: in-progress; priority: safety; integrator: root; updated: 2026-09-10.
+- Status: in-progress; priority: safety; milestone: M-array-core; integrator: root; updated: 2026-09-10.
 - **Why it matters.** `reduce_axis` writes its output through
   `VecStorage::uninit` and raw pointers (PR #157, `d16e3b2`). That is sound only
   because every output element is written before it is read — an obligation
@@ -169,7 +169,7 @@
 <a id="leto-windows-source-identity"></a>
 
 ## LETO-WINDOWS-SOURCE-IDENTITY — Preserve source identity across mapped checkouts [patch]
-- Status: todo; priority: correctness; updated: 2026-09-07.
+- Status: todo; priority: correctness; milestone: M-array-core; updated: 2026-09-07.
 - Outcome: standalone Windows builds cannot reuse another checkout's crate metadata when drive aliases are recycled; keep the single shared target directory.
 - Scope: centralize the standalone Cargo mapping/freshness mechanism and adopt it in Leto's committed verification path; no mathematical or workload changes.
 - Evidence: merged primary exports `transpose_copy`, but release reused local `leto-2960c0092a779492` metadata without that export; its relative-path dep-info and 05:07 UTC artifact were newer than primary source. Debug compilation passed; release failed E0432 in `application/layout/complex/batch.rs:8`.
@@ -182,7 +182,7 @@
 <a id="leto-square-transpose"></a>
 
 ## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]
-- Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-08; [PR 175](https://github.com/ryancinsight/leto/pull/175); provider-first delivery authorized, consumer acceptance remains open.
+- Status: in-progress; milestone: M-array-core; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-08; [PR 175](https://github.com/ryancinsight/leto/pull/175); provider-first delivery authorized, consumer acceptance remains open.
 - Outcome: checked dense transpose and allocation-free, bit-preserving complex movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
 - Scope: core assignment, complex layout kernels and generic scalar/allocation tests; preserve FFT arithmetic, workload, manifest versions and locks.
 - Acceptance: failure-atomic extents, all four scalar payload/coordinate/offset/tail oracles, no supported consumer regression or executable growth, unchanged allocation bounds.
@@ -193,6 +193,7 @@
 - Dependency closure: `68745ef` includes landed CTC and requires Moirai 0.6. Apollo's old Hephaestus `242520e` requires Moirai ^0.5; adoption must advance Leto together with landed Hephaestus `1481a37`. Fresh consumer graph/size/allocation/census gates remain required; provider merge does not establish their result.
 
 ## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
+- **Milestone:** M-ops-linalg.
 - **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
   `crates/leto-ops/src/application/diff/three_dimensional/`,
   `crates/leto-ops/src/lib.rs`, `backlog.md` — 2026-09-04.
@@ -245,6 +246,7 @@
 
 ## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
 - **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.
+- **Milestone:** M-array-core.
 - **Outcome:** remove the obsolete Mnemosyne PR #123 pin after confirming its
   Eunomia source correction already exists on reviewed `main`.
 - **Acceptance:** standalone metadata resolves one Eunomia identity from
@@ -257,6 +259,7 @@
   already valid on `main`.
 
 ## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
+- **Milestone:** M-array-core.
 - **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**
   `Cargo.toml`, `Cargo.lock`, `backlog.md`.
 - **Outcome:** Advance Leto's workspace Hermes edge to PR #155 so consumers
@@ -271,6 +274,7 @@
 - **Dependency:** Hermes PR #155 (`5a399ee`); **Last-update:** 2026-09-04.
 
 ## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress
+- **Milestone:** M-array-core.
 - **Outcome:** extend `LayoutDyn` with checked physical-span bounds, exact
   injectivity validation, and zero-copy-compatible broadcasting so Hephaestus
   fusion can validate runtime-rank views through Leto's canonical layout seam.
@@ -290,6 +294,7 @@
 
 ## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
 - **Integrator:** claude-fable session 03d80d33 subagent.
+- **Milestone:** M-ops-linalg.
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.
