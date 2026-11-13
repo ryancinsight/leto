@@ -1,6 +1,6 @@
 <a id="LETO-DIGAMMA"></a>
 ## LETO-DIGAMMA [minor]
-- status: blocked; priority: verification; milestone: M-ops-linalg; needs: none; integrator: pi:01a1885f-3f38-73dd-a2f0-7e3fde63b66a
+- status: blocked; priority: verification; milestone: M-array-core; needs: none; integrator: pi:01a1885f-3f38-73dd-a2f0-7e3fde63b66a
 - Blocker: `leto-ops` 0.47.0 publication waits on `moirai-runtime` 0.11 on
   crates.io, and the Coeus optional backend capability belongs to its owner.
 - Re-open trigger: the pending publisher reports the cohort published, or the
@@ -27,7 +27,7 @@
 <a id="LETO-EUNOMIA-010-COHORT"></a>
 ## LETO-EUNOMIA-010-COHORT — restore a resolvable provider cohort [minor] — todo
 - priority: correctness
-- milestone: M-1.0
+- milestone: M-array-core
 - scope: dependency requirements, canonical source lock, 0.46 version/migration records and exact-source API gate; all Rust sources stay unchanged.
 - Outcome: one Eunomia 0.10 identity across Aequitas 0.3, Hermes 0.9, Mnemosyne-memory 0.10 and Moirai 0.9.3.
 - Acceptance: standalone lock and identity checks, strict Clippy, complete native value tests, doctests/docs, exact-source API comparison, hosted CI and a fresh consumer after upstream integration.
@@ -38,7 +38,7 @@
 <a id="LETO-RESCUE-QUEUE"></a>
 
 ## LETO-RESCUE-QUEUE — Complete or close the open rescue PRs [patch] — todo
-- priority: correctness
+- priority: correctness; milestone: M-array-core
 - needs: none
 - scope: `crates/leto-ops/` (code: 62 paths each, linalg/attention/sparse/benches), `backlog.md`
 - Outcome: each rescue PR below is completed onto current main (ported, fmt, gate green, merged) or closed once its diff resolves empty against main.
@@ -51,7 +51,7 @@
 <a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
 
 ## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow CSR index storage from usize to u32 [major] [arch] — todo
-- priority: tightening
+- priority: tightening; milestone: M-array-core
 - needs: none
 - scope: `crates/leto-ops/src/application/sparse/csr.rs` and every CSR constructor/consumer (public format change)
 - Evidence: the 2026-07-20 SpMV bounds-check elision audit (`docs/benchmarks.md#spmv-bounds-check-elision-krylov-kernel-2026-07-20`) identified `col_indices`/`row_ptr: usize` as the dominant index-traffic term for DRAM-bound SpMV (halving it halves index bytes moved per nonzero); at the time this collided with in-flight sparse-LU/SpGEMM work on the same format. Re-verify that work has settled before starting.
@@ -61,7 +61,7 @@
 <a id="LETO-BLOCKED-LU-L3-GATE-2026-09-27"></a>
 
 ## LETO-BLOCKED-LU-L3-GATE-2026-09-27 — Cache-aware gate for blocked (BLAS-3) LU [patch] — todo
-- priority: tightening
+- priority: tightening; milestone: M-array-core
 - needs: none
 - scope: `crates/leto-ops/src/application/linalg/lu/decompose.rs`, `crates/leto-ops/benches/kernels.rs`
 - Evidence: the 2026-07-20 blocked-LU experiment (`docs/benchmarks.md#blocked-lu-cache-resident-regression-2026-07-20`) measured a right-looking blocked LU as a regression at n=256/512 on a 36 MiB-L3 host, because unblocked SIMD axpy already runs at cache bandwidth below `n ≈ 1200`; it was reverted, not deleted from history.
@@ -72,7 +72,7 @@
 <a id="LETO-SPARSE-DIRECT-1"></a>
 
 ## LETO-SPARSE-DIRECT-1 — Own sparse direct (LU) factorization over CSR [feature] — todo
-- priority: feature
+- priority: feature; milestone: M-ops-linalg
 - needs: none
 - scope: `crates/leto-ops/src/application/sparse/` (new direct-factorization module)
 - Evidence: CFDrs calls a direct sparse solver only after its GMRES tiers stagnate, break down, or exhaust their iteration budget — a real failure-mode-independence requirement, not a preference. Leto owns CSR storage, sparse products, CG, and GMRES today but exposes no sparse direct factorization or reusable sparse LU factors, so CFDrs retains a third-party solver for that tier. Sparse factorization belongs with Leto's CSR representation (upstream ownership) — a CFDrs-local wrapper, dense materialization, or iterative fallback would preserve the gap instead of closing it.
@@ -82,7 +82,7 @@
 <a id="LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25"></a>
 
 ## LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25 — No derived oracle bounds F16/Bf16 factor accuracy [patch] — todo
-- priority: verification
+- priority: verification; milestone: M-array-core
 - needs: none
 - scope: `crates/leto-ops/tests/ops/backward_error.rs`, `crates/leto-ops/tests/ops/a_posteriori.rs`, `crates/leto-ops/tests/ops/graded_scan.rs`, `crates/leto-ops/tests/ops/scale_range.rs`
 - Evidence: PR #237's deterministic γ bounds are vacuous for the iterative routines in F16/Bf16 (one length-3 reflector costs γ₅₃ ≈ 0.027/0.26); the a-posteriori certificates bind values to factors but assert nothing about the factors' residual or orthogonality in those formats (ADR 0033, Tests).
@@ -93,7 +93,7 @@
 <a id="LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25"></a>
 
 ## LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25 — `MatrixDecompose::symmetric_eigen` still runs classical Jacobi [minor] — todo
-- priority: performance
+- priority: performance; milestone: M-array-core
 - Evidence: `symmetric_eigen_qr` landed in #233 (CHANGELOG [Unreleased]) for ritk's 60×60 MP-PCA Gram matrices, which cost 6.2 ms each under Jacobi's pivot scans, but `MatrixDecompose::symmetric_eigen` in `leto-ops/src/application/linalg/matrix.rs` still calls `symmetric_eigen_jacobi`.
 - Outcome: route `MatrixDecompose::symmetric_eigen` through the QL solver, keeping Jacobi as the high-relative-accuracy option.
 - Acceptance: existing `symmetric_eigen` tests pass unchanged within their tolerances; a 60×60 benchmark shows the QL cost.
@@ -101,7 +101,7 @@
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
-- Status: in-progress; priority: safety; integrator: root; updated: 2026-09-10.
+- Status: in-progress; priority: safety; milestone: M-array-core; integrator: root; updated: 2026-09-10.
 - **Why it matters.** `reduce_axis` writes its output through
   `VecStorage::uninit` and raw pointers (PR #157, `d16e3b2`). That is sound only
   because every output element is written before it is read — an obligation
@@ -154,14 +154,14 @@
 <a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
 
 ## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
-- Status: review; priority: correctness; integrator: root; branch: `codex/leto-wasm-tolerance`; updated: 2026-09-10.
+- Status: review; priority: correctness; milestone: M-array-core; integrator: root; branch: `codex/leto-wasm-tolerance`; updated: 2026-09-10.
 - Outcome: `rank_pivot_ratio` converts the shared `1e-12` denominator through `FloatElement::from_f64`, so ColPivQR, Jacobi eigen, FullPivLU, SVD pseudoinverse, and UDU compile on 32-bit targets without changing the native threshold. The duplicate literal is deleted.
 - Acceptance evidence: Atlas-overlay `cargo check --offline -p leto-ops --target wasm32-unknown-unknown`, standalone strict Clippy, 585/585 `leto-ops` nextest, and the new f32/f64 threshold contract test pass. PR pending.
 
 <a id="leto-windows-source-identity"></a>
 
 ## LETO-WINDOWS-SOURCE-IDENTITY — Preserve source identity across mapped checkouts [patch]
-- Status: todo; priority: correctness; updated: 2026-09-07.
+- Status: todo; priority: correctness; milestone: M-array-core; updated: 2026-09-07.
 - Outcome: standalone Windows builds cannot reuse another checkout's crate metadata when drive aliases are recycled; keep the single shared target directory.
 - Scope: centralize the standalone Cargo mapping/freshness mechanism and adopt it in Leto's committed verification path; no mathematical or workload changes.
 - Evidence: merged primary exports `transpose_copy`, but release reused local `leto-2960c0092a779492` metadata without that export; its relative-path dep-info and 05:07 UTC artifact were newer than primary source. Debug compilation passed; release failed E0432 in `application/layout/complex/batch.rs:8`.
@@ -174,7 +174,7 @@
 <a id="leto-square-transpose"></a>
 
 ## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]
-- Status: in-progress; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-08; [PR 175](https://github.com/ryancinsight/leto/pull/175); provider-first delivery authorized, consumer acceptance remains open.
+- Status: in-progress; milestone: M-array-core; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-08; [PR 175](https://github.com/ryancinsight/leto/pull/175); provider-first delivery authorized, consumer acceptance remains open.
 - Outcome: checked dense transpose and allocation-free, bit-preserving complex movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
 - Scope: core assignment, complex layout kernels and generic scalar/allocation tests; preserve FFT arithmetic, workload, manifest versions and locks.
 - Acceptance: failure-atomic extents, all four scalar payload/coordinate/offset/tail oracles, no supported consumer regression or executable growth, unchanged allocation bounds.
@@ -184,7 +184,7 @@
 - API: exact-head CI confirms intended free-function/public-module removals; [major] migration is documented, with no release or version bump.
 - Dependency closure: `68745ef` includes landed CTC and requires Moirai 0.6. Apollo's old Hephaestus `242520e` requires Moirai ^0.5; adoption must advance Leto together with landed Hephaestus `1481a37`. Fresh consumer graph/size/allocation/census gates remain required; provider merge does not establish their result.
 
-## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
+## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress; milestone: M-ops-linalg <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
 - **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
   `crates/leto-ops/src/application/diff/three_dimensional/`,
   `crates/leto-ops/src/lib.rs`, `backlog.md` — 2026-09-04.
@@ -235,7 +235,7 @@
   kernels follow as their own increments.
 - **Last-update:** 2026-09-04.
 
-## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
+## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review; milestone: M-array-core <a id="leto-mnemosyne-default-2026-09-04"></a>
 - **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.
 - **Outcome:** remove the obsolete Mnemosyne PR #123 pin after confirming its
   Eunomia source correction already exists on reviewed `main`.
@@ -248,7 +248,7 @@
   upstream review rejected PR #123 while confirming its source correction is
   already valid on `main`.
 
-## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
+## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress; milestone: M-array-core <a id="leto-hermes-identity-2026-09-03"></a>
 - **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**
   `Cargo.toml`, `Cargo.lock`, `backlog.md`.
 - **Outcome:** Advance Leto's workspace Hermes edge to PR #155 so consumers
@@ -262,7 +262,7 @@
   Mnemosyne, and Eunomia remain pinned until their provider increments merge.
 - **Dependency:** Hermes PR #155 (`5a399ee`); **Last-update:** 2026-09-04.
 
-## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress
+## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress; milestone: M-array-core
 - **Outcome:** extend `LayoutDyn` with checked physical-span bounds, exact
   injectivity validation, and zero-copy-compatible broadcasting so Hephaestus
   fusion can validate runtime-rank views through Leto's canonical layout seam.
@@ -280,14 +280,14 @@
   `Cargo.toml`, `Cargo.lock`;
   **last-update:** 2026-09-03.
 
-## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
+## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress; milestone: M-array-core
 - **Integrator:** claude-fable session 03d80d33 subagent.
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.
 - **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS` (done, `62a0434`),
   `ATLAS-LETO-REDUCE-SINGLE-WRITE` (stays filed — see its entry).
-### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo
+### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo; milestone: M-array-core
 - Owner: unclaimed (examined 2026-08-28 under `ATLAS-LETO-OP-PERF-2026-08-28`;
   deliberately not implemented). Original evidence: audit 2026-08-27 —
   `reduce_axis` allocates `VecStorage::fill(size, T::ZERO)` then
@@ -326,7 +326,7 @@
   and miri coverage become tractable. Weigh it against the corrected cost
   model above — the win may not justify the unsafe surface.
 
-## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, blocked]
+## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, blocked] — milestone: M-array-core
 **Owner:** Codex; implementation metadata reconciled 2026-08-17.
 **Outcome:** give both publishable packages precise crates.io descriptions so
 the registry can validate the current 0.42.0 archives.
@@ -345,7 +345,7 @@ locked package job runs without the umbrella overlay. Hosted verification,
 merge, indexing, trusted-publisher registration, and publication remain
 external release work; this task does not authorize registry mutation.
 
-## LETO-PYTHON-RELEASE-1 — Python release wheels [patch, in progress]
+## LETO-PYTHON-RELEASE-1 — Python release wheels [patch, in progress] — milestone: M-array-core
 **Owner:** Codex `/root`
 **Scope:** the `leto-python` release workflow, protected GitHub environment,
 distribution documentation, and PyPI trusted publisher. Python binding behavior
@@ -363,7 +363,7 @@ contract are implemented, and GitHub environment `pypi` accepts only
 current-release proof. Hosted CI and pending-publisher registration remain
 open.
 
-## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no intensity gate [minor] — blocked (re-open: first bandwidth-bound in-place caller)
+## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no intensity gate [minor] — blocked (re-open: first bandwidth-bound in-place caller); milestone: M-array-core
 - **Outcome:** give bandwidth-bound ops an in-place path that reaches the
   cache-residency gate, as `unary_map_into` already does for the into-output
   form. `UnaryOp::COMPUTE_BOUND` has no in-place consumer: `unary_map_into`
@@ -595,7 +595,7 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
 - [x] [major] Rank-revealing SVD via one-sided Jacobi plus rank-deficient pseudoinverse; ADR 0005 records the selected algorithm and verification plan. Verification: reconstruction, right-vector orthonormality, nalgebra singular-value parity, nalgebra `pseudo_inverse` parity, and Moore-Penrose identities.
 - [x] [minor] Non-symmetric eigenvalues (real + complex) through Hessenberg + shifted complex QR; ADR 0006 records the staged eigensolver track. Verification: nalgebra `complex_eigenvalues` battery and exact spectra. Schur vectors remain a separate open surface.
 - [x] [minor] Unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`) with solve/inverse/determinant helpers. Verification: reconstruction, determinant/solve/inverse parity with nalgebra, invalid-input and zero-pivot rejection. Pivoted Bunch-Kaufman remains open for matrices requiring symmetric pivoting.
-### Stage A2 — ndarray consolidation (support coeus/apollo)
+### Stage A2 — ndarray consolidation (support coeus/apollo) — milestone: M-array-core
 - [x] [patch] Extend stack fixed primitives for RITK spatial metadata:
   `FixedVector::iter`, `FixedMatrix::iter`, and 3-D row-major/column-major
   constructors/extractors. Verification: focused fixed primitive tests and
@@ -787,7 +787,7 @@ no unmeasured "optimization" per performance_engineering.
   get the documented fallback L1/L2/line constants. The `themis` cache-level
   reader walks the borrowed slice directly and does not allocate copies.
 
-## Phase 2: ndarray API Parity Required by Apollo [minor]
+## Phase 2: ndarray API Parity Required by Apollo [minor] — milestone: M-array-core
 - [x] Add rank-specific aliases for `Array1`, `Array2`, `Array3` and corresponding view types. Verification: value test constructs `Array1` and `Array2` aliases and reads through views.
 - [x] Add a stable `RankMarker` / `RemoveAxis` helper for rank-dropping shape and stride calculations over ranks 1 through 4. Verification: value tests cover rank-3 axis removal and out-of-bounds rejection.
 - [x] Add `zeros`, `from_elem`, `from_vec`, `from_shape_fn`, `from_shape_vec`, and `into_vec` equivalents. Verification: value tests cover filled/generated/vector constructors, length mismatch rejection, and zero-copy contiguous `into_vec`.
@@ -799,7 +799,7 @@ no unmeasured "optimization" per performance_engineering.
 - [ ] Add caller-owned output variants for all constructors and operations used in Apollo to preserve zero-copy and allocation control.
 - [ ] Add differential tests against `ndarray` for every Apollo-facing API before replacing a downstream crate dependency. Current coverage includes map-style traversal, keep-dim axis reductions, and 2D matmul; remaining coverage must include all transform-specific Apollo migration fixtures.
 
-## Phase 3: Coeus Tensor Substrate Requirements [minor]
+## Phase 3: Coeus Tensor Substrate Requirements [minor] — milestone: M-array-core
 - [ ] Add shape/stride/layout contracts suitable for tensor batches, channels, and rank-generic model activations.
   The iterator portion is now provider-complete: `&Array` and `&ArrayViewMut`
   implement logical, stride-aware `IntoIterator`; plain mutable yielding is
@@ -813,7 +813,7 @@ no unmeasured "optimization" per performance_engineering.
 - [x] Resolve batched matmul ownership: the `gap_audit.md` §C boundary decision places rank-3 batch contraction in Leto; implementation tracked in Phase 6.
 - [ ] Keep Leto non-differentiable. Coeus owns autodiff graph, gradient storage, and optimizer state; Leto owns layout/storage/views only.
 
-## Phase 4: Operations, Performance, and Architecture [minor]
+## Phase 4: Operations, Performance, and Architecture [minor] — milestone: M-ops-linalg
 - [x] Replace duplicated elementwise functions with one generic binary traversal kernel selected by ZST operation markers. Verification: direct `binary_map::<AddOp>`/`binary_map::<MulOp>` tests and transposed strided-view elementwise test.
 - [x] Extract shared logical flat-index conversion helpers for core constructors and leto-ops traversals. Verification: all constructor, map, elementwise, and reduction tests pass after the split.
 - [x] Split matrix multiplication into its own module and documented each raw-pointer block with storage-span safety invariants. Verification: `leto-ops` focused tests and clippy pass.
@@ -831,7 +831,7 @@ no unmeasured "optimization" per performance_engineering.
 - [ ] Integrate Hermes SIMD through sealed scalar/vector traits, not ad hoc per-operation dispatch.
 - [ ] Keep Mnemosyne allocation optional and feature-gated; no downstream Apollo/Coeus crate should need allocator-specific types in public domain structs.
 
-## Phase 5: Python and Interop [minor]
+## Phase 5: Python and Interop [minor] — milestone: M-array-core
 - [ ] Keep Python as a thin PyO3/NumPy boundary over Rust operations.
 - [x] [patch] Resolve the reopened `numpy-0.23.0` rustdoc ICE in the Python FFI
   documentation path. `leto-python` is a PyO3 extension boundary, not a Rust
@@ -842,7 +842,7 @@ no unmeasured "optimization" per performance_engineering.
 - [x] Replace current Python result construction that clones through `Vec` after computation. Verification: `leto-python` now transfers owned `VecStorage` with `Array::into_vec()` and `PyArray1::from_vec`, then reshapes without the former `as_mut_slice().to_vec()` clone path.
 - [x] Add Python boundary tests for shape validation, C-contiguous input, rejected non-contiguous inputs, and value parity with NumPy-visible outputs. Verification: `leto-python` unit tests cover `add`, `sum`, `matmul`, shape mismatch rejection, and a real NumPy transposed non-contiguous input.
 
-## Phase 6: Coeus Backend Consolidation [arch]
+## Phase 6: Coeus Backend Consolidation [arch] — milestone: M-array-core
 Source: `gap_audit.md` §C. Coeus delegates non-differentiable CPU array
 operations to Leto while retaining its autodiff-integrated tensor/COW wrapper.
 Coeus owns backend selection, autodiff, NN orchestration, optimizers, and higher
@@ -859,7 +859,7 @@ while Hephaestus owns accelerator attention.
 - [x] [minor] Add deterministic seeded random constructors (`uniform_with_seed`, `normal_with_seed` via Box-Muller) over the `Xorshift64` PRNG domain type. Verification: determinism, range, and closed-form mean/variance for uniform and normal.
 - [ ] [arch] Re-base Coeus's CPU storage/layout layer onto Leto types (or thin adapters) and delete the duplicate, as a coordinated cross-repo unit per the co-evolution protocol; file the consumer-side item in the Coeus backlog naming Leto as provider.
 
-## Phase 7: ndarray Parity Completion (Apollo hot kernels) [minor]
+## Phase 7: ndarray Parity Completion (Apollo hot kernels) [minor] — milestone: M-ops-linalg
 `LETO-FFT-LAYOUT-THROUGHPUT` [minor] is in progress. It provides the measured,
 caller-owned layout-movement primitive required by Apollo's non-contiguous 2-D
 and 3-D FFT axis passes. The implementation profiles the existing cache-tiled
@@ -890,7 +890,7 @@ Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto`
 - [x] [minor] Add 3+-operand zip traversal: `zip2_mut_with` (one mutable output + two read inputs), the `Zip::from(out).and(a).and(b)` analogue. Verification: fused multiply-add and strided-input value tests.
 - [x] [minor] Add indexed mutable zip traversal: `indexed_zip_mut_with` and `indexed_zip2_mut_with`, the `Zip::indexed` analogue for one- and two-input mutable zip paths. Verification: dense logical-index and strided-transposed value tests.
 
-## Phase 9: Blocked-reflector vectorization (eig/SVD disparity) [major]
+## Phase 9: Blocked-reflector vectorization (eig/SVD disparity) [major] — milestone: M-ops-linalg
 Source: `docs/adr/0010-blocked-reflector-vectorization.md`; `gap_audit.md` eig/SVD residuals.
 Residual disparity is structural: the Francis right-apply and the Givens bidiagonal-QR
 apply *single* width-2/3 reflectors (bandwidth-bound, no contiguous SIMD span). The fix

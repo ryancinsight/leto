@@ -1,6 +1,6 @@
 <a id="LETO-SPMV-FINITE-RANGE-20261020"></a>
 # LETO-SPMV-FINITE-RANGE-20261020 — Recover finite CSR row ranges [patch] — blocked
-- priority: correctness; scope: native CSR recovery; target: Leto/LetoOps 0.46.3.
+- priority: correctness; milestone: M-array-core; scope: native CSR recovery; target: Leto/LetoOps 0.46.3.
 - [x] Confirm current main, registry slot and ownership; preserve separate 0.47 work.
 - [x] Reproduce native f32/f64 and real GMRES failures before production changes.
 - [x] Preserve finite lane bits and original conditional native stored-fold recovery.
