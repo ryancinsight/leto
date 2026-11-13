@@ -813,7 +813,7 @@ no unmeasured "optimization" per performance_engineering.
 - [x] Resolve batched matmul ownership: the `gap_audit.md` §C boundary decision places rank-3 batch contraction in Leto; implementation tracked in Phase 6.
 - [ ] Keep Leto non-differentiable. Coeus owns autodiff graph, gradient storage, and optimizer state; Leto owns layout/storage/views only.
 
-## Phase 4: Operations, Performance, and Architecture [minor] — milestone: M-ops-linalg
+## Phase 4: Operations, Performance, and Architecture [minor] — milestone: M-array-core
 - [x] Replace duplicated elementwise functions with one generic binary traversal kernel selected by ZST operation markers. Verification: direct `binary_map::<AddOp>`/`binary_map::<MulOp>` tests and transposed strided-view elementwise test.
 - [x] Extract shared logical flat-index conversion helpers for core constructors and leto-ops traversals. Verification: all constructor, map, elementwise, and reduction tests pass after the split.
 - [x] Split matrix multiplication into its own module and documented each raw-pointer block with storage-span safety invariants. Verification: `leto-ops` focused tests and clippy pass.
@@ -890,7 +890,7 @@ Source: `gap_audit.md` §A. Apollo already exposes `forward_leto`/`inverse_leto`
 - [x] [minor] Add 3+-operand zip traversal: `zip2_mut_with` (one mutable output + two read inputs), the `Zip::from(out).and(a).and(b)` analogue. Verification: fused multiply-add and strided-input value tests.
 - [x] [minor] Add indexed mutable zip traversal: `indexed_zip_mut_with` and `indexed_zip2_mut_with`, the `Zip::indexed` analogue for one- and two-input mutable zip paths. Verification: dense logical-index and strided-transposed value tests.
 
-## Phase 9: Blocked-reflector vectorization (eig/SVD disparity) [major] — milestone: M-ops-linalg
+## Phase 9: Blocked-reflector vectorization (eig/SVD disparity) [major] — milestone: M-array-core
 Source: `docs/adr/0010-blocked-reflector-vectorization.md`; `gap_audit.md` eig/SVD residuals.
 Residual disparity is structural: the Francis right-apply and the Givens bidiagonal-QR
 apply *single* width-2/3 reflectors (bandwidth-bound, no contiguous SIMD span). The fix
