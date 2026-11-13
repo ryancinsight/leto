@@ -184,7 +184,8 @@
 - API: exact-head CI confirms intended free-function/public-module removals; [major] migration is documented, with no release or version bump.
 - Dependency closure: `68745ef` includes landed CTC and requires Moirai 0.6. Apollo's old Hephaestus `242520e` requires Moirai ^0.5; adoption must advance Leto together with landed Hephaestus `1481a37`. Fresh consumer graph/size/allocation/census gates remain required; provider merge does not establish their result.
 
-## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress; milestone: M-ops-linalg <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
+## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
+- **Milestone:** M-ops-linalg.
 - **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
   `crates/leto-ops/src/application/diff/three_dimensional/`,
   `crates/leto-ops/src/lib.rs`, `backlog.md` — 2026-09-04.
@@ -235,8 +236,9 @@
   kernels follow as their own increments.
 - **Last-update:** 2026-09-04.
 
-## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review; milestone: M-array-core <a id="leto-mnemosyne-default-2026-09-04"></a>
+## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
 - **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.
+- **Milestone:** M-array-core.
 - **Outcome:** remove the obsolete Mnemosyne PR #123 pin after confirming its
   Eunomia source correction already exists on reviewed `main`.
 - **Acceptance:** standalone metadata resolves one Eunomia identity from
@@ -248,7 +250,8 @@
   upstream review rejected PR #123 while confirming its source correction is
   already valid on `main`.
 
-## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress; milestone: M-array-core <a id="leto-hermes-identity-2026-09-03"></a>
+## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
+- **Milestone:** M-array-core.
 - **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**
   `Cargo.toml`, `Cargo.lock`, `backlog.md`.
 - **Outcome:** Advance Leto's workspace Hermes edge to PR #155 so consumers
@@ -262,7 +265,8 @@
   Mnemosyne, and Eunomia remain pinned until their provider increments merge.
 - **Dependency:** Hermes PR #155 (`5a399ee`); **Last-update:** 2026-09-04.
 
-## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress; milestone: M-array-core
+## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress
+- **Milestone:** M-array-core.
 - **Outcome:** extend `LayoutDyn` with checked physical-span bounds, exact
   injectivity validation, and zero-copy-compatible broadcasting so Hephaestus
   fusion can validate runtime-rank views through Leto's canonical layout seam.
@@ -280,8 +284,9 @@
   `Cargo.toml`, `Cargo.lock`;
   **last-update:** 2026-09-03.
 
-## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress; milestone: M-array-core
+## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
 - **Integrator:** claude-fable session 03d80d33 subagent.
+- **Milestone:** M-ops-linalg.
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.

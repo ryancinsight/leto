@@ -1,10 +1,10 @@
 #[cfg(feature = "parallel")]
 use super::dot_outer_kernels::{parallel_dot_matmul, parallel_outer_matmul};
 use super::dot_outer_kernels::{serial_dot_matmul, serial_outer_matmul};
-#[cfg(feature = "parallel")]
-use super::generic_kernel::parallel_matmul;
-use super::generic_kernel::serial_matmul;
 use super::packing::zero_output;
+#[cfg(feature = "parallel")]
+use super::row_blocked_kernel::parallel_matmul;
+use super::row_blocked_kernel::serial_matmul;
 use super::types::validate_matmul;
 #[cfg(feature = "parallel")]
 use super::types::MatmulLayout;
@@ -102,7 +102,7 @@ pub(super) fn route_matmul<T: Scalar>(
     }
 
     // Fallback: copy only genuinely non-dense operands to contiguous. A
-    // dense-but-offset operand is kept in place (the generic kernel addresses it
+    // dense-but-offset operand is kept in place (the row-blocked kernel addresses it
     // through its layout offset), so only strided/broadcast operands pay a copy.
     let lhs_contig;
     let lhs_view = if lhs.is_c_dense() {
