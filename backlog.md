@@ -286,7 +286,7 @@
 
 ## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
 - **Integrator:** claude-fable session 03d80d33 subagent.
-- **Milestone:** M-ops-linalg.
+- **Milestone:** M-array-core.
 - **Lease:** `crates/leto/src/application/arithmetic.rs`,
   `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
 - **Last-update:** 2026-08-28.
