@@ -57,8 +57,6 @@ final provider, review, CI and package-verification gates.
       owner's explicit nonblocking decision; actual required policies/checks
       pass. Preserve source/providers, test coverage and all original limits.
 
-**Target Version**: 0.46.0
-
 ## ATLAS-LETO-HERMES-COMPLEX-TRANSPOSE-2026-09-01 [minor, perf] — Codex
 
 - [x] Attribute Apollo's 3-D transpose phase with a pinned value-checked
