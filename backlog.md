@@ -77,14 +77,6 @@
 - Acceptance: tests assert F16 and Bf16 residual and orthogonality below that bound across the scan families.
 - Next step: derive the per-entry rounding count of the Francis and Golub–Kahan paths so `γ̃` replaces `γ` term by term.
 
-<a id="LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25"></a>
-
-## LETO-SYMMETRIC-EIGEN-ROUTE-2026-09-25 — `MatrixDecompose::symmetric_eigen` still runs classical Jacobi [minor] — todo
-- priority: performance
-- Evidence: `symmetric_eigen_qr` landed in #233 (CHANGELOG [Unreleased]) for ritk's 60×60 MP-PCA Gram matrices, which cost 6.2 ms each under Jacobi's pivot scans, but `MatrixDecompose::symmetric_eigen` in `leto-ops/src/application/linalg/matrix.rs` still calls `symmetric_eigen_jacobi`.
-- Outcome: route `MatrixDecompose::symmetric_eigen` through the QL solver, keeping Jacobi as the high-relative-accuracy option.
-- Acceptance: existing `symmetric_eigen` tests pass unchanged within their tolerances; a 60×60 benchmark shows the QL cost.
-
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
 ## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
