@@ -411,10 +411,11 @@ gather. The cache-resident n=4096 case (least bandwidth-sensitive) showed no
 change (p=0.29) — no demonstrated benefit for the added unsafe/miri burden.
 Not shipped.
 
-Blocked lever, not yet filed: narrowing `CsrMatrix`'s `col_indices`/
+Blocked lever: narrowing `CsrMatrix`'s `col_indices`/
 `row_ptr` from `usize` to `u32` would halve index traffic on DRAM-bound
-SpMV (the dominant term), but it is a public-API format change — file as a
-[major] backlog item with an ADR before starting.
+SpMV (the dominant term), but it is a public-API format change: see
+[ADR 0038](adr/0038-csr-index-width.md) and backlog
+`LETO-CSR-INDEX-WIDTH-2026-09-27`.
 
 Concurrent builds invalidate wall-clock evidence when run-to-run variance
 exceeds the derived noise bound. Use deterministic instruction/cache counters

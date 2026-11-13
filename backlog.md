@@ -26,13 +26,15 @@
 
 <a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
 
-## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow CSR index storage from usize to u32 [major] [arch] — todo
+## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow sparse index storage from usize to u32 [major] [arch] — todo
 - priority: tightening; milestone: M-array-core
 - needs: none
-- scope: `crates/leto-ops/src/application/sparse/csr.rs` and every CSR constructor/consumer (public format change)
-- Evidence: the 2026-07-20 SpMV bounds-check elision audit (`docs/benchmarks.md#spmv-bounds-check-elision-krylov-kernel-2026-07-20`) identified `col_indices`/`row_ptr: usize` as the dominant index-traffic term for DRAM-bound SpMV (halving it halves index bytes moved per nonzero); at the time this collided with in-flight sparse-LU/SpGEMM work on the same format. Re-verify that work has settled before starting.
-- Outcome: an ADR proposing the format change (breaking, public), a migration for every in-repo call site, and a re-measurement of `bench_csr_spmv`/`bench_csc_spmv` confirming the halved-traffic win.
-- Next step: `git log --oneline -- crates/leto-ops/src/application/sparse` to confirm the sparse-LU/SpGEMM format has stabilized, then draft the ADR.
+- scope: `crates/leto-ops/src/application/sparse/` and `crates/leto/src/infrastructure/sparse/` (public format change); every consumer of the `&[usize]` accessors
+- Delivered: [ADR 0038](docs/adr/0038-csr-index-width.md) (Proposed) records the decision, the derived `16/12` (f64) bandwidth ceiling and the migration consequences; sparse paths last changed 2026-11-10.
+- Outcome: migrate `CsrMatrix`, `CscMatrix`, `CooMatrix` to `I: SparseIndex = u32` with checked entry, then every in-repo caller, in one slice per format.
+- Acceptance: boundary tests at `I::MAX`; `u32` and `u64` results bitwise equal on the sparse suites; `bench_spmv`/`bench_csc_spmv` reported against the `1.33×` ceiling on a quiet host or by counters.
+- Needs first: a decision on `leto::CsrArray` versus `leto_ops::CsrMatrix` (two CSR formats; ADR 0038 point 4), filed as its own item when the ADR is Accepted.
+- Next step: accept or redirect ADR 0038, then migrate `leto-ops` CSR with its callers.
 
 <a id="LETO-BLOCKED-LU-L3-GATE-2026-09-27"></a>
 
