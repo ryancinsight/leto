@@ -24,15 +24,29 @@
 
 # Leto Work Backlog — active patch **0.46.3**, [SpMV finite-range recovery](backlog/leto-spmv-finite-range-20261020.md)
 
-<a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
+<a id="LETO-SPARSE-FORMAT-CONSOLIDATION-2026-11-13"></a>
 
-## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow CSR index storage from usize to u32 [major] [arch] — todo
+## LETO-SPARSE-FORMAT-CONSOLIDATION-2026-11-13 — Two sparse format families, `leto::*Array` and `leto_ops::*Matrix` [arch] — todo
 - priority: tightening; milestone: M-array-core
 - needs: none
-- scope: `crates/leto-ops/src/application/sparse/csr.rs` and every CSR constructor/consumer (public format change)
-- Evidence: the 2026-07-20 SpMV bounds-check elision audit (`docs/benchmarks.md#spmv-bounds-check-elision-krylov-kernel-2026-07-20`) identified `col_indices`/`row_ptr: usize` as the dominant index-traffic term for DRAM-bound SpMV (halving it halves index bytes moved per nonzero); at the time this collided with in-flight sparse-LU/SpGEMM work on the same format. Re-verify that work has settled before starting.
-- Outcome: an ADR proposing the format change (breaking, public), a migration for every in-repo call site, and a re-measurement of `bench_csr_spmv`/`bench_csc_spmv` confirming the halved-traffic win.
-- Next step: `git log --oneline -- crates/leto-ops/src/application/sparse` to confirm the sparse-LU/SpGEMM format has stabilized, then draft the ADR.
+- basis: d2206475
+- scope: `crates/leto/src/infrastructure/sparse/`, `crates/leto-ops/src/application/sparse/`, the `leto` crate-root re-exports, and every consumer of the retired family
+- Evidence: at d2206475 `git grep -l -E '\b(CsrArray|CscArray|CooArray)\b'` over `*.rs` finds 7 files, all in `leto`, and one consumer file (prometheus `src/stoichiometry.rs`); `\b(CsrMatrix|CscMatrix|CooMatrix)\b` finds 42, all in `leto-ops`. `leto-ops` depends on `leto`. ADR 0028 (Accepted) governs the `*Array` family and ADR 0034 puts narrow CPU CSR kernels in Leto, so the survivor is a decision, not a default.
+- Outcome: one sparse format family. An ADR (new, or a revision of ADR 0028) records the survivor and why; the retired structs, their tests ported, every in-repo caller and the `*Array` consumer migrate in the same slice, with no alias or adapter.
+- Acceptance: `git grep -n -E 'pub struct (Csr|Csc|Coo)(Array|Matrix)\b' -- crates` lists one family; each retired test case runs against the survivor; prometheus builds against it.
+- Next step: draft the ADR comparing dependency direction, API and test parity, and the one consumer.
+
+<a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
+
+## LETO-CSR-INDEX-WIDTH-2026-09-27 — Narrow sparse index storage from usize to u32 [major] [arch] — todo
+- priority: tightening; milestone: M-array-core
+- needs: LETO-SPARSE-FORMAT-CONSOLIDATION-2026-11-13
+- basis: d2206475
+- scope: `crates/leto-ops/src/application/sparse/` and `crates/leto/src/infrastructure/sparse/` (public format change); every consumer of the `&[usize]` accessors
+- Delivered: [ADR 0038](docs/adr/0038-csr-index-width.md) (Proposed): decision, the derived `f64` ceiling `1.308×` on `bench_spmv`, two unverified hypotheses about what binds SpMV, and the migration consequences.
+- Outcome: migrate the surviving format's CSR, CSC and COO to `I: SparseIndex = u32` with checked entry, then every in-repo caller, in one slice per format.
+- Acceptance: count-level `fits::<I>` boundary tests; `u32` and `u64` results bitwise equal on the sparse suites; `bench_spmv` at 1<<20 gives a ratio interval with lower bound above 1 and not wholly above `1.308`, and `bench_csc_spmv` at 1<<20 a lower bound above 1 (ADR 0038, Verification plan), else the ADR's overturning clause applies.
+- Next step: accept or redirect ADR 0038, then migrate `leto-ops` CSR with its callers.
 
 <a id="LETO-BLOCKED-LU-L3-GATE-2026-09-27"></a>
 
