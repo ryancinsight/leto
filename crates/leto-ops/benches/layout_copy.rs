@@ -172,7 +172,7 @@ fn expected_batch<T: Copy + Default>(
     output
 }
 
-fn generic_batch_assign<T: Copy>(
+fn batch_assign<T: Copy>(
     source: &[T],
     destination: &mut [T],
     matrix_len: usize,
@@ -226,25 +226,25 @@ fn bench_complex_scalar<T>(
         });
     });
 
-    let mut generic_output = vec![Complex::default(); len];
-    generic_batch_assign(
+    let mut assigned_output = vec![Complex::default(); len];
+    batch_assign(
         &source,
-        &mut generic_output,
+        &mut assigned_output,
         matrix_len,
         source_layout,
         destination_layout,
     );
-    assert_eq!(generic_output, expected);
-    group.bench_with_input(BenchmarkId::new("generic", &parameter), &(), |b, ()| {
+    assert_eq!(assigned_output, expected);
+    group.bench_with_input(BenchmarkId::new("batch", &parameter), &(), |b, ()| {
         b.iter(|| {
-            generic_batch_assign(
+            batch_assign(
                 black_box(&source),
-                black_box(&mut generic_output),
+                black_box(&mut assigned_output),
                 matrix_len,
                 source_layout,
                 destination_layout,
             );
-            black_box(generic_output[len - 1])
+            black_box(assigned_output[len - 1])
         });
     });
 }
