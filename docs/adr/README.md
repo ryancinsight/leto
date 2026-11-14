@@ -46,3 +46,4 @@
 | [0035](0035-col-piv-qr-dlaqp2-norm-downdating.md) | Column-pivoted QR selects pivots by LAPACK DLAQP2 norm downdating | Accepted |
 | [0037](0037-release-scope-1-0.md) | Leto release scope for 1.0 | Accepted |
 | [0038](0038-csr-index-width.md) | Sparse formats store indices as a width-parameterized unsigned integer | Proposed |
+| [0039](0039-unsafe-uninitialized-vec-storage.md) | `VecStorage::uninit` is an unsafe constructor over `Copy` elements | Proposed |

@@ -358,3 +358,58 @@ fn concat_into_empty_output_skips_overflowing_prefix() {
         leto::ArrayViewMut::try_new(Layout::c_contiguous([n, n, 0]).unwrap(), &mut []).unwrap();
     concat_into(&[a], 2, &mut output).unwrap();
 }
+
+thread_local! {
+    /// Constructed minus dropped `Counted` values on this thread.
+    static LIVE_COUNTED: std::cell::Cell<i64> = const { std::cell::Cell::new(0) };
+}
+
+fn live_counted() -> i64 {
+    LIVE_COUNTED.with(std::cell::Cell::get)
+}
+
+/// An element with drop glue whose lifetime balance is observable.
+#[derive(Debug, PartialEq)]
+struct Counted(u32);
+
+impl Counted {
+    fn new(value: u32) -> Self {
+        LIVE_COUNTED.with(|live| live.set(live.get() + 1));
+        Self(value)
+    }
+}
+
+impl Clone for Counted {
+    fn clone(&self) -> Self {
+        Self::new(self.0)
+    }
+}
+
+impl Drop for Counted {
+    fn drop(&mut self) {
+        LIVE_COUNTED.with(|live| live.set(live.get() - 1));
+    }
+}
+
+#[test]
+fn test_pad_destroys_only_values_it_constructed() {
+    // Padding an element type with drop glue must construct every output
+    // value and destroy none that was never constructed: after `pad` returns,
+    // the live values are the 4 inputs plus the 9 output cells.
+    let input = Array::new(
+        Layout::c_contiguous([2, 2]).expect("2x2 layout"),
+        VecStorage::new((1..=4).map(Counted::new).collect()),
+    )
+    .expect("storage length matches the layout");
+    let out = pad(&input.view(), [(1, 0), (0, 1)], Counted::new(0)).expect("pad widths are valid");
+
+    assert_eq!(out.shape(), [3, 3]);
+    let values: Vec<u32> = out.storage().as_slice().iter().map(|c| c.0).collect();
+    assert_eq!(values, [0, 0, 0, 1, 2, 0, 3, 4, 0]);
+    assert_eq!(live_counted(), 4 + 9);
+
+    drop(out);
+    assert_eq!(live_counted(), 4);
+    drop(input);
+    assert_eq!(live_counted(), 0);
+}

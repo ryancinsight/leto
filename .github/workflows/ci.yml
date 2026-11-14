@@ -201,8 +201,9 @@ jobs:
   #
   # `reduce_axis` writes its output through `VecStorage::uninit` and raw
   # pointers (PR #157, `d16e3b2`): the single-write optimization is sound only
-  # because every output element is written before it is read, and that
-  # obligation lives in prose on `VecStorage::uninit`, not in the type system.
+  # because every output element is written before it is read. `VecStorage::uninit`
+  # is an `unsafe fn` over `T: Copy`, so that obligation is a `SAFETY` proof at
+  # each caller, which this job exercises rather than the type system.
   # Nothing gated it, which is the defect generator the mnemosyne board already
   # recorded for a crate sitting outside its Miri gate (MN-459): the sweep that
   # fixed every gated sibling could not see the ungated copy.

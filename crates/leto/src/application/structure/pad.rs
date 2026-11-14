@@ -1,4 +1,5 @@
 use crate::application::array::Array;
+use crate::application::constructors::increment_index;
 use crate::application::view::{ArrayView, ArrayViewMut};
 use crate::domain::error::{LetoError, Result};
 use crate::domain::layout::Layout;
@@ -59,27 +60,34 @@ pub fn pad_into<T: Clone, const N: usize>(
     }
 
     for (out_index, slot) in output.reborrow().indexed_iter_mut()? {
-        let mut src_index = [0usize; N];
-        let mut inside = true;
-        for d in 0..N {
-            if out_index[d] < width[d].0 {
-                inside = false;
-                break;
-            }
-            let s = out_index[d] - width[d].0;
-            if s >= in_shape[d] {
-                inside = false;
-                break;
-            }
-            src_index[d] = s;
-        }
-        *slot = if inside {
-            input.get(src_index)?.clone()
-        } else {
-            fill.clone()
-        };
+        *slot = padded_value(input, width, out_index, &fill)?;
     }
     Ok(())
+}
+
+/// The padded element at `out_index`: the source cell inside the original
+/// region, `fill` in the margins.
+///
+/// One selection rule for [`pad_into`] and [`pad`], so the caller-owned and
+/// allocating paths cannot diverge.
+fn padded_value<T: Clone, const N: usize>(
+    input: &ArrayView<'_, T, N>,
+    width: PadWidth<N>,
+    out_index: [usize; N],
+    fill: &T,
+) -> Result<T> {
+    let in_shape = input.shape();
+    let mut src_index = [0usize; N];
+    for d in 0..N {
+        let Some(s) = out_index[d]
+            .checked_sub(width[d].0)
+            .filter(|&s| s < in_shape[d])
+        else {
+            return Ok(fill.clone());
+        };
+        src_index[d] = s;
+    }
+    Ok(input.get(src_index)?.clone())
 }
 
 /// Pad `input` with `fill` by `width` elements before and after on each axis,
@@ -95,7 +103,13 @@ pub fn pad<T: Clone, const N: usize>(
     let out_shape = padded_shape(input.shape(), width)?;
     let out_layout = Layout::c_contiguous(out_shape)?;
     let size = out_layout.size();
-    let mut output = Array::new(out_layout, VecStorage::uninit(size))?;
-    pad_into(input, width, fill, &mut output.view_mut())?;
-    Ok(output)
+    // Pushed one value at a time in row-major order: the vector length is the
+    // live prefix, so an error drops exactly the elements already built.
+    let mut data = Vec::with_capacity(size);
+    let mut out_index = [0usize; N];
+    for _ in 0..size {
+        data.push(padded_value(input, width, out_index, &fill)?);
+        increment_index(&mut out_index, &out_shape);
+    }
+    Array::new(out_layout, VecStorage::new(data))
 }
