@@ -190,9 +190,9 @@ acceptance against the provider's scalar contract.
 
 ## 2026-07-17 CFDrs sparse direct factorization gap
 
-- risk: filed as backlog `LETO-SPARSE-DIRECT-1` — Leto owns CSR but exposes
-  no sparse direct factorization; CFDrs retains a third-party solver for
-  its post-GMRES-stagnation tier.
+- risk: filed as backlog `LETO-SPARSE-DIRECT-1` — Leto's sparse LU is
+  pivot-free and routes pivoting systems to the dense path, so CFDrs
+  retains a third-party solver for its post-GMRES-stagnation tier.
 - evidence: see the backlog item.
 - re-open trigger: closes when `LETO-SPARSE-DIRECT-1` merges.
 
