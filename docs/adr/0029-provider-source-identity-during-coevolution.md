@@ -14,8 +14,12 @@ which prevents values such as layouts and buffers from crossing provider
 boundaries. The owning dependency edge must be corrected at the provider, not
 worked around in consumers.
 
-This decision is tracked by
-[LETO-MNEMOSYNE-DEFAULT-2026-09-04](../../backlog.md#leto-mnemosyne-default-2026-09-04).
+This decision was delivered by Leto PRs
+[164](https://github.com/ryancinsight/leto/pull/164) (`452c47c1`, Hermes),
+[166](https://github.com/ryancinsight/leto/pull/166) (`81f724bd`, Moirai),
+[167](https://github.com/ryancinsight/leto/pull/167) (`ebbf050d`, merged
+provider sources) and [168](https://github.com/ryancinsight/leto/pull/168)
+(`3c1f9f17`, Mnemosyne).
 
 ## Decision
 

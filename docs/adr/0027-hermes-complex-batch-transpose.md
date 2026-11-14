@@ -4,12 +4,12 @@
 - Date: 2026-09-01
 - Class: [major] [arch]
 
-Revision 2026-09-08: [LETO-SQUARE-TRANSPOSE](../../backlog.md#leto-square-transpose)
-retains the private generic kernels and public `ComplexLayout` role. Consumer
-acceptance below binds to Apollo `3f1c0db7` with Leto `633acb7`; provider
-checks at Leto `68745ef` do not transfer that acceptance to its newer graph.
-[PR 175](https://github.com/ryancinsight/leto/pull/175) may advance through
-provider-first delivery; consumer acceptance remains open. No release or
+Revision 2026-11-13: LETO-SQUARE-TRANSPOSE retains the private generic
+kernels and public `ComplexLayout` role. Consumer acceptance below binds to
+Apollo `3f1c0db7` with Leto `633acb7`; provider checks at Leto `68745ef` do
+not transfer that acceptance to its newer graph.
+[PR 175](https://github.com/ryancinsight/leto/pull/175) merged as `d9ca3252`
+and Apollo adopted the movement in apollo#338. No release or
 manifest version change is authorized.
 
 ## Ownership and current acceptance

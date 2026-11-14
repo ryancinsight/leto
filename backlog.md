@@ -61,257 +61,67 @@
 
 <a id="LETO-SPARSE-DIRECT-1"></a>
 
-## LETO-SPARSE-DIRECT-1 — Own sparse direct (LU) factorization over CSR [feature] — todo
+## LETO-SPARSE-DIRECT-1 — Sparse LU with partial pivoting past the dense route [feature] — todo
 - priority: feature; milestone: M-ops-linalg
 - needs: none
-- scope: `crates/leto-ops/src/application/sparse/` (new direct-factorization module)
-- Evidence: CFDrs calls a direct sparse solver only after its GMRES tiers stagnate, break down, or exhaust their iteration budget — a real failure-mode-independence requirement, not a preference. Leto owns CSR storage, sparse products, CG, and GMRES today but exposes no sparse direct factorization or reusable sparse LU factors, so CFDrs retains a third-party solver for that tier. Sparse factorization belongs with Leto's CSR representation (upstream ownership) — a CFDrs-local wrapper, dense materialization, or iterative fallback would preserve the gap instead of closing it.
-- Outcome: an authoritative-algorithm-specification-backed native-precision generic sparse LU (or equivalent) over CSR, with value-semantic and differential tests, closing the failure-mode-independence gap for a downstream direct-after-GMRES consumer.
-- Next step: locate the authoritative reference algorithm (e.g. a documented sparse LU with fill-reducing ordering) and its domain of validity before implementation.
+- basis: b738a4e2
+- scope: `crates/leto-ops/src/application/sparse/{lu_numeric/,lu_symbolic.rs,lu_sparse/}`
+- Evidence: delivered at b738a4e2 are `SparseLuSolver` (CSR, generic scalar, natural or AMD ordering, dense dispatch) and `examples/poisson_sparse_lu_accuracy.rs`, which exits 0 with a backward error of 9.2e-17 against its derived 3.4e-13 bound; 37 `lu_sparse`, `lu_numeric`, `lu_symbolic` and `amd` lib tests pass, among them `factor_random_sparse_n64_diff_dense` and `solver_is_generic_over_f32`. The sparse factorization is pivot-free: a matrix needing partial pivoting takes the dense route (`SMALL_SWITCH_DEFAULT` doc, test `owned_factor_falls_back_to_dense_when_pivoting_required`), and `max_size` (default 2048) rejects larger orders.
+- Consumer: CFDrs keeps a third-party solver for its direct-after-GMRES tier until Leto offers this (`repos/CFDrs/gap_audit.md`, entry 2026-07-17); the failure-mode-independence requirement stands.
+- Outcome: a generic sparse LU whose pivoting path stays sparse, so a pivoting-required system above the dense limit solves without an iterative fallback or dense materialization.
+- Acceptance: a pivoting-required CSR system of order above 2048 solves with a residual below its derived backward-error bound; parity with the dense route at orders both reach.
+- Next step: locate the authoritative reference algorithm for sparse LU with partial pivoting and its domain of validity before implementation.
 
 <a id="LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25"></a>
 
-## LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25 — No derived oracle bounds F16/Bf16 factor accuracy [patch] — todo
+## LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25 — Bf16 and large-order factor bounds are vacuous across the scans [patch] — todo
 - priority: verification; milestone: M-array-core
 - needs: none
-- scope: `crates/leto-ops/tests/ops/backward_error.rs`, `crates/leto-ops/tests/ops/a_posteriori.rs`, `crates/leto-ops/tests/ops/graded_scan.rs`, `crates/leto-ops/tests/ops/scale_range.rs`
-- Evidence: PR #237's deterministic γ bounds are vacuous for the iterative routines in F16/Bf16 (one length-3 reflector costs γ₅₃ ≈ 0.027/0.26); the a-posteriori certificates bind values to factors but assert nothing about the factors' residual or orthogonality in those formats (ADR 0033, Tests).
-- Outcome: assert F16/Bf16 factor accuracy against a derived probabilistic bound: Higham & Mary, "A new approach to probabilistic rounding error analysis", SIAM J. Sci. Comput. 41(5), A2815–A2835 (2019) — `γ̃_n(λ) = exp(λ√n·u + n·u²/(1 − u)) − 1` with probability ≥ `1 − 2exp(−λ²(1 − u)²/2)` per product (Theorem 2.4, eqs. 2.1, 2.3). The theorem and equation numbers are verified against the preprint (MIMS EPrint 2018.33) only; the journal volume and pages are from citing literature. Its Model 2.1 (independent mean-zero rounding errors) is an assumption about round-to-nearest, to be stated with the failure probability chosen. Alternative oracle: the deterministic bound at an instrumented transformation count.
-- Acceptance: tests assert F16 and Bf16 residual and orthogonality below that bound across the scan families.
-- Next step: derive the per-entry rounding count of the Francis and Golub–Kahan paths so `γ̃` replaces `γ` term by term.
+- basis: b738a4e2
+- scope: `crates/leto-ops/tests/ops/backward_error/`, `graded_scan.rs`, `graded_scan/case.rs`, `symmetric_qr/fixtures.rs`; the id is cited at `schur/skew_ties.rs`
+- Evidence: delivered are `gamma_tilde` (Higham and Mary, SIAM J. Sci. Comput. 41(5), 2019, Theorem 2.4, eqs. 2.1, 2.3, checked against the MIMS EPrint 2018.33 preprint, journal pages from citing literature; `PROBABILISTIC_LAMBDA` 7) over instrumented sweep, chase and step counts, with every factor assertion behind `informative(...)`. A temporary logging `informative` in an export (not committed) over the 46 `ops_tests` tests of the graded scan, Schur, symmetric QR and pivoted QR at b738a4e2 counted the cases whose bound is below 1, as scan cases and large-order cases (the 18 cases of `large_orders_factor_in_the_narrow_formats`, F16 orders 16-48 and Bf16 32 and 64, are the tail of the per-site totals 174 and 1512). F16: SVD residual and orthogonality 162 of 162 scan, 0 of 12 large; Schur residual 148 of 162 and 0 of 12 (the 14 vacuous scan cases are all at n = 8); Schur orthogonality 162 of 162 and 0 of 12; symmetric-QR residual and orthogonality 6 of 7; pivoted-QR residual 2 of 2. Bf16: SVD residual and orthogonality 0 of 1506 and 0 of 6; Schur residual 0 of 1506 and 0 of 6; Schur orthogonality 272 of 1506 (all 215 cases at n = 2, 57 of 215 at n = 3) and 0 of 6; symmetric-QR 0 of 7; pivoted-QR 0 of 2. The QR rows are the PR 415 figures, not re-probed.
+- Bound: at `u = 2^-8` and `λ = 7`, `γ̃_k < 1` holds exactly for `k ≤ 624` (the first-order `λ√k·u < ln 2` gives 642 and is necessary only), and one length-3 reflector costs 24 (`γ̃_24 = 0.144`). The probe finds Bf16 sites vacuous except Schur orthogonality at n = 2 and 3; the rounding counts that exceed 624 at the other sites are not tabulated, so the vacuity is observed, not derived.
+- Outcome: for each F16 and Bf16 factor site (SVD, Schur, symmetric QR, pivoted QR) in the scan band and the large-order band, the residual and orthogonality are asserted by an oracle informative there, or the site is recorded vacuous by its derived rounding count and covered by the a-posteriori certificates; the original alternative is the deterministic bound at an instrumented transformation count.
+- Acceptance: a committed counting test reports, per (format, site, band), cases below the bound; every case whose bound is not below 1 is made informative or carries its derived rounding count showing the bound is at least 1, so no row passes on a nonzero count alone; this binds the 14 F16 Schur-residual cases at n = 8, the vacuous F16 symmetric-QR case, the 1234 vacuous Bf16 Schur-orthogonality scan cases (n = 3 to 8) and every case of `large_orders_factor_in_the_narrow_formats`; `PROBABILISTIC_LAMBDA` stays 7 (a smaller `λ` raises the per-product failure probability `2exp(-λ²(1-u)²/2)`, a larger one widens the bound); no tolerance widening.
+- Next step: commit the counting test, then instrument the per-entry rounding count of the Bf16 Francis and Golub-Kahan paths and tabulate the orders at which `γ̃` falls below 1.
+
+<a id="LETO-VECSTORAGE-UNINIT-2026-11-13"></a>
+
+## LETO-VECSTORAGE-UNINIT-2026-11-13 — Safe `VecStorage::uninit` exposes uninitialized memory [major] — todo
+- priority: correctness; milestone: M-array-core
+- needs: none
+- basis: b738a4e2
+- scope: `crates/leto/src/infrastructure/storage/vec.rs`, the `leto` crate-root re-export (`lib.rs:31`), and its 7 call sites: `leto-ops` `embedding.rs:115`, `reduction/axis.rs:217`, `reduction/topk.rs:154-155`, `triangular.rs:189`, `volume.rs:216`, and `leto` `structure/pad.rs:98`
+- Evidence: `VecStorage::uninit` is a safe `pub fn` that `set_len`s a `Vec::with_capacity` (`vec.rs:48-58`), contrary to the `Vec::set_len` precondition, with a `# Safety` doc on a safe fn. Miri (nightly 2026-08-26, `-Zmiri-disable-isolation`) on b738a4e2 with a test holding no `unsafe` block, `VecStorage::<f64>::uninit(4)` then `as_slice()[0]`, reports UB: reading uninitialized memory. This shows the public API is unsound from safe code, not that `reduce_axis` executes UB: its write-before-read coverage proof for the three routes is in `git show b738a4e2:backlog.md` (`ATLAS-LETO-REDUCE-SINGLE-WRITE`), and the `miri` job runs the serial reduction. Whether a `&mut [T]` over uninitialized memory is itself UB is open in the Rust reference (hypothesis). Introduced by d16e3b2 (PR 157), which removed the zero-fill of `reduce_axis`; that removal and `ATLAS-LETO-OPERATOR-OWNED-LHS` (62a0434) landed.
+- Outcome: no safe code path reaches uninitialized `T`: `VecStorage::uninit` becomes `unsafe fn` whose callers discharge a `// SAFETY:` write-before-read obligation, or each call site writes through a `MaybeUninit<T>` output slot generic over one traversal (the deleted block's direction, with no duplicated body).
+- Acceptance: a `compile_fail,E0133` doctest shows `VecStorage::<f64>::uninit(4)` outside `unsafe` is rejected, or the symbol is gone; `git grep -n 'VecStorage::uninit'` lists only sites with a `SAFETY` proof, or none; the Miri `reduction` steps stay green under both models; `cargo-semver-checks` records the break under [major].
+- Next step: choose between `unsafe fn` and the output slot by the cost of the zero-fill it removed (`alloc_zeroed` for zero primitives, per the deleted block), then migrate the 7 sites.
 
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
-## LETO-MIRI-GATE-2026-09-10 — The crate that depends on an uninitialized-write invariant had no Miri gate [patch] [safety]
-- Status: in-progress; priority: safety; milestone: M-array-core; integrator: root; updated: 2026-09-10.
-- **Why it matters.** `reduce_axis` writes its output through
-  `VecStorage::uninit` and raw pointers (PR #157, `d16e3b2`). That is sound only
-  because every output element is written before it is read — an obligation
-  stated in prose on `VecStorage::uninit`, not enforced by any type. Nothing
-  gated it, which is the defect generator the mnemosyne board already recorded
-  for a crate sitting outside its Miri gate (MN-459).
-- **Landed in this item:** `[profile.miri]` in `.config/nextest.toml`, and a
-  `miri` job in `ci.yml` running both borrow models. Both are needed: an MN-437
-  fix in this stack passed Stacked Borrows while Tree Borrows still rejected
-  it, so a single-model gate can certify a still-broken fix.
-- **Measured 2026-09-10 (local Windows host, Miri `0.1.0` / nightly
-  `2026-08-26`).** Miri interprets every instruction, so cost tracks suite size,
-  not the code under test:
-  | Target | Tests | Stacked | Tree | Gated |
-  |---|---:|---:|---:|---|
-  | `leto --lib` | 130 | 206s | 363s | yes |
-  | `leto-ops --test ops_tests -E test(/reduction/)` | 17 | 6s | 8s | yes |
-  | `leto-ops --lib` | 216 | >10m | — | no |
-  | `leto-ops --test ops_tests` (full binary) | 352 | >10m | — | no |
-  | `leto layout_property_tests` | proptest | >10m | — | no |
-- **Scope, stated so it is not mistaken for a clean bill.** The gated pair is
-  the storage substrate and the uninitialized-output caller, which are the
-  contracts the job exists for. The excluded surfaces are excluded because they
-  are not yet affordable or Miri-clean — **not because they are believed
-  sound** — and this item owns widening the scope:
-  1. `layout_property_tests` samples thousands of layouts per run; under Miri
-     each sample is interpreted. Its property is still checked natively.
-  2. `leto-ops` unit and `ops_tests` suites exceed ten minutes. Narrowing them
-     by an arbitrary name filter would tailor the gate to what passes, so they
-     stay out until their workload is bounded.
-- **Two failures observed locally and deliberately not filed as defects.** Both
-  are environment or test-fragility, and neither is yet confirmed on the Linux
-  runner:
-  - `complex_transpose_allocations` aborts under Miri with a Stacked Borrows
-    tag error whose entire backtrace is the **test's own** `CountingAllocator`
-    forwarding to the Windows `HeapFree` path
-    (`tests/complex_transpose_allocations.rs:31`), plus
-    `unsupported operation: can't call foreign function
-    GetNumaHighestNodeNumber`. Both are Windows-Miri limitations, not product
-    UB; confirm on `ubuntu-latest` before treating either as a finding.
-  - `leto-ops --lib` fails two `leapfrog` tests on an exact `assert_eq!`
-    (`leapfrog/tests.rs:152`) under Miri. The test asserts bit-exact equality
-    of a computed kernel against a plain difference; the divergence between
-    native and interpreted float evaluation is not yet explained, so the test
-    is neither loosened nor called a defect here.
-- **Acceptance:** the `miri` job is green on `main` under both borrow models,
-  and each excluded surface above is either brought into scope with a measured
-  bound or recorded as closed with the reason it stays out.
-
-<a id="LETO-WASM-32BIT-TOLERANCE-2026-09-10"></a>
-
-## LETO-WASM-32BIT-TOLERANCE-2026-09-10 — Keep generic linalg thresholds portable on wasm32 [patch]
-- Status: review; priority: correctness; milestone: M-array-core; integrator: root; branch: `codex/leto-wasm-tolerance`; updated: 2026-09-10.
-- Outcome: `rank_pivot_ratio` converts the shared `1e-12` denominator through `FloatElement::from_f64`, so ColPivQR, Jacobi eigen, FullPivLU, SVD pseudoinverse, and UDU compile on 32-bit targets without changing the native threshold. The duplicate literal is deleted.
-- Acceptance evidence: Atlas-overlay `cargo check --offline -p leto-ops --target wasm32-unknown-unknown`, standalone strict Clippy, 585/585 `leto-ops` nextest, and the new f32/f64 threshold contract test pass. PR pending.
+## LETO-MIRI-GATE-2026-09-10 — Widen the Miri gate past the storage substrate and the uninitialized reduction output [patch] [safety] — todo
+- priority: verification; milestone: M-array-core
+- needs: none
+- basis: b738a4e2
+- scope: `.github/workflows/ci.yml` (`miri` job), `.config/nextest.toml` (`[profile.miri]`), `crates/leto-ops/tests/ops/`
+- Evidence: the job runs `leto --lib` and `leto-ops ops_tests -E test(/reduction/)` under both Stacked and Tree Borrows (`ci.yml:263-282`), the second excluding `parallel_axis_reduction_matches_the_serial_result` (`ci.yml:259-262`: the 40000x8 input exceeds the 600 s profile bound, so Miri covers the serial output path only). The serial route exercises the write-before-read ordering of `reduce_axis` over `VecStorage::uninit` (d16e3b2); it does not make `VecStorage::uninit` sound, which is the open `correctness` item LETO-VECSTORAGE-UNINIT-2026-11-13. Measured 2026-09-10 (Windows host, Miri 0.1.0, nightly 2026-08-26): `leto --lib` 130 tests 206 s Stacked, 363 s Tree; `leto-ops --lib` (216 tests), `leto-ops --test ops_tests` (352) and `leto layout_property_tests` each exceed 10 min, so they stay out as unaffordable, not as believed sound.
+- Open observations, unconfirmed on Linux: `complex_transpose_allocations` aborts under Miri inside the test's own `CountingAllocator` (Windows `HeapFree`, `GetNumaHighestNodeNumber`); two `leapfrog` tests fail an exact `assert_eq!` under Miri with the native/interpreted float divergence unexplained.
+- Outcome: each excluded surface, the parallel route of the uninitialized reduction output included, joins the job with a measured bound or is closed with the reason it stays out; both borrow models stay (an MN-437 fix passed Stacked Borrows while Tree Borrows still rejected it).
+- Acceptance: the `miri` job is green on main under both models over the widened scope; the two observations are confirmed or refuted on `ubuntu-latest`.
+- Next step: run `leto-ops --lib` and `ops_tests` under Miri on `ubuntu-latest` with a bounded workload and record per-test time.
 
 <a id="leto-windows-source-identity"></a>
 
-## LETO-WINDOWS-SOURCE-IDENTITY — Preserve source identity across mapped checkouts [patch]
-- Status: todo; priority: correctness; milestone: M-array-core; updated: 2026-09-07.
-- Outcome: standalone Windows builds cannot reuse another checkout's crate metadata when drive aliases are recycled; keep the single shared target directory.
-- Scope: centralize the standalone Cargo mapping/freshness mechanism and adopt it in Leto's committed verification path; no mathematical or workload changes.
-- Evidence: merged primary exports `transpose_copy`, but release reused local `leto-2960c0092a779492` metadata without that export; its relative-path dep-info and 05:07 UTC artifact were newer than primary source. Debug compilation passed; release failed E0432 in `application/layout/complex/batch.rs:8`.
-- Current mechanism: verification borrows `../coeus/scripts/lockfile.py::unused_windows_drive`; alternating primary/lane sources can retain one relative-path Cargo identity. Changing Z: to Y: still produced artifact `2960c0092a779492`, so a different drive letter alone is insufficient. Leto's committed lock guard does not own build freshness.
-- Recovery: invalidate only that crate's release fingerprint and artifacts; unchanged source then rebuilds metadata containing `transpose_copy` and passes release CTC 10/10 (`7de39bb0`). No full-cache deletion or source workaround.
-- Acceptance: alternate the actual primary and lane source states under one shared cache; each build exposes exactly its own API and computes its expected values, including when the incoming source has older timestamps.
-- Verification: source-identity regression plus the existing locked debug/release CTC gate; no cache fork, Cargo flag suppression, test retries, or source workaround.
-- Dependencies/authority: Atlas-owned standalone runner integration; Change through merge. Prior Apollo performance evidence remains bound to its original dependency graph.
-
-<a id="leto-square-transpose"></a>
-
-## LETO-SQUARE-TRANSPOSE — Own checked complex matrix movement [major] [arch]
-- Status: in-progress; milestone: M-array-core; integrator: Codex; branch: `codex/square-transpose`; updated: 2026-09-08; [PR 175](https://github.com/ryancinsight/leto/pull/175); provider-first delivery authorized, consumer acceptance remains open.
-- Outcome: checked dense transpose and allocation-free, bit-preserving complex movement for [Apollo FourStep](../apollo/backlog.md#apollo-four-step-square-movement).
-- Scope: core assignment, complex layout kernels and generic scalar/allocation tests; preserve FFT arithmetic, workload, manifest versions and locks.
-- Acceptance: failure-atomic extents, all four scalar payload/coordinate/offset/tail oracles, no supported consumer regression or executable growth, unchanged allocation bounds.
-- Design/migration: [ADR 0027](docs/adr/0027-hermes-complex-batch-transpose.md) owns contracts, rejected experiments and revision-specific acceptance.
-- Consumer evidence: Apollo `3f1c0db7` with Leto `633acb7` is accepted: one efficiency-core full-real/262,144 gain, no supported regression, -512 executable bytes, 20 exact footprint windows. Cold peak maximum is +24 bytes; no general RustFFT lead. [Independent audit](../../output/apollo-square-transpose/integration/provider-graph/census/independent-audit.json).
-- Provider evidence: exact `68745ef` passes format/minimal/Clippy, 940 debug and 940 release tests, 30 doctests (one existing ignored), strict Rustdoc and 24 smokes; 331 inputs and lock unchanged. [Results](../../output/apollo-square-transpose/integration/provider-delivery/final-checks.json).
-- API: exact-head CI confirms intended free-function/public-module removals; [major] migration is documented, with no release or version bump.
-- Dependency closure: `68745ef` includes landed CTC and requires Moirai 0.6. Apollo's old Hephaestus `242520e` requires Moirai ^0.5; adoption must advance Leto together with landed Hephaestus `1481a37`. Fresh consumer graph/size/allocation/census gates remain required; provider merge does not establish their result.
-
-## LETO-STAGGERED-ARBITRARY-ORDER-2026-09-04 — Arbitrary-even-order staggered gradient/divergence pair [minor] — in-progress <a id="leto-staggered-arbitrary-order-2026-09-04"></a>
-- **Milestone:** M-ops-linalg.
-- **Integrator:** Claude on `feat/leto-arbitrary-order-staggered`; **lease:**
-  `crates/leto-ops/src/application/diff/three_dimensional/`,
-  `crates/leto-ops/src/lib.rs`, `backlog.md` — 2026-09-04.
-- **Outcome:** Leto owns the derived-coefficient staggered first-derivative
-  family at any even order `2N`, `N = 1..=8`, so the Yee gradient/divergence
-  pair has one implementation in the stack. Closes the provider gap that keeps
-  `kwavers-math` carrying `StaggeredLeapfrogOperator`,
-  `StaggeredGridOperator`, and the Fornberg coefficient derivation.
-- **Scope:** coefficient derivation (Fornberg 1988) over `leto_ops` LU;
-  generic `T: FloatElement`; gradient (cell-centred to face-centred) and
-  divergence (face-centred back to cell-centred) forming a negative-adjoint
-  pair. Non-goals: device kernels (Hephaestus), the Coeus backend-generic
-  seam, and the kwavers deletion — each its own increment.
-- **Acceptance:** derived coefficients match the published rationals for
-  orders 2-8 to `1e-13` relative; measured order of accuracy matches the
-  nominal order; `D = -G^T` holds to the derived tolerance on non-degenerate
-  fields; the `N = 1` gradient is bitwise identical to the existing
-  `StaggeredForward` kernel wherever both are defined; check, Clippy, nextest,
-  doctests, and rustdoc pass.
-- **Acceptance correction (2026-09-04):** the claim first read "`N = 1` is
-  bitwise identical to `StaggeredForward` / `StaggeredBackward`", which is
-  false at the walls and was never true. The fixed kernels write one cell fewer
-  on the differentiated axis and impose no wall closure; the leapfrog pair is
-  grid-shaped and reflects taps about the wall to give the rigid
-  `∂p/∂n = 0` the conservative pair needs. Equality holds on the overlap and is
-  tested there; the far face is separately tested to be an unforced zero.
-- **Consumer driver:** kwavers FDTD `SolverState::leapfrog_operator` runs
-  `config.spatial_order` up to 8 (Fullwave 2.5 parity); atlas
-  `docs/audit/math-ssot-ledger.md` rows 137-140.
-- **Evidence (2026-09-04):** delivered on `feat/leto-arbitrary-order-staggered`.
-  New `leto_ops::{staggered_first_derivative_coefficients,
-  central_first_derivative_coefficients, TapCoefficients, MAX_HALF_ORDER}` and
-  `leto_ops::{Axis, StaggeredLeapfrog3D}`. Coefficients derive through the
-  crate's own LU rather than a second dense solver; taps live in inline
-  `[T; 8]` storage so the operator stays `Copy` and the sweep allocation-free.
-  Gate at this revision: `cargo fmt --check`, `cargo check --locked -p leto
-  -p leto-ops --no-default-features`, `cargo clippy --locked -p leto -p leto-ops
-  --all-targets -- -D warnings`, `cargo nextest run --locked -p leto -p leto-ops`
-  917/917, `cargo test --doc` 26 passed, `cargo doc --no-deps` — all clean.
-  15 new tests: published rationals for staggered orders 2-8 and collocated
-  2-6, measured order of accuracy at 2/4/6/8, the negative-adjoint identity on
-  all three axes at every order, wall closure, traversal agreement across the
-  three axis kernels, the Courant derivation, and an f32/f64 instantiation
-  pair.
-- **Next:** `KW-*` deletes `kwavers-math`'s `staggered_leapfrog`,
-  `staggered_grid`, and `central_difference_2/4/6` against this provider
-  surface; the Coeus `FiniteDifference3DOps` seam and the Hephaestus device
-  kernels follow as their own increments.
-- **Last-update:** 2026-09-04.
-
-## LETO-MNEMOSYNE-DEFAULT-2026-09-04 — Follow reviewed Mnemosyne main [patch] [arch] — review <a id="leto-mnemosyne-default-2026-09-04"></a>
-- **Integrator:** Codex on `build/leto-provider-default`; **lease:** none.
-- **Milestone:** M-array-core.
-- **Outcome:** remove the obsolete Mnemosyne PR #123 pin after confirming its
-  Eunomia source correction already exists on reviewed `main`.
-- **Acceptance:** standalone metadata resolves one Eunomia identity from
-  provider defaults; configured Leto gates pass; no stale Mnemosyne allocator
-  changes enter the graph. **Last-update:** 2026-09-04.
-- **Evidence:** one Eunomia/eunomia-derive source at `02397fa`; Mnemosyne
-  default resolves at `8d2f466`; all-target check and Clippy, format, 923/923
-  nextest, 23 executable doctests with one ignored, and rustdoc pass. Independent
-  upstream review rejected PR #123 while confirming its source correction is
-  already valid on `main`.
-
-## LETO-HERMES-IDENTITY-2026-09-03 — Align leto-ops with the Hermes provider source identity [patch] [arch] — in-progress <a id="leto-hermes-identity-2026-09-03"></a>
-- **Milestone:** M-array-core.
-- **Integrator:** Codex on `build/leto-moirai-source-identity`; **lease:**
-  `Cargo.toml`, `Cargo.lock`, `backlog.md`.
-- **Outcome:** Advance Leto's workspace Hermes edge to PR #155 so consumers
-  resolve one first-party SIMD and memory-provider source graph.
-- **Acceptance:** Standalone lock resolves Hermes `5a399ee`, Mnemosyne
-  `mnemosyne#123` (proposed, not merged), and Eunomia `fdbf122`; workspace
-  check, Clippy, nextest, doctests, rustdoc, and diff checks pass; no adapter
-  or compatibility layer.
-- **Follow-up source edge:** Moirai PR #256 merged at `70d201a`; this increment
-  removes its temporary revision pin and regenerates `Cargo.lock`. Hermes,
-  Mnemosyne, and Eunomia remain pinned until their provider increments merge.
-- **Dependency:** Hermes PR #155 (`5a399ee`); **Last-update:** 2026-09-04.
-
-## LETO-LAYOUTDYN-CONTRACT-2026-09-03 — Complete runtime-rank layout contracts [minor] [arch] — in-progress
-- **Milestone:** M-array-core.
-- **Outcome:** extend `LayoutDyn` with checked physical-span bounds, exact
-  injectivity validation, and zero-copy-compatible broadcasting so Hephaestus
-  fusion can validate runtime-rank views through Leto's canonical layout seam.
-- **Scope/non-goals:** `crates/leto` shared layout kernels, `LayoutDyn` API,
-  dynamic-rank value tests, ADR 0007 and crate documentation. No dynamic-rank
-  compute substrate, element storage changes, or downstream adapter.
-- **Acceptance:** const-rank and dynamic-rank layouts delegate the same
-  rank-agnostic arithmetic; valid, aliased, empty, negative-stride, overflow,
-  incompatible-broadcast, and value-preserving broadcast cases are tested;
-  the public API is warning-clean and Hephaestus's runtime-rank caller
-  compiles against the locked source.
-- **Integrator:** Codex atlas-session; **lease:** `crates/leto/src/domain/layout/`,
-  `crates/leto/src/domain/dynamic/`, `crates/leto/tests/core/dynamic.rs`,
-  `docs/adr/0007-dynamic-rank-boundary.md`, `crates/leto/README.md`,
-  `Cargo.toml`, `Cargo.lock`;
-  **last-update:** 2026-09-03.
-
-## ATLAS-LETO-OP-PERF-2026-08-28 — Operator buffer reuse and single-write reductions [patch] — in-progress
-- **Integrator:** claude-fable session 03d80d33 subagent.
-- **Milestone:** M-array-core.
-- **Lease:** `crates/leto/src/application/arithmetic.rs`,
-  `crates/leto-ops/benches/kernels.rs`, `CHANGELOG.md`, `backlog.md`.
-- **Last-update:** 2026-08-28.
-- **Members:** `ATLAS-LETO-OPERATOR-OWNED-LHS` (done, `62a0434`),
-  `ATLAS-LETO-REDUCE-SINGLE-WRITE` (stays filed — see its entry).
-### ATLAS-LETO-REDUCE-SINGLE-WRITE — `reduce_axis` zero-fills a fully-overwritten output [patch] — todo; milestone: M-array-core
-- Owner: unclaimed (examined 2026-08-28 under `ATLAS-LETO-OP-PERF-2026-08-28`;
-  deliberately not implemented). Original evidence: audit 2026-08-27 —
-  `reduce_axis` allocates `VecStorage::fill(size, T::ZERO)` then
-  `reduce_axis_into` writes every element; for small `axis_len` the memset is
-  up to ~50% extra write traffic.
-- **Coverage proof — established**, so a later attempt need not redo it. All
-  three routes of `reduce_axis_into` write each output offset exactly once:
-  (1) the `N == 2 && axis == 0` fast path writes `col in 0..cols` and output
-  shape is `[1, cols]`, in both the `rows == 0` and general branches;
-  (2) the serial route iterates `flat_idx in 0..out_size` through the
-  bijection `offset_of(index_from_flat(..))`, which for the fresh
-  offset-0 C-contiguous output is the identity onto `0..out_size`;
-  (3) the parallel route's `parallel_for_chunks` covers `0..len` disjointly
-  (`start = idx * chunk`, `end = min(start + chunk, len)`, `idx` over
-  `len.div_ceil(chunk)`) and each `flat_idx` writes once.
-- **Cost premise is weaker than filed.** `VecStorage::fill` is
-  `vec![value; len]`, and for a zero-valued primitive that hits std's
-  `SpecFromElem` specialization: measured `alloc_zeroed` +1 / plain alloc +0
-  for `f64` zero, versus plain +2 for a nonzero element. So the fill is a
-  `calloc`, not malloc-plus-memset — for a large fresh output the zero pages
-  come from the OS with no write traffic, and the first-touch page faults are
-  paid by the single write either way. Redundant write traffic is real only
-  for small or allocator-recycled blocks, well below the filed ~50%.
-- **Blocker (not the proof — the API shape).** `reduce_axis_into` is public and
-  writes through `&mut ArrayViewMut<'_, T, N>`, whose `data_mut()` yields
-  `&mut [T]`; the parallel route derives its `*mut T` from that same slice.
-  Constructing a `&mut [T]` over uninitialized memory is UB regardless of
-  coverage, so single-write construction requires either changing that public
-  signature to carry a `MaybeUninit<T>` output or duplicating the ~140-line
-  three-route body over an uninit output — the second being the duplication
-  the consolidation rules forbid. Both exceed [patch] scope.
-- **Direction if resumed:** reclassify as [minor] and make the output type a
-  parameter of one generic body (an output-slot abstraction implemented for
-  both `&mut [T]` and `&mut [MaybeUninit<T>]`) so there is still one
-  reduction traversal; then panic-safety for a partially-initialized buffer
-  and miri coverage become tractable. Weigh it against the corrected cost
-  model above — the win may not justify the unsafe surface.
+## LETO-WINDOWS-SOURCE-IDENTITY — Regress the older-timestamp source swap in the atlas identity checker [patch] — todo
+- priority: verification; milestone: M-array-core
+- needs: none
+- basis: b738a4e2
+- scope: owner is the atlas stack scripts (`scripts/tests/test_atlas_build_identity.py`, `scripts/atlas_build_stale_packages.py`), not a leto path; leto's `.githooks/pre-push` is a stack-synced shim and stays unedited
+- Evidence: the 2026-09-07 failure (release reused local `leto-2960c0092a779492` metadata without `transpose_copy`, E0432 in `application/layout/complex/batch.rs:8`, after a primary/lane source swap under one shared target) predates the shim. The shim runs `atlas-build-identity.py`, whose records bind path packages to file digests, so another tree's artifact cannot stand in for this one (`_path_packages` docstring), and one real-cargo test alternates source states under one shared target (`test_a_peer_rerunning_a_build_script_is_not_trusted`, in the `shutil.which("cargo")`-gated `MultiPackageRunTestCase`); `test_source_transition_cleans_once_and_rebuilds_the_affected_package` is a scripted-build unit test (a Python script writes the source token into a fake rlib under a patched toolchain identity), not cargo. Read at atlas 2b000c51 on 2026-11-13.
+- Missing: no `scripts/tests/test_atlas_build_*.py` case gives the incoming source mtimes older than the recorded artifact (the only `os.utime` on a source file, `test_atlas_build_package_source.py:77`, moves its mtime forward), and no check covers an ad hoc `cargo build` outside the hook, the probable path of the 2026-09-07 failure (hypothesis: a local release-profile build; leto has no committed release test gate).
+- Outcome: the checker's alternation of two source states of one path package under one shared target is regressed with the incoming state older, and the ad hoc and release-profile build cases are decided in or out of scope; if out, the release-profile reproduction is filed as `correctness`.
+- Acceptance: state A builds, then state B whose files carry mtimes older than A's artifact builds; each build exposes exactly its own API and computes its expected values; no cache fork, flag suppression, retries or source workaround.
+- Next step: file the regression with the atlas stack scripts board.
 
 ## LETO-CRATES-METADATA-1 — Satisfy registry metadata [patch, blocked] — milestone: M-array-core
 **Owner:** Codex; implementation metadata reconciled 2026-08-17.
@@ -350,66 +160,30 @@ contract are implemented, and GitHub environment `pypi` accepts only
 current-release proof. Hosted CI and pending-publisher registration remain
 open.
 
-## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no intensity gate [minor] — blocked (re-open: first bandwidth-bound in-place caller); milestone: M-array-core
-- **Outcome:** give bandwidth-bound ops an in-place path that reaches the
-  cache-residency gate, as `unary_map_into` already does for the into-output
-  form. `UnaryOp::COMPUTE_BOUND` has no in-place consumer: `unary_map_into`
-  honors it, and nothing else does.
-- **Driver.** `LETO-PARALLEL-INTENSITY-1` (below) records acceptance as *"every
-  bandwidth-bound elementwise path gates on cache residency"*. That is not
-  true of `map_inplace`, which was outside the converted set — its scope named
-  `unary.rs`, but only the `_into` entries moved. `map_inplace` still gates on
-  the flat `PARALLEL_THRESHOLD` element count for every op and every scalar.
-  That item's "Remaining: none for the threshold policy" is therefore
-  overstated; this item carries the remainder rather than reopening it.
-- **Evidence** (36 MiB-L3 AVX2 host; `map_inplace` against a hand-written
-  sequential loop over the identical slice and the identical closure, both
-  monomorphized from the same generic `F: Fn(T) -> T`, best-of-9 blocks). The
-  control reads ratio 1.00 at every sub-threshold length, which is what
-  establishes that the comparison isolates dispatch:
-  | elems | KiB (f64) | f64 ratio | f32 ratio | dispatch |
-  |---|---|---|---|---|
-  | 16384-49152 | 128-384 | 1.00 | 1.00 | sequential |
-  | 65536 | 512 | **5.85** | **8.45** | parallel |
-  | 98304 | 768 | **4.85** | **7.82** | parallel |
-  | 131072 | 1024 | **6.44** | **9.80** | parallel |
-  | 262144 | 2048 | 2.14 | 5.37 | parallel |
-  | 524288 | 4096 | 1.09 | 3.71 | parallel |
-  | 1048576 | 8192 | 0.29 | 0.35 | parallel |
-  | 4194304 | 32768 | 0.16 | 0.31 | parallel |
-  Ratios above 1.0 are parallel losing. The bandwidth-bound crossover sits near
-  **1M elements for both scalars** here. **Correction (2026-09-01):** this
-  originally read as evidence against the LLC-byte model the `_into` and binary
-  gates use. Measured directly on the binary path with a same-binary three-arm
-  probe (gate / sequential / naive scoped threads), the byte model holds: naive
-  parallel breaks even at 1.57M for f64 and between 2.1M and 3.1M for f32 —
-  exactly the bytes-over-L3 prediction, and nowhere near the ~3x-early
-  crossover an element count would imply. The in-place figure does not transfer
-  to a three-stream operation and is not a finding against that gate. A
-  compute-bound control (`sin`, `f64`) inverts cleanly: 0.15 at the same 65536
-  gate, confirming the flat constant is right for the case it now serves.
-- **Scope/non-goals:** a typed in-place entry (`unary_map_inplace`) routing
-  through the existing `map_into_gated` policy. No change to `map_inplace`'s
-  raw-closure behavior — its eager default is deliberate and documented, and
-  changing it would regress compute-bound closures by the inverse factor. No
-  new threshold constant; no change to the `_into` or binary gates.
-- **Acceptance:** value-identical to `map_inplace` for the same op; a
-  `COMPUTE_BOUND = false` op stays sequential below the cache gate and matches
-  the sequential control within noise across 64 KiB-2 MiB; a `COMPUTE_BOUND`
-  op parallelizes exactly as today; zero allocations after caller storage.
-- **Deferred, with reason — no caller.** `AbsOp`/`NegOp` declare
-  `COMPUTE_BOUND = false` but no in-stack consumer maps them in place: a stack
-  sweep of `map_inplace(` finds no caller in leto, apollo, hephaestus, or
-  kwavers. Building the API now would be speculative generality. The hazard is
-  documented at the call site instead, so a consumer meets it in Rustdoc rather
-  than in a profile.
-- **Re-open trigger:** the first bandwidth-bound in-place caller in the stack,
-  or an external report against the published `map_inplace`.
-- **Trigger re-checked 2026-09-02:** still unfired. The stack's only in-place
-  mappers are kwavers-boundary's `indexed_map_inplace` calls (CPML, adaptive
-  coupling), and that entry is a sequential row walk with no parallel gate, so
-  it neither pays nor needs the threshold this item concerns.
-- **Integrator:** Claude session 03d80d33. **Last-update:** 2026-09-01.
+<a id="LETO-INPLACE-INTENSITY-GATE-2026-09-01"></a>
+
+## LETO-INPLACE-INTENSITY-GATE-2026-09-01 — `map_inplace` has no cache-residency gate [minor] — blocked
+- priority: tightening; milestone: M-array-core
+- needs: none
+- basis: b738a4e2
+- scope: `crates/leto-ops/src/application/unary/traversal.rs`; `map_inplace`'s eager raw-closure behavior and the `_into` and binary gates stay unchanged; no new threshold constant
+- Outcome: a typed `unary_map_inplace` that routes through the existing `map_into_gated` policy, so a `UnaryOp` with `COMPUTE_BOUND = false` stays sequential below the cache gate.
+- Evidence: `unary_map_into` honors `UnaryOp::COMPUTE_BOUND`; `map_inplace` (`crates/leto-ops/src/application/unary/traversal.rs`) gates on the flat `PARALLEL_THRESHOLD` element count for every op. Measured against a sequential loop over the same slice and closure (36 MiB-L3 AVX2 host, best of 9): ratio 1.00 at 16384-49152 elements, parallel loses at 65536-131072 (f64 4.85-6.44, f32 7.82-9.80) and wins from about 1M elements (0.29 f64, 0.35 f32 at 1048576); a compute-bound `sin` control reads 0.15 at 65536. The LLC-byte model holds on the binary path (naive-parallel break-even 1.57M f64, 2.1M-3.1M f32); the in-place figures do not transfer to it.
+- Blocker: no in-stack bandwidth-bound caller of an in-place `UnaryOp` (`AbsOp` and `NegOp` declare `COMPUTE_BOUND = false`); an API without a caller is speculative generality, so the hazard is documented at the call site.
+- Re-open trigger: the first bandwidth-bound in-place caller in the stack, or an external report against published `map_inplace`. Re-checked 2026-11-13: no file outside leto imports `leto_ops::map_inplace`; the CFDrs hits are `Field2D::map_inplace` and the kwavers hits `indexed_map_inplace`, a sequential row walk.
+- Acceptance: value-identical to `map_inplace` for the same op; a `COMPUTE_BOUND = false` op stays sequential below the cache gate and matches the sequential control within noise across 64 KiB-2 MiB; a `COMPUTE_BOUND` op parallelizes as today; zero allocations after caller storage.
+
+<a id="LETO-BOARD-LEGACY-FOLD-2026-11-13"></a>
+
+## LETO-BOARD-LEGACY-FOLD-2026-11-13 — Convert the remaining legacy board blocks and `checklist.md` to the DoR schema [patch] — todo
+- priority: verification; milestone: M-array-core
+- needs: none
+- basis: b738a4e2
+- scope: `backlog.md` from `## Atlas in-house replacement roadmap` to its end, the `LETO-CRATES-METADATA-1` and `LETO-PYTHON-RELEASE-1` blocks, and `checklist.md`
+- Evidence: at b738a4e2 the tail holds 95 `[x]` and 13 unchecked `[ ]` lines under headings with no id, status or priority; the two named blocks carry status `milestone`, no anchor and no priority, and still say 0.42.0 while crates.io lists `leto` 0.47.0 and `leto-ops` 0.46.4 and PyPI `leto-python` 0.46.1 (looked up 2026-11-13); `checklist.md` (258 lines, copies of both blocks) is a checklist file (`board_checklist_files` 1).
+- Outcome: each `[x]` line is checked against its landing commit and deleted; each `[ ]` line becomes a DoR item or is deleted with a reason (ADR 0001 operator overloading and ADR 0012 dqds already have records); the two blocks are verified against the registries and the trusted-publisher settings, then deleted or narrowed; `checklist.md` folds into items and is deleted.
+- Acceptance: `board_checklist_files` 0; no board heading without an id, status and priority; `atlas-board-lint.py` passes.
+- Next step: delete the all-`[x]` stages S0, A0 and A1, citing each landing commit from `git log --grep`.
 
 ## Atlas in-house replacement roadmap — leto slice [arch]
 Cross-repo program to eliminate ndarray, nalgebra, rayon, tokio, std::simd, and
