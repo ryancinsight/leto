@@ -213,7 +213,13 @@ pub fn ray_line_integrals(
     let [n_rays, _] = rays.shape();
     let layout = Layout::c_contiguous([n_rays])?;
     let size = layout.checked_size()?;
-    let mut out = Array::new(layout, VecStorage::uninit(size))?;
+    // SAFETY: `f32` is valid for every bit pattern and has no drop glue.
+    // `ray_line_integrals_into` stores one integral per ray, zero-direction
+    // and chord-miss rays included, and never reads the output. Its `Err`
+    // returns (the argument checks and `segment_count`) drop the storage
+    // unread.
+    let storage = unsafe { VecStorage::uninit(size) };
+    let mut out = Array::new(layout, storage)?;
     ray_line_integrals_into(field, origin, spacing, rays, step, &mut out.view_mut())?;
     Ok(out)
 }

@@ -186,7 +186,15 @@ pub fn triangular<T: Scalar>(
 ) -> Result<Array<T, VecStorage<T>, 2>> {
     let layout = Layout::c_contiguous(input.shape())?;
     let size = layout.checked_size()?;
-    let mut output = Array::new(layout, VecStorage::uninit(size))?;
+    // SAFETY: `Scalar` is sealed to integers, floats, `F16`/`Bf16` and
+    // complex pairs of them, so `T` is valid for every bit pattern and has
+    // no drop glue. `triangular_into` writes every output cell: the
+    // contiguous route copies one side of each row split and zero-fills the
+    // other, and the strided route stores `input` or `T::ZERO` per
+    // `(row, col)`. It never reads the output, and its early `Err` returns
+    // drop the storage unread.
+    let storage = unsafe { VecStorage::uninit(size) };
+    let mut output = Array::new(layout, storage)?;
     triangular_into(input, mode, diagonal, &mut output.view_mut())?;
     Ok(output)
 }

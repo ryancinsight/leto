@@ -51,7 +51,7 @@ impl IntoShape<5> for (usize, usize, usize, usize, usize) {
 }
 
 #[inline]
-fn increment_index<const N: usize>(index: &mut [usize; N], shape: &[usize; N]) {
+pub(crate) fn increment_index<const N: usize>(index: &mut [usize; N], shape: &[usize; N]) {
     for i in (0..N).rev() {
         index[i] += 1;
         if index[i] < shape[i] {

@@ -260,3 +260,23 @@ fn test_slice_step_isize_min() {
         "Incompatible slice: range (0, 5), shape [5]"
     );
 }
+
+/// Fill every element, then read the storage back: the sole obligation of
+/// `uninit`'s contract, discharged by the test itself.
+fn written_uninit_storage_reads_back<T: Copy + PartialEq + core::fmt::Debug>(values: &[T]) {
+    // SAFETY: the integer and float element types instantiated below are
+    // valid for every bit pattern, and `copy_from_slice` writes all
+    // `values.len()` elements before the first read.
+    let mut storage = unsafe { VecStorage::<T>::uninit(values.len()) };
+    leto::StorageMut::as_mut_slice(&mut storage).copy_from_slice(values);
+    assert_eq!(storage.as_slice(), values);
+}
+
+#[test]
+fn test_uninit_storage_holds_exactly_the_written_values() {
+    written_uninit_storage_reads_back::<u8>(&[0, 1, 255]);
+    written_uninit_storage_reads_back::<i32>(&[i32::MIN, -1, 0, i32::MAX]);
+    written_uninit_storage_reads_back::<f32>(&[-0.0, 0.5, f32::INFINITY]);
+    written_uninit_storage_reads_back::<f64>(&[f64::MIN_POSITIVE, 1.0e300, -2.5]);
+    written_uninit_storage_reads_back::<f64>(&[]);
+}
