@@ -140,6 +140,7 @@ Each delivery slice carries its own oracle; this record claims none.
 - Predicate: the old/new median-time ratio `S` of `bench_spmv` has a 95%
   interval whose lower bound exceeds 1 (the noise bound) and does not lie
   wholly above `1.308`; an interval wholly above falsifies the byte model.
+  `bench_csc_spmv` at 1<<20 must also show a lower bound above 1.
 
 ## Overturning evidence
 

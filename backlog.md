@@ -31,9 +31,9 @@
 - needs: none
 - basis: d2206475
 - scope: `crates/leto/src/infrastructure/sparse/`, `crates/leto-ops/src/application/sparse/`, the `leto` crate-root re-exports, and every consumer of the retired family
-- Evidence: at d2206475 `git grep -l -E '(CsrArray|CscArray|CooArray)'` over `*.rs` finds 7 files, all in `leto`, and one consumer file (prometheus `src/stoichiometry.rs`); `(CsrMatrix|CscMatrix|CooMatrix)` finds 42, all in `leto-ops`. `leto-ops` depends on `leto`. ADR 0028 (Accepted) governs the `*Array` family and ADR 0034 puts narrow CPU CSR kernels in Leto, so the survivor is a decision, not a default.
+- Evidence: at d2206475 `git grep -l -E '\b(CsrArray|CscArray|CooArray)\b'` over `*.rs` finds 7 files, all in `leto`, and one consumer file (prometheus `src/stoichiometry.rs`); `\b(CsrMatrix|CscMatrix|CooMatrix)\b` finds 42, all in `leto-ops`. `leto-ops` depends on `leto`. ADR 0028 (Accepted) governs the `*Array` family and ADR 0034 puts narrow CPU CSR kernels in Leto, so the survivor is a decision, not a default.
 - Outcome: one sparse format family. An ADR (new, or a revision of ADR 0028) records the survivor and why; the retired structs, their tests ported, every in-repo caller and the `*Array` consumer migrate in the same slice, with no alias or adapter.
-- Acceptance: `git grep -n -E 'pub struct (Csr|Csc|Coo)(Array|Matrix)' -- crates` lists one family; each retired test case runs against the survivor; prometheus builds against it.
+- Acceptance: `git grep -n -E 'pub struct (Csr|Csc|Coo)(Array|Matrix)\b' -- crates` lists one family; each retired test case runs against the survivor; prometheus builds against it.
 - Next step: draft the ADR comparing dependency direction, API and test parity, and the one consumer.
 
 <a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
@@ -45,7 +45,7 @@
 - scope: `crates/leto-ops/src/application/sparse/` and `crates/leto/src/infrastructure/sparse/` (public format change); every consumer of the `&[usize]` accessors
 - Delivered: [ADR 0038](docs/adr/0038-csr-index-width.md) (Proposed): decision, the derived `f64` ceiling `1.308×` on `bench_spmv`, two unverified hypotheses about what binds SpMV, and the migration consequences.
 - Outcome: migrate the surviving format's CSR, CSC and COO to `I: SparseIndex = u32` with checked entry, then every in-repo caller, in one slice per format.
-- Acceptance: count-level `fits::<I>` boundary tests; `u32` and `u64` results bitwise equal on the sparse suites; `bench_spmv` at 1<<20 gives a ratio interval with lower bound above 1 and not wholly above `1.308` (ADR 0038, Verification plan), else the ADR's overturning clause applies.
+- Acceptance: count-level `fits::<I>` boundary tests; `u32` and `u64` results bitwise equal on the sparse suites; `bench_spmv` at 1<<20 gives a ratio interval with lower bound above 1 and not wholly above `1.308`, and `bench_csc_spmv` at 1<<20 a lower bound above 1 (ADR 0038, Verification plan), else the ADR's overturning clause applies.
 - Next step: accept or redirect ADR 0038, then migrate `leto-ops` CSR with its callers.
 
 <a id="LETO-BLOCKED-LU-L3-GATE-2026-09-27"></a>
