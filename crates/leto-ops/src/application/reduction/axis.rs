@@ -214,7 +214,17 @@ where
     let shape = output_shape(input.shape(), axis)?;
     let layout = Layout::c_contiguous(shape)?;
     let size = layout.checked_size()?;
-    let storage = VecStorage::uninit(size);
+    // SAFETY: `Scalar` is sealed to integers, floats, `F16`/`Bf16` and
+    // complex pairs of them, so `T` is valid for every bit pattern and has
+    // no drop glue. `reduce_axis_into` reads an output element only after
+    // writing it on each route: the rank-2 axis-0 fast path stores
+    // `Op::initial` (or `Op::EMPTY` for zero rows) into every output column
+    // before folding or finalizing; the parallel route writes one disjoint
+    // element per unit (`Op::EMPTY` for an empty axis, else the finalized
+    // accumulator); the serial route writes `Op::EMPTY` or the finalized
+    // accumulator once per element. An `Err` from `offset_of` leaves a
+    // partly written output that is dropped unread.
+    let storage = unsafe { VecStorage::uninit(size) };
     let mut output = Array::new(layout, storage)?;
     reduce_axis_into::<Op, T, N>(input, axis, &mut output.view_mut())?;
     Ok(output)

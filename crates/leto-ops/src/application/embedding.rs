@@ -112,7 +112,14 @@ pub fn embedding_gather<T: Scalar>(
     let [rows] = indices.shape();
     let layout = Layout::c_contiguous([rows, embedding_dim])?;
     let size = layout.checked_size()?;
-    let mut output = Array::new(layout, VecStorage::uninit(size))?;
+    // SAFETY: `Scalar` is sealed to integers, floats, `F16`/`Bf16` and
+    // complex pairs of them, so `T` is valid for every bit pattern and has
+    // no drop glue. `embedding_gather_into` writes every cell of the
+    // `rows * embedding_dim` output on its contiguous and strided routes and
+    // never reads the output. Its early `Err` returns (out-of-range index)
+    // drop the storage unread.
+    let storage = unsafe { VecStorage::uninit(size) };
+    let mut output = Array::new(layout, storage)?;
     embedding_gather_into(table, indices, &mut output.view_mut())?;
     Ok(output)
 }
