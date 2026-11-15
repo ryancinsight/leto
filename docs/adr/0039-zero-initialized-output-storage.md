@@ -4,21 +4,12 @@
 
 Status: Proposed
 
-Board item `LETO-VECSTORAGE-UNINIT` (class `[major]`, delivered by PR 421; its
+Board item `LETO-VECSTORAGE-UNINIT` (class `[major]`, delivered by PR 422; its
 predecessor `LETO-VECSTORAGE-UNINIT-2026-11-13` was delivered by PR 419). The
 number 0036 is held by the typed `MaybeUninit` design on
 `refs/pull/360/head`, the strongest rejected alternative below.
 
-Revision 2026-11-15: the decision changes from "`uninit` is an `unsafe`
-constructor over `Copy` elements" (PR 419) to "`uninit` is removed and each
-allocating kernel zero-fills its output". Reason: `Vec::set_len` requires the
-elements at `old_len..new_len` to be initialized (`alloc/src/vec/mod.rs:2141`,
-Rust 1.97.0), and `uninit` called it over elements nothing had written, so
-every call breached the precondition, `unsafe` or not. The PR 419 text, which
-called the design sound once callers proved write-before-read, was wrong.
-Evidence: the std source above, read at 1.97.0; the post-merge verdict on
-PR 419 (finding G1). The zero-fill choice is a user veto point: the reversal
-is `refs/pull/360/head`.
+Revision 2026-11-15: `uninit` is removed and each allocating kernel zero-fills its output, replacing PR 419's `unsafe` constructor, because its `Vec::set_len` call breached std's initialization precondition (`alloc/src/vec/mod.rs:2141`, Rust 1.97.0; PR 419 post-merge verdict G1); the zero-fill choice is a user veto point, reversed by `refs/pull/360/head`.
 
 ## Context
 
@@ -78,13 +69,17 @@ stack member at its fetched default head, and of the working trees, finds no
 call; external callers use `generate`, `fill` or `new`.
 
 Each allocating kernel pays one store pass over its output before the
-overwrite, except that zero-bit primitives are served by `alloc_zeroed` and
-skip the pass until the pages are touched.
+overwrite. For zero-bit primitives `fill` reaches `alloc_zeroed`
+(`alloc/src/vec/spec_from_elem.rs:20-26`), but whether that avoids the pass
+depends on the global allocator: `GlobalAlloc::alloc_zeroed` defaults to
+`alloc` followed by `write_bytes` (`core/src/alloc/global.rs:216-226`, Rust
+1.97.0). Skipping the pass until the pages are touched is a hypothesis for
+allocators that override it, not measured.
 
 The cost is not yet measured: a wall-clock A/B run under peer load was
 too noisy to establish or exclude a regression, and `LETO-OUTPUT-ZEROFILL-COST`
 holds the isolated-core A/B against `bd349c5e`.
 
-Overturning evidence: a measured regression on a hot path beyond the noise
-bound recorded above. The remedy is the `MaybeUninit` design, not a return to
-`set_len`.
+Overturning evidence: a regression on a hot path that
+`LETO-OUTPUT-ZEROFILL-COST` measures beyond its derived noise bound. The
+remedy is the `MaybeUninit` design, not a return to `set_len`.
