@@ -80,14 +80,11 @@ Measurement (`crates/leto-ops/benches/output_allocation.rs`, Criterion, 30
 samples, release profile, Intel Core Ultra 9 285K, Windows 11, rustc 1.97.0).
 A is origin/main `bd349c5e` (`uninit`, no fill; its kernels are the pre-PR 419
 kernels, which `d16e3b2` introduced for `reduce_axis` alone), B is this
-change. Three interleaved A/B rounds over the five operations, then five over
-`triangular` and `embedding_gather`; host CPU load before each run was
-29-100% from peer agents. Per-round B/A ratios of the median: `sum_axis`
-262144x4 0.87-1.14, 1024x1024 0.86-0.97, `topk_axis` 0.91-1.02,
-`ray_line_integrals` 0.85-0.93, `embedding_gather` 0.56-2.07, `triangular`
-0.60-1.59. The spread inside one binary (`triangular` A 0.96-2.17 ms) exceeds
-any effect, so the wall-clock instrument is invalid for a cost claim under this
-load: no regression is established and none is excluded. The expected cost is
+change. Interleaved A/B rounds over the five operations ran at a host CPU
+load of 29-100% from peer agents. The spread inside one binary (`triangular`
+A 0.96-2.17 ms) exceeds any effect, so the wall-clock instrument is invalid
+for a cost claim under this load and its ratios are discarded: no regression
+is established and none is excluded. The expected cost is
 bounded by one store pass over the output (4 MiB for `triangular` and
 `embedding_gather`); isolated-core confirmation is `LETO-OUTPUT-ZEROFILL-COST`.
 
