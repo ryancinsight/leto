@@ -57,7 +57,7 @@ it.
    `F16`, `Bf16` and complex elements take the element-wise fill.
 3. No `set_len` runs over a `Vec<T>` whose new elements are unwritten.
    `concat` and `stack` keep their `Vec<MaybeUninit<T>>` assembly, where
-   `set_len` is vacuous.
+   `set_len` is vacuous, and now carry `SAFETY` proofs for their writes.
 
 ## Alternatives rejected
 
@@ -81,9 +81,20 @@ Each allocating kernel pays one store pass over its output before the
 overwrite, except that zero-bit primitives are served by `alloc_zeroed` and
 skip the pass until the pages are touched.
 
-The cost is not yet measured: a wall-clock A/B run under peer load was
-too noisy to establish or exclude a regression, and `LETO-OUTPUT-ZEROFILL-COST`
-holds the isolated-core A/B against `bd349c5e`.
+Measurement (`crates/leto-ops/benches/output_allocation.rs`, Criterion, 30
+samples, release profile, Intel Core Ultra 9 285K, Windows 11, rustc 1.97.0).
+A is origin/main `bd349c5e` (`uninit`, no fill; its kernels are the pre-PR 419
+kernels, which `d16e3b2` introduced for `reduce_axis` alone), B is this
+change. Three interleaved A/B rounds over the five operations, then five over
+`triangular` and `embedding_gather`; host CPU load before each run was
+29-100% from peer agents. Per-round B/A ratios of the median: `sum_axis`
+262144x4 0.87-1.14, 1024x1024 0.86-0.97, `topk_axis` 0.91-1.02,
+`ray_line_integrals` 0.85-0.93, `embedding_gather` 0.56-2.07, `triangular`
+0.60-1.59. The spread inside one binary (`triangular` A 0.96-2.17 ms) exceeds
+any effect, so the wall-clock instrument is invalid for a cost claim under this
+load: no regression is established and none is excluded. The expected cost is
+bounded by one store pass over the output (4 MiB for `triangular` and
+`embedding_gather`); isolated-core confirmation is `LETO-OUTPUT-ZEROFILL-COST`.
 
 Overturning evidence: a measured regression on a hot path beyond the noise
 bound recorded above. The remedy is the `MaybeUninit` design, not a return to

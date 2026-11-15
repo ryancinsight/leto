@@ -48,6 +48,8 @@ pub fn concat<T: Clone, const N: usize>(
     let size = out_layout.size();
 
     let mut values: Vec<std::mem::MaybeUninit<T>> = Vec::with_capacity(size);
+    // SAFETY: `MaybeUninit<T>` needs no initialization, and `with_capacity`
+    // allocated room for `size` elements.
     unsafe {
         values.set_len(size);
     }
@@ -61,6 +63,8 @@ pub fn concat<T: Clone, const N: usize>(
         fn drop(&mut self) {
             if self.initialized > 0 && std::mem::needs_drop::<T>() {
                 for i in 0..self.initialized {
+                    // SAFETY: the guard holds the first `initialized` slots, each
+                    // written exactly once by the loop below, in increasing order.
                     unsafe {
                         std::ptr::drop_in_place(self.ptr.add(i) as *mut T);
                     }
@@ -102,6 +106,10 @@ pub fn concat<T: Clone, const N: usize>(
             let out_off = outer_idx * out_axis_total * inner_size + *base_offset * inner_size;
             for i in 0..*block_size {
                 let val = iter.next().expect("iterator exhausted early");
+                // SAFETY: `out_off + ...` indexes below `size`: the offsets visit
+                // each output slot once, in increasing order, so the write
+                // never aliases a live value and `initialized` counts the
+                // written prefix.
                 unsafe {
                     guard
                         .ptr
@@ -115,6 +123,9 @@ pub fn concat<T: Clone, const N: usize>(
 
     std::mem::forget(guard);
 
+    // SAFETY: every slot in `0..size` was written by the loops above, and
+    // `MaybeUninit<T>` has the layout of `T`, so the allocation transfers to
+    // a `Vec<T>` of the same length and capacity.
     let values = unsafe {
         let mut values = std::mem::ManuallyDrop::new(values);
         Vec::from_raw_parts(
