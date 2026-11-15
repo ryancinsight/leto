@@ -199,15 +199,17 @@ jobs:
   # Miri over the code whose correctness rests on an invariant the native suite
   # cannot see.
   #
-  # `reduce_axis_into` writes each output element once, through raw pointers
-  # on the parallel route and through slices on the serial route (PR #157,
-  # `d16e3b2`); `concat` and `stack` assemble their output in `MaybeUninit`
-  # storage. Both rest on write-coverage invariants the type system does not
-  # check; the selection below runs the serial reduction route only, and
-  # LETO-MIRI-GATE owns the rest. `VecStorage::uninit`, which this comment
-  # once covered, is removed (ADR 0039): it called `Vec::set_len` over
-  # unwritten elements, a breach of std's initialization precondition that no
-  # Miri run can observe.
+  # The reduction-output steps run the serial route of `reduce_axis_into`,
+  # which is safe code over zero-filled output storage (ADR 0039): its write
+  # coverage is a value invariant that the native suite checks
+  # (`reduction_output`), not a soundness invariant Miri adds to. The `unsafe`
+  # reduction code is the raw-pointer writes of `parallel_reduce_axis_into`
+  # (PR #157, `d16e3b2`); it engages at 32768 outputs or more and is outside
+  # the selection, as are `concat` and `stack`, which assemble their output in
+  # `MaybeUninit` storage. LETO-MIRI-GATE-2026-09-10 owns widening to them.
+  # `VecStorage::uninit`, which this comment once covered, is removed: it
+  # called `Vec::set_len` over unwritten elements, a breach of std's
+  # initialization precondition that no Miri run can observe.
   #
   # Both borrow models run, and that is not belt-and-braces: an MN-437 fix in
   # this stack passed Stacked Borrows while Tree Borrows still rejected it, so a
@@ -222,8 +224,9 @@ jobs:
   #   leto-ops --test ops_tests              full binary, >10m <- excluded
   #   leto layout_property_tests             proptest,     >10m <- excluded
   #
-  # The two selected runs are the storage substrate and the reduction-output
-  # caller, which are the contracts this job exists for. The broader `leto-ops`
+  # The two selected runs are the storage substrate and the serial reduction
+  # route; the `unsafe` code named above is what this job exists for, and the
+  # widening reaches it. The broader `leto-ops`
   # and property surfaces are excluded because they are not yet Miri-clean or
   # affordable, not because they are believed sound; the measured blockers are
   # recorded on LETO-MIRI-GATE-2026-09-10, which owns widening this scope.
