@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.48.0] - Unreleased
+## [0.49.0] - Unreleased
 
 ### Added
 
@@ -13,6 +13,13 @@
   monomorphization over rank.
 
 ### Changed
+
+- [major] `VecStorage::uninit` is an `unsafe fn` bounded to `T: Copy`: safe code
+  could read or drop uninitialized elements through it. Callers prove that every
+  element is written before it is read (see ADR 0039), or construct with
+  `generate`, `fill` or `new`. `pad` no longer allocates uninitialized
+  storage, so a clone-padded `T` with drop glue never has an unwritten value
+  destroyed.
 
 - [patch] `CooMatrix::to_csr` requests removal of spare result capacity after
   coalescing. Documentation describes its borrowed-input allocation behavior
