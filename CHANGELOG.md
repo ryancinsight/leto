@@ -14,12 +14,14 @@
 
 ### Changed
 
-- [major] `VecStorage::uninit` is an `unsafe fn` bounded to `T: Copy`: safe code
-  could read or drop uninitialized elements through it. Callers prove that every
-  element is written before it is read (see ADR 0039), or construct with
-  `generate`, `fill` or `new`. `pad` no longer allocates uninitialized
-  storage, so a clone-padded `T` with drop glue never has an unwritten value
-  destroyed.
+- [major] `VecStorage::uninit` is removed. It called `Vec::set_len` over
+  elements nothing had written, which breaks std's precondition that the
+  elements at `old_len..new_len` are initialized, for every caller and in its
+  `unsafe` form too (ADR 0039). Construct storage with `generate`, `fill` or
+  `new`. `embedding_gather`, the allocating axis reductions, `topk_axis`,
+  `triangular` and `ray_line_integrals` zero-fill their output before
+  overwriting it, and `pad` no longer allocates uninitialized storage, so a
+  clone-padded `T` with drop glue never has an unwritten value destroyed.
 
 - [patch] `CooMatrix::to_csr` requests removal of spare result capacity after
   coalescing. Documentation describes its borrowed-input allocation behavior

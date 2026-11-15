@@ -199,14 +199,15 @@ jobs:
   # Miri over the code whose correctness rests on an invariant the native suite
   # cannot see.
   #
-  # `reduce_axis` writes its output through `VecStorage::uninit` and raw
-  # pointers (PR #157, `d16e3b2`): the single-write optimization is sound only
-  # because every output element is written before it is read. `VecStorage::uninit`
-  # is an `unsafe fn` over `T: Copy`, so that obligation is a `SAFETY` proof at
-  # each caller, which this job exercises rather than the type system.
-  # Nothing gated it, which is the defect generator the mnemosyne board already
-  # recorded for a crate sitting outside its Miri gate (MN-459): the sweep that
-  # fixed every gated sibling could not see the ungated copy.
+  # `reduce_axis_into` writes each output element once, through raw pointers
+  # on the parallel route and through slices on the serial route (PR #157,
+  # `d16e3b2`); `concat` and `stack` assemble their output in `MaybeUninit`
+  # storage. Both rest on write-coverage invariants the type system does not
+  # check; the selection below runs the serial reduction route only, and
+  # LETO-MIRI-GATE owns the rest. `VecStorage::uninit`, which this comment
+  # once covered, is removed (ADR 0039): it called `Vec::set_len` over
+  # unwritten elements, a breach of std's initialization precondition that no
+  # Miri run can observe.
   #
   # Both borrow models run, and that is not belt-and-braces: an MN-437 fix in
   # this stack passed Stacked Borrows while Tree Borrows still rejected it, so a
@@ -221,7 +222,7 @@ jobs:
   #   leto-ops --test ops_tests              full binary, >10m <- excluded
   #   leto layout_property_tests             proptest,     >10m <- excluded
   #
-  # The two selected runs are the storage substrate and the uninitialized-output
+  # The two selected runs are the storage substrate and the reduction-output
   # caller, which are the contracts this job exists for. The broader `leto-ops`
   # and property surfaces are excluded because they are not yet Miri-clean or
   # affordable, not because they are believed sound; the measured blockers are
@@ -261,7 +262,7 @@ jobs:
       # test reduces a 40000x8 array; under Miri that exceeds the profile's
       # 600 s bound. Miri therefore covers the serial output path only, and
       # the parallel task split is covered by the native suite.
-      - name: Miri — uninitialized reduction output (Stacked Borrows)
+      - name: Miri — reduction output (Stacked Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation
         run: >-
@@ -274,7 +275,7 @@ jobs:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
         run: cargo +nightly miri nextest run -p leto --locked --profile miri --lib
 
-      - name: Miri — uninitialized reduction output (Tree Borrows)
+      - name: Miri — reduction output (Tree Borrows)
         env:
           MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-tree-borrows
         run: >-

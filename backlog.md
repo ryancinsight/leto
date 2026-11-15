@@ -85,16 +85,28 @@
 - Acceptance: a committed counting test reports, per (format, site, band), cases below the bound; every case whose bound is not below 1 is made informative or carries its derived rounding count showing the bound is at least 1, so no row passes on a nonzero count alone; this binds the 14 F16 Schur-residual cases at n = 8, the vacuous F16 symmetric-QR case, the 1234 vacuous Bf16 Schur-orthogonality scan cases (n = 3 to 8) and every case of `large_orders_factor_in_the_narrow_formats`; `PROBABILISTIC_LAMBDA` stays 7 (a smaller `λ` raises the per-product failure probability `2exp(-λ²(1-u)²/2)`, a larger one widens the bound); no tolerance widening.
 - Next step: commit the counting test, then instrument the per-entry rounding count of the Bf16 Francis and Golub-Kahan paths and tabulate the orders at which `γ̃` falls below 1.
 
+<a id="LETO-OUTPUT-ZEROFILL-COST"></a>
+
+## LETO-OUTPUT-ZEROFILL-COST — Confirm the zero-fill cost of the allocating kernels on isolated cores [patch] — todo
+- priority: tightening; milestone: M-array-core
+- needs: none
+- basis: bd349c5e
+- scope: `crates/leto-ops/benches/`, `embedding_gather`, `reduce_axis`, `topk_axis`, `triangular`, `ray_line_integrals`
+- Evidence: [ADR 0039](docs/adr/0039-zero-initialized-output-storage.md) replaced `VecStorage::uninit` with zero-filled output storage, which adds one store pass over each output. A wall-clock A/B under peer load was too noisy to establish or exclude a regression.
+- Outcome: per operation, the B/A median ratio with a confidence interval from isolated cores or instruction and cache counters, recorded in ADR 0039. A ratio above the noise bound on a hot path opens the typed `MaybeUninit` route (`refs/pull/360/head`) as sliced items.
+- Acceptance: ADR 0039 carries the measured ratio and interval for each of the five operations at a recorded host load.
+- Next step: add an `output_allocation` Criterion bench over the five operations and run it on a quiet host against `bd349c5e`.
+
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 
-## LETO-MIRI-GATE-2026-09-10 — Widen the Miri gate past the storage substrate and the uninitialized reduction output [patch] [safety] — todo
+## LETO-MIRI-GATE-2026-09-10 — Widen the Miri gate past the storage substrate and the reduction output [patch] [safety] — todo
 - priority: verification; milestone: M-array-core
 - needs: none
 - basis: b738a4e2
 - scope: `.github/workflows/ci.yml` (`miri` job), `.config/nextest.toml` (`[profile.miri]`), `crates/leto-ops/tests/ops/`
-- Evidence: the job runs `leto --lib` and `leto-ops ops_tests -E test(/reduction/)` under both Stacked and Tree Borrows (`ci.yml:263-282`), the second excluding `parallel_axis_reduction_matches_the_serial_result` (`ci.yml:259-262`: the 40000x8 input exceeds the 600 s profile bound, so Miri covers the serial output path only). The serial route exercises the write-before-read ordering of `reduce_axis` over `VecStorage::uninit` (d16e3b2); the soundness of `VecStorage::uninit` is the unsafe-constructor contract of [ADR 0039](docs/adr/0039-unsafe-uninitialized-vec-storage.md), proved per caller. Measured 2026-09-10 (Windows host, Miri 0.1.0, nightly 2026-08-26): `leto --lib` 130 tests 206 s Stacked, 363 s Tree; `leto-ops --lib` (216 tests), `leto-ops --test ops_tests` (352) and `leto layout_property_tests` each exceed 10 min, so they stay out as unaffordable, not as believed sound.
+- Evidence: the job runs `leto --lib` and `leto-ops ops_tests -E test(/reduction/)` under both Stacked and Tree Borrows (the `Miri — reduction output` steps of `ci.yml`), the second excluding `parallel_axis_reduction_matches_the_serial_result` (the 40000x8 input exceeds the 600 s profile bound, so Miri covers the serial output path only). The serial route exercises the single-write ordering of `reduce_axis` (d16e3b2) over zero-filled output storage; `VecStorage::uninit` is removed because it broke the `Vec::set_len` initialization precondition, which no Miri run can observe ([ADR 0039](docs/adr/0039-zero-initialized-output-storage.md)). Measured 2026-09-10 (Windows host, Miri 0.1.0, nightly 2026-08-26): `leto --lib` 130 tests 206 s Stacked, 363 s Tree; `leto-ops --lib` (216 tests), `leto-ops --test ops_tests` (352) and `leto layout_property_tests` each exceed 10 min, so they stay out as unaffordable, not as believed sound.
 - Open observations, unconfirmed on Linux: `complex_transpose_allocations` aborts under Miri inside the test's own `CountingAllocator` (Windows `HeapFree`, `GetNumaHighestNodeNumber`); two `leapfrog` tests fail an exact `assert_eq!` under Miri with the native/interpreted float divergence unexplained.
-- Outcome: each excluded surface, the parallel route of the uninitialized reduction output included, joins the job with a measured bound or is closed with the reason it stays out; both borrow models stay (an MN-437 fix passed Stacked Borrows while Tree Borrows still rejected it).
+- Outcome: each excluded surface, the parallel route of the reduction output included, joins the job with a measured bound or is closed with the reason it stays out; both borrow models stay (an MN-437 fix passed Stacked Borrows while Tree Borrows still rejected it).
 - Acceptance: the `miri` job is green on main under both models over the widened scope; the two observations are confirmed or refuted on `ubuntu-latest`.
 - Next step: run `leto-ops --lib` and `ops_tests` under Miri on `ubuntu-latest` with a bounded workload and record per-test time.
 

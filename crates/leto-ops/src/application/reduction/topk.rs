@@ -151,18 +151,8 @@ pub fn topk_axis<T: Scalar>(input: &ArrayView<'_, T, 2>, axis: usize, k: usize) 
     let values_layout = Layout::c_contiguous(shape)?;
     let indices_layout = Layout::c_contiguous(shape)?;
     let size = values_layout.checked_size()?;
-    // SAFETY: `Scalar` is sealed to integers, floats, `F16`/`Bf16` and
-    // complex pairs of them, and `u32` is an integer, so both element types
-    // are valid for every bit pattern and have no drop glue. `topk_axis_into`
-    // validates its arguments before the first write, then fills each lane:
-    // slots `0..k` are placed in order while `a < k`, and `bubble_up`,
-    // `worst` and the swaps read only slots already placed, because `worst`
-    // runs once `a >= k`, after all `k` slots hold a value. An `Err` return
-    // drops the storage unread.
-    let values_storage = unsafe { VecStorage::uninit(size) };
-    // SAFETY: the same obligation holds for the index storage, written by
-    // `place` together with each value slot.
-    let indices_storage = unsafe { VecStorage::uninit(size) };
+    let values_storage = VecStorage::fill(size, T::ZERO);
+    let indices_storage = VecStorage::fill(size, 0_u32);
     let mut values = Array::new(values_layout, values_storage)?;
     let mut indices = Array::new(indices_layout, indices_storage)?;
     topk_axis_into(

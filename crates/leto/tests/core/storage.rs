@@ -261,22 +261,36 @@ fn test_slice_step_isize_min() {
     );
 }
 
-/// Fill every element, then read the storage back: the sole obligation of
-/// `uninit`'s contract, discharged by the test itself.
-fn written_uninit_storage_reads_back<T: Copy + PartialEq + core::fmt::Debug>(values: &[T]) {
-    // SAFETY: the integer and float element types instantiated below are
-    // valid for every bit pattern, and `copy_from_slice` writes all
-    // `values.len()` elements before the first read.
-    let mut storage = unsafe { VecStorage::<T>::uninit(values.len()) };
-    leto::StorageMut::as_mut_slice(&mut storage).copy_from_slice(values);
-    assert_eq!(storage.as_slice(), values);
+/// `fill` writes the supplied value into every element, so allocating kernels
+/// that fill their output first never expose unwritten memory.
+fn filled_storage_holds_the_value_everywhere<T: Copy + PartialEq + core::fmt::Debug>(
+    value: T,
+    len: usize,
+) {
+    let storage = VecStorage::fill(len, value);
+    assert_eq!(storage.as_slice(), vec![value; len].as_slice());
 }
 
 #[test]
-fn test_uninit_storage_holds_exactly_the_written_values() {
-    written_uninit_storage_reads_back::<u8>(&[0, 1, 255]);
-    written_uninit_storage_reads_back::<i32>(&[i32::MIN, -1, 0, i32::MAX]);
-    written_uninit_storage_reads_back::<f32>(&[-0.0, 0.5, f32::INFINITY]);
-    written_uninit_storage_reads_back::<f64>(&[f64::MIN_POSITIVE, 1.0e300, -2.5]);
-    written_uninit_storage_reads_back::<f64>(&[]);
+fn test_fill_storage_holds_the_value_in_every_element() {
+    filled_storage_holds_the_value_everywhere::<u8>(0, 3);
+    filled_storage_holds_the_value_everywhere::<i32>(i32::MIN, 4);
+    filled_storage_holds_the_value_everywhere::<u32>(0, 5);
+    filled_storage_holds_the_value_everywhere::<f32>(0.5, 3);
+    filled_storage_holds_the_value_everywhere::<f64>(f64::MIN_POSITIVE, 3);
+    filled_storage_holds_the_value_everywhere::<f64>(0.0, 0);
+}
+
+#[test]
+fn test_fill_storage_preserves_the_sign_of_zero() {
+    let positive = VecStorage::fill(4, 0.0_f64);
+    assert!(positive
+        .as_slice()
+        .iter()
+        .all(|x| x.to_bits() == 0.0_f64.to_bits()));
+    let negative = VecStorage::fill(4, -0.0_f64);
+    assert!(negative
+        .as_slice()
+        .iter()
+        .all(|x| x.to_bits() == (-0.0_f64).to_bits()));
 }
