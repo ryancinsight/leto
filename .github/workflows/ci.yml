@@ -196,13 +196,12 @@ jobs:
           python -m pytest crates/leto-python/tests/test_numpy_parity.py
           crates/leto-python/tests/test_wheel_contract.py
 
-  # Miri over the code whose correctness rests on an invariant the native suite
-  # cannot see.
+  # Miri over the storage substrate and the serial reduction route.
   #
   # The reduction-output steps run the serial route of `reduce_axis_into`:
   # safe code over zero-filled output storage (ADR 0039), whose write coverage
   # the native suite checks (`reduction_output`). The `unsafe` code is the
-  # raw-pointer writes of `parallel_reduce_axis_into` (PR #157, `d16e3b2`),
+  # raw-pointer writes of `parallel_reduce_axis_into`,
   # which engage at 32768 outputs or more, and the `MaybeUninit` assembly of
   # `concat` and `stack`; both are outside the selection, and
   # LETO-MIRI-GATE-2026-09-10 owns widening to them. `VecStorage::uninit` is
