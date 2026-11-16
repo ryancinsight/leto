@@ -97,7 +97,7 @@ pub fn schur_factors(n: usize, eps: f64) -> (f64, f64) {
 /// `θ_30` applied two-sided, `36` per entry; block entries `40`), and the
 /// `θ_3` read-off. The eigenvalues-only windows only exclude entries, so
 /// the Schur-path count covers both.
-fn francis_roundings(n: usize, steps: usize) -> f64 {
+pub fn francis_roundings(n: usize, steps: usize) -> f64 {
     let hessenberg = 2.0
         * f64::from_count(n.saturating_sub(2))
         * super::reflector_roundings(n.saturating_sub(1));
@@ -110,7 +110,7 @@ fn francis_roundings(n: usize, steps: usize) -> f64 {
 /// Hessenberg reflectors from the right, every Francis step's right
 /// applications, and the `dlanv2` rotations (`36` covers the one-sided
 /// application).
-fn francis_vectors_roundings(n: usize, steps: usize) -> f64 {
+pub fn francis_vectors_roundings(n: usize, steps: usize) -> f64 {
     let hessenberg =
         f64::from_count(n.saturating_sub(2)) * super::reflector_roundings(n.saturating_sub(1));
     let chase = f64::from_count(steps) * FRANCIS_VECTORS_STEP_ROUNDINGS;

@@ -3,6 +3,7 @@
 use super::super::a_posteriori::{self, BlockEigenvalue};
 use super::super::backward_error::{self, informative};
 use super::super::format::{epsilon, scale, Format};
+use super::coverage::{Counts, Coverage, Site};
 use leto::{Array2, Storage};
 use leto_ops::{schur, svd_decompose, take_dbdsqr_counts, take_francis_steps};
 
@@ -56,7 +57,12 @@ impl<T: Format> Case<'_, T> {
     /// `svd_decompose`: the a-posteriori Weyl certificate against the `f64`
     /// reference `σ(Â)` (within `reference_error`), and the a-priori residual
     /// and orthogonality where informative. Returns `σ̂` in units of `2^e`.
-    pub(super) fn svd_factors(&self, reference: &[f64], reference_error: f64) -> Vec<f64> {
+    pub(super) fn svd_factors(
+        &self,
+        coverage: &mut Coverage,
+        reference: &[f64],
+        reference_error: f64,
+    ) -> Vec<f64> {
         let (label, n, eps) = (self.label, self.n, epsilon::<T>());
         let full = svd_decompose(&self.matrix.view())
             .unwrap_or_else(|error| panic!("{label}: svd_decompose: {error}"));
@@ -91,6 +97,19 @@ impl<T: Format> Case<'_, T> {
         let residual_bound = informative(eta_r)
             .map(|eta| (eta, "a-priori"))
             .or_else(|| informative(eta_r_tilde).map(|eta| (eta, "probabilistic")));
+        let counts = Counts {
+            value: backward_error::svd_roundings(n, n, sweeps, chases),
+            vectors: backward_error::svd_vectors_roundings(n, n, sweeps, chases),
+            order: n,
+        };
+        let precision = T::PRECISION;
+        coverage.record(
+            precision,
+            Site::SvdResidual,
+            residual_bound.is_some(),
+            counts,
+            eps,
+        );
         if let Some((eta, tag)) = residual_bound {
             let bound = eta * self.norm();
             assert!(
@@ -101,6 +120,13 @@ impl<T: Format> Case<'_, T> {
         let orthogonality_bound = informative(eta_o)
             .map(|eta| (eta, "a-priori"))
             .or_else(|| informative(eta_o_tilde).map(|eta| (eta, "probabilistic")));
+        coverage.record(
+            precision,
+            Site::SvdOrthogonality,
+            orthogonality_bound.is_some(),
+            counts,
+            eps,
+        );
         if let Some((eta, tag)) = orthogonality_bound {
             assert!(
                 left <= eta && right <= eta,
@@ -124,6 +150,7 @@ impl<T: Format> Case<'_, T> {
     /// informative.
     pub(super) fn schur_factors(
         &self,
+        coverage: &mut Coverage,
         reference: &[(f64, f64)],
         condition: Option<f64>,
         reference_error: f64,
@@ -145,6 +172,19 @@ impl<T: Format> Case<'_, T> {
         let residual_bound = informative(eta_r)
             .map(|eta| (eta, "a-priori"))
             .or_else(|| informative(eta_r_tilde).map(|eta| (eta, "probabilistic")));
+        let counts = Counts {
+            value: backward_error::francis_roundings(n, steps),
+            vectors: backward_error::francis_vectors_roundings(n, steps),
+            order: n,
+        };
+        let precision = T::PRECISION;
+        coverage.record(
+            precision,
+            Site::SchurResidual,
+            residual_bound.is_some(),
+            counts,
+            eps,
+        );
         if let Some((eta, tag)) = residual_bound {
             let bound = eta * self.norm();
             assert!(
@@ -155,6 +195,13 @@ impl<T: Format> Case<'_, T> {
         let orthogonality_bound = informative(eta_o)
             .map(|eta| (eta, "a-priori"))
             .or_else(|| informative(eta_o_tilde).map(|eta| (eta, "probabilistic")));
+        coverage.record(
+            precision,
+            Site::SchurOrthogonality,
+            orthogonality_bound.is_some(),
+            counts,
+            eps,
+        );
         if let Some((eta, tag)) = orthogonality_bound {
             assert!(
                 defect <= eta,
