@@ -1,3 +1,9 @@
+## 2026-11-16 Graded-scan vacuity derivation is sufficient-only [patch]
+
+- risk: `derives_vacuous` (`crates/leto-ops/tests/ops/graded_scan/coverage.rs:81-89`) drops the deflation-floor factors, so `Coverage::record` can panic on an unasserted case whose full derived bound is `>= 1`; it fails safe, and a change to the rounding counts can trigger it.
+- evidence: judge on leto#425, finding 4, recomputed one case (p = 11, counts 1531/966, order 8): `E(N_r) + 2ln(1+d) = 0.68593 < ln 2`, and the floors add `7 ln(1+4ε) = 0.02729`; not re-run here.
+- re-open trigger: a count change makes `record` panic on a case the full derivation clears, or the derivation gains the floor terms.
+
 ## 2026-11-02 Hermitian QR correctness [patch]
 
 - finding: n > 32 returned inaccurate eigenpairs and Ok on exhaustion; the old factor reconstruction used conjugation instead of the required adjoint and a real-only Householder phase.
