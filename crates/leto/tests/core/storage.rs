@@ -283,16 +283,9 @@ fn test_fill_storage_holds_the_value_in_every_element() {
 
 #[test]
 fn test_fill_storage_preserves_the_sign_of_zero() {
-    let positive = VecStorage::fill(4, 0.0_f64);
-    assert_eq!(positive.as_slice().len(), 4);
-    assert!(positive
-        .as_slice()
-        .iter()
-        .all(|x| x.to_bits() == 0.0_f64.to_bits()));
-    let negative = VecStorage::fill(4, -0.0_f64);
-    assert_eq!(negative.as_slice().len(), 4);
-    assert!(negative
-        .as_slice()
-        .iter()
-        .all(|x| x.to_bits() == (-0.0_f64).to_bits()));
+    for zero in [0.0_f64, -0.0] {
+        let storage = VecStorage::fill(4, zero);
+        let bits: Vec<u64> = storage.as_slice().iter().map(|x| x.to_bits()).collect();
+        assert_eq!(bits, [zero.to_bits(); 4]);
+    }
 }
