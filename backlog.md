@@ -191,7 +191,7 @@ open.
 - needs: none
 - basis: fba6315393561b514b59299079ff1da88637c0a2
 - scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`
-- Evidence: `derives_vacuous` (`coverage.rs:81-91`) compares against `LN_2`; its only caller is the `assert!` in `Coverage::record` (`:112-113`) and `assert_rows` pins only tallies. The crossing
+- Evidence: `derives_vacuous` (`coverage.rs:81-89`) compares against `LN_2`; its only caller is the `assert!` in `Coverage::record` (`:112-113`) and `assert_rows` pins only tallies. The crossing
   test (`:172`) calls `growth`, not `derives_vacuous`. Source: judge on leto#425, F1, which reports the mutant `LN_2` -> `0.0` survives; not re-run here. By reading, a threshold of 0 passes every
   unasserted case and leaves every tally unchanged.
 - Outcome: the threshold of `derives_vacuous` is observable by a test on each side of its crossing.
