@@ -5,9 +5,8 @@
 Status: Proposed
 
 Board item `LETO-VECSTORAGE-UNINIT` (class `[major]`, delivered by PR 422; its
-predecessor `LETO-VECSTORAGE-UNINIT-2026-11-13` was delivered by PR 419). The
-number 0036 is held by the typed `MaybeUninit` design on
-`refs/pull/360/head`, the strongest rejected alternative below.
+predecessor `LETO-VECSTORAGE-UNINIT-2026-11-13` by PR 419). The number 0036
+belongs to the typed `MaybeUninit` design on `refs/pull/360/head`.
 
 Revision 2026-11-15: `uninit` is removed and each allocating kernel zero-fills its output, replacing PR 419's `unsafe` constructor, because its `Vec::set_len` call breached std's initialization precondition (`alloc/src/vec/mod.rs:2141`, Rust 1.97.0; PR 419 post-merge verdict G1); the zero-fill choice is a user veto point, reversed by `refs/pull/360/head`.
 
@@ -26,23 +25,19 @@ each caller. That removed the safe-code reads and the drop defect, and it
 left the `Vec::set_len` breach: the precondition concerns memory state at the
 call, before any caller receives the storage, so no caller proof discharges
 it. std checks only `new_len <= capacity()` (`check_library_ub`), so no
-runtime check, Miri included, observes the initialization clause; the green
-Miri runs on PR 419 do not bear on it. `MaybeUninit`'s documentation also
-states that uninitialized data in an integer-typed variable is undefined
-behavior (`core/src/mem/maybe_uninit.rs:42-46`).
-
-Six call sites used `uninit` outside the constructor: `embedding_gather`,
-`reduce_axis`, `topk_axis` (two), `triangular` and `ray_line_integrals`, all
-instantiated at `T: Scalar` (integers, floats, `F16`/`Bf16`, complex pairs of
-them), `u32` indices, or `f32`. `pad` (`T: Clone`) had already stopped using
-it.
+runtime check, Miri included, observes the initialization clause, and the
+green Miri runs on PR 419 do not bear on it. `MaybeUninit`'s documentation
+also calls uninitialized data in an integer-typed variable undefined behavior
+(`core/src/mem/maybe_uninit.rs:42-46`).
 
 ## Decision
 
 1. `VecStorage::uninit` is deleted, with its `#[expect(clippy::uninit_vec)]`.
-2. Each former caller allocates zero-filled storage through
+2. The six former call sites (`embedding_gather`, `reduce_axis`, `topk_axis`
+   (two buffers), `triangular`, `ray_line_integrals`; `pad` had already
+   stopped using it) allocate zero-filled storage through
    `VecStorage::fill(size, T::ZERO)` (`0_u32` for indices, `0.0_f32` for
-   `ray_line_integrals`) and then overwrites it. `fill` is `vec![value; len]`,
+   `ray_line_integrals`) and then overwrite it. `fill` is `vec![value; len]`,
    which std specializes to `alloc_zeroed` for the primitive element types
    when the value is zero bits (`alloc/src/vec/spec_from_elem.rs:20-26`);
    `F16`, `Bf16` and complex elements take the element-wise fill.
@@ -55,26 +50,25 @@ it.
 - `VecStorage<MaybeUninit<T>>` with an unsafe consuming `assume_init`
   (`refs/pull/360/head`, 25 files, +743/-171): the only design that keeps the
   single-write path without a `set_len` breach, since no `&mut [T]` is formed
-  over unwritten memory. It stays the upgrade path if the zero-fill cost below
-  matters on a hot path; it needs an output-slot trait through every kernel and
-  is a separate sliced delivery.
+  over unwritten memory. Rejected for now: it needs an output-slot trait
+  through every kernel, a separate sliced delivery, and the zero-fill cost is
+  not shown to matter; it stays the upgrade path if it does.
 - Keeping `uninit` with corrected prose, `unsafe` or not: every call still
   breaches the precondition, and documentation does not repair that.
 
 ## Consequences
 
-`uninit` leaves the public API: a source-breaking change classified `[major]`
-(`uninit` was a safe `pub fn` in the released 0.47.0). A search of every other
-stack member at its fetched default head, and of the working trees, finds no
-call; external callers use `generate`, `fill` or `new`.
+`uninit` leaves the public API, a `[major]` source break (it was a safe `pub fn`
+in the released 0.47.0). No other stack member at its fetched default head or
+in its working tree calls it; external callers use `generate`, `fill` or `new`.
 
 Each allocating kernel pays one store pass over its output before the
-overwrite. For zero-bit primitives `fill` reaches `alloc_zeroed`
-(`alloc/src/vec/spec_from_elem.rs:20-26`), but whether that avoids the pass
-depends on the global allocator: `GlobalAlloc::alloc_zeroed` defaults to
-`alloc` followed by `write_bytes` (`core/src/alloc/global.rs:216-226`, Rust
-1.97.0). Skipping the pass until the pages are touched is a hypothesis for
-allocators that override it, not measured.
+overwrite. Whether `alloc_zeroed` (decision 2) avoids the pass for zero-bit
+primitives depends on the global allocator: `GlobalAlloc::alloc_zeroed`
+defaults to `alloc` followed by `write_bytes`
+(`core/src/alloc/global.rs:216-226`, Rust 1.97.0). Skipping the pass until
+the pages are touched is an unmeasured hypothesis for allocators that
+override it.
 
 Measurement (`crates/leto-ops/benches/output_allocation.rs`, Criterion, 30
 samples, release profile, Intel Core Ultra 9 285K, Windows 11, rustc 1.97.0).

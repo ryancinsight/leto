@@ -199,17 +199,15 @@ jobs:
   # Miri over the code whose correctness rests on an invariant the native suite
   # cannot see.
   #
-  # The reduction-output steps run the serial route of `reduce_axis_into`,
-  # which is safe code over zero-filled output storage (ADR 0039): its write
-  # coverage is a value invariant that the native suite checks
-  # (`reduction_output`), not a soundness invariant Miri adds to. The `unsafe`
-  # reduction code is the raw-pointer writes of `parallel_reduce_axis_into`
-  # (PR #157, `d16e3b2`); it engages at 32768 outputs or more and is outside
-  # the selection, as are `concat` and `stack`, which assemble their output in
-  # `MaybeUninit` storage. LETO-MIRI-GATE-2026-09-10 owns widening to them.
-  # `VecStorage::uninit`, which this comment once covered, is removed: it
-  # called `Vec::set_len` over unwritten elements, a breach of std's
-  # initialization precondition that no Miri run can observe.
+  # The reduction-output steps run the serial route of `reduce_axis_into`:
+  # safe code over zero-filled output storage (ADR 0039), whose write coverage
+  # the native suite checks (`reduction_output`). The `unsafe` code is the
+  # raw-pointer writes of `parallel_reduce_axis_into` (PR #157, `d16e3b2`),
+  # which engage at 32768 outputs or more, and the `MaybeUninit` assembly of
+  # `concat` and `stack`; both are outside the selection, and
+  # LETO-MIRI-GATE-2026-09-10 owns widening to them. `VecStorage::uninit` is
+  # removed: it called `Vec::set_len` over unwritten elements, a breach of
+  # std's initialization precondition that no Miri run can observe.
   #
   # Both borrow models run, and that is not belt-and-braces: an MN-437 fix in
   # this stack passed Stacked Borrows while Tree Borrows still rejected it, so a
@@ -225,8 +223,7 @@ jobs:
   #   leto layout_property_tests             proptest,     >10m <- excluded
   #
   # The two selected runs are the storage substrate and the serial reduction
-  # route; the `unsafe` code named above is what this job exists for, and the
-  # widening reaches it. The broader `leto-ops`
+  # route. The broader `leto-ops`
   # and property surfaces are excluded because they are not yet Miri-clean or
   # affordable, not because they are believed sound; the measured blockers are
   # recorded on LETO-MIRI-GATE-2026-09-10, which owns widening this scope.
