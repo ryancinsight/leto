@@ -186,10 +186,10 @@ open.
 - Next step: delete the all-`[x]` stages S0, A0 and A1, citing each landing commit from `git log --grep`.
 
 <a id="LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16"></a>
-## LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 — Pin the ln 2 crossing of `derives_vacuous` — todo
+## LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 — Pin the ln 2 crossing of `derives_vacuous` [patch] — todo
 - priority: verification; milestone: M-array-core
 - needs: none
-- basis: fba6315393561b514b59299079ff1da88637c0a2
+- basis: 274da18e1cff2d123c5dca9e05b848374bc3eb6e
 - scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`
 - Evidence: `derives_vacuous` (`coverage.rs:81-89`) compares against `LN_2`; its only caller is the `assert!` in `Coverage::record` (`:112-113`) and `assert_rows` pins only tallies. The crossing
   test (`:172`) calls `growth`, not `derives_vacuous`. Source: judge on leto#425, F1, which reports the mutant `LN_2` -> `0.0` survives; not re-run here. By reading, a threshold of 0 passes every
@@ -200,31 +200,33 @@ open.
 - Next step: add the test beside `growth_counts` in `coverage.rs`, then run both mutants against it.
 
 <a id="LETO-GROWTH-GAMMA-TILDE-SSOT-2026-11-16"></a>
-## LETO-GROWTH-GAMMA-TILDE-SSOT-2026-11-16 — Write the `γ̃` exponent once in the graded scan — todo
+## LETO-GROWTH-GAMMA-TILDE-SSOT-2026-11-16 — Write the `γ̃` exponent once in the graded scan [patch] — todo
 - priority: tightening; milestone: M-array-core
-- needs: none
-- basis: fba6315393561b514b59299079ff1da88637c0a2
+- needs: LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16
+- basis: 274da18e1cff2d123c5dca9e05b848374bc3eb6e
 - scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`, `crates/leto-ops/tests/ops/backward_error/mod.rs`
 - Evidence: `growth` (`coverage.rs:74-77`) repeats the exponent `λ√N·u + N·u²/(1−u)` that `gamma_tilde` exponentiates (`backward_error/mod.rs:119-122`); `growth_matches_gamma_tilde` (`:148`) pins
   one copy to the other within `ROUND_TRIP_ULPS = 8.0` (`:145`). Its doc names five operations, one rounding each and doubled for the libm functions; the judge sums them to 7 (F3), and the sum is 8 only
-  if `sqrt` counts as libm, which the doc does not say. `git grep -c 'sqrt() \* u' -- crates/leto-ops/tests` finds the expression at two sites. Source: judge on leto#425, F2 and F3.
+  if `sqrt` counts as libm, which the doc does not say. `git grep -c 'sqrt() \* u' -- crates/leto-ops/tests` finds the expression at two sites. Once the exponent is shared, a round-trip test checks
+  only libm's `ln_1p(exp_m1(x))`, which no leto defect can fail, so the test is deleted, not retained. The crossing test at `:172` calls `growth`. Source: judge on leto#425, F2 and F3; leto#426, F1.
 - Outcome: the exponent is written once, and no tolerance constant lacks its derivation.
-- Acceptance: `git grep -c 'sqrt() \* u' -- crates/leto-ops/tests` totals 1; `gamma_tilde` and `derives_vacuous` use that one function; `growth`, `growth_matches_gamma_tilde` and
-  `ROUND_TRIP_ULPS` are deleted, or a retained round-trip test carries a constant equal to its doc's operation count; the 624/625 crossing test and the `assert_rows` tallies pass unchanged.
-- Next step: make `gamma_tilde` exponentiate the shared exponent and read `derives_vacuous` from it, then delete the round-trip test.
+- Acceptance: `git grep -c 'sqrt() \* u' -- crates/leto-ops/tests` totals 1; `gamma_tilde` and `derives_vacuous` call that one function; `growth`, `growth_matches_gamma_tilde`, `ROUND_TRIP_ULPS` and the
+  `growth` crossing test (`:172`) are deleted; the `derives_vacuous` crossing test of LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 and the `assert_rows` tallies pass unchanged.
+- Next step: after the `needs:` item lands, make `gamma_tilde` exponentiate the shared exponent and read `derives_vacuous` from it, then delete the round-trip and `growth` crossing tests.
 
 <a id="LETO-COVERAGE-RECORD-SIGNATURE-2026-11-16"></a>
-## LETO-COVERAGE-RECORD-SIGNATURE-2026-11-16 — Type the arguments of `Coverage::record` — todo
+## LETO-COVERAGE-RECORD-SIGNATURE-2026-11-16 — Type the arguments of `Coverage::record` [patch] — todo
 - priority: tightening; milestone: M-array-core
 - needs: none
-- basis: fba6315393561b514b59299079ff1da88637c0a2
+- basis: 274da18e1cff2d123c5dca9e05b848374bc3eb6e
 - scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`, `crates/leto-ops/tests/ops/graded_scan/case.rs`
 - Evidence: `Coverage::record(precision: i32, site, asserted: bool, counts, eps: f64)` (`coverage.rs:100-107`) takes a bare `bool` and both `precision` and `eps`, which are functions of the one
   format (`T::PRECISION`, `format::epsilon::<T>()` at `format.rs:51`). Callers: `case.rs:106`, `:123`, `:181`, `:198`. Source: judge on leto#425, F5.
 - Outcome: a call names the format once and states whether the assertion ran by a two-variant type, so a precision and an epsilon of different formats cannot be passed together.
-- Acceptance: `git grep -n 'asserted: bool' -- crates/leto-ops/tests` is empty; `record` takes the format as one argument from which precision and epsilon derive; the four callers are updated;
-  the `assert_rows` tallies and `cargo nextest run -p leto-ops -E 'test(graded_scan)'` pass unchanged.
-- Next step: replace the `bool` with a two-variant enum and derive `precision` and `eps` from a `Format` type parameter.
+- Acceptance: `git grep -nE 'enum Assertion' -- crates/leto-ops/tests` finds one definition with two variants; `Coverage::record` has no `bool` parameter and every one of the four callers passes an
+  `Assertion`, so a renamed `bool` fails; `record` takes the format as one argument from which precision and epsilon derive; the `assert_rows` tallies and
+  `cargo nextest run -p leto-ops -E 'test(graded_scan)'` pass unchanged.
+- Next step: replace the `bool` with `enum Assertion { Ran, Skipped }` and derive `precision` and `eps` from a `Format` type parameter.
 
 ## Atlas in-house replacement roadmap — leto slice [arch]
 Cross-repo program to eliminate ndarray, nalgebra, rayon, tokio, std::simd, and
