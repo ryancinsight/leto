@@ -113,7 +113,7 @@ pub fn svd_factors(rows: usize, cols: usize, eps: f64) -> (f64, f64) {
 /// length `≤ k−1`; [`reflector_roundings`] covers both the `U/V` and the
 /// values-only `larfg` (`3m+4`) constructions), the instrumented sweeps
 /// and chases, and the capped 2×2 direct diagonalizations.
-fn svd_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
+pub fn svd_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
     let (big, k) = (rows.max(cols), rows.min(cols));
     let bidiagonal = f64::from_count(k) * super::reflector_roundings(big)
         + f64::from_count(k.saturating_sub(1)) * super::reflector_roundings(k.saturating_sub(1));
@@ -127,7 +127,7 @@ fn svd_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 
 /// left reflectors and `V` the `k−1` right ones (the max covers both); per
 /// sweep an entry meets two rotations plus the shift chain (`40`); per
 /// chase the pivot row meets `≤ k` rotations, others one.
-fn svd_vectors_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
+pub fn svd_vectors_roundings(rows: usize, cols: usize, sweeps: usize, chases: usize) -> f64 {
     let (big, k) = (rows.max(cols), rows.min(cols));
     let bidiagonal = f64::from_count(k) * super::reflector_roundings(big);
     let per_sweep = 2.0 * ROTATION_ROUNDINGS + 20.0;

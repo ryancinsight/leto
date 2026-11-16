@@ -41,7 +41,9 @@
 //! `Bf16`, and in `f32` for Francis at `n = 8` (`η ≈ 1.03`) and the Schur
 //! residual ([`schur_factors`]) from `n = 5`. Those cases are covered by the *a-posteriori*
 //! certificates of `a_posteriori.rs`, which bound the returned values by the
-//! residuals of the returned factors, measured.
+//! residuals of the returned factors, measured. `graded_scan/coverage.rs`
+//! counts which scan cases the factor bounds cover and derives the vacuity of
+//! the rest.
 
 mod col_piv_qr;
 mod francis;
@@ -50,9 +52,14 @@ mod svd;
 mod symmetric;
 
 pub use col_piv_qr::{col_piv_qr, col_piv_qr_pivot_slack, col_piv_qr_tilde};
-pub use francis::{francis, francis_tilde, francis_vectors, schur_factors, schur_factors_tilde};
+pub use francis::{
+    francis, francis_roundings, francis_tilde, francis_vectors, francis_vectors_roundings,
+    schur_factors, schur_factors_tilde,
+};
 pub use ql::{ql, ql_tilde, ql_vectors, ql_vectors_tilde};
-pub use svd::{svd, svd_factors, svd_factors_tilde, svd_tilde};
+pub use svd::{
+    svd, svd_factors, svd_factors_tilde, svd_roundings, svd_tilde, svd_vectors_roundings,
+};
 pub use symmetric::symmetric_certificate;
 
 use eunomia::FloatElement;

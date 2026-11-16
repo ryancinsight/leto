@@ -26,14 +26,16 @@
 //!   eigenvalue of its own `T̂` block up to the read-off's rounding. These
 //!   hold for whatever factors come back: they certify the values against
 //!   the factors, not the factors.
-//! - **A priori** (`backward_error.rs`), only where the derived bound is
-//!   informative (`η < 1`: `f64` everywhere; `f32` for the SVD, the Schur
-//!   residual to order 4 and the Francis eigenvalues to order 7; never
-//!   `F16` or `Bf16`): the measured residuals within the
-//!   derived `η_R·‖Â‖_F` and `η_O`, which certifies the factors; the
+//! - **A priori** (`backward_error.rs`), only where the derived bound —
+//!   deterministic at the iteration caps, else probabilistic at the
+//!   instrumented counts — is informative (`η < 1`): the measured residuals
+//!   within the derived `η_R·‖Â‖_F` and `η_O`, which certifies the factors; the
 //!   factor-free entry points `eigenvalues` and `singular_values` within
 //!   `(η(ε(T)) + η(ε₆₄))·‖Â‖_F` (Weyl, Bauer–Fike) of the `f64` reference;
 //!   and `singular_values` within `2η(ε(T))·‖Â‖_F` of `svd_decompose`.
+//!
+//! `coverage.rs` tallies, per format and factor site, the cases asserted and
+//! the cases not, each of which derives `η ≥ 1` from its rounding counts.
 //!
 //! The `f64` reference carries its own a-priori error `η(ε₆₄)` (always
 //! informative). Restoring a result onto `T`'s grid adds half the subnormal
@@ -48,6 +50,7 @@ use super::backward_error::{self, informative};
 use super::format::{epsilon, scale, Format};
 use super::spectral_condition::condition_by_inverse_iteration;
 use case::{frobenius, nearest, Case};
+use coverage::{Coverage, Row, Site};
 use eunomia::{Bf16, F16};
 use families::{place, unit, Family, FAMILIES};
 use leto::Array2;
@@ -57,9 +60,16 @@ use leto_ops::{
 };
 
 mod case;
+mod coverage;
 mod families;
 
-fn check_case<T: Format>(family: Family, n: usize, unit_values: &[f64], exponent: i32) {
+fn check_case<T: Format>(
+    coverage: &mut Coverage,
+    family: Family,
+    n: usize,
+    unit_values: &[f64],
+    exponent: i32,
+) {
     let (matrix, image) = place::<T>(unit_values, n, exponent);
     let label = format!(
         "{} {family:?} 2^{exponent} n = {n}",
@@ -81,7 +91,7 @@ fn check_case<T: Format>(family: Family, n: usize, unit_values: &[f64], exponent
     // Singular values.
     let reference_sigmas = singular_values(&reference.view()).unwrap();
     let reference_error = backward_error::svd(n, n, f64::EPSILON) * norm;
-    let full = case.svd_factors(&reference_sigmas, reference_error);
+    let full = case.svd_factors(coverage, &reference_sigmas, reference_error);
     let values = singular_values(&matrix.view())
         .unwrap_or_else(|error| panic!("{label}: singular_values: {error}"));
     let (sweeps, chases) = take_dbdsqr_counts();
@@ -127,7 +137,7 @@ fn check_case<T: Format>(family: Family, n: usize, unit_values: &[f64], exponent
     };
     let reference_error =
         condition.unwrap_or(0.0) * backward_error::francis(n, f64::EPSILON) * norm;
-    case.schur_factors(&reference_spectrum, condition, reference_error);
+    case.schur_factors(coverage, &reference_spectrum, condition, reference_error);
     let spectrum =
         eigenvalues(&matrix.view()).unwrap_or_else(|error| panic!("{label}: eigenvalues: {error}"));
     let steps = take_francis_steps();
@@ -154,23 +164,49 @@ fn check_case<T: Format>(family: Family, n: usize, unit_values: &[f64], exponent
     }
 }
 
-fn check_scan<T: Format>(seed: u64) {
+fn check_scan<T: Format>(coverage: &mut Coverage, seed: u64) {
     let mut rng = Xorshift64::new(seed);
     for exponent in T::MIN_EXPONENT..=(T::MAX_EXPONENT - 3) {
         for (index, family) in FAMILIES.into_iter().enumerate() {
             let n = 2 + (exponent.unsigned_abs() as usize * 3 + index) % 7;
             let unit_values = family.matrix(n, &mut rng);
-            check_case::<T>(family, n, &unit_values, exponent);
+            check_case::<T>(coverage, family, n, &unit_values, exponent);
         }
     }
 }
 
 #[test]
 fn random_families_converge_accurately_at_every_normal_magnitude() {
-    check_scan::<f64>(0x5EED_0064);
-    check_scan::<f32>(0x5EED_0032);
-    check_scan::<F16>(0x5EED_0016);
-    check_scan::<Bf16>(0x5EED_BF16);
+    let mut coverage = Coverage::default();
+    check_scan::<f64>(&mut coverage, 0x5EED_0064);
+    check_scan::<f32>(&mut coverage, 0x5EED_0032);
+    check_scan::<F16>(&mut coverage, 0x5EED_0016);
+    check_scan::<Bf16>(&mut coverage, 0x5EED_BF16);
+    coverage.assert_rows(&[
+        // Cases per site: 2043 exponents x 6 families = 12258 in f64, 251 x 6 = 1506 in f32.
+        (f64::PRECISION, Site::SvdResidual, Row::new(12258, 0)),
+        (f64::PRECISION, Site::SvdOrthogonality, Row::new(12258, 0)),
+        (f64::PRECISION, Site::SchurResidual, Row::new(12258, 0)),
+        (f64::PRECISION, Site::SchurOrthogonality, Row::new(12258, 0)),
+        (f32::PRECISION, Site::SvdResidual, Row::new(1506, 0)),
+        (f32::PRECISION, Site::SvdOrthogonality, Row::new(1506, 0)),
+        (f32::PRECISION, Site::SchurResidual, Row::new(1506, 0)),
+        (f32::PRECISION, Site::SchurOrthogonality, Row::new(1506, 0)),
+        // 27 exponents x 6 families = 162 cases per site.
+        (F16::PRECISION, Site::SvdResidual, Row::new(162, 0)),
+        (F16::PRECISION, Site::SvdOrthogonality, Row::new(162, 0)),
+        (F16::PRECISION, Site::SchurResidual, Row::new(148, 14)),
+        (F16::PRECISION, Site::SchurOrthogonality, Row::new(162, 0)),
+        // 251 exponents x 6 families = 1506 cases per site.
+        (Bf16::PRECISION, Site::SvdResidual, Row::new(0, 1506)),
+        (Bf16::PRECISION, Site::SvdOrthogonality, Row::new(0, 1506)),
+        (Bf16::PRECISION, Site::SchurResidual, Row::new(0, 1506)),
+        (
+            Bf16::PRECISION,
+            Site::SchurOrthogonality,
+            Row::new(272, 1234),
+        ),
+    ]);
 }
 
 /// Orders past where `dbdsqr`'s `maxitr·n²·unfl` floor passes the gate's
@@ -178,20 +214,32 @@ fn random_families_converge_accurately_at_every_normal_magnitude() {
 /// returning a false `Overflow` at order 48): three matrices per order,
 /// entries uniform in `[−1, 1]`, must factor and agree with the `f64`
 /// factorization of their image.
-fn check_large_orders<T: Format>(orders: &[usize], seed: u64) {
+fn check_large_orders<T: Format>(coverage: &mut Coverage, orders: &[usize], seed: u64) {
     let mut rng = Xorshift64::new(seed);
     for &n in orders {
         for _ in 0..3 {
             let unit_values: Vec<f64> = (0..n * n).map(|_| unit(&mut rng)).collect();
-            check_case::<T>(Family::RankDeficient, n, &unit_values, 0);
+            check_case::<T>(coverage, Family::RankDeficient, n, &unit_values, 0);
         }
     }
 }
 
 #[test]
 fn large_orders_factor_in_the_narrow_formats() {
-    check_large_orders::<F16>(&[16, 24, 32, 48], 0xA11CE);
-    check_large_orders::<Bf16>(&[32, 64], 0xA11CE);
+    let mut coverage = Coverage::default();
+    check_large_orders::<F16>(&mut coverage, &[16, 24, 32, 48], 0xA11CE);
+    check_large_orders::<Bf16>(&mut coverage, &[32, 64], 0xA11CE);
+    // 3 matrices per order: 12 cases in F16 (orders 16 to 48), 6 in Bf16 (32, 64).
+    coverage.assert_rows(&[
+        (F16::PRECISION, Site::SvdResidual, Row::new(0, 12)),
+        (F16::PRECISION, Site::SvdOrthogonality, Row::new(0, 12)),
+        (F16::PRECISION, Site::SchurResidual, Row::new(0, 12)),
+        (F16::PRECISION, Site::SchurOrthogonality, Row::new(0, 12)),
+        (Bf16::PRECISION, Site::SvdResidual, Row::new(0, 6)),
+        (Bf16::PRECISION, Site::SvdOrthogonality, Row::new(0, 6)),
+        (Bf16::PRECISION, Site::SchurResidual, Row::new(0, 6)),
+        (Bf16::PRECISION, Site::SchurOrthogonality, Row::new(0, 6)),
+    ]);
 }
 
 /// `diag(1, B)` with `B` a random upper-Hessenberg block of subnormal
