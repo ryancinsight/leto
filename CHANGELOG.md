@@ -2,6 +2,12 @@
 
 ## [0.50.0] - Unreleased
 
+### Fixed
+
+- [patch] Allocating `concat` and `stack` return validated empty outputs before
+  dimension-prefix arithmetic, preventing overflow panics and empty copy walks
+  for valid zero-volume arrays with large dimensions.
+
 ### Added
 
 - [minor] `concat_into` / `stack_into` — caller-owned-output duals of

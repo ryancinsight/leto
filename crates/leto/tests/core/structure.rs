@@ -413,3 +413,17 @@ fn test_pad_destroys_only_values_it_constructed() {
     drop(input);
     assert_eq!(live_counted(), 0);
 }
+
+#[test]
+fn concat_empty_output_skips_overflowing_prefix() {
+    let large = usize::try_from(isize::MAX).unwrap();
+    let shape = [large, 3, 0];
+    let input = Array::new(
+        Layout::c_contiguous(shape).unwrap(),
+        VecStorage::new(Vec::<i32>::new()),
+    )
+    .unwrap();
+    let result = concat(&[input.view()], 2).unwrap();
+    assert_eq!(result.shape(), shape);
+    assert!(result.storage().as_slice().is_empty());
+}

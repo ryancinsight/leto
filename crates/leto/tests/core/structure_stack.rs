@@ -236,3 +236,16 @@ fn stack_into_empty_output_skips_overflowing_prefix() {
         leto::ArrayViewMut::try_new(Layout::c_contiguous([n, n, 0, 1]).unwrap(), &mut []).unwrap();
     stack_into(&[a], 3, &mut output).unwrap();
 }
+
+#[test]
+fn stack_empty_output_skips_overflowing_prefix() {
+    let large = usize::try_from(isize::MAX).unwrap();
+    let input = Array::new(
+        Layout::c_contiguous([large, 3, 0]).unwrap(),
+        VecStorage::new(Vec::<i32>::new()),
+    )
+    .unwrap();
+    let result = stack::<_, 3, 4>(&[input.view()], 2).unwrap();
+    assert_eq!(result.shape(), [large, 3, 1, 0]);
+    assert!(result.storage().as_slice().is_empty());
+}
