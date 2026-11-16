@@ -40,6 +40,11 @@ where
     let out_shape = RankMarker::<N>.insert_shape(base_shape, axis, inputs.len())?;
     let out_layout = Layout::c_contiguous(out_shape)?;
     let size = out_layout.size();
+    // Empty layouts can have overflowing nonzero dimension prefixes.
+    // Shape and axis validation above still applies, but no copy walk is needed.
+    if size == 0 {
+        return Array::new(out_layout, VecStorage::new(Vec::new()));
+    }
     let mut values: Vec<std::mem::MaybeUninit<T>> = Vec::with_capacity(size);
     // SAFETY: `MaybeUninit<T>` needs no initialization, and `with_capacity`
     // allocated room for `size` elements.
