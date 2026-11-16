@@ -77,13 +77,13 @@
 ## LETO-LOW-PRECISION-FACTOR-ORACLE-2026-09-25 — Bf16 and large-order factor bounds are vacuous across the scans [patch] — todo
 - priority: verification; milestone: M-array-core
 - needs: none
-- basis: 6483eac3
+- basis: fba6315393561b514b59299079ff1da88637c0a2
 - scope: `crates/leto-ops/tests/ops/backward_error/`, `graded_scan/coverage.rs`, `symmetric_qr/fixtures.rs`, `col_piv_qr.rs`, `scale_range/pivoted_qr.rs`; the id is cited at `schur/skew_ties.rs`
 - Evidence: `gamma_tilde` is Higham and Mary, SIAM J. Sci. Comput. 41(5), 2019, Theorem 2.4, eqs. 2.1, 2.3 (MIMS EPrint 2018.33; journal pages from citing literature), `PROBABILISTIC_LAMBDA` 7. Delivered: `graded_scan/coverage.rs` tallies the SVD and Schur residual and orthogonality sites per format over the scan (F16 162 cases, Bf16 1506) and large-order bands, and requires every unasserted case to derive its bound at least 1 from its own rounding counts (`E(N_r) + 2 ln(1 + √m·expm1(E(N_v))) ≥ ln 2`, `E = ln(1 + γ̃)`). Tallies (asserted, vacuous), scan: F16 SVD (162, 0), Schur residual (148, 14), Schur orthogonality (162, 0); Bf16 SVD (0, 1506), Schur residual (0, 1506), Schur orthogonality (272, 1234); large orders: F16 (0, 12) and Bf16 (0, 6) at every site. They equal the b738a4e2 probe, which placed the 14 vacuous F16 Schur-residual cases at n = 8 and the 272 asserted Bf16 Schur-orthogonality cases at n = 2 and 3 (orders are not tabulated by the test). Not yet counted: symmetric QR (F16 6 of 7 asserted, Bf16 0 of 7) and pivoted QR (F16 2 of 2, Bf16 0 of 2), the PR 415 figures.
 - Bound: at `u = 2^-8` and `λ = 7`, `γ̃_k < 1` holds exactly for `k ≤ 624` (pinned by `coverage.rs`; the first-order `λ√k·u < ln 2` gives 642 and is necessary only); one length-3 reflector costs 24 (`γ̃_24 = 0.144`). At the current per-entry counts the Bf16 SVD and Schur-residual cases all derive vacuity.
-- Outcome: for each F16 and Bf16 factor site (SVD, Schur, symmetric QR, pivoted QR) in the scan band and the large-order band, the residual and orthogonality are asserted by an oracle informative there, or the site is recorded vacuous by its derived rounding count and covered by the a-posteriori certificates.
+- Outcome: for each F16 and Bf16 factor site (SVD, Schur, symmetric QR, pivoted QR) in the scan band and the large-order band, the residual and orthogonality are asserted by an oracle informative there, or the site is recorded vacuous by its derived rounding count and covered by the a-posteriori certificates; the original alternative is the deterministic bound at an instrumented transformation count.
 - Acceptance: the counting test of `coverage.rs` covers symmetric QR and pivoted QR as it covers SVD and Schur: per (format, site) the asserted and vacuous tallies, each vacuous case deriving its bound at least 1, the 6 of 7 F16 symmetric-QR tally included; `PROBABILISTIC_LAMBDA` stays 7 (a smaller `λ` raises the per-product failure probability `2exp(-λ²(1-u)²/2)`, a larger one widens the bound); no tolerance widening.
-- Next step: tally symmetric QR (`symmetric_qr/fixtures.rs` `backward_bound` and `assert_backward_stable`) and pivoted QR (`col_piv_qr.rs`, `scale_range/pivoted_qr.rs`) through `Coverage::record`; then instrument the Bf16 Francis and Golub-Kahan per-entry rounding counts if a vacuous site is to become informative under a tighter derived count.
+- Next step: tally symmetric QR (`symmetric_qr/fixtures.rs` `backward_bound` and `assert_backward_stable`) and pivoted QR (`col_piv_qr.rs`, `scale_range/pivoted_qr.rs`) through `Coverage::record`; then instrument the per-entry rounding count of the Bf16 Francis and Golub-Kahan paths and tabulate the orders at which `γ̃` falls below 1.
 
 <a id="LETO-OUTPUT-ZEROFILL-COST"></a>
 
@@ -184,6 +184,47 @@ open.
 - Outcome: each `[x]` line is checked against its landing commit and deleted; each `[ ]` line becomes a DoR item or is deleted with a reason (ADR 0001 operator overloading and ADR 0012 dqds already have records); the two blocks are verified against the registries and the trusted-publisher settings, then deleted or narrowed; `checklist.md` folds into items and is deleted.
 - Acceptance: `board_checklist_files` 0; no board heading without an id, status and priority; `atlas-board-lint.py` passes.
 - Next step: delete the all-`[x]` stages S0, A0 and A1, citing each landing commit from `git log --grep`.
+
+<a id="LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16"></a>
+## LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 — Pin the ln 2 crossing of `derives_vacuous` — todo
+- priority: verification; milestone: M-array-core
+- needs: none
+- basis: fba6315393561b514b59299079ff1da88637c0a2
+- scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`
+- Evidence: `derives_vacuous` (`coverage.rs:81-89`) compares against `LN_2`; its only caller is the `assert!` in `Coverage::record` (`:112-113`) and `assert_rows` pins only tallies. The crossing
+  test (`:172`) calls `growth`, not `derives_vacuous`. Source: judge on leto#425, F1, which reports the mutant `LN_2` -> `0.0` survives; not re-run here. By reading, a threshold of 0 passes every
+  unasserted case and leaves every tally unchanged.
+- Outcome: the threshold of `derives_vacuous` is observable by a test on each side of its crossing.
+- Acceptance: a test calls `derives_vacuous` at `eps = 2^-7` and asserts by value: residual site, `value` count 624 false and 625 true (`vectors` 0, `order` 1); orthogonality site, `vectors`
+  count 158 false and 159 true (`order` 1, from `2E(N) >= ln 2`, counts computed here and not yet run in the test); the test fails with `LN_2` replaced by `0.0` and by `f64::INFINITY`.
+- Next step: add the test beside `growth_counts` in `coverage.rs`, then run both mutants against it.
+
+<a id="LETO-GROWTH-GAMMA-TILDE-SSOT-2026-11-16"></a>
+## LETO-GROWTH-GAMMA-TILDE-SSOT-2026-11-16 — Write the `γ̃` exponent once in the graded scan — todo
+- priority: tightening; milestone: M-array-core
+- needs: none
+- basis: fba6315393561b514b59299079ff1da88637c0a2
+- scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`, `crates/leto-ops/tests/ops/backward_error/mod.rs`
+- Evidence: `growth` (`coverage.rs:74-77`) repeats the exponent `λ√N·u + N·u²/(1−u)` that `gamma_tilde` exponentiates (`backward_error/mod.rs:119-122`); `growth_matches_gamma_tilde` (`:148`) pins
+  one copy to the other within `ROUND_TRIP_ULPS = 8.0` (`:145`). Its doc names five operations, one rounding each and doubled for the libm functions; the judge sums them to 7 (F3), and the sum is 8 only
+  if `sqrt` counts as libm, which the doc does not say. `git grep -c 'sqrt() \* u' -- crates/leto-ops/tests` finds the expression at two sites. Source: judge on leto#425, F2 and F3.
+- Outcome: the exponent is written once, and no tolerance constant lacks its derivation.
+- Acceptance: `git grep -c 'sqrt() \* u' -- crates/leto-ops/tests` totals 1; `gamma_tilde` and `derives_vacuous` use that one function; `growth`, `growth_matches_gamma_tilde` and
+  `ROUND_TRIP_ULPS` are deleted, or a retained round-trip test carries a constant equal to its doc's operation count; the 624/625 crossing test and the `assert_rows` tallies pass unchanged.
+- Next step: make `gamma_tilde` exponentiate the shared exponent and read `derives_vacuous` from it, then delete the round-trip test.
+
+<a id="LETO-COVERAGE-RECORD-SIGNATURE-2026-11-16"></a>
+## LETO-COVERAGE-RECORD-SIGNATURE-2026-11-16 — Type the arguments of `Coverage::record` — todo
+- priority: tightening; milestone: M-array-core
+- needs: none
+- basis: fba6315393561b514b59299079ff1da88637c0a2
+- scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`, `crates/leto-ops/tests/ops/graded_scan/case.rs`
+- Evidence: `Coverage::record(precision: i32, site, asserted: bool, counts, eps: f64)` (`coverage.rs:100-107`) takes a bare `bool` and both `precision` and `eps`, which are functions of the one
+  format (`T::PRECISION`, `format::epsilon::<T>()` at `format.rs:51`). Callers: `case.rs:106`, `:123`, `:181`, `:198`. Source: judge on leto#425, F5.
+- Outcome: a call names the format once and states whether the assertion ran by a two-variant type, so a precision and an epsilon of different formats cannot be passed together.
+- Acceptance: `git grep -n 'asserted: bool' -- crates/leto-ops/tests` is empty; `record` takes the format as one argument from which precision and epsilon derive; the four callers are updated;
+  the `assert_rows` tallies and `cargo nextest run -p leto-ops -E 'test(graded_scan)'` pass unchanged.
+- Next step: replace the `bool` with a two-variant enum and derive `precision` and `eps` from a `Format` type parameter.
 
 ## Atlas in-house replacement roadmap — leto slice [arch]
 Cross-repo program to eliminate ndarray, nalgebra, rayon, tokio, std::simd, and
