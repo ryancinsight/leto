@@ -91,11 +91,11 @@
 - priority: tightening; milestone: M-array-core
 - needs: none
 - basis: bd349c5e
-- scope: `crates/leto-ops/benches/`, `embedding_gather`, `reduce_axis`, `topk_axis`, `triangular`, `ray_line_integrals`
-- Evidence: [ADR 0039](docs/adr/0039-zero-initialized-output-storage.md) replaced `VecStorage::uninit` with zero-filled output storage, which adds one store pass over each output. A wall-clock A/B under peer load was too noisy to establish or exclude a regression.
+- scope: `crates/leto-ops/benches/output_allocation.rs`, `embedding_gather`, `reduce_axis`, `topk_axis`, `triangular`, `ray_line_integrals`
+- Evidence: [ADR 0039](docs/adr/0039-zero-initialized-output-storage.md) replaced `VecStorage::uninit` with zero-filled output storage. Its A/B wall-clock run under 29-100% peer load is discarded as invalid, since the spread inside one binary exceeds any effect, so the cost is neither established nor excluded.
 - Outcome: per operation, the B/A median ratio with a confidence interval from isolated cores or instruction and cache counters, recorded in ADR 0039. A ratio above the noise bound on a hot path opens the typed `MaybeUninit` route (`refs/pull/360/head`) as sliced items.
 - Acceptance: ADR 0039 carries the measured ratio and interval for each of the five operations at a recorded host load.
-- Next step: add an `output_allocation` Criterion bench over the five operations and run it on a quiet host against `bd349c5e`.
+- Next step: run `cargo bench -p leto-ops --bench output_allocation` on a quiet host against `bd349c5e`.
 
 <a id="LETO-MIRI-GATE-2026-09-10"></a>
 

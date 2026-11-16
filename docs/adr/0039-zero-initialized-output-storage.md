@@ -43,7 +43,7 @@ also calls uninitialized data in an integer-typed variable undefined behavior
    `F16`, `Bf16` and complex elements take the element-wise fill.
 3. No `set_len` runs over a `Vec<T>` whose new elements are unwritten.
    `concat` and `stack` keep their `Vec<MaybeUninit<T>>` assembly, where
-   `set_len` is vacuous.
+   `set_len` is vacuous, and now carry `SAFETY` proofs for their writes.
 
 ## Alternatives rejected
 
@@ -70,9 +70,17 @@ defaults to `alloc` followed by `write_bytes`
 the pages are touched is an unmeasured hypothesis for allocators that
 override it.
 
-The cost is not yet measured: a wall-clock A/B run under peer load was
-too noisy to establish or exclude a regression, and `LETO-OUTPUT-ZEROFILL-COST`
-holds the isolated-core A/B against `bd349c5e`.
+Measurement (`crates/leto-ops/benches/output_allocation.rs`, Criterion, 30
+samples, release profile, Intel Core Ultra 9 285K, Windows 11, rustc 1.97.0).
+A is origin/main `bd349c5e` (`uninit`, no fill; its kernels are the pre-PR 419
+kernels, which `d16e3b2` introduced for `reduce_axis` alone), B is this
+change. Interleaved A/B rounds over the five operations ran at a host CPU
+load of 29-100% from peer agents. The spread inside one binary (`triangular`
+A 0.96-2.17 ms) exceeds any effect, so the wall-clock instrument is invalid
+for a cost claim under this load and its ratios are discarded: no regression
+is established and none is excluded. The expected cost is
+bounded by one store pass over the output (4 MiB for `triangular` and
+`embedding_gather`); isolated-core confirmation is `LETO-OUTPUT-ZEROFILL-COST`.
 
 Overturning evidence: a regression on a hot path that
 `LETO-OUTPUT-ZEROFILL-COST` measures beyond its derived noise bound. The

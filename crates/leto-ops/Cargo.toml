@@ -59,6 +59,12 @@ harness = false
 name = "layout_copy"
 harness = false
 
+# Output-allocation cost of the allocating kernels, the instrument for the
+# zero-filled output storage (ADR 0039).
+[[bench]]
+name = "output_allocation"
+harness = false
+
 # ATLAS-ARCH-008 sub-slice: L-BFGS flat-ring vs jagged-baseline direction.
 # Compares the converted CSR-shaped ring buffer (`LbfgsMemory`) against an
 # inline pre-conversion `Vec<Vec<f64>>` reference over {8, 32} memory ×
