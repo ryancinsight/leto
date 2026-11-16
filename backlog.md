@@ -228,6 +228,20 @@ open.
   `cargo nextest run -p leto-ops -E 'test(graded_scan)'` pass unchanged.
 - Next step: replace the `bool` with `enum Assertion { Ran, Skipped }` and derive `precision` and `eps` from a `Format` type parameter.
 
+<a id="LETO-COMPLEX-MINMAX-SEED"></a>
+## LETO-COMPLEX-MINMAX-SEED — Complex min and max folds return the seed, never an element [patch] — todo
+- priority: correctness; milestone: M-array-core
+- needs: an Eunomia revision containing ryancinsight/eunomia#217 (Complex `MIN_VALUE`/`MAX_VALUE` identity; open when filed)
+- basis: 6a1f6b27699fbadd0c936b5d8cc9461efdca0948
+- scope: `crates/leto-ops/src/domain/scalar/contract.rs` (`min_slice` `:205`, `max_slice` `:219`), `crates/leto-ops/src/application/reduction/strategies.rs` (`MinAxis::initial` `:144`, `MaxAxis::initial` `:173`)
+- Evidence: by reading at 6a1f6b27, not run. `min_slice`/`max_slice` fold with `x < acc` / `x > acc` from `MAX_VALUE`/`MIN_VALUE` (`contract.rs:208`, `:222`); `MinAxis`/`MaxAxis` seed `initial` from the same constants and
+  fold with `<`/`>` (`strategies.rs:144-155`, `:173-184`). `impl<T> Scalar for Complex<T>` (`impls.rs:313`) has an empty body, so Complex takes these defaults. `Complex`'s `PartialOrd::partial_cmp` returns `None`
+  for every pair (`crates/eunomia/src/types/complex/ops.rs:256` at the revision `Cargo.lock:420` resolves), so every `<`/`>` is false. Any non-empty Complex input to `min_axis`, `max_axis`, `min`, `max`
+  (`convenience.rs:79-113`) therefore returns the seed, not an element. The marker docs (`strategies.rs:36-51`) state the NaN contract and are silent on Complex.
+- Outcome: Complex min/max folds return an element of the input, not the seed.
+- Acceptance: a test over a Complex slice and a Complex axis whose minimum and maximum are elements, asserted by value; it fails at the basis, where both return the seed.
+- Next step: route Complex through Eunomia's `min_scalar`/`max_scalar` (`traits/numeric.rs:87`, `:116`), whose `MIN_VALUE`/`MAX_VALUE` identity the `needs:` PR corrects, or exclude Complex from these operations; the second replaces the test with a `compile_fail` doctest.
+
 ## Atlas in-house replacement roadmap — leto slice [arch]
 Cross-repo program to eliminate ndarray, nalgebra, rayon, tokio, std::simd, and
 burn from the Atlas stack using monomorphized zero-cost in-house crates. SSOT
