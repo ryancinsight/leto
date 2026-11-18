@@ -132,6 +132,53 @@ impl<T: Scalar> CooMatrix<T> {
         self.values.is_empty()
     }
 
+    /// Sort by `(major, minor)`, sum each equal pair, drop exact zeros, and
+    /// return `(values, minor_indices, major_ptr)` for the requested orientation.
+    /// `to_csr` passes `(rows, cols, nrows)`; `to_csc` passes `(cols, rows, ncols)`.
+    fn compress(
+        &self,
+        major: &[usize],
+        minor: &[usize],
+        n_major: usize,
+    ) -> (Vec<T>, Vec<usize>, Vec<usize>) {
+        let nnz_in = self.values.len();
+        let mut order: Vec<usize> = (0..nnz_in).collect();
+        order.sort_unstable_by_key(|&p| (major[p], minor[p]));
+
+        let mut values: Vec<T> = Vec::with_capacity(nnz_in);
+        let mut minors: Vec<usize> = Vec::with_capacity(nnz_in);
+        let mut major_ptr = vec![0usize; n_major + 1];
+
+        let mut k = 0;
+        while k < nnz_in {
+            let p = order[k];
+            let (i, j) = (major[p], minor[p]);
+            let mut sum = self.values[p];
+            let mut k2 = k + 1;
+            while k2 < nnz_in {
+                let q = order[k2];
+                if major[q] == i && minor[q] == j {
+                    sum = sum.add(self.values[q]);
+                    k2 += 1;
+                } else {
+                    break;
+                }
+            }
+            if sum != T::ZERO {
+                values.push(sum);
+                minors.push(j);
+                major_ptr[i + 1] += 1;
+            }
+            k = k2;
+        }
+        for i in 0..n_major {
+            major_ptr[i + 1] += major_ptr[i];
+        }
+        values.shrink_to_fit();
+        minors.shrink_to_fit();
+        (values, minors, major_ptr)
+    }
+
     /// Compress to CSR, summing duplicate `(i, j)` entries and dropping exact
     /// zeros (`O(nnz log nnz)`; see the [module theorem](crate::application::sparse)).
     ///
@@ -142,42 +189,8 @@ impl<T: Scalar> CooMatrix<T> {
     /// throughout and are not reused for the output.
     #[must_use = "to_csr returns the compressed matrix"]
     pub fn to_csr(&self) -> CsrMatrix<T> {
-        let nnz_in = self.values.len();
-        let mut order: Vec<usize> = (0..nnz_in).collect();
-        order.sort_unstable_by_key(|&p| (self.row_indices[p], self.col_indices[p]));
-
-        let mut values: Vec<T> = Vec::with_capacity(nnz_in);
-        let mut col_indices: Vec<usize> = Vec::with_capacity(nnz_in);
-        let mut row_ptr = vec![0usize; self.nrows + 1];
-
-        let mut k = 0;
-        while k < nnz_in {
-            let p = order[k];
-            let (i, j) = (self.row_indices[p], self.col_indices[p]);
-            let mut sum = self.values[p];
-            let mut k2 = k + 1;
-            while k2 < nnz_in {
-                let q = order[k2];
-                if self.row_indices[q] == i && self.col_indices[q] == j {
-                    sum = sum.add(self.values[q]);
-                    k2 += 1;
-                } else {
-                    break;
-                }
-            }
-            if sum != T::ZERO {
-                values.push(sum);
-                col_indices.push(j);
-                row_ptr[i + 1] += 1;
-            }
-            k = k2;
-        }
-        for i in 0..self.nrows {
-            row_ptr[i + 1] += row_ptr[i];
-        }
-        values.shrink_to_fit();
-        col_indices.shrink_to_fit();
-
+        let (values, col_indices, row_ptr) =
+            self.compress(&self.row_indices, &self.col_indices, self.nrows);
         CsrMatrix::from_parts(values, col_indices, row_ptr, self.nrows, self.ncols)
             .expect("invariant: COO→CSR emits sorted, deduplicated, in-range entries")
     }
@@ -186,40 +199,8 @@ impl<T: Scalar> CooMatrix<T> {
     /// zeros (`O(nnz log nnz)`).
     #[must_use = "to_csc returns the column-compressed matrix"]
     pub fn to_csc(&self) -> CscMatrix<T> {
-        let nnz_in = self.values.len();
-        let mut order: Vec<usize> = (0..nnz_in).collect();
-        order.sort_unstable_by_key(|&p| (self.col_indices[p], self.row_indices[p]));
-
-        let mut values: Vec<T> = Vec::with_capacity(nnz_in);
-        let mut row_indices: Vec<usize> = Vec::with_capacity(nnz_in);
-        let mut col_ptr = vec![0usize; self.ncols + 1];
-
-        let mut k = 0;
-        while k < nnz_in {
-            let p = order[k];
-            let (i, j) = (self.row_indices[p], self.col_indices[p]);
-            let mut sum = self.values[p];
-            let mut k2 = k + 1;
-            while k2 < nnz_in {
-                let q = order[k2];
-                if self.row_indices[q] == i && self.col_indices[q] == j {
-                    sum = sum.add(self.values[q]);
-                    k2 += 1;
-                } else {
-                    break;
-                }
-            }
-            if sum != T::ZERO {
-                values.push(sum);
-                row_indices.push(i);
-                col_ptr[j + 1] += 1;
-            }
-            k = k2;
-        }
-        for j in 0..self.ncols {
-            col_ptr[j + 1] += col_ptr[j];
-        }
-
+        let (values, row_indices, col_ptr) =
+            self.compress(&self.col_indices, &self.row_indices, self.ncols);
         CscMatrix::from_parts(values, row_indices, col_ptr, self.nrows, self.ncols)
             .expect("invariant: COO→CSC emits sorted, deduplicated, in-range entries")
     }
@@ -253,6 +234,29 @@ mod tests {
         assert_eq!(csc.nnz(), 3);
         // CSC should match dense round-trip.
         assert_eq!(csc.to_dense(), coo.to_dense());
+    }
+
+    #[test]
+    fn coo_to_csc_sorts_and_sums_duplicates() {
+        // Exact CSC parts, pinned so the CSR/CSC compressors cannot diverge.
+        // (0,1) twice -> 2.0; entries arrive out of column order; (2,3) cancels.
+        let mut coo = CooMatrix::<f64>::new(3, 4);
+        for &(i, j, v) in &[
+            (2, 3, 1.5),
+            (0, 1, 1.5),
+            (1, 0, -3.0),
+            (0, 1, 0.5),
+            (2, 3, -1.5),
+            (1, 0, 1.0),
+        ] {
+            coo.push(i, j, v);
+        }
+        let csc = coo.to_csc();
+        let (values, rows, col_ptr) = csc.as_parts();
+        // column 0: row 1 -> -2.0; column 1: row 0 -> 2.0; columns 2,3 empty.
+        assert_eq!(values, &[-2.0, 2.0]);
+        assert_eq!(rows, &[1, 0]);
+        assert_eq!(col_ptr, &[0, 1, 2, 2, 2]);
     }
 
     #[test]
