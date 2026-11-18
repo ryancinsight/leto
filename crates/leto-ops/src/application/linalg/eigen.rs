@@ -123,15 +123,7 @@ pub fn symmetric_eigenvalues_jacobi_with_tolerance<T: RealScalar>(
     let mut target = NoEigenvectors;
 
     diagonalize(&mut a, n, tolerance, &mut target)?;
-    let mut diagonal: Vec<T> = (0..n).map(|i| a[i * n + i]).collect();
-    scaling::restore(
-        &mut diagonal,
-        exponent,
-        "Jacobi eigensolver: an eigenvalue exceeds the scalar range",
-    )?;
-    for (i, value) in diagonal.into_iter().enumerate() {
-        a[i * n + i] = value;
-    }
+    restore_diagonal(&mut a, n, exponent)?;
     Ok(sort_diagonal(&a, n))
 }
 
@@ -208,15 +200,7 @@ pub fn symmetric_eigen_jacobi_with_tolerance<T: RealScalar>(
     let mut v = identity::<T>(n);
     let mut target = EigenvectorWorkspace { values: &mut v };
     diagonalize(&mut a, n, tolerance, &mut target)?;
-    let mut diagonal: Vec<T> = (0..n).map(|i| a[i * n + i]).collect();
-    scaling::restore(
-        &mut diagonal,
-        exponent,
-        "Jacobi eigensolver: an eigenvalue exceeds the scalar range",
-    )?;
-    for (i, value) in diagonal.into_iter().enumerate() {
-        a[i * n + i] = value;
-    }
+    restore_diagonal(&mut a, n, exponent)?;
 
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&lhs, &rhs| {
@@ -281,6 +265,23 @@ fn validate_symmetric_input<T: RealScalar>(a: &[T], n: usize, tolerance: T) -> R
 /// `diag(1e300, 1e-300)` or `f32` `diag(1e38, 1e-38)` has `r = 0` and is
 /// factored unscaled, exactly. The lower end (`smlnum`) only ever scales up,
 /// which is exact.
+/// Rescale the converged diagonal of `a` by `2^exponent` back into `T`'s
+/// range, returning a typed overflow error if any result is unrepresentable.
+/// Shared by the eigenvalues-only and full-decomposition Jacobi paths so the
+/// two cannot drift apart.
+fn restore_diagonal<T: RealScalar>(a: &mut [T], n: usize, exponent: i32) -> Result<()> {
+    let mut diagonal: Vec<T> = (0..n).map(|i| a[i * n + i]).collect();
+    scaling::restore(
+        &mut diagonal,
+        exponent,
+        "Jacobi eigensolver: an eigenvalue exceeds the scalar range",
+    )?;
+    for (i, value) in diagonal.into_iter().enumerate() {
+        a[i * n + i] = value;
+    }
+    Ok(())
+}
+
 fn jacobi_gate_exponent<T: RealScalar>(a: &[T]) -> Result<i32> {
     Ok(scaling::gate_exponent(a, 1, |values, largest| {
         GateBound::factor(1 + scaling::norm_ratio_log2(values, largest))
