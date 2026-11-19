@@ -1,10 +1,15 @@
 # Leto Development Checklist
 
-Target version: leto/leto-ops 0.48.0 (assembly and AMD candidate; existing release prerequisites retained).
+Target version: leto and leto-ops 0.51.0.
+
+## LETO-REGISTRY-SCALAR-PROVIDER [major]
+
+- [x] Record the public provider migration in [ADR 0040](docs/adr/0040-registry-scalar-provider.md).
+- [x] Advance both Rust crate manifests and the local dependency edges together.
+- [ ] Verify the exact candidate against published Hermes, the required hosted checks, and both Rust packages.
+- [ ] Publish Leto first, then Leto Ops. Verify both archives and a fresh typed consumer.
 
 Published Python repair receipt: leto-python 0.46.1 (2026-10-16).
-Current Rust candidate: 0.47.0; publication is conditionally authorized after
-final provider, review, CI and package-verification gates.
 
 ## LETO-HERMITIAN-QR-CONVERGENCE [patch]
 

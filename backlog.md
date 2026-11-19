@@ -1,3 +1,9 @@
+<a id="LETO-REGISTRY-SCALAR-PROVIDER"></a>
+## LETO-REGISTRY-SCALAR-PROVIDER [major]
+- status: todo; priority: correctness; milestone: M-array-core; needs: published Hermes 0.10.0.
+- outcome: Leto and Leto Ops 0.51.0 resolve one published scalar identity with Aequitas.
+- acceptance: [ADR 0040](docs/adr/0040-registry-scalar-provider.md) and the 0.51.0 checklist.
+
 <a id="LETO-DIGAMMA"></a>
 ## LETO-DIGAMMA [minor]
 - status: blocked; priority: verification; milestone: M-array-core; needs: none; integrator: pi:01a1885f-3f38-73dd-a2f0-7e3fde63b66a

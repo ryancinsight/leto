@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.51.0] - Unreleased
+
+### Breaking
+
+- [major] Leto and Leto Ops require the published Aequitas 0.4 and Eunomia
+  0.12.1 provider lines. The two crates share those Rust types with Hermes
+  0.10. Update callers that exchange typed quantities, scalar wrappers, or
+  kernel values across these crates together. See [ADR 0040](docs/adr/0040-registry-scalar-provider.md).
+
 ## [0.50.0] - Unreleased
 
 ### Fixed
