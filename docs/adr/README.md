@@ -47,3 +47,4 @@
 | [0037](0037-release-scope-1-0.md) | Leto release scope for 1.0 | Accepted |
 | [0038](0038-csr-index-width.md) | Sparse formats store indices as a width-parameterized unsigned integer | Proposed |
 | [0039](0039-zero-initialized-output-storage.md) | Allocating kernels zero-initialize their output storage | Proposed |
+| [0040](0040-registry-scalar-provider.md) | Share the published scalar provider in Leto | Accepted |
