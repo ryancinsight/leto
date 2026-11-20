@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.52.0] - Unreleased
+
+### Breaking
+
+- [major] Stencil spacing accepts `Length` from Aequitas 0.5.0. Use the
+  same Aequitas identity throughout the consumer graph. Spacing remains
+  canonical metres and the numerical stencil is unchanged.
+
 ## [0.51.0] - Unreleased
 
 ### Breaking

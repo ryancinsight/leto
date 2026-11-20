@@ -1,6 +1,12 @@
 # Leto Development Checklist
 
-Target version: leto and leto-ops 0.51.0.
+Target version: leto and leto-ops 0.52.0.
+
+## LETO-AEQUITAS-050 [major]
+
+- [x] Advance public typed spacing and both Rust crate manifests together.
+- [ ] Verify the exact candidate with native, Miri, Python and package gates.
+- [ ] Verify publish authorization and both archives before consumer adoption.
 
 ## LETO-REGISTRY-SCALAR-PROVIDER [major]
 

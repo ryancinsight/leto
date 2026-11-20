@@ -35,3 +35,11 @@ candidate. Verify Hermes before publishing Leto, and Leto before
 publishing Leto Ops. A fresh registry consumer must exchange a typed
 quantity and use Leto Ops to compute values with the shared scalar
 provider.
+
+
+## Aequitas 0.5 adoption
+
+The 0.52.0 candidate advances the public stencil spacing type to Aequitas
+0.5.0. A consumer can pass a length directly when its graph resolves that
+Aequitas identity. The native stencil and Eunomia 0.12.1 contract stay
+the same. The bump guard requires a new release line for this change.

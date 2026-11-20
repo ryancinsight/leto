@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.51.0"
+version = "0.52.0"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Ryan Clanton <ryanclanton@outlook.com>"]
@@ -17,8 +17,8 @@ readme = "README.md"
 
 [workspace.dependencies]
 # â”€â”€ Local Workspace Crates â”€â”€
-leto = { version = "0.51.0", path = "crates/leto" }
-leto-ops = { version = "0.51.0", path = "crates/leto-ops" }
+leto = { version = "0.52.0", path = "crates/leto" }
+leto-ops = { version = "0.52.0", path = "crates/leto-ops" }
 
 # â”€â”€ Systems and Parallelization â”€â”€
 # Canonical provider URLs preserve one nominal type identity (ADR 0029).
@@ -29,7 +29,7 @@ moirai = { package = "moirai-runtime", version = "0.12.0", git = "https://github
 # Hermes provides the fused dual-output `axpy_pair` kernel behind `axpy_pair_slice`.
 hermes-simd = { version = "0.10.0", git = "https://github.com/ryancinsight/hermes.git" }
 eunomia = { package = "eunomia", version = "0.12.1", default-features = false }
-aequitas = { package = "aequitas", version = "0.4.0", default-features = false }
+aequitas = { package = "aequitas", version = "0.5.0", default-features = false }
 themis = { package = "themis-topology", version = "0.11.1", git = "https://github.com/ryancinsight/themis", default-features = false }
 
 # â”€â”€ Dev-only compatibility deps were removed per LETO-NDARRAY-BOUNDARY-1 â”€â”€
