@@ -1,5 +1,14 @@
 # Leto Development Checklist
 
+## Stable release checklist
+
+Basis `de7c3965e53b`, representative manifest `leto 0.52.0`. Target 1.0.0. [Backlog item](backlog.md#leto-stable-qualification).
+
+- [ ] [arch] Review the proposed CSR, CSC and COO storage decision with leto-ops and Prometheus. Inventory constructor, duplicate-entry, borrowed-view, conversion and error contracts before moving either family.
+- [ ] [major] After sign-off, migrate storage, kernels, tests and direct consumers together. Compare dense reconstructions and sparse products, including empty rows, duplicate input and malformed offsets. Keep index-width selection under ADR 0038.
+- [ ] [patch] Re-run array and linalg milestone exits, the registry scalar identity check and the owned NumPy-compatible reference cases. Record measured performance against the former kernels.
+- [ ] [patch] Run the [release scope](docs/adr/0037-release-scope-1-0.md) exits and attach reviewed, exact-revision evidence for this member’s [Atlas qualification criteria](https://github.com/ryancinsight/atlas/blob/17b0124a7548ad81e817284afc5cb115c1d1bc78/docs/parity/repositories.json).
+
 Target version: leto and leto-ops 0.52.0.
 
 ## LETO-AEQUITAS-050 [major]

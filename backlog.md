@@ -1,3 +1,9 @@
+<a id="leto-stable-qualification"></a>
+## LETO-STABLE-QUALIFICATION — leto stable-release qualification [patch] — todo
+- priority: verification; milestone: M-array-core; basis: `de7c3965e53b`.
+- Outcome: Settle ownership of the duplicate sparse matrix representations. Follow the [release scope](docs/adr/0037-release-scope-1-0.md) and [milestone exits](backlog/milestones.md). See the [proposed decision](docs/adr/0041-canonical-sparse-storage.md).
+- Acceptance and sequence: [stable-release checklist](checklist.md#stable-release-checklist).
+
 <a id="LETO-REGISTRY-SCALAR-PROVIDER"></a>
 ## LETO-REGISTRY-SCALAR-PROVIDER [major]
 - status: todo; priority: correctness; milestone: M-array-core; needs: published Hermes 0.10.0.
@@ -40,7 +46,7 @@
 - Evidence: at d2206475 `git grep -l -E '\b(CsrArray|CscArray|CooArray)\b'` over `*.rs` finds 7 files, all in `leto`, and one consumer file (prometheus `src/stoichiometry.rs`); `\b(CsrMatrix|CscMatrix|CooMatrix)\b` finds 42, all in `leto-ops`. `leto-ops` depends on `leto`. ADR 0028 (Accepted) governs the `*Array` family and ADR 0034 puts narrow CPU CSR kernels in Leto, so the survivor is a decision, not a default.
 - Outcome: one sparse format family. An ADR (new, or a revision of ADR 0028) records the survivor and why; the retired structs, their tests ported, every in-repo caller and the `*Array` consumer migrate in the same slice, with no alias or adapter.
 - Acceptance: `git grep -n -E 'pub struct (Csr|Csc|Coo)(Array|Matrix)\b' -- crates` lists one family; each retired test case runs against the survivor; prometheus builds against it.
-- Next step: draft the ADR comparing dependency direction, API and test parity, and the one consumer.
+- Next step: review [proposed ADR 0041](docs/adr/0041-canonical-sparse-storage.md) against both families’ APIs, test suites and the Prometheus consumer before starting migration.
 
 <a id="LETO-CSR-INDEX-WIDTH-2026-09-27"></a>
 
