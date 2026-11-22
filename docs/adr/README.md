@@ -48,3 +48,4 @@
 | [0038](0038-csr-index-width.md) | Sparse formats store indices as a width-parameterized unsigned integer | Proposed |
 | [0039](0039-zero-initialized-output-storage.md) | Allocating kernels zero-initialize their output storage | Proposed |
 | [0040](0040-registry-scalar-provider.md) | Share the published scalar provider in Leto | Accepted |
+| [0041](0041-canonical-sparse-storage.md) | Own compressed sparse storage in Leto and numerical kernels in Leto Ops | Proposed |
