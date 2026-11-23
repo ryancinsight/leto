@@ -1,3 +1,12 @@
+
+## Incremental release baseline
+
+Reviewed [leto 0.52.0](crates/leto/Cargo.toml) at [e929b7f8cb3e](https://github.com/ryancinsight/leto/tree/e929b7f8cb3eec824fa22a3b3e04f04a5d08cbe4). The exact version appears in the [registry](https://crates.io/crates/leto/0.52.0).
+
+The next [patch] checkpoint uses [csr](crates/leto-ops/tests/ops/sparse/csr.rs). [Target version and acceptance criteria](checklist.md#stable-release-checklist).
+
+The Atlas board check reports 2 existing schema findings, including `LETO-CRATES-METADATA-1`. Verify each item against its delivery evidence, archive completed work and rerun the board check before the freeze.
+
 ## 2026-11-16 Graded-scan vacuity derivation is sufficient-only [patch]
 
 - risk: `derives_vacuous` (`crates/leto-ops/tests/ops/graded_scan/coverage.rs:81-89`) drops the deflation-floor factors, so `Coverage::record` can panic on an unasserted case whose full derived bound is `>= 1`; it fails safe, and a change to the rounding counts can trigger it.

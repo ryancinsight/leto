@@ -2,12 +2,14 @@
 
 ## Stable release checklist
 
-Basis `de7c3965e53b`, representative manifest `leto 0.52.0`. Target 1.0.0. [Backlog item](backlog.md#leto-stable-qualification).
+Basis `e929b7f8cb3e`, representative manifest `leto 0.52.0`. Target 1.0.0. [Backlog item](backlog.md#leto-stable-qualification).
 
 - [ ] [arch] Review the proposed CSR, CSC and COO storage decision with leto-ops and Prometheus. Inventory constructor, duplicate-entry, borrowed-view, conversion and error contracts before moving either family.
 - [ ] [major] After sign-off, migrate storage, kernels, tests and direct consumers together. Compare dense reconstructions and sparse products, including empty rows, duplicate input and malformed offsets. Keep index-width selection under ADR 0038.
 - [ ] [patch] Re-run array and linalg milestone exits, the registry scalar identity check and the owned NumPy-compatible reference cases. Record measured performance against the former kernels.
-- [ ] [patch] Run the [release scope](docs/adr/0037-release-scope-1-0.md) exits and attach reviewed, exact-revision evidence for this member’s [Atlas qualification criteria](https://github.com/ryancinsight/atlas/blob/17b0124a7548ad81e817284afc5cb115c1d1bc78/docs/parity/repositories.json).
+- [ ] [patch] **0.52.1.** Compare sparse construction, iteration and dense reconstruction for equivalent coordinates. Check duplicate-entry handling and invalid offsets at the current public boundaries before choosing the owner. [Source and baseline](gap_audit.md#incremental-release-baseline).
+- [ ] [arch] **0.53.0 proposed after sparse-storage review.** Once the storage decision is accepted, migrate the ops and Prometheus callers together. Compare CSR, CSC and COO conversions and verify borrowed views preserve layout and valid lifetimes.
+- [ ] [major] **1.0.0-beta.1 → 1.0.0-rc.1 → 1.0.0.** Freeze the supported surface at beta. A packaged array consumer performs a sparse product with the agreed duplicate policy and equal dense-reference values. Repeat the applicable exits on the exact RC before stable promotion. Run the [release scope](docs/adr/0037-release-scope-1-0.md) exits and attach reviewed, exact-revision evidence for this member’s [Atlas qualification criteria](https://github.com/ryancinsight/atlas/blob/17b0124a7548ad81e817284afc5cb115c1d1bc78/docs/parity/repositories.json).
 
 Target version: leto and leto-ops 0.52.0.
 

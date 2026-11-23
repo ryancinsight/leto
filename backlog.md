@@ -1,7 +1,7 @@
 <a id="leto-stable-qualification"></a>
 ## LETO-STABLE-QUALIFICATION — leto stable-release qualification [patch] — todo
-- priority: verification; milestone: M-array-core; basis: `de7c3965e53b`.
-- Outcome: Settle ownership of the duplicate sparse matrix representations. Follow the [release scope](docs/adr/0037-release-scope-1-0.md) and [milestone exits](backlog/milestones.md). See the [proposed decision](docs/adr/0041-canonical-sparse-storage.md).
+- priority: verification; milestone: M-array-core; basis: `e929b7f8cb3e`.
+- Outcome: Settle ownership of the duplicate sparse matrix representations. Follow the [release scope](docs/adr/0037-release-scope-1-0.md) and [milestone exits](backlog/milestones.md). See the [proposed decision](docs/adr/0041-canonical-sparse-storage.md). Planning targets for `leto` are 0.52.1, then 0.53.0 proposed after sparse-storage review, then 1.0.0. Verification alone can advance the current version.
 - Acceptance and sequence: [stable-release checklist](checklist.md#stable-release-checklist).
 
 <a id="LETO-REGISTRY-SCALAR-PROVIDER"></a>
