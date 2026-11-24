@@ -35,18 +35,25 @@ pub struct MeanAxis;
 
 /// Minimum axis-reduction marker.
 ///
-/// NaN lanes are ignored on every route: the fold starts from
-/// `T::MAX_VALUE` and only a value that compares below the accumulator
-/// replaces it, and the contiguous route inherits the same contract from
-/// [`Scalar::min_slice`]. An all-NaN axis therefore reduces to
-/// `T::MAX_VALUE`, the identity.
+/// Folds with [`min_scalar`](eunomia::NumericElement::min_scalar) from
+/// `T::MAX_VALUE`, and the contiguous route inherits the same contract from
+/// [`Scalar::min_slice`], so the result is an element of the axis whenever it
+/// holds no NaN lane.
+///
+/// NaN lanes are ignored on every route: a real NaN never replaces the
+/// accumulator, and an all-NaN axis reduces to `T::MAX_VALUE`, the identity.
+/// A `Complex` orders by real part, then imaginary part: an element whose real
+/// part is NaN is ignored, and one with a NaN imaginary part replaces the
+/// accumulator only through a strictly smaller real part.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MinAxis;
 
 /// Maximum axis-reduction marker.
 ///
-/// The mirror of [`MinAxis`]: NaN lanes are ignored, the fold starts from
-/// `T::MIN_VALUE`, and an all-NaN axis reduces to that identity.
+/// The mirror of [`MinAxis`] under
+/// [`max_scalar`](eunomia::NumericElement::max_scalar): NaN lanes are ignored,
+/// the fold starts from `T::MIN_VALUE`, and an all-NaN axis reduces to that
+/// identity. A `Complex` orders by real part, then imaginary part.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MaxAxis;
 
@@ -147,11 +154,7 @@ impl<T: Scalar> AxisReduction<T> for MinAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value < acc {
-            value
-        } else {
-            acc
-        }
+        value.min_scalar(acc)
     }
 
     #[inline(always)]
@@ -176,11 +179,7 @@ impl<T: Scalar> AxisReduction<T> for MaxAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value > acc {
-            value
-        } else {
-            acc
-        }
+        value.max_scalar(acc)
     }
 
     #[inline(always)]
