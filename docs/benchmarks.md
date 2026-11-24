@@ -311,6 +311,11 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   dense row-blocks through it regressed the 64x64/128x128/256x256 Leto-only
   oracle rows to 21.695 µs / 126.73 µs / 1.8273 ms in the local themis-0.9
   stack. Leto retains the measured 128-row gate only.
+- **Axis-reduction output-index decomposition (0.13.1 closure)**: left
+  unchanged. `reduce_axis_into` computes `index_from_flat(flat_idx, &out_shape)`
+  once per output element (`crates/leto-ops/src/application/reduction/axis.rs:168`);
+  the cost is amortized over the axis length (1/`axis_len` per reduced element),
+  so the row-walk policy does not route it through `RowMajorTraversal`.
 - Constraint (satisfied since 0.16.0): matmul SIMD work needs a Hermes
   scalar-AXPY / fused row-update provider, and Leto must not emulate one with
   temporary allocation. `Scalar::axpy_slice` routes through `hermes_simd::axpy`.

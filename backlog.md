@@ -191,9 +191,8 @@ open.
 - priority: verification; milestone: M-array-core
 - needs: none
 - basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
-- scope: `backlog.md` from `### Stage A2` to its end, the `LETO-CRATES-METADATA-1` and `LETO-PYTHON-RELEASE-1` blocks, and `checklist.md`
+- scope: `backlog.md` from `## Atlas in-house replacement roadmap` to its end, the `LETO-CRATES-METADATA-1` and `LETO-PYTHON-RELEASE-1` blocks, and `checklist.md`
 - Evidence: at 9d322c39 the tail holds 46 `[x]` and 13 unchecked `[ ]` lines (Stage A2, Phases 2-9) under headings with no id, status or priority; the two named blocks carry status `milestone`, no anchor and no priority, and still say 0.42.0 while crates.io lists `leto` 0.47.0 and `leto-ops` 0.46.4 and PyPI `leto-python` 0.46.1 (looked up 2026-11-13); `checklist.md` (280 lines) is a checklist file (`board_checklist_files` 1) that holds the stable-release acceptance cited by `LETO-STABLE-QUALIFICATION` and `LETO-REGISTRY-SCALAR-PROVIDER`.
-- Delivered: Stages S0, A0, A1, C2 and C3 (49 `[x]` lines) are deleted in leto#439, each checked against its introducing commit; the findings they carried without an owner became `LETO-HERMES-DISPATCH-UNARY-SCAN-2026-11-24` and `LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24`.
 - Outcome: each remaining `[x]` line is checked against its landing commit and deleted; each `[ ]` line becomes a DoR item or is deleted with a reason (ADR 0001 operator overloading and ADR 0012 dqds already have records); the two blocks are verified against the registries and the trusted-publisher settings, then deleted or narrowed; `checklist.md` folds into items, with its stable-release acceptance moving into those items, and is deleted.
 - Acceptance: `board_checklist_files` 0; no board heading without an id, status and priority; `atlas-board-lint.py` passes.
 - Next step: verify Stage A2 and Phases 2-3, then the two registry blocks, against the tree and registries, in one slice.
@@ -205,22 +204,22 @@ open.
 - needs: none
 - basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
 - scope: `crates/leto-ops/src/application/unary/`, `crates/leto-ops/src/application/scan.rs`, `crates/leto-ops/src/domain/scalar/contract.rs`
-- Evidence: the 0.14.3 hot-kernel audit (legacy Stage C2, retired in leto#439) listed the non-dense strided norm fallback, scans and unary math as not dispatched through Hermes. At 9d322c39 `git grep -n hermes_simd` over `application/unary` and `application/scan.rs` finds nothing, and the `Scalar` slice hooks in `contract.rs` cover elementwise arithmetic, scale, sum, dot, axpy, gemv, tiled gemm and min/max, with none named for unary functions or scans; the strided norm fallback is not re-checked here.
-- Outcome: for each of unary elementwise math, prefix scans and the strided norm fallback, the surface routes through a Hermes kernel with a Criterion comparison against its recorded baseline (`docs/benchmarks.md`), or the missing Hermes operation is filed on the Hermes board and cited here with the reason Leto keeps its loop.
+- Evidence: the 0.14.3 hot-kernel audit (legacy Stage C2, retired in leto#439) listed the non-dense strided norm fallback, scans and unary math as not dispatched through Hermes. At 9d322c39 `git grep -n hermes_simd` over `application/unary` and `application/scan.rs` finds nothing, and the `Scalar` slice hooks in `contract.rs` cover elementwise arithmetic, scale, sum, dot, axpy, gemv, tiled gemm and min/max, with none named for unary functions or scans; the strided norm fallback is not re-checked here. The same audit named a Hermes fused square-accumulate kernel, to be pursued only if profiling shows the dot self-alias overhead of `norm_l2` (`Σx²` through Hermes `dot`) is material; no such profile is recorded.
+- Outcome: for each of unary elementwise math, prefix scans and the strided norm fallback, the surface routes through a Hermes kernel with a Criterion comparison against its recorded baseline (`docs/benchmarks.md`), or the missing Hermes operation is filed on the Hermes board and cited here with the reason Leto keeps its loop; a fourth, profile-triggered surface, the fused square-accumulate kernel for `norm_l2`, opens only when a profile shows the self-alias overhead material.
 - Acceptance: one recorded outcome per surface, each a merged routing change with median and confidence interval or a Hermes board item; the existing value tests pass unchanged.
 - Next step: list the `hermes_simd` public operations against `unary/operators/` and `scan.rs` and record which have a provider.
 
 <a id="LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24"></a>
 
-## LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24 — Five Kwavers-driven zip and coordinate names have no in-stack consumer [major] — todo
+## LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24 — Seven Kwavers-driven zip and coordinate names have no in-stack consumer [major] — todo
 - priority: tightening; milestone: M-array-core
 - needs: none
 - basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
-- scope: `crates/leto-ops/src/application/zip/{coordinate,fold,map}.rs`, the matching `crates/leto-ops/src/lib.rs` re-exports, `crates/leto-ops/tests/ops/structure_ops/`
-- Evidence: `indexed_map4_inplace`, `indexed_fold`, `indexed_fold_fortran`, `coordinate_map_inplace` and `CoordinateMapPlan` were added for Kwavers (legacy Stage A0, retired in leto#439). At 9d322c39 `git grep -w` for each name matches only leto-ops sources and tests, and the five names appear in no file of the fetched Kwavers `origin/main` or of the other registered members' checked-out HEADs (2026-11-24; those HEADs are not fetched defaults). None has a doctest or example. The retired entry recorded the coordinate plan as unconsumed until Kwavers' focused-test runtime is profiled below 30 s.
+- scope: `crates/leto-ops/src/application/zip/{coordinate,fold,map}.rs`, the re-exports in `application/mod.rs`, `application/zip/mod.rs` and `lib.rs`, `crates/leto-ops/tests/ops/structure_ops.rs` and `structure_ops/`
+- Evidence: `indexed_map4_inplace`, `indexed_fold`, `indexed_fold_fortran`, `coordinate_map_inplace`, `coordinate_map_plan`, `coordinate_map_plan_inplace` and `CoordinateMapPlan` were added for Kwavers (legacy Stage A0, retired in leto#439). At 9d322c39 `git grep -w` for each name matches only leto-ops sources and tests. On 2026-11-24, on the fetched default branch of all 27 other registered members (each equal to its remote HEAD), the same search finds none of the seven. None has a doctest or example. The retired entry recorded the coordinate plan as unconsumed until Kwavers' focused-test runtime is profiled below 30 s.
 - Outcome: each name has a stack consumer, a doctest or example, or is deleted with its tests; deleting a published item is a break batched into the next major.
 - Acceptance: `git grep -w` over every member's fetched default branch finds a consumer for each kept name; each deleted name is absent from `crates/`, and the next major's migration notes list it.
-- Next step: fetch every member's default branch, repeat the search, and ask the Kwavers board whether the four call sites are planned.
+- Next step: ask the Kwavers board whether it plans a call site for any of the seven names.
 
 <a id="LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16"></a>
 ## LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 — Pin the ln 2 crossing of `derives_vacuous` [patch] — todo
