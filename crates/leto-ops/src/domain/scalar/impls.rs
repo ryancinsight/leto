@@ -6,7 +6,8 @@ use eunomia::{Bf16, Complex, NumericElement, F16};
 
 use super::fallback::{
     scalar_axpy_rows_batch_fallback, scalar_axpy_rows_fallback, scalar_gemv_strided_fallback,
-    scalar_gemv_transpose_strided_fallback, scalar_tiled_gemm_fallback,
+    scalar_gemv_transpose_strided_fallback, scalar_max_fallback, scalar_min_fallback,
+    scalar_tiled_gemm_fallback,
 };
 use super::Scalar;
 
@@ -240,15 +241,7 @@ macro_rules! impl_scalar_simd {
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::min_slice(s) {
                     res
                 } else {
-                    s.iter()
-                        .copied()
-                        .fold(<Self as NumericElement>::MAX_VALUE, |acc, x| {
-                            if x < acc {
-                                x
-                            } else {
-                                acc
-                            }
-                        })
+                    scalar_min_fallback(s)
                 }
             }
 
@@ -257,15 +250,7 @@ macro_rules! impl_scalar_simd {
                 if let Some(res) = <SimdStrategy as SimdOperations<Self>>::max_slice(s) {
                     res
                 } else {
-                    s.iter()
-                        .copied()
-                        .fold(<Self as NumericElement>::MIN_VALUE, |acc, x| {
-                            if x > acc {
-                                x
-                            } else {
-                                acc
-                            }
-                        })
+                    scalar_max_fallback(s)
                 }
             }
 
@@ -307,7 +292,11 @@ impl_scalar_simd!(Bf16);
 /// (boundary-element Helmholtz operators, spectral kernels) without a
 /// parallel complex-only container.
 ///
-/// Ordering-dependent surfaces stay real by construction: they are bound on
+/// `min`/`max` reductions are defined for complex input through the
+/// lexicographic order of [`NumericElement::min_scalar`] and
+/// [`NumericElement::max_scalar`]: real part, then imaginary part. That order
+/// is a convention for selecting an element, not a field order; the other
+/// ordering-dependent surfaces stay real by construction, bound on
 /// [`RealScalar`](crate::domain::real::RealScalar), which complex does not
 /// implement because the complex field admits no total order.
 impl<T> Scalar for Complex<T> where T: Scalar + core::ops::Neg<Output = T> {}

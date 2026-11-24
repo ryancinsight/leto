@@ -2,6 +2,17 @@
 
 ## [0.52.0] - Unreleased
 
+### Fixed
+
+- [patch] `min`, `max`, `min_axis`, `max_axis` and `Scalar::min_slice` /
+  `max_slice` return an element of a non-empty `Complex` input instead of the
+  fold identity. `Complex` has no `PartialOrd` order, so the `<`/`>` fold never
+  replaced its seed. The folds now use Eunomia's `min_scalar`/`max_scalar`,
+  which order a `Complex` by real part, then imaginary part. Real scalars keep
+  the NaN contract: a NaN lane is ignored and an all-NaN axis reduces to the
+  identity. Which zero a mixed `+0`/`-0` axis reduces to is unspecified, as
+  before.
+
 ### Breaking
 
 - [major] Stencil spacing accepts `Length` from Aequitas 0.5.0. Use the

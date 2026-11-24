@@ -5,6 +5,24 @@ use eunomia::NumericElement;
 
 use super::Scalar;
 
+/// Minimum of `s` under [`NumericElement::min_scalar`], folded from the
+/// least-upper identity `T::MAX_VALUE`; the identity for an empty slice.
+#[inline]
+pub(super) fn scalar_min_fallback<T: Scalar>(s: &[T]) -> T {
+    s.iter()
+        .copied()
+        .fold(T::MAX_VALUE, |acc, x| x.min_scalar(acc))
+}
+
+/// Maximum of `s` under [`NumericElement::max_scalar`], folded from the
+/// greatest-lower identity `T::MIN_VALUE`; the identity for an empty slice.
+#[inline]
+pub(super) fn scalar_max_fallback<T: Scalar>(s: &[T]) -> T {
+    s.iter()
+        .copied()
+        .fold(T::MIN_VALUE, |acc, x| x.max_scalar(acc))
+}
+
 #[inline]
 pub(super) fn scalar_axpy_rows_fallback<T: Scalar>(
     alphas: &[T],
