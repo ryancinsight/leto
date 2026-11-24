@@ -311,9 +311,9 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   dense row-blocks through it regressed the 64x64/128x128/256x256 Leto-only
   oracle rows to 21.695 µs / 126.73 µs / 1.8273 ms in the local themis-0.9
   stack. Leto retains the measured 128-row gate only.
-- Constraint recorded in backlog Stage C2: matmul SIMD work waits on a
-  hermes scalar-AXPY / fused row-update provider; leto must not emulate one
-  with temporary allocation.
+- Constraint (satisfied since 0.16.0): matmul SIMD work needs a Hermes
+  scalar-AXPY / fused row-update provider, and Leto must not emulate one with
+  temporary allocation. `Scalar::axpy_slice` routes through `hermes_simd::axpy`.
 
 ## Open measured targets
 
