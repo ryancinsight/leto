@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.52.1] - Unreleased
 
 ### Fixed
 
@@ -10,6 +10,10 @@
   orders by real part, then imaginary part, and an element with any NaN
   component is ignored. An empty or all-NaN lane reduces to the identity.
   Fixed after the published 0.52.0.
+- [patch] When the operands are zeros of both signs, the sign of the zero
+  result of these reductions is unspecified and can differ between the
+  contiguous and strided routes. The strided `min` of `F16` and `Bf16` now
+  returns the last zero seen rather than the first.
 
 ## [0.52.0] - Unreleased
 
