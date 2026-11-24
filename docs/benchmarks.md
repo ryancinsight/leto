@@ -313,7 +313,7 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
   stack. Leto retains the measured 128-row gate only.
 - **Axis-reduction output-index decomposition (0.13.1 closure)**: left
   unchanged. `reduce_axis_into` computes `index_from_flat(flat_idx, &out_shape)`
-  once per output element (`crates/leto-ops/src/application/reduction/axis.rs:168`);
+  once per output element (`crates/leto-ops/src/application/reduction/axis.rs`);
   the cost is amortized over the axis length (1/`axis_len` per reduced element),
   so the row-walk policy does not route it through `RowMajorTraversal`.
 - Constraint (satisfied since 0.16.0): matmul SIMD work needs a Hermes
@@ -322,6 +322,9 @@ Cumulative on the headline case (elementwise transposed 256²): 1.206 ms →
 
 ## Open measured targets
 
+- Fused square-accumulate kernel for dense `norm_l2` (`Σx²` runs as
+  `Scalar::dot_slice(x, x)` through Hermes `dot`): pursue only if a profile
+  shows the dot self-alias overhead is material; none is recorded.
 - `zip_mut_with` transposed now tiled at 40.7 µs; the residual vs the binary
   map (~28 µs) is the opaque `FnMut` body — no further structural target
   without an op-ZST zip variant, which no caller currently needs.

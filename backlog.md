@@ -186,7 +186,6 @@ open.
 - Acceptance: value-identical to `map_inplace` for the same op; a `COMPUTE_BOUND = false` op stays sequential below the cache gate and matches the sequential control within noise across 64 KiB-2 MiB; a `COMPUTE_BOUND` op parallelizes as today; zero allocations after caller storage.
 
 <a id="LETO-BOARD-LEGACY-FOLD-2026-11-13"></a>
-
 ## LETO-BOARD-LEGACY-FOLD-2026-11-13 — Convert the remaining legacy board blocks and `checklist.md` to the DoR schema [patch] — todo
 - priority: verification; milestone: M-array-core
 - needs: none
@@ -198,19 +197,17 @@ open.
 - Next step: verify Stage A2 and Phases 2-3, then the two registry blocks, against the tree and registries, in one slice.
 
 <a id="LETO-HERMES-DISPATCH-UNARY-SCAN-2026-11-24"></a>
-
 ## LETO-HERMES-DISPATCH-UNARY-SCAN-2026-11-24 — Unary math and prefix scans bypass Hermes [patch] — todo
 - priority: tightening; milestone: M-array-core
 - needs: none
 - basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
 - scope: `crates/leto-ops/src/application/unary/`, `crates/leto-ops/src/application/scan.rs`, `crates/leto-ops/src/domain/scalar/contract.rs`
 - Evidence: the 0.14.3 hot-kernel audit (legacy Stage C2, retired in leto#439) listed the non-dense strided norm fallback, scans and unary math as not dispatched through Hermes. At 9d322c39 `git grep -n hermes_simd` over `application/unary` and `application/scan.rs` finds nothing, and the `Scalar` slice hooks in `contract.rs` cover elementwise arithmetic, scale, sum, dot, axpy, gemv, tiled gemm and min/max, with none named for unary functions or scans; the strided norm fallback is not re-checked here. The same audit named a Hermes fused square-accumulate kernel, to be pursued only if profiling shows the dot self-alias overhead of `norm_l2` (`Σx²` through Hermes `dot`) is material; no such profile is recorded.
-- Outcome: for each of unary elementwise math, prefix scans and the strided norm fallback, the surface routes through a Hermes kernel with a Criterion comparison against its recorded baseline (`docs/benchmarks.md`), or the missing Hermes operation is filed on the Hermes board and cited here with the reason Leto keeps its loop; a fourth, profile-triggered surface, the fused square-accumulate kernel for `norm_l2`, opens only when a profile shows the self-alias overhead material.
+- Outcome: for each of unary elementwise math, prefix scans and the strided norm fallback, the surface routes through a Hermes kernel with a Criterion comparison against its recorded baseline (`docs/benchmarks.md`), or the missing Hermes operation is filed on the Hermes board and cited here with the reason Leto keeps its loop; the profile-triggered fused square-accumulate kernel for `norm_l2` is carried in `docs/benchmarks.md` (Open measured targets) and outlives this item.
 - Acceptance: one recorded outcome per surface, each a merged routing change with median and confidence interval or a Hermes board item; the existing value tests pass unchanged.
 - Next step: list the `hermes_simd` public operations against `unary/operators/` and `scan.rs` and record which have a provider.
 
 <a id="LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24"></a>
-
 ## LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24 — Seven Kwavers-driven zip and coordinate names have no in-stack consumer [major] — todo
 - priority: tightening; milestone: M-array-core
 - needs: none
@@ -220,6 +217,17 @@ open.
 - Outcome: each name has a stack consumer, a doctest or example, or is deleted with its tests; deleting a published item is a break batched into the next major.
 - Acceptance: `git grep -w` over every member's fetched default branch finds a consumer for each kept name; each deleted name is absent from `crates/`, and the next major's migration notes list it.
 - Next step: ask the Kwavers board whether it plans a call site for any of the seven names.
+
+<a id="LETO-FIXED-MATRIX-VECTOR3-MUL-2026-11-24"></a>
+## LETO-FIXED-MATRIX-VECTOR3-MUL-2026-11-24 — `FixedMatrix<T, 3, 3> * geometry::Vector3<T>` is claimed but absent [minor] — todo
+- priority: feature; milestone: M-array-core
+- needs: none
+- basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
+- scope: `crates/leto/src/geometry/operators.rs`, `crates/leto/tests/core/geometry.rs`, the `CHANGELOG.md` line that claims the operator
+- Evidence: a retired Stage A0 `[x]` line (leto#439) and `CHANGELOG.md:1050` state the operator exists. At 9d322c39 `git grep -n -E 'Mul<.*Vector' -- crates/leto/src` finds six impls; none has `FixedMatrix` on the left and `geometry::Vector<T, N>` on the right (`Mul<FixedVector<T, C>> for FixedMatrix`, `fixed/matrix/ops.rs:91`, takes the other vector type). No commit reachable from origin/main adds it (`git log -G'Mul<[^>]*Vector'`). CFDrs works around it at `crates/cfd-core/src/geometry/mesh/operations.rs:44` (cbaf26ac).
+- Outcome: implement `Mul<geometry::Vector3<T>> for FixedMatrix<T, 3, 3>`, which a consumer needs, rather than retract the claim; the `CHANGELOG.md` line becomes true by delivery. Priority `feature`: nothing computes a wrong value, so not `correctness`, and the operator is new public surface.
+- Acceptance: a value-semantic test in `tests/core/geometry.rs`, over `f32` and `f64`, asserts `M * v` for a rotation and a non-symmetric matrix; it fails at the basis because the impl does not exist.
+- Next step: add the impl beside `Mul<Vector3<T>> for Isometry3` in `geometry/operators.rs` with the test.
 
 <a id="LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16"></a>
 ## LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 — Pin the ln 2 crossing of `derives_vacuous` [patch] — todo
