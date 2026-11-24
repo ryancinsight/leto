@@ -1,170 +1,177 @@
-//! `min`/`max` fold contract: a reduction returns an element of its input.
-//!
-//! `Complex` orders lexicographically by real part, then imaginary part (the
-//! order of `NumericElement::min_scalar`/`max_scalar`), so a fold over complex
-//! input returns the lexicographic extremum, never the seed. Real scalars keep
-//! the IEEE contract: a NaN lane is ignored and an all-NaN input reduces to the
-//! identity.
+//! `min`/`max` select the least or greatest non-NaN element, whatever the
+//! element order or memory layout. `Complex` orders by real part, then
+//! imaginary part; an element with any NaN component is a NaN lane, ignored as
+//! a real NaN is; an empty or all-NaN lane reduces to the fold identity.
 #![expect(
     clippy::unwrap_used,
     reason = "test scope: failed precondition = test failure"
 )]
 
 use eunomia::{Bf16, Complex, F16};
-use leto::{Array, Storage, VecStorage};
+use leto::{Array, ArrayView, SliceArg, Storage, VecStorage};
 use leto_ops::{max, max_axis, min, min_axis, Scalar};
 
-type C = Complex<f64>;
-
-fn c(re: f64, im: f64) -> C {
-    Complex::new(re, im)
+/// Runs `$check::<T>(lift)` for every shipped component type; `lift` is exact.
+macro_rules! over_components {
+    ($check:ident) => {{
+        $check::<f32>(|x| x);
+        $check::<f64>(f64::from);
+        $check::<F16>(F16::from_f32);
+        $check::<Bf16>(Bf16::from_f32);
+    }};
 }
 
-/// Real parts tie at `2` and at `-1`, so the imaginary part decides both
-/// extrema: the minimum is `(-1, -5)` and the maximum is `(2, 7)`.
-fn tied_real_parts() -> Vec<C> {
-    vec![
+type Lift<T> = fn(f32) -> T;
+
+fn array<T: Copy>(shape: [usize; 2], data: Vec<T>) -> Array<T, VecStorage<T>, 2> {
+    Array::from_shape_vec(shape, data).unwrap()
+}
+
+/// Whole-array and per-lane `(minima, maxima)` of a rank-2 view, asserted by
+/// value: rows (contiguous axis) and columns (strided axis).
+fn assert_extrema<T>(
+    view: &ArrayView<'_, T, 2>,
+    whole: (T, T),
+    rows: (&[T], &[T]),
+    columns: (&[T], &[T]),
+) where
+    T: Scalar + Copy + PartialEq + core::fmt::Debug,
+{
+    assert_eq!(min(view).unwrap(), whole.0);
+    assert_eq!(max(view).unwrap(), whole.1);
+    let lanes = |reduced: Array<T, VecStorage<T>, 2>| reduced.storage().as_slice().to_vec();
+    assert_eq!(lanes(min_axis(view, 1).unwrap()), rows.0);
+    assert_eq!(lanes(max_axis(view, 1).unwrap()), rows.1);
+    assert_eq!(lanes(min_axis(view, 0).unwrap()), columns.0);
+    assert_eq!(lanes(max_axis(view, 0).unwrap()), columns.1);
+}
+
+/// Real parts tie in rows 1 and 2 and in column 2, so the imaginary part
+/// decides there.
+fn complex_extrema_are_lexicographic_elements<T>(lift: Lift<T>)
+where
+    T: Copy + core::fmt::Debug,
+    Complex<T>: Scalar + PartialEq,
+{
+    let c = |re: f32, im: f32| Complex::new(lift(re), lift(im));
+    let mut slice = [
         c(2.0, 1.0),
         c(2.0, -3.0),
         c(2.0, 7.0),
         c(-1.0, 4.0),
         c(-1.0, -5.0),
         c(0.0, 0.0),
-    ]
-}
+    ];
+    for _ in 0..2 {
+        assert_eq!(Scalar::min_slice(&slice), c(-1.0, -5.0));
+        assert_eq!(Scalar::max_slice(&slice), c(2.0, 7.0));
+        slice.reverse();
+    }
+    assert_eq!(Scalar::min_slice(&[c(5.0, -6.0)]), c(5.0, -6.0));
+    assert_eq!(Scalar::max_slice(&[c(5.0, -6.0)]), c(5.0, -6.0));
+    // Elements at or beside a fold identity, and the empty identity.
+    let inf = f32::INFINITY;
+    assert_eq!(Scalar::min_slice(&[c(inf, inf), c(inf, 1.0)]), c(inf, 1.0));
+    assert_eq!(Scalar::max_slice(&[c(inf, inf), c(inf, 1.0)]), c(inf, inf));
+    assert_eq!(Scalar::max_slice(&[c(-inf, -1.0)]), c(-inf, -1.0));
+    assert_eq!(<Complex<T> as Scalar>::min_slice(&[]), c(inf, inf));
+    assert_eq!(<Complex<T> as Scalar>::max_slice(&[]), c(-inf, -inf));
 
-#[test]
-fn complex_slice_extrema_are_lexicographic_elements() {
-    let data = tied_real_parts();
-    assert_eq!(<C as Scalar>::min_slice(&data), c(-1.0, -5.0));
-    assert_eq!(<C as Scalar>::max_slice(&data), c(2.0, 7.0));
-}
-
-#[test]
-fn complex_slice_extrema_of_a_single_element_is_that_element() {
-    let data = [c(5.0, -6.0)];
-    assert_eq!(<C as Scalar>::min_slice(&data), c(5.0, -6.0));
-    assert_eq!(<C as Scalar>::max_slice(&data), c(5.0, -6.0));
-}
-
-/// An element equal to a fold identity, or sharing one component with it, is
-/// still returned: the identity is the least or greatest pair, not a sentinel
-/// that absorbs input.
-#[test]
-fn complex_slice_extrema_keep_elements_at_the_identity() {
-    let inf = f64::INFINITY;
-    let top = [c(inf, inf), c(inf, 1.0)];
-    assert_eq!(<C as Scalar>::min_slice(&top), c(inf, 1.0));
-    assert_eq!(<C as Scalar>::max_slice(&top), c(inf, inf));
-    let bottom = [c(-inf, -inf), c(-inf, 2.0)];
-    assert_eq!(<C as Scalar>::min_slice(&bottom), c(-inf, -inf));
-    assert_eq!(<C as Scalar>::max_slice(&bottom), c(-inf, 2.0));
-    // `(re = -inf, im < 0)` is the element a `(-inf, 0)` max identity dropped.
-    let below_zero = [c(-inf, -1.0)];
-    assert_eq!(<C as Scalar>::max_slice(&below_zero), c(-inf, -1.0));
-    let above_zero = [c(inf, 1.0)];
-    assert_eq!(<C as Scalar>::min_slice(&above_zero), c(inf, 1.0));
-}
-
-/// Real parts tie in row 1 (`3`), row 2 (`0`) and column 2 (`3`), so the
-/// imaginary part decides there. Axis 1 takes the contiguous slice route and
-/// axis 0 the strided fold.
-fn tied_matrix() -> Array<C, VecStorage<C>, 2> {
     let rows = [
         [c(2.0, 1.0), c(2.0, -3.0), c(2.0, 7.0), c(-1.0, 4.0)],
         [c(-1.0, -5.0), c(0.0, 0.0), c(3.0, 2.0), c(3.0, 2.0)],
         [c(0.0, 9.0), c(0.0, -9.0), c(3.0, -8.0), c(-4.0, 1.0)],
     ];
-    Array::from_shape_vec([3, 4], rows.iter().flatten().copied().collect()).unwrap()
-}
-
-#[test]
-fn complex_axis_extrema_are_lexicographic_elements_on_both_routes() {
-    let input = tied_matrix();
-
-    let row_min = min_axis(&input.view(), 1).unwrap();
-    let row_max = max_axis(&input.view(), 1).unwrap();
-    assert_eq!(
-        row_min.storage().as_slice(),
-        &[c(-1.0, 4.0), c(-1.0, -5.0), c(-4.0, 1.0)]
-    );
-    assert_eq!(
-        row_max.storage().as_slice(),
-        &[c(2.0, 7.0), c(3.0, 2.0), c(3.0, -8.0)]
-    );
-
-    let column_min = min_axis(&input.view(), 0).unwrap();
-    let column_max = max_axis(&input.view(), 0).unwrap();
-    assert_eq!(
-        column_min.storage().as_slice(),
-        &[c(-1.0, -5.0), c(0.0, -9.0), c(2.0, 7.0), c(-4.0, 1.0)]
-    );
-    assert_eq!(
-        column_max.storage().as_slice(),
-        &[c(2.0, 1.0), c(2.0, -3.0), c(3.0, 2.0), c(3.0, 2.0)]
+    let input = array([3, 4], rows.concat());
+    assert_extrema(
+        &input.view(),
+        (c(-4.0, 1.0), c(3.0, 2.0)),
+        (
+            &[c(-1.0, 4.0), c(-1.0, -5.0), c(-4.0, 1.0)],
+            &[c(2.0, 7.0), c(3.0, 2.0), c(3.0, -8.0)],
+        ),
+        (
+            &[c(-1.0, -5.0), c(0.0, -9.0), c(2.0, 7.0), c(-4.0, 1.0)],
+            &[c(2.0, 1.0), c(2.0, -3.0), c(3.0, 2.0), c(3.0, 2.0)],
+        ),
     );
 }
 
 #[test]
-fn complex_whole_array_extrema_are_lexicographic_elements() {
-    let input = tied_matrix();
-    assert_eq!(min(&input.view()).unwrap(), c(-4.0, 1.0));
-    assert_eq!(max(&input.view()).unwrap(), c(3.0, 2.0));
+fn complex_extrema_are_lexicographic_elements_across_component_types() {
+    over_components!(complex_extrema_are_lexicographic_elements);
 }
 
-#[test]
-fn complex_single_element_axis_extrema_are_that_element() {
-    let input = Array::from_shape_vec([1, 1], vec![c(5.0, -6.0)]).unwrap();
-    for axis in 0..2 {
-        assert_eq!(
-            min_axis(&input.view(), axis).unwrap().storage().as_slice(),
-            &[c(5.0, -6.0)]
-        );
-        assert_eq!(
-            max_axis(&input.view(), axis).unwrap().storage().as_slice(),
-            &[c(5.0, -6.0)]
-        );
+/// An element with a NaN component never replaces the accumulator, so the
+/// result is a selection over the non-NaN elements: independent of element
+/// order and of memory layout, and the identity when none exists.
+fn complex_nan_component_is_ignored<T>(lift: Lift<T>)
+where
+    T: Copy + core::fmt::Debug,
+    Complex<T>: Scalar + PartialEq,
+{
+    let c = |re: f32, im: f32| Complex::new(lift(re), lift(im));
+    let (nan, inf) = (f32::NAN, f32::INFINITY);
+    let (top, bottom) = (c(inf, inf), c(-inf, -inf));
+
+    for lone in [c(inf, nan), c(nan, 1.0)] {
+        assert_eq!(Scalar::min_slice(&[lone]), top);
+        assert_eq!(Scalar::max_slice(&[lone]), bottom);
     }
-}
-
-/// An element whose real part is NaN never replaces the accumulator, wherever
-/// it sits, and an input of such elements reduces to the fold identity.
-#[test]
-fn complex_nan_real_part_is_ignored_on_every_route() {
-    let nan = f64::NAN;
-    let inf = f64::INFINITY;
-    let leading = [c(nan, 1.0), c(2.0, 3.0), c(-1.0, 0.0)];
-    let trailing = [c(2.0, 3.0), c(-1.0, 0.0), c(nan, 1.0)];
-    for data in [leading, trailing] {
-        assert_eq!(<C as Scalar>::min_slice(&data), c(-1.0, 0.0));
-        assert_eq!(<C as Scalar>::max_slice(&data), c(2.0, 3.0));
-        let column = Array::from_shape_vec([3, 1], data.to_vec()).unwrap();
-        assert_eq!(min(&column.view()).unwrap(), c(-1.0, 0.0));
-        assert_eq!(max(&column.view()).unwrap(), c(2.0, 3.0));
-        assert_eq!(
-            min_axis(&column.view(), 0).unwrap().storage().as_slice(),
-            &[c(-1.0, 0.0)]
-        );
-        assert_eq!(
-            max_axis(&column.view(), 0).unwrap().storage().as_slice(),
-            &[c(2.0, 3.0)]
-        );
+    let elements = [c(2.0, 0.0), c(1.0, nan), c(1.0, -1.0)];
+    for order in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        let slice = order.map(|index| elements[index]);
+        assert_eq!(Scalar::min_slice(&slice), c(1.0, -1.0));
+        assert_eq!(Scalar::max_slice(&slice), c(2.0, 0.0));
     }
-    let all_nan = [c(nan, 1.0), c(nan, -1.0)];
-    assert_eq!(<C as Scalar>::min_slice(&all_nan), c(inf, inf));
-    assert_eq!(<C as Scalar>::max_slice(&all_nan), c(-inf, -inf));
+
+    // One logical array: transposed column-major buffer, C-order copy, strided.
+    let (a, b, d, e) = (c(2.0, 0.0), c(1.0, nan), c(1.0, -1.0), c(5.0, 5.0));
+    let column_major = array([2, 2], vec![a, b, d, e]);
+    let transposed = column_major.view().transpose([1, 0]).unwrap();
+    let c_order = array([2, 2], vec![a, d, b, e]);
+    for view in [&transposed, &c_order.view()] {
+        assert_extrema(view, (d, e), (&[d, e], &[a, e]), (&[a, d], &[a, e]));
+    }
+    let (f, g) = (c(-7.0, -7.0), c(7.0, 7.0));
+    let (h, i) = (c(1.0, 0.0), c(9.0, 9.0));
+    let source = array([4, 2], [[h, i], [f, g], [b, d], [g, f]].concat());
+    let strided = source
+        .view()
+        .slice_with::<2>(&[SliceArg::range(Some(0), None, 2), SliceArg::All])
+        .unwrap();
+    assert_extrema(&strided, (d, i), (&[h, d], &[i, d]), (&[h, d], &[h, i]));
+
+    // An all-NaN row and an all-NaN column reduce to the identity.
+    let (j, k) = (c(2.0, 5.0), c(nan, nan));
+    let mixed = array([2, 2], vec![c(nan, 1.0), c(3.0, nan), j, k]);
+    let (row, column) = (
+        (&[top, j][..], &[bottom, j][..]),
+        (&[j, top][..], &[j, bottom][..]),
+    );
+    assert_extrema(&mixed.view(), (j, j), row, column);
 }
 
-/// Real scalars keep the IEEE contract under the order-based fold: the result
-/// is the numeric extremum for every position of a NaN lane, infinities are
-/// ordinary elements, and an all-NaN input reduces to the identity, on the
-/// slice route and on the contiguous and strided axis routes alike.
-fn real_extrema_ignore_nan_and_keep_infinities<T>(lift: fn(f32) -> T)
+#[test]
+fn complex_nan_component_is_ignored_across_component_types() {
+    over_components!(complex_nan_component_is_ignored);
+}
+
+/// Real scalars keep the IEEE contract: a NaN lane is ignored wherever it
+/// sits, infinities are elements, and an all-NaN lane reduces to the identity,
+/// on the slice, contiguous axis and strided axis routes.
+fn real_extrema_keep_the_ieee_contract<T>(lift: Lift<T>)
 where
     T: Scalar + Copy + PartialEq + core::fmt::Debug,
 {
-    let nan = f32::NAN;
-    let inf = f32::INFINITY;
+    let (nan, inf) = (f32::NAN, f32::INFINITY);
     #[rustfmt::skip]
     let rows = [
         [nan, 3.0, -1.0, 2.0],
@@ -173,83 +180,48 @@ where
         [nan, nan, nan, nan],
         [inf, 1.0, 2.0, 3.0],
         [-inf, 1.0, 2.0, 3.0],
-        [inf, inf, inf, inf],
-        [-inf, -inf, -inf, -inf],
     ];
-    let expected_min = [-1.0, -1.0, -1.0, inf, 1.0, -inf, inf, -inf];
-    let expected_max = [3.0, 3.0, 3.0, -inf, inf, 3.0, inf, -inf];
-
-    let data = rows.iter().flatten().map(|&x| lift(x)).collect();
-    let input = Array::from_shape_vec([rows.len(), 4], data).unwrap();
-    let row_min = min_axis(&input.view(), 1).unwrap();
-    let row_max = max_axis(&input.view(), 1).unwrap();
+    let lanes = |expected: [f32; 6]| expected.map(lift);
+    let (row_min, row_max) = (
+        lanes([-1.0, -1.0, -1.0, inf, 1.0, -inf]),
+        lanes([3.0, 3.0, 3.0, -inf, inf, 3.0]),
+    );
+    let input = array([6, 4], rows.concat().into_iter().map(lift).collect());
+    let reduced = |lanes: Array<T, VecStorage<T>, 2>| lanes.storage().as_slice().to_vec();
+    assert_eq!(reduced(min_axis(&input.view(), 1).unwrap()), row_min);
+    assert_eq!(reduced(max_axis(&input.view(), 1).unwrap()), row_max);
     for (index, row) in rows.iter().enumerate() {
-        let lifted: Vec<T> = row.iter().map(|&x| lift(x)).collect();
-        let (least, greatest) = (lift(expected_min[index]), lift(expected_max[index]));
-        assert_eq!(T::min_slice(&lifted), least, "min_slice row {index}");
-        assert_eq!(T::max_slice(&lifted), greatest, "max_slice row {index}");
-        assert_eq!(
-            row_min.storage().as_slice()[index],
-            least,
-            "min_axis row {index}"
-        );
-        assert_eq!(
-            row_max.storage().as_slice()[index],
-            greatest,
-            "max_axis row {index}"
-        );
+        assert_eq!(T::min_slice(&row.map(lift)), row_min[index]);
+        assert_eq!(T::max_slice(&row.map(lift)), row_max[index]);
     }
-
-    // Strided axis: each column folds one element per row, in row order.
-    let column_min = min_axis(&input.view(), 0).unwrap();
-    let column_max = max_axis(&input.view(), 0).unwrap();
     assert_eq!(
-        column_min.storage().as_slice(),
-        &[lift(-inf), lift(-inf), lift(-inf), lift(-inf)]
+        reduced(min_axis(&input.view(), 0).unwrap()),
+        [-inf, -1.0, -1.0, 2.0].map(lift)
     );
     assert_eq!(
-        column_max.storage().as_slice(),
-        &[lift(inf), lift(inf), lift(inf), lift(inf)]
+        reduced(max_axis(&input.view(), 0).unwrap()),
+        [inf, 3.0, 2.0, 3.0].map(lift)
     );
 }
 
 #[test]
-fn real_extrema_ignore_nan_and_keep_infinities_across_shipped_floats() {
-    real_extrema_ignore_nan_and_keep_infinities::<f32>(|x| x);
-    real_extrema_ignore_nan_and_keep_infinities::<f64>(f64::from);
-    real_extrema_ignore_nan_and_keep_infinities::<F16>(F16::from_f32);
-    real_extrema_ignore_nan_and_keep_infinities::<Bf16>(Bf16::from_f32);
+fn real_extrema_keep_the_ieee_contract_across_shipped_floats() {
+    over_components!(real_extrema_keep_the_ieee_contract);
 }
 
-/// An element at the type's own fold identity is returned, not dropped: the
-/// identity is `MAX_VALUE` for a minimum and `MIN_VALUE` for a maximum.
-fn extrema_keep_an_element_at_the_identity<T>()
-where
-    T: Scalar + Copy + PartialEq + core::fmt::Debug,
-{
-    let at_max = [T::MAX_VALUE];
-    let at_min = [T::MIN_VALUE];
-    assert_eq!(T::min_slice(&at_max), T::MAX_VALUE);
-    assert_eq!(T::max_slice(&at_min), T::MIN_VALUE);
-    let pair = [T::MAX_VALUE, T::MIN_VALUE];
-    assert_eq!(T::min_slice(&pair), T::MIN_VALUE);
-    assert_eq!(T::max_slice(&pair), T::MAX_VALUE);
-    let column = Array::from_shape_vec([2, 1], pair.to_vec()).unwrap();
-    assert_eq!(min(&column.view()).unwrap(), T::MIN_VALUE);
-    assert_eq!(max(&column.view()).unwrap(), T::MAX_VALUE);
-}
-
+/// An extremum that differs from the fold seed is selected over it (the pair
+/// `[MAX_VALUE, MIN_VALUE]` answers each fold with the other seed).
 #[test]
-fn extrema_keep_an_element_at_the_identity_across_shipped_scalars() {
-    extrema_keep_an_element_at_the_identity::<f32>();
-    extrema_keep_an_element_at_the_identity::<f64>();
-    extrema_keep_an_element_at_the_identity::<F16>();
-    extrema_keep_an_element_at_the_identity::<Bf16>();
-    extrema_keep_an_element_at_the_identity::<i8>();
-    extrema_keep_an_element_at_the_identity::<i32>();
-    extrema_keep_an_element_at_the_identity::<i64>();
-    extrema_keep_an_element_at_the_identity::<u8>();
-    extrema_keep_an_element_at_the_identity::<u32>();
-    extrema_keep_an_element_at_the_identity::<u64>();
-    extrema_keep_an_element_at_the_identity::<usize>();
+fn extrema_differing_from_the_seed_are_selected_across_shipped_scalars() {
+    fn check<T: Scalar + Copy + PartialEq + core::fmt::Debug>() {
+        let pair = [T::MAX_VALUE, T::MIN_VALUE];
+        assert_eq!(T::min_slice(&pair), T::MIN_VALUE);
+        assert_eq!(T::max_slice(&pair), T::MAX_VALUE);
+        assert_eq!(T::min_slice(&[]), T::MAX_VALUE);
+        assert_eq!(T::max_slice(&[]), T::MIN_VALUE);
+    }
+    macro_rules! over_scalars {
+        ($($t:ty),*) => {$(check::<$t>();)*};
+    }
+    over_scalars!(f32, f64, F16, Bf16, i8, i32, i64, u8, u32, u64, usize);
 }

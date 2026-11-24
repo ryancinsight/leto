@@ -5,22 +5,38 @@ use eunomia::NumericElement;
 
 use super::Scalar;
 
-/// Minimum of `s` under [`NumericElement::min_scalar`], folded from the
-/// least-upper identity `T::MAX_VALUE`; the identity for an empty slice.
-#[inline]
-pub(super) fn scalar_min_fallback<T: Scalar>(s: &[T]) -> T {
-    s.iter()
-        .copied()
-        .fold(T::MAX_VALUE, |acc, x| x.min_scalar(acc))
+/// One step of a minimum fold: `value` replaces `acc` only when it is a
+/// non-NaN element below it under [`NumericElement::min_scalar`], so the fold
+/// selects among the non-NaN elements whatever their order or layout.
+#[inline(always)]
+pub(crate) fn fold_min<T: Scalar>(acc: T, value: T) -> T {
+    if value.is_nan() {
+        acc
+    } else {
+        value.min_scalar(acc)
+    }
 }
 
-/// Maximum of `s` under [`NumericElement::max_scalar`], folded from the
-/// greatest-lower identity `T::MIN_VALUE`; the identity for an empty slice.
+/// One step of a maximum fold; the mirror of [`fold_min`].
+#[inline(always)]
+pub(crate) fn fold_max<T: Scalar>(acc: T, value: T) -> T {
+    if value.is_nan() {
+        acc
+    } else {
+        value.max_scalar(acc)
+    }
+}
+
+/// Minimum of `s` from `T::MAX_VALUE`, the result for an empty or all-NaN `s`.
+#[inline]
+pub(super) fn scalar_min_fallback<T: Scalar>(s: &[T]) -> T {
+    s.iter().copied().fold(T::MAX_VALUE, fold_min)
+}
+
+/// Maximum of `s` from `T::MIN_VALUE`, the result for an empty or all-NaN `s`.
 #[inline]
 pub(super) fn scalar_max_fallback<T: Scalar>(s: &[T]) -> T {
-    s.iter()
-        .copied()
-        .fold(T::MIN_VALUE, |acc, x| x.max_scalar(acc))
+    s.iter().copied().fold(T::MIN_VALUE, fold_max)
 }
 
 #[inline]
