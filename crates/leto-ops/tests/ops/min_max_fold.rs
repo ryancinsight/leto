@@ -73,9 +73,26 @@ where
     let inf = f32::INFINITY;
     assert_eq!(Scalar::min_slice(&[c(inf, inf), c(inf, 1.0)]), c(inf, 1.0));
     assert_eq!(Scalar::max_slice(&[c(inf, inf), c(inf, 1.0)]), c(inf, inf));
+    assert_eq!(
+        Scalar::min_slice(&[c(-inf, -inf), c(-inf, 2.0)]),
+        c(-inf, -inf)
+    );
+    assert_eq!(
+        Scalar::max_slice(&[c(-inf, -inf), c(-inf, 2.0)]),
+        c(-inf, 2.0)
+    );
     assert_eq!(Scalar::max_slice(&[c(-inf, -1.0)]), c(-inf, -1.0));
     assert_eq!(<Complex<T> as Scalar>::min_slice(&[]), c(inf, inf));
     assert_eq!(<Complex<T> as Scalar>::max_slice(&[]), c(-inf, -inf));
+
+    let single = array([1, 1], vec![c(5.0, -6.0)]);
+    let lone = [c(5.0, -6.0)];
+    assert_extrema(
+        &single.view(),
+        (lone[0], lone[0]),
+        (&lone, &lone),
+        (&lone, &lone),
+    );
 
     let rows = [
         [c(2.0, 1.0), c(2.0, -3.0), c(2.0, 7.0), c(-1.0, 4.0)],
