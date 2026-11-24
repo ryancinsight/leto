@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.52.1] - Unreleased
+
+- [patch] Versions `leto-ops` for the `Complex` `min`/`max` fix of leto#441,
+  which changes the source of the published 0.52.0. No release is made here.
+
 ## [0.52.0] - Unreleased
 
 ### Breaking
