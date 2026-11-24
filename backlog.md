@@ -186,16 +186,48 @@ open.
 - Acceptance: value-identical to `map_inplace` for the same op; a `COMPUTE_BOUND = false` op stays sequential below the cache gate and matches the sequential control within noise across 64 KiB-2 MiB; a `COMPUTE_BOUND` op parallelizes as today; zero allocations after caller storage.
 
 <a id="LETO-BOARD-LEGACY-FOLD-2026-11-13"></a>
-
 ## LETO-BOARD-LEGACY-FOLD-2026-11-13 — Convert the remaining legacy board blocks and `checklist.md` to the DoR schema [patch] — todo
 - priority: verification; milestone: M-array-core
 - needs: none
-- basis: b738a4e2
+- basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
 - scope: `backlog.md` from `## Atlas in-house replacement roadmap` to its end, the `LETO-CRATES-METADATA-1` and `LETO-PYTHON-RELEASE-1` blocks, and `checklist.md`
-- Evidence: at b738a4e2 the tail holds 95 `[x]` and 13 unchecked `[ ]` lines under headings with no id, status or priority; the two named blocks carry status `milestone`, no anchor and no priority, and still say 0.42.0 while crates.io lists `leto` 0.47.0 and `leto-ops` 0.46.4 and PyPI `leto-python` 0.46.1 (looked up 2026-11-13); `checklist.md` (258 lines, copies of both blocks) is a checklist file (`board_checklist_files` 1).
-- Outcome: each `[x]` line is checked against its landing commit and deleted; each `[ ]` line becomes a DoR item or is deleted with a reason (ADR 0001 operator overloading and ADR 0012 dqds already have records); the two blocks are verified against the registries and the trusted-publisher settings, then deleted or narrowed; `checklist.md` folds into items and is deleted.
+- Evidence: at 9d322c39 the tail holds 46 `[x]` and 13 unchecked `[ ]` lines (Stage A2, Phases 2-9) under headings with no id, status or priority; the two named blocks carry status `milestone`, no anchor and no priority, and still say 0.42.0 while crates.io lists `leto` 0.47.0 and `leto-ops` 0.46.4 and PyPI `leto-python` 0.46.1 (looked up 2026-11-13); `checklist.md` (280 lines) is a checklist file (`board_checklist_files` 1) that holds the stable-release acceptance cited by `LETO-STABLE-QUALIFICATION` and `LETO-REGISTRY-SCALAR-PROVIDER`.
+- Outcome: each remaining `[x]` line is checked against its landing commit and deleted; each `[ ]` line becomes a DoR item or is deleted with a reason (ADR 0001 operator overloading and ADR 0012 dqds already have records); the two blocks are verified against the registries and the trusted-publisher settings, then deleted or narrowed; `checklist.md` folds into items, with its stable-release acceptance moving into those items, and is deleted.
 - Acceptance: `board_checklist_files` 0; no board heading without an id, status and priority; `atlas-board-lint.py` passes.
-- Next step: delete the all-`[x]` stages S0, A0 and A1, citing each landing commit from `git log --grep`.
+- Next step: verify Stage A2 and Phases 2-3, then the two registry blocks, against the tree and registries, in one slice.
+
+<a id="LETO-HERMES-DISPATCH-UNARY-SCAN-2026-11-24"></a>
+## LETO-HERMES-DISPATCH-UNARY-SCAN-2026-11-24 — Unary math and prefix scans bypass Hermes [patch] — todo
+- priority: tightening; milestone: M-array-core
+- needs: none
+- basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
+- scope: `crates/leto-ops/src/application/unary/`, `crates/leto-ops/src/application/scan.rs`, `crates/leto-ops/src/domain/scalar/contract.rs`
+- Evidence: the 0.14.3 hot-kernel audit (legacy Stage C2, retired in leto#439) listed the non-dense strided norm fallback, scans and unary math as not dispatched through Hermes. At 9d322c39 `git grep -n hermes_simd` over `application/unary` and `application/scan.rs` finds nothing, and the `Scalar` slice hooks in `contract.rs` cover elementwise arithmetic, scale, sum, dot, axpy, gemv, tiled gemm and min/max, with none named for unary functions or scans; the strided norm fallback is not re-checked here. The same audit named a Hermes fused square-accumulate kernel, to be pursued only if profiling shows the dot self-alias overhead of `norm_l2` (`Σx²` through Hermes `dot`) is material; no such profile is recorded.
+- Outcome: for each of unary elementwise math, prefix scans and the strided norm fallback, the surface routes through a Hermes kernel with a Criterion comparison against its recorded baseline (`docs/benchmarks.md`), or the missing Hermes operation is filed on the Hermes board and cited here with the reason Leto keeps its loop; the profile-triggered fused square-accumulate kernel for `norm_l2` is carried in `docs/benchmarks.md` (Open measured targets) and outlives this item.
+- Acceptance: one recorded outcome per surface, each a merged routing change with median and confidence interval or a Hermes board item; the existing value tests pass unchanged.
+- Next step: list the `hermes_simd` public operations against `unary/operators/` and `scan.rs` and record which have a provider.
+
+<a id="LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24"></a>
+## LETO-ZIP-PROVIDER-SURFACE-CONSUMERS-2026-11-24 — Seven Kwavers-driven zip and coordinate names have no in-stack consumer [major] — todo
+- priority: tightening; milestone: M-array-core
+- needs: none
+- basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
+- scope: `crates/leto-ops/src/application/zip/{coordinate,fold,map}.rs`, the re-exports in `application/mod.rs`, `application/zip/mod.rs` and `lib.rs`, `crates/leto-ops/tests/ops/structure_ops.rs` and `structure_ops/`
+- Evidence: `indexed_map4_inplace`, `indexed_fold`, `indexed_fold_fortran`, `coordinate_map_inplace`, `coordinate_map_plan`, `coordinate_map_plan_inplace` and `CoordinateMapPlan` were added for Kwavers (legacy Stage A0, retired in leto#439). At 9d322c39 `git grep -w` for each name matches only leto-ops sources and tests. On 2026-11-24, on the fetched default branch of all 27 other registered members (each equal to its remote HEAD), the same search finds none of the seven. None has a doctest or example. The retired entry recorded the coordinate plan as unconsumed until Kwavers' focused-test runtime is profiled below 30 s.
+- Outcome: each name has a stack consumer, a doctest or example, or is deleted with its tests; deleting a published item is a break batched into the next major.
+- Acceptance: `git grep -w` over every member's fetched default branch finds a consumer for each kept name; each deleted name is absent from `crates/`, and the next major's migration notes list it.
+- Next step: ask the Kwavers board whether it plans a call site for any of the seven names.
+
+<a id="LETO-FIXED-MATRIX-VECTOR3-MUL-2026-11-24"></a>
+## LETO-FIXED-MATRIX-VECTOR3-MUL-2026-11-24 — `FixedMatrix<T, 3, 3> * geometry::Vector3<T>` is claimed but absent [minor] — todo
+- priority: feature; milestone: M-array-core
+- needs: none
+- basis: 9d322c397b8096875f8f6a8826a1e218c2d9b33d
+- scope: `crates/leto/src/geometry/operators.rs`, `crates/leto/tests/core/geometry.rs`, the `CHANGELOG.md` line that claims the operator
+- Evidence: a retired Stage A0 `[x]` line (leto#439) and `CHANGELOG.md:1050` state the operator exists. At 9d322c39 `git grep -n -E 'Mul<.*Vector' -- crates/leto/src` finds six impls; none has `FixedMatrix` on the left and `geometry::Vector<T, N>` on the right (`Mul<FixedVector<T, C>> for FixedMatrix`, `fixed/matrix/ops.rs:91`, takes the other vector type). No commit reachable from origin/main adds it (`git log -G'Mul<[^>]*Vector'`). CFDrs works around it at `crates/cfd-core/src/geometry/mesh/operations.rs:44` (cbaf26ac).
+- Outcome: implement `Mul<geometry::Vector3<T>> for FixedMatrix<T, 3, 3>`, which a consumer needs, rather than retract the claim; the `CHANGELOG.md` line becomes true by delivery. Priority `feature`: nothing computes a wrong value, so not `correctness`, and the operator is new public surface.
+- Acceptance: a value-semantic test in `tests/core/geometry.rs`, over `f32` and `f64`, asserts `M * v` for a rotation and a non-symmetric matrix; it fails at the basis because the impl does not exist.
+- Next step: add the impl beside `Mul<Vector3<T>> for Isometry3` in `geometry/operators.rs` with the test.
 
 <a id="LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16"></a>
 ## LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 — Pin the ln 2 crossing of `derives_vacuous` [patch] — todo
@@ -261,170 +293,6 @@ map: ndarray→leto, nalgebra→leto-ops linalg, rayon/tokio→moirai, std::simd
 burn→coeus, alloc→mnemosyne, capabilities→melinoe, GPU=wgpu+cuda-oxide behind
 coeus `ComputeBackend`. leto owns the CPU array substrate and stays CPU-only; GPU
 backends live in coeus/apollo and index leto-style host-side layout metadata.
-### Stage S0 — scalar SSOT audit
-- [x] [patch] Add the Atlas special-functions provider lane:
-  `leto_ops::{ErfOp,ErfcOp,LgammaOp}` over Eunomia `FloatElement`, with f64
-  value-semantic coverage against known `erf`/`erfc`/`lgamma` values. Driver:
-  Coeus exact GELU and `torch.special` parity surfaces.
-- [x] [major] Rebase `leto-ops::Scalar` and `RealScalar` onto Eunomia
-  supertraits instead of re-owning numeric constants, arithmetic/bit contracts,
-  finite predicates, and real transcendental methods. Leto keeps only
-  operation-local slice/SIMD hooks and `Scalar::from_usize`. Downstream fallout
-  stays in Apollo/Coeus: use `eunomia::NumericElement` /
-  `eunomia::FloatElement` directly for removed UFCS constants/constructors. No
-  Leto compatibility shims.
-- [x] [minor] Extend Eunomia's primitive numeric SSOT to `isize`/`usize`, then
-  re-enable the corresponding `leto-ops::Scalar` impls through the Eunomia
-  supertrait contract. Platform-sized scalar support remains upstream-owned; no
-  Leto compatibility shims.
-### Stage A0 — consumer-driven geometry and array surface
-- [x] [minor] Add the Helios-driven checked rotation-column constructor:
-  `UnitQuaternion::try_from_rotation_columns` validates finite, right-handed,
-  orthonormal world-space axes without silently projecting an affine basis to a
-  rotation. Helios consumes it for `ImageOrientationPatient` grid poses.
-  Verification: generic `f32`/`f64` rotation tests plus invalid-basis tests,
-  package fmt/check/clippy/nextest/doc, and repository-baseline SemVer checks.
-  The downstream oblique DICOM-grid test remains Helios-owned and is sequenced
-  behind RITK's named `ImageOrientationPatient` attribute contract.
-- [x] [patch] Add the CFDrs sparse-extension CSR utility provider surface:
-  `CsrMatrix::diagonal`, `scale_values`, `scale_rows`, `scale_columns`,
-  `frobenius_norm`, `is_strictly_diagonally_dominant`, and
-  `condition_estimate`. Driver: CFDrs `SparseMatrixExt` can move remaining
-  CSR utility loops out of `cfd-math` and into Leto-owned CSR storage while
-  the downstream public sparse storage boundary is migrated separately.
-  Verification: provider fmt/check/clippy and focused sparse nextest (18/18),
-  plus downstream cfd-math fmt/check/focused sparse nextest/all-target clippy.
-- [x] [patch] Add the CFDrs AMG-driven CSR transpose provider surface:
-  `CsrMatrix::transpose()` constructs `A^T` with sorted CSR rows and no dense
-  materialization. Driver: CFDrs AMG restriction construction can move off
-  `nalgebra_sparse::transpose_as_csc` while preserving Leto-owned CSR
-  products. Verification: provider fmt/check/clippy/doc, focused sparse
-  nextest (16/16), and downstream cfd-math fmt/check/focused sparse+AMG
-  nextest/all-target clippy.
-- [x] [patch] Add the CFDrs AMG-driven CSR×CSR sparse product provider
-  surface: `leto_ops::spgemm` multiplies two CSR matrices through Leto-owned
-  row accumulation, exports the operation at crate root, and adds `CsrRow::nnz`
-  for sparse-pattern consumers. Driver: CFDrs AMG Galerkin products can move
-  off `nalgebra_sparse` instead of preserving a downstream sparse multiply.
-  Verification: provider fmt/check/clippy/doc and focused sparse nextest.
-- [x] [patch] Add CFDrs mesh-rotation provider support:
-  `FixedMatrix<T, 3, 3> * leto::geometry::Vector3<T>`. CFDrs uses this to move
-  `cfd-core::geometry::mesh` transforms from nalgebra `Matrix3`/`Vector3` to
-  Leto fixed geometry without a downstream helper. Verification: provider
-  fmt/check/clippy/full nextest (171/171), downstream cfd-core no-default
-  check/clippy/full nextest (201/201), and clean downstream mesh/staggered
-  provider scans.
-- [x] [patch] Add the CFDrs Domain-driven `Point1<T>` fixed geometry primitive,
-  conditional `Eq` derives for fixed geometry values, and serde feature
-  propagation for `std`/`alloc`. CFDrs uses this provider contract to migrate
-  `cfd-core::geometry::shapes::Domain` and boundary/domain geometry from
-  nalgebra point/vector/scalar contracts to Leto/Eunomia without a downstream
-  wrapper. Verification: provider fmt/check/clippy, full provider nextest
-  (170/170), downstream cfd-core no-default check/clippy, full downstream
-  cfd-core no-default nextest (201/201), and clean migrated-cone scans.
-- [x] [patch] Add the CFDrs state-driven owned-array serde provider surface.
-  `Array<T, S, N>`, `VecStorage<T>`, and `Layout<N>` now serialize and
-  deserialize without a downstream wrapper; array deserialization validates the
-  decoded layout against storage through `Array::new`. `Layout<N>` serde now
-  serializes shape/stride slices and validates decoded rank manually, so ranks
-  above serde's fixed-array impl limit compile without a downstream wrapper.
-  Verification: provider fmt, focused value-semantic serde nextest, provider
-  clippy, downstream `cfd-core` no-default check/clippy/state nextest, and the
-  Kwavers-driven rank-33 layout serde regression.
-- [x] [patch] Add the CFDrs FVM-driven `Vector2<T>` fixed geometry alias plus
-  generic fixed-vector norm and normalization methods so FVM face
-  centers/normals and velocity fields can use Leto geometry instead of
-  nalgebra `Vector2`. Verification: provider compile and focused
-  value-semantic nextest, downstream `cfd-2d` compile, and downstream focused
-  FVM nextest.
-- [x] [patch] Add CFDrs-driven Serde derives to fixed geometry value types
-  (`Point2`, `Point3`, `Vector3`, `UnitVector3`, and `Isometry3`) so serialized
-  consumer domain values can use Leto geometry directly instead of retaining
-  nalgebra or adding downstream wrapper types. Verification: provider
-  touched-file rustfmt, `cargo nextest run -p leto geometry`, and downstream
-  `cargo check -p cfd-core`.
-- [x] [patch] Add the Kwavers FWI-driven four-read-view mutable zip provider
-  surface (`leto_ops::zip3_mut_with`) so consumers can replace
-  `ndarray::Zip::from(out).and(a).and(b).and(c)` at the provider boundary.
-  Verification: dense fused second-difference and strided logical-order value
-  tests, no-default consumer-feature `cargo check`/clippy, and downstream
-  Kwavers FWI time-domain nextest.
-- [x] [patch] Add the Kwavers FWI-driven two-read-view reduction provider
-  surface (`leto_ops::zip_fold`) so consumers can replace two-array
-  `ndarray::Zip` reductions at the provider boundary instead of adding local
-  compatibility helpers. Verification: contiguous, strided logical-order, and
-  shape-mismatch value tests, no-default consumer-feature `cargo check`/clippy,
-  and downstream Kwavers FWI time-domain nextest.
-- [x] [patch] Add the Kwavers self-adjoint FWI-driven multi-read provider
-  surfaces (`leto_ops::zip5_mut_with` and `indexed_zip4_mut_with`) so consumers
-  can replace reconstructed/stored-history imaging-condition `ndarray::Zip`
-  paths at the provider boundary. Verification: contiguous, strided
-  logical-order, and logical-index value tests, no-default consumer-feature
-  `cargo check`/clippy, and downstream Kwavers FWI time-domain nextest.
-- [x] [patch] Add the Kwavers FWI-driven one-view indexed mutable provider
-  surface (`leto_ops::indexed_map_inplace`) so consumers can replace indexed
-  mutable test-helper traversals at the provider boundary. Verification:
-  logical-index value test, no-default consumer-feature `cargo check`/clippy,
-  and downstream Kwavers FWI time-domain nextest plus source audit.
-- [x] [patch] Add the Kwavers FWI-driven all-elements signed extrema provider
-  surface (`leto_ops::{min,max}`) so consumers can replace model-range
-  reductions at the provider boundary instead of adding downstream ndarray
-  helpers. Verification: contiguous, sliced logical-view, and empty-input error
-  value tests, no-default consumer-feature `cargo check`/clippy, and downstream
-  Kwavers FWI time-domain nextest.
-- [x] [patch] Add the Kwavers FWI-driven one-view indexed reduction provider
-  surface (`leto_ops::indexed_fold`) so consumers can replace
-  `indexed_iter().fold` reductions at the provider boundary instead of adding
-  downstream ndarray helpers. Verification: logical-index and strided
-  logical-order value tests, package `cargo check`, and downstream Kwavers FWI
-  time-domain nextest.
-- [x] [patch] Add the Kwavers MOFI-driven four-output indexed mutable provider
-  surface (`leto_ops::indexed_map4_inplace`) so consumers can fill related
-  model/Jacobian buffers in one provider-owned coordinate traversal instead of
-  adding downstream loops or helpers. Verification: logical-index multi-output
-  value test, package clippy, and downstream Kwavers MOFI nextest.
-- [x] [patch] Add the Kwavers FWI-driven Fortran-order indexed reduction
-  surface (`leto_ops::indexed_fold_fortran`) so consumers can preserve
-  recorder/source column-major row-order contracts at the provider boundary.
-  Verification: column-major logical-order value test, package clippy, and
-  downstream Kwavers FWI time-domain nextest.
-- [x] [patch] Add the Kwavers self-adjoint FWI-driven sparse coordinate mutable
-  provider surface (`leto_ops::coordinate_map_inplace`) plus the prevalidated
-  `CoordinateMapPlan` companion so consumers can inject source and residual
-  terms through provider-owned logical-coordinate traversal instead of
-  downstream coordinate loops. Verification: repeated-coordinate order,
-  out-of-bounds, and plan-layout-mismatch value tests, package check/clippy,
-  and downstream Kwavers self-adjoint/FWI time-domain nextest. Kwavers currently
-  consumes the direct sparse map path; planned consumption stays provider-ready
-  but unconsumed until its focused-test runtime is profiled below 30 s.
-- [x] [minor] Add the Gaia/Kwavers-driven fixed-vector, fixed-matrix, and small
-  geometry primitives (`Point3`, `Vector3`, `UnitVector3`, `Isometry3`) plus
-  the owned-array convenience methods required for Atlas consumers to replace
-  ndarray/nalgebra at the provider boundary. `FixedMatrix<T, 3, 3>::try_inverse`
-  now covers the tetrahedral-Jacobian inverse needed by Kwavers FEM geometry.
-  Verification: focused value tests for fixed/geometry primitives and array
-  indexing/fill/map/zip semantics; current inverse evidence is package
-  check/clippy plus `cargo nextest run -p leto fixed_matrix_inverse`.
-- [x] [patch] Add the Kwavers CPML-driven rank-1 `Array1` `usize` indexing and
-  owned-array `PartialEq`/`Eq` semantics so consumers can replace ndarray
-  `Array1` profile/factor storage at the provider boundary. Verification:
-  focused value tests for mutation, shape-sensitive equality, downstream
-  CPML/PSTD/PML nextest, and downstream boundary/GPU compile/lint gates.
-### Stage A1 — nalgebra linalg completion (leto-ops `application/linalg/`)
-Each routine generic over `T: RealScalar`, native-precision accumulation (wider
-accumulator only via a trait-encoded associated type with numerical justification),
-admitted only with a named consumer driver (coeus/apollo) and a differential
-oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
-- [x] [patch] Vector/matrix norms over `RealScalar`: `NormKind` ZST markers (`NormL1`/`NormL2`/`NormMax`) through one generic `norm` traversal in `application/linalg/norms.rs`; `norm_l2` covers Euclidean (rank-1) and Frobenius (rank-2+) in one entry point. Eigensolver consolidated into `linalg/` (re-export paths stable). Verification: nalgebra differential oracle, strided layout-independence, empty-view, and exact f16 tests.
-- [x] [minor] Eigenvalues-only symmetric Jacobi API (`symmetric_eigenvalues_jacobi` and tolerance variant): shares the same diagonalization kernel as the full decomposition via a monomorphized `RotationTarget`; the eigenvalues path uses a zero-sized no-vector target and avoids `n*n` eigenvector storage. Verification: value tests for full-vs-values parity, strided input, closed-form eigenvalues, and invalid input rejection.
-- [x] [minor] LU with partial pivoting (`linalg/lu.rs`): `lu_decompose`/`LuDecomposition<T>` (packed factors, pivots, parity) with `solve`, `det`, `inv` — generic over `RealScalar`, native precision. Driver: CFDrs `cfd-math`. Verification: nalgebra oracle, pivot parity, `inv·A=I`, `det(Aᵀ)=det(A)` via strided view, singular/non-finite rejection, f32 genericity.
-- [x] [minor] QR (Householder) + least-squares solve (`linalg/qr.rs`): compact packed reflectors, Q never materialized, least-squares via reflector application + back-substitution. Oracle: nalgebra SVD (independent path) + LU cross-check + residual-orthogonality property.
-- [x] [minor] Cholesky (SPD) factorization + solve/det/inv (`linalg/cholesky.rs`): lower-triangle-only reads, constructive positive-definiteness verification, determinant from `Π diag(L)^2`, inverse through identity-column solves over the same triangular substitution helper. Oracle: nalgebra cholesky().l()/determinant + LU cross-check + `A·A⁻¹=I` + strided symmetry invariance.
-- [x] [patch] Wide full-row-rank thin SVD support: `svd_decompose` uses `A Aᵀ` for wide matrices and derives `V = Aᵀ U Σ⁻¹`; tall/square inputs keep `Aᵀ A`. Verification: value-semantic wide reconstruction, singular-value ordering, and right singular-vector orthonormality tests.
-- [x] [patch] Rank-deficient singular-values-only support: `singular_values` diagonalizes the smaller Gram matrix and maps near-zero eigenvalues to zero singular values without constructing missing null-space vectors. `svd_decompose` still rejects rank-deficient matrices until a rank-revealing vector contract exists. Verification: tall and wide rank-deficient value tests.
-- [x] [major] Rank-revealing SVD via one-sided Jacobi plus rank-deficient pseudoinverse; ADR 0005 records the selected algorithm and verification plan. Verification: reconstruction, right-vector orthonormality, nalgebra singular-value parity, nalgebra `pseudo_inverse` parity, and Moore-Penrose identities.
-- [x] [minor] Non-symmetric eigenvalues (real + complex) through Hessenberg + shifted complex QR; ADR 0006 records the staged eigensolver track. Verification: nalgebra `complex_eigenvalues` battery and exact spectra. Schur vectors remain a separate open surface.
-- [x] [minor] Unpivoted symmetric indefinite `U D Uᵀ` factorization (`udu_decompose`, `MatrixDecompose::udu`) with solve/inverse/determinant helpers. Verification: reconstruction, determinant/solve/inverse parity with nalgebra, invalid-input and zero-pivot rejection. Pivoted Bunch-Kaufman remains open for matrices requiring symmetric pivoting.
 ### Stage A2 — ndarray consolidation (support coeus/apollo) — milestone: M-array-core
 - [x] [patch] Extend stack fixed primitives for RITK spatial metadata:
   `FixedVector::iter`, `FixedMatrix::iter`, and 3-D row-major/column-major
@@ -453,169 +321,6 @@ oracle (nalgebra / ndarray-linalg as dev-dependency). SRP leaf modules.
   as coeus integration surfaces them).
 - [ ] [patch] Keep ndarray strictly a dev-dependency differential oracle; core
   crates never depend on it in production.
-### Stage C2 — hermes SIMD coverage audit
-- [x] [patch] Audit leto-ops hot kernels (matmul inner loop, reductions, scans,
-  unary math) to ensure they dispatch through hermes `SimdOps` rather than
-  ad-hoc scalar loops; file hermes coverage requests for any missing op/dtype.
-  Dense f32/f64 `norm_l2` now routes `Σx²` through Hermes dot via
-  `Scalar::dot_slice` (28.07 µs → 5.508 µs for 64k elements). Remaining
-  coverage gaps: non-dense strided norm fallback, scans, unary math, matmul
-  inner loops, and a future Hermes fused square-accumulate kernel if profiling
-  shows dot self-alias overhead is material. Audit result (0.14.3): current
-  Hermes public surface covers dense pairwise elementwise ops and dense
-  sum/dot/min/max; no zero-allocation scalar-AXPY/fused row-update API is
-  available for matmul. Rejected measured Leto-local candidates: const-generic
-  dense blocking regressed `64x64` to ~48.5 µs and `256x256` to ~3.37 ms;
-  a generic `mul_add` hook regressed `64x64` to ~245.6 µs and `256x256` to
-  ~12.5 ms. Do not retry these paths without a changed kernel model.
-- [x] [minor] (0.16.0) Consume the Hermes scalar-AXPY / fused row-update
-  provider (`hermes_simd::axpy`, delivered hermes 51131a6): `Scalar::axpy_slice`
-  routes the matmul unit-stride row update through Hermes fmadd lanes with no
-  temporary allocation. Measured: `matmul/dense_256x256` 2.210 ms → 1.529 ms
-  (−31%); `dense_64x64` unchanged within noise. The sum reduction also gained a
-  dense memory-order fast path: `sum_transposed_256x256` 44.9 µs → 4.48 µs
-  (−90%), matching the norm path.
-- [x] [minor] (0.17.0) Consume Hermes absolute-value reductions for dense
-  `norm_l1`/`norm_max`: defaulted `RealScalar::{abs_sum_slice, abs_max_slice}`
-  hooks keep reduced-precision scalar fallback while f32/f64 route through
-  `SimdOperations` to `hermes_simd::{abs_sum, abs_max}` with no temporary
-  allocation. Measured in-run against scalar-fold references:
-  `norm_l1_64k` 34.174 µs → 4.069 µs (−88.1%, 8.4×);
-  `norm_max_64k` 39.961 µs → 5.293 µs (−86.8%, 7.5×).
-- [x] [patch] (0.19.7) Consume Hermes fused multi-row AXPY
-  (`hermes_simd::axpy_rows`, delivered hermes `efac045`) in Leto dense
-  row-blocked matmul. The fused path updates a positive-stride output row
-  block through one runtime-dispatched SIMD kernel per RHS row and keeps
-  strided/transposed layouts on the existing value-correct path. Criterion
-  oracle medians improved: 64x64 21.443 µs → 17.430 µs, 128x128 127.63 µs →
-  108.98 µs, and 256x256 2.4357 ms → 1.0631 ms. Dense matmul remains slower
-  than ndarray/nalgebra, so replacement-performance parity is still open.
-  **Superseded 2026-08-28** by `LETO-MATMUL-PARITY-VERDICT-2026-08-28`: the
-  gap closed and the parity thread is no longer open.
-- [x] [patch] Consume Hermes batched row-panel AXPY
-  (`hermes_simd::axpy_rows_batch`, delivered hermes `d4a01bd`) for the
-  measured 128-row dense matmul regime. The path keeps caller-owned output,
-  borrows contiguous RHS panels directly, and packs only the fixed-size alpha
-  panel on the stack. Local themis-0.9 stack criterion medians improved
-  `oracle_compare/matmul_leto_128x128` from 212.64 µs to 98.853 µs. Dense
-  matmul still trails nalgebra's recorded 128x128 median, so parity remains
-  open. Broad depth-batched routing across 64x64/256x256 was rejected after
-  regression.
-### Stage C3 — cache-aware CPU kernels (atlas ADR 0002 leto slice)
-Criterion baselines recorded in `gap_audit.md` (2026-06-11); every
-item below must show a statistically significant improvement against them —
-no unmeasured "optimization" per performance_engineering.
-- [x] [patch] Row-walk strided traversal (`RowMajorTraversal` in
-  `application/index.rs`, shared by binary/unary serial + parallel strided
-  paths): one offset computation per innermost row, stride-increment walk.
-  Measured: transposed add 1.206 ms → 49–51 µs (−95.9%, 23.7×, p < 0.05),
-  contiguous unchanged; negative-stride differential tests added. Remaining
-  gap vs contiguous is ~3.6× (cache-line behavior of column walks).
-- [x] [patch] Row-walk whole-array strided reduction and norm traversal:
-  `sum` and generic `norm` now share the same innermost-row base-offset policy.
-  Criterion baselines added for transposed and reverse-last-axis reductions:
-  transposed `sum` 40.73 µs, transposed `norm_l2` 28.67 µs,
-  reverse-last-axis `sum` 30.55 µs, reverse-last-axis `norm_l2` 30.21 µs.
-- [x] [patch] (0.13.1) Row-walk policy completed across zip (all four
-  variants, indexed forms via incremental last coordinate), `map_inplace`,
-  and scan lane walks — every strided fallback now routes through
-  `RowMajorTraversal`. Measured: transposed zip 553.4 µs → 55.9 µs (−89.9%,
-  9.9×, p < 0.05). Axis-reduction output-index decomposition is amortized
-  over the axis length (cost 1/axis_len per element) and deliberately left.
-- [x] [patch] (0.14.4) Cache-line micro-tiling for column-walk strided
-  elementwise (binary serial + parallel): tile side = 64-byte line /
-  `size_of::<T>()` (analytic, not tuned); applied only when some operand's
-  |last-axis stride| ≥ elements-per-line. Measured: transposed add
-  50.65 µs → 28.4 µs (−43.5%, p < 0.05), contiguous unchanged; gap vs
-  contiguous now ~1.8× (cumulative 42× from the 1.206 ms origin). Line
-  tiling needs only the line size, so the themis `CacheLevel` wiring item
-  now applies to the L1/L2-sized matmul blocking below. Residual ~1.8× is
-  TLB/prefetch behavior of large-stride walks; revisit only with profile
-  evidence.
-- [x] [minor] (0.15.0) Extend line micro-tiling to the unary strided
-  fallbacks (`map_into` serial + parallel) through the same `TileGeometry`
-  SSOT. Mixed input/output scalar maps use the smaller
-  `line_elements::<T/U>()` value. Measured: transposed unary
-  `map_into` 57.631 µs (56.477–58.379 µs CI) → 35.303 µs
-  (34.221–36.468 µs CI), −38.7% median with non-overlapping confidence
-  intervals. Contiguous `map_into` remains within observed run-to-run noise;
-  no contiguous speedup is claimed.
-- [x] [patch] (0.18.1) Row-block dense matmul on top of the Hermes AXPY row
-  kernel: one authoritative const-generic row-block kernel reuses each RHS row
-  across 32 output rows, writes caller-owned output in place, and allocates no
-  temporaries. Criterion all-features current medians:
-  `dense_64x64` 22.536 µs (~−19.8% vs recorded 28.1 µs table baseline);
-  `dense_256x256` 1.4016 ms (~−8.3% vs recorded 1.529 ms table baseline).
-- [x] [minor] Close topology-adaptive matmul tile sizing from `CacheGeometry`.
-  **Implementation delivered:** `MatmulTilePolicy` uses one quarter of detected
-  L2, caps at the existing 32-row specialization, rounds to a safe power-of-two
-  const-generic shape, and preserves the measured common-shape 32-row route.
-  **Route-coverage evidence (2026-08-08):** dense C×C inputs now use the same
-  policy-aware row-block/tiled-GEMM route as the generic layout path; the legacy
-  `serial_cc_matmul`/`parallel_cc_matmul` bypass was removed. A 64×64 explicit
-  fixed-1 versus fixed-32 differential test is value-equivalent, and the dense
-  64×64/256×256 benchmarks execute through the production route (`6.0371 µs`
-  and `116.35 µs` medians in the recorded run). The alternating-order,
-  checksum-consuming 64×64×4096 strided policy comparison still selected 16
-  rows automatically versus fixed 32 with overlapping intervals, so it provides
-  no adaptive speedup or regression claim. Production convenience APIs retain
-  fixed 32; the explicit adaptive seam remains available for hardware-specific
-  experiments.
-- [x] [minor] `LETO-MATMUL-PERF-1`: Close dense matmul oracle performance
-  parity before any replacement claim. **Owner:** Codex `/root` (complete).
-  **Claimed files:** `crates/leto-ops/src/application/matrix.rs`,
-  `crates/leto-ops/benches/kernels.rs`,
-  `gap_audit.md`, and `checklist.md`.
-  The 0.19.7 fused multi-row AXPY improves Leto but still trails
-  ndarray/nalgebra at 64x64, 128x128, and 256x256. Current medians:
-  Leto 17.430 µs / 108.98 µs / 1.0631 ms; ndarray 8.4923 µs / 66.527 µs /
-  495.95 µs; nalgebra 8.7752 µs / 62.935 µs / 505.35 µs. Investigate
-  row/block/column micro-kernel geometry, cache-topology-selected tile shapes,
-  and allocation-controlled reusable packing scratch. Do not retry the
-  rejected 0.14.3 const-generic blocking, generic `mul_add` hook, 0.19.2
-  zero-skip branch removal, 0.19.3 packed RHS dot path, 0.19.3 scalar
-  row-update path, 0.19.4 Hermes `tiled_gemm` path, reduced small-matrix
-  parallel scheduling, 0.19.5 `MATMUL_ROW_BLOCK=16`, or 0.19.5 first-shared-row
-  output initialization, post-0.19.7 Hermes column-chunk `axpy_rows`, or
-  post-0.19.7 `MATMUL_ROW_BLOCK=64`, or post-0.19.7 row-block
-  fused-branch/alpha-buffer hoisting, or post-0.19.7 generic 4x4 registered
-  dense tiles, or broad depth-batched row-panel AXPY routing without a changed
-  kernel model and profile evidence. **Closed 2026-07-23 as an evidence-only
-  audit:** current default-feature medians are Leto 23.597/123.63/233.60 µs
-  versus ndarray 12.770/113.07/952.54 µs at 64/128/256; serial Leto is
-  27.483/223.69/1.8522 ms. The current parallel threshold remains the measured
-  better policy. Flamegraph collection is blocked by missing Windows dtrace
-  and administrator-only blondie; no speculative production rewrite landed.
-- [x] [patch] `LETO-STRIDED-REDUCE-1`: Reduce the overhead of the genuinely
-  non-unit-stride whole-array reduction fallback without copying the view.
-  **Owner:** Codex `/root` (complete). **Claimed files:**
-  `crates/leto-ops/src/application/reduction.rs`,
-  `crates/leto-ops/tests/ops/reduction.rs`,
-  `crates/leto-ops/benches/kernels.rs`,
-  `gap_audit.md`, and `checklist.md`. Acceptance: one canonical generic
-  fallback preserves logical values and the existing reduction contract for
-  positive and negative strides, performs no allocation or materialization,
-  and shows a value-preserving benchmark improvement for the existing
-  `sum_strided_step2_256x256` case; if the measured result is not positive,
-  close with evidence and retain the current implementation. Do not add a
-  second scalar-type or operation-specific kernel. **Closed 2026-07-23 as
-  evidence-only:** the order-preserving four-way loop candidate measured
-  `27.793 µs` versus the quiet baseline `28.849 µs` with `p = 0.06`, while the
-  contiguous control regressed in the candidate run; the production helper
-  was removed. The zero-copy fallback remains unchanged and the new focused
-  regression test passes.
-- [x] [minor] (0.19.0) Route reverse-last-axis whole-array reductions through
-  borrowed unit-stride physical row slices. `sum` uses `Scalar::sum_slice`;
-  `norm` uses `NormKind::accumulate_slice` plus the new defaulted
-  `NormKind::combine` hook so row partials combine in accumulator space.
-  Criterion: `sum_reverse_last_axis_256x256` 5.1575-5.2534 µs (−21.56%
-  median, p < 0.05) and `norm_l2_reverse_last_axis_256x256` 9.1467-9.9752 µs
-  (−18.00% median, p < 0.05).
-- [x] [minor] (0.18.0) Wire themis as an optional leto-ops dependency for
-  `CacheLevel` queries through `leto_ops::CacheGeometry` and the `topology`
-  feature. The public API is additive; when the feature is disabled, callers
-  get the documented fallback L1/L2/line constants. The `themis` cache-level
-  reader walks the borrowed slice directly and does not allocate copies.
 
 ## Phase 2: ndarray API Parity Required by Apollo [minor] — milestone: M-array-core
 - [x] Add rank-specific aliases for `Array1`, `Array2`, `Array3` and corresponding view types. Verification: value test constructs `Array1` and `Array2` aliases and reads through views.
