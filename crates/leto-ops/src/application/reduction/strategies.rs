@@ -1,6 +1,6 @@
 //! [`AxisReduction`] strategy marker types: `Sum`/`Product`/`Mean`/`Min`/`Max`.
 
-use crate::domain::scalar::Scalar;
+use crate::domain::scalar::{fold_max, fold_min, Scalar};
 use eunomia::FloatElement;
 
 /// Zero-sized axis-reduction contract.
@@ -35,25 +35,19 @@ pub struct MeanAxis;
 
 /// Minimum axis-reduction marker.
 ///
-/// Folds with [`min_scalar`](eunomia::NumericElement::min_scalar) from
-/// `T::MAX_VALUE`, and the contiguous route inherits the same contract from
-/// [`Scalar::min_slice`], so the result is an element of the axis whenever it
-/// holds no NaN lane.
-///
-/// NaN lanes are ignored on every route: a real NaN never replaces the
-/// accumulator, and an all-NaN axis reduces to `T::MAX_VALUE`, the identity.
-/// A `Complex` orders by real part, then imaginary part: an element whose real
-/// part is NaN is ignored, and one with a NaN imaginary part replaces the
-/// accumulator only through a strictly smaller real part.
+/// Folds with `fold_min` from `T::MAX_VALUE`; the contiguous route inherits
+/// the same contract from [`Scalar::min_slice`]. The result is the least
+/// non-NaN element of the axis: a real NaN and a `Complex` with a NaN
+/// component are ignored wherever they sit, and an all-NaN axis reduces to
+/// `T::MAX_VALUE`, the identity. A `Complex` orders by real part, then
+/// imaginary part. The sign of a zero tie (`+0` against `-0`) is unspecified.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MinAxis;
 
 /// Maximum axis-reduction marker.
 ///
-/// The mirror of [`MinAxis`] under
-/// [`max_scalar`](eunomia::NumericElement::max_scalar): NaN lanes are ignored,
-/// the fold starts from `T::MIN_VALUE`, and an all-NaN axis reduces to that
-/// identity. A `Complex` orders by real part, then imaginary part.
+/// The mirror of [`MinAxis`] under `fold_max`: the greatest non-NaN
+/// element, `T::MIN_VALUE` for an all-NaN axis.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MaxAxis;
 
@@ -154,7 +148,7 @@ impl<T: Scalar> AxisReduction<T> for MinAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        value.min_scalar(acc)
+        fold_min(acc, value)
     }
 
     #[inline(always)]
@@ -179,7 +173,7 @@ impl<T: Scalar> AxisReduction<T> for MaxAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        value.max_scalar(acc)
+        fold_max(acc, value)
     }
 
     #[inline(always)]

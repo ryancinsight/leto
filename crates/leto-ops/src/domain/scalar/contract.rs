@@ -201,21 +201,20 @@ pub trait Scalar: NumericElement {
         scalar_tiled_gemm_fallback(a, b, c, m, n, k);
     }
 
-    /// Min reduction over a slice, an element of `s` for non-empty input.
+    /// Min reduction over a slice: the least non-NaN element.
     ///
-    /// Orders by [`NumericElement::min_scalar`]: a real NaN lane is ignored and
-    /// an all-NaN slice reduces to `MAX_VALUE`; a `Complex` orders by real
-    /// part, then imaginary part. An empty slice reduces to `MAX_VALUE`.
+    /// A `Complex` orders by real part, then imaginary part; an element with
+    /// any NaN component is ignored. An empty or all-NaN slice reduces to
+    /// `MAX_VALUE`, and the sign of a zero tie is unspecified.
     #[inline]
     fn min_slice(s: &[Self]) -> Self {
         scalar_min_fallback(s)
     }
 
-    /// Max reduction over a slice, an element of `s` for non-empty input.
+    /// Max reduction over a slice: the greatest non-NaN element of `s`.
     ///
-    /// The mirror of [`min_slice`](Self::min_slice) under
-    /// [`NumericElement::max_scalar`], reducing an empty or all-NaN slice to
-    /// `MIN_VALUE`.
+    /// The mirror of [`min_slice`](Self::min_slice); an empty or all-NaN slice
+    /// reduces to `MIN_VALUE`.
     #[inline]
     fn max_slice(s: &[Self]) -> Self {
         scalar_max_fallback(s)

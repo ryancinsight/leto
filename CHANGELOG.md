@@ -4,19 +4,17 @@
 
 - [patch] Versions `leto-ops` for the `Complex` `min`/`max` fix of leto#441,
   which changes the source of the published 0.52.0. No release is made here.
+- [patch] `min`, `max`, `min_axis`, `max_axis` and `Scalar::min_slice` /
+  `max_slice` return an element of a `Complex` input instead of the fold
+  identity. They select the least or greatest non-NaN element: a `Complex`
+  orders by real part, then imaginary part, and an element with any NaN
+  component is ignored. An empty or all-NaN lane reduces to the identity.
+  Fixed after the published 0.52.0.
+- [patch] When the operands are zeros of both signs, the sign of the zero
+  result of these reductions is unspecified and can differ between the
+  contiguous and strided routes.
 
 ## [0.52.0] - Unreleased
-
-### Fixed
-
-- [patch] `min`, `max`, `min_axis`, `max_axis` and `Scalar::min_slice` /
-  `max_slice` return an element of a non-empty `Complex` input instead of the
-  fold identity. `Complex` has no `PartialOrd` order, so the `<`/`>` fold never
-  replaced its seed. The folds now use Eunomia's `min_scalar`/`max_scalar`,
-  which order a `Complex` by real part, then imaginary part. Real scalars keep
-  the NaN contract: a NaN lane is ignored and an all-NaN axis reduces to the
-  identity. Which zero a mixed `+0`/`-0` axis reduces to is unspecified, as
-  before.
 
 ### Breaking
 
