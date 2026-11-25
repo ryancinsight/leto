@@ -445,3 +445,34 @@ fn sparse_path_routes_correctly_for_tridiagonal_n64() {
     }
     assert!(max_residual < 1e-8, "max_residual = {max_residual}");
 }
+
+#[test]
+fn row_swap_precedes_later_spurious_zero_pivot() {
+    // A = [[0,1,0],[0,1,1],[1,0,0]] has determinant +1. The first
+    // column needs a row swap that the natural symbolic pattern cannot store.
+    let a = make_csr(3, 3, &[(0, 1, 1.), (1, 1, 1.), (1, 2, 1.), (2, 0, 1.)]);
+    let csc = CscMatrix::from_csr(&a.as_view());
+    let symbolic = factor_symbolic(&csc);
+    let result = crate::application::sparse::factor_numeric(&csc, &symbolic, 1e-12);
+    assert!(
+        matches!(result, Err(LetoError::NumericalBreakdown(_))),
+        "{result:?}"
+    );
+
+    let solver = SparseLuSolver {
+        small_switch: 0,
+        density_threshold: 1.,
+        ..Default::default()
+    };
+    let rhs = Array1::from_shape_vec([3], vec![2., 5., 1.]).unwrap();
+    let want = [1., 2., 3.];
+    assert_eq!(
+        solver.solve_view(&a, &rhs.view()).unwrap().as_slice(),
+        Some(want.as_slice())
+    );
+    let factor = solver.factor_sparse_with_symbolic(&a, &symbolic).unwrap();
+    assert_eq!(
+        factor.solve(&rhs.view()).unwrap().as_slice(),
+        Some(want.as_slice())
+    );
+}
