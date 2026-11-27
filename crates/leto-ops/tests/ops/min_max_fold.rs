@@ -9,7 +9,7 @@
 )]
 
 use eunomia::{Bf16, Complex, F16};
-use leto::{Array, ArrayView, SliceArg, Storage, VecStorage};
+use leto::{Array, ArrayView, LetoError, SliceArg, Storage, VecStorage};
 use leto_ops::{max, max_axis, min, min_axis, Scalar};
 
 /// Runs `$check::<T>(lift)` for every shipped component type; `lift` is exact.
@@ -242,4 +242,67 @@ fn extrema_differing_from_the_seed_are_selected_across_shipped_scalars() {
         ($($t:ty),*) => {$(check::<$t>();)*};
     }
     over_scalars!(f32, f64, F16, Bf16, i8, i32, i64, u8, u32, u64, usize);
+}
+
+/// An empty input has no extremum: `min` and `max` return a storage error for
+/// an empty array and `min_axis` and `max_axis` for a zero-length axis, while
+/// an empty array reduced along a non-empty axis has no lanes and gives an
+/// empty result. Only the empty slice reduces to the fold identity.
+fn empty_input_errors_and_the_empty_slice_is_the_identity<T>()
+where
+    T: Scalar + Copy + PartialEq + core::fmt::Debug,
+{
+    let no_rows = array::<T>([0, 2], Vec::new());
+    let no_columns = array::<T>([3, 0], Vec::new());
+    let (rows, columns) = (no_rows.view(), no_columns.view());
+    assert!(matches!(min(&rows), Err(LetoError::StorageError { .. })));
+    assert!(matches!(max(&rows), Err(LetoError::StorageError { .. })));
+    assert!(matches!(min(&columns), Err(LetoError::StorageError { .. })));
+    assert!(matches!(max(&columns), Err(LetoError::StorageError { .. })));
+    assert!(matches!(
+        min_axis(&rows, 0),
+        Err(LetoError::StorageError { .. })
+    ));
+    assert!(matches!(
+        max_axis(&rows, 0),
+        Err(LetoError::StorageError { .. })
+    ));
+    assert!(matches!(
+        min_axis(&columns, 1),
+        Err(LetoError::StorageError { .. })
+    ));
+    assert!(matches!(
+        max_axis(&columns, 1),
+        Err(LetoError::StorageError { .. })
+    ));
+    assert_eq!(min_axis(&rows, 1).unwrap().shape(), [0, 1]);
+    assert_eq!(max_axis(&rows, 1).unwrap().shape(), [0, 1]);
+    assert_eq!(min_axis(&columns, 0).unwrap().shape(), [1, 0]);
+    assert_eq!(max_axis(&columns, 0).unwrap().shape(), [1, 0]);
+    assert_eq!(T::min_slice(&[]), T::MAX_VALUE);
+    assert_eq!(T::max_slice(&[]), T::MIN_VALUE);
+}
+
+#[test]
+fn empty_input_errors_and_the_empty_slice_is_the_identity_across_shipped_scalars() {
+    macro_rules! over_scalars {
+        ($($t:ty),*) => {$(empty_input_errors_and_the_empty_slice_is_the_identity::<$t>();)*};
+    }
+    over_scalars!(
+        f32,
+        f64,
+        F16,
+        Bf16,
+        Complex<f32>,
+        Complex<f64>,
+        Complex<F16>,
+        Complex<Bf16>,
+        i8,
+        i32,
+        i64,
+        u8,
+        u32,
+        u64,
+        usize
+    );
 }
