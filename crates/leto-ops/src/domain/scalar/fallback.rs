@@ -5,9 +5,10 @@ use eunomia::NumericElement;
 
 use super::Scalar;
 
-/// One step of a minimum fold: `value` replaces `acc` only when it is a
-/// non-NaN element below it under [`NumericElement::min_scalar`], so the fold
-/// selects among the non-NaN elements whatever their order or layout.
+/// One step of a minimum fold: a NaN-bearing `value` never replaces `acc`, so
+/// the fold selects among the non-NaN elements whatever their order or layout.
+/// Otherwise [`NumericElement::min_scalar`] picks the lesser; between equal
+/// values its choice decides, which only the sign of a zero can show.
 #[inline(always)]
 pub(crate) fn fold_min<T: Scalar>(acc: T, value: T) -> T {
     if value.is_nan() {
