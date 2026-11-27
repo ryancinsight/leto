@@ -1,6 +1,6 @@
 //! [`AxisReduction`] strategy marker types: `Sum`/`Product`/`Mean`/`Min`/`Max`.
 
-use crate::domain::scalar::Scalar;
+use crate::domain::scalar::{fold_max, fold_min, Scalar};
 use eunomia::FloatElement;
 
 /// Zero-sized axis-reduction contract.
@@ -35,18 +35,19 @@ pub struct MeanAxis;
 
 /// Minimum axis-reduction marker.
 ///
-/// NaN lanes are ignored on every route: the fold starts from
-/// `T::MAX_VALUE` and only a value that compares below the accumulator
-/// replaces it, and the contiguous route inherits the same contract from
-/// [`Scalar::min_slice`]. An all-NaN axis therefore reduces to
-/// `T::MAX_VALUE`, the identity.
+/// Folds with `fold_min` from `T::MAX_VALUE`; the contiguous route inherits
+/// the same contract from [`Scalar::min_slice`]. The result is the least
+/// non-NaN element of the axis: a real NaN and a `Complex` with a NaN
+/// component are ignored wherever they sit, and an all-NaN axis reduces to
+/// `T::MAX_VALUE`, the identity. A `Complex` orders by real part, then
+/// imaginary part. The sign of a zero tie (`+0` against `-0`) is unspecified.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MinAxis;
 
 /// Maximum axis-reduction marker.
 ///
-/// The mirror of [`MinAxis`]: NaN lanes are ignored, the fold starts from
-/// `T::MIN_VALUE`, and an all-NaN axis reduces to that identity.
+/// The mirror of [`MinAxis`] under `fold_max`: the greatest non-NaN
+/// element, `T::MIN_VALUE` for an all-NaN axis.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MaxAxis;
 
@@ -147,11 +148,7 @@ impl<T: Scalar> AxisReduction<T> for MinAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value < acc {
-            value
-        } else {
-            acc
-        }
+        fold_min(acc, value)
     }
 
     #[inline(always)]
@@ -176,11 +173,7 @@ impl<T: Scalar> AxisReduction<T> for MaxAxis {
 
     #[inline(always)]
     fn fold(acc: T, value: T) -> T {
-        if value > acc {
-            value
-        } else {
-            acc
-        }
+        fold_max(acc, value)
     }
 
     #[inline(always)]

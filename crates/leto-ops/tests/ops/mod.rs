@@ -21,6 +21,7 @@ pub mod lu;
 pub mod matmul;
 pub mod matrix_function;
 pub mod matrix_traits;
+pub mod min_max_fold;
 pub mod norms;
 pub mod oracle_parity;
 pub mod parity;

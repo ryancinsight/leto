@@ -6,3 +6,4 @@ mod fallback;
 mod impls;
 
 pub use contract::Scalar;
+pub(crate) use fallback::{fold_max, fold_min};

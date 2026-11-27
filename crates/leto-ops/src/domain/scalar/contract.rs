@@ -4,7 +4,8 @@ use eunomia::NumericElement;
 
 use super::fallback::{
     scalar_axpy_rows_batch_fallback, scalar_axpy_rows_fallback, scalar_gemv_strided_fallback,
-    scalar_gemv_transpose_strided_fallback, scalar_tiled_gemm_fallback,
+    scalar_gemv_transpose_strided_fallback, scalar_max_fallback, scalar_min_fallback,
+    scalar_tiled_gemm_fallback,
 };
 
 /// Leto operation scalar contract.
@@ -200,32 +201,23 @@ pub trait Scalar: NumericElement {
         scalar_tiled_gemm_fallback(a, b, c, m, n, k);
     }
 
-    /// Min reduction over a slice.
+    /// Min reduction over a slice: the least non-NaN element.
+    ///
+    /// A `Complex` orders by real part, then imaginary part; an element with
+    /// any NaN component is ignored. An empty or all-NaN slice reduces to
+    /// `MAX_VALUE`, and the sign of a zero tie is unspecified.
     #[inline]
     fn min_slice(s: &[Self]) -> Self {
-        s.iter()
-            .copied()
-            .fold(<Self as NumericElement>::MAX_VALUE, |acc, x| {
-                if x < acc {
-                    x
-                } else {
-                    acc
-                }
-            })
+        scalar_min_fallback(s)
     }
 
-    /// Max reduction over a slice.
+    /// Max reduction over a slice: the greatest non-NaN element of `s`.
+    ///
+    /// The mirror of [`min_slice`](Self::min_slice); an empty or all-NaN slice
+    /// reduces to `MIN_VALUE`.
     #[inline]
     fn max_slice(s: &[Self]) -> Self {
-        s.iter()
-            .copied()
-            .fold(<Self as NumericElement>::MIN_VALUE, |acc, x| {
-                if x > acc {
-                    x
-                } else {
-                    acc
-                }
-            })
+        scalar_max_fallback(s)
     }
 
     /// Jaccard distance between two slices.
