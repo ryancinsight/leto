@@ -77,9 +77,8 @@ pub fn min_axis_into<T: Scalar, const N: usize>(
 /// Min-reduce `input` along `axis` into newly allocated C-contiguous output storage.
 ///
 /// The least non-NaN element: a `Complex` orders by real part, then imaginary
-/// part, any NaN component makes a NaN lane that is ignored, a lane without a
-/// non-NaN element gives `T::MAX_VALUE`, and the sign of a zero tie is
-/// unspecified.
+/// part, any NaN component makes a NaN lane that is ignored, an all-NaN lane
+/// gives `T::MAX_VALUE`, and the sign of a zero tie is unspecified.
 #[inline]
 pub fn min_axis<T: Scalar, const N: usize>(
     input: &ArrayView<'_, T, N>,
@@ -101,9 +100,8 @@ pub fn max_axis_into<T: Scalar, const N: usize>(
 /// Max-reduce `input` along `axis` into newly allocated C-contiguous output storage.
 ///
 /// The greatest non-NaN element: a `Complex` orders by real part, then imaginary
-/// part, any NaN component makes a NaN lane that is ignored, a lane without a
-/// non-NaN element gives `T::MIN_VALUE`, and the sign of a zero tie is
-/// unspecified.
+/// part, any NaN component makes a NaN lane that is ignored, an all-NaN lane
+/// gives `T::MIN_VALUE`, and the sign of a zero tie is unspecified.
 #[inline]
 pub fn max_axis<T: Scalar, const N: usize>(
     input: &ArrayView<'_, T, N>,
@@ -115,9 +113,8 @@ pub fn max_axis<T: Scalar, const N: usize>(
 /// Minimum over all elements of `input`.
 ///
 /// The least non-NaN element: a `Complex` orders by real part, then imaginary
-/// part, any NaN component makes a NaN lane that is ignored, a lane without a
-/// non-NaN element gives `T::MAX_VALUE`, and the sign of a zero tie is
-/// unspecified.
+/// part, any NaN component makes a NaN lane that is ignored, an all-NaN input
+/// gives `T::MAX_VALUE`, and the sign of a zero tie is unspecified.
 #[inline]
 pub fn min<T: Scalar, const N: usize>(input: &ArrayView<'_, T, N>) -> Result<T> {
     reduce_all::<MinAxis, T, N>(input)
@@ -126,9 +123,8 @@ pub fn min<T: Scalar, const N: usize>(input: &ArrayView<'_, T, N>) -> Result<T> 
 /// Maximum over all elements of `input`.
 ///
 /// The greatest non-NaN element: a `Complex` orders by real part, then imaginary
-/// part, any NaN component makes a NaN lane that is ignored, a lane without a
-/// non-NaN element gives `T::MIN_VALUE`, and the sign of a zero tie is
-/// unspecified.
+/// part, any NaN component makes a NaN lane that is ignored, an all-NaN input
+/// gives `T::MIN_VALUE`, and the sign of a zero tie is unspecified.
 #[inline]
 pub fn max<T: Scalar, const N: usize>(input: &ArrayView<'_, T, N>) -> Result<T> {
     reduce_all::<MaxAxis, T, N>(input)

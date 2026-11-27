@@ -1,7 +1,8 @@
 //! `min`/`max` select the least or greatest non-NaN element, whatever the
 //! element order or memory layout. `Complex` orders by real part, then
 //! imaginary part; an element with any NaN component is a NaN lane, ignored as
-//! a real NaN is; an empty or all-NaN lane reduces to the fold identity.
+//! a real NaN is; an empty slice or an all-NaN lane reduces to the fold
+//! identity.
 #![expect(
     clippy::unwrap_used,
     reason = "test scope: failed precondition = test failure"
