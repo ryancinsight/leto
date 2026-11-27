@@ -79,10 +79,6 @@ pub fn min_axis_into<T: Scalar, const N: usize>(
 /// The least non-NaN element: a `Complex` orders by real part, then imaginary
 /// part, any NaN component makes a NaN lane that is ignored, an all-NaN lane
 /// gives `T::MAX_VALUE`, and the sign of a zero tie is unspecified.
-///
-/// # Errors
-///
-/// Returns an error if `axis` has zero length.
 #[inline]
 pub fn min_axis<T: Scalar, const N: usize>(
     input: &ArrayView<'_, T, N>,
@@ -106,10 +102,6 @@ pub fn max_axis_into<T: Scalar, const N: usize>(
 /// The greatest non-NaN element: a `Complex` orders by real part, then imaginary
 /// part, any NaN component makes a NaN lane that is ignored, an all-NaN lane
 /// gives `T::MIN_VALUE`, and the sign of a zero tie is unspecified.
-///
-/// # Errors
-///
-/// Returns an error if `axis` has zero length.
 #[inline]
 pub fn max_axis<T: Scalar, const N: usize>(
     input: &ArrayView<'_, T, N>,
@@ -123,10 +115,6 @@ pub fn max_axis<T: Scalar, const N: usize>(
 /// The least non-NaN element: a `Complex` orders by real part, then imaginary
 /// part, any NaN component makes a NaN lane that is ignored, an all-NaN input
 /// gives `T::MAX_VALUE`, and the sign of a zero tie is unspecified.
-///
-/// # Errors
-///
-/// Returns an error if `input` has no elements.
 #[inline]
 pub fn min<T: Scalar, const N: usize>(input: &ArrayView<'_, T, N>) -> Result<T> {
     reduce_all::<MinAxis, T, N>(input)
@@ -137,10 +125,6 @@ pub fn min<T: Scalar, const N: usize>(input: &ArrayView<'_, T, N>) -> Result<T> 
 /// The greatest non-NaN element: a `Complex` orders by real part, then imaginary
 /// part, any NaN component makes a NaN lane that is ignored, an all-NaN input
 /// gives `T::MIN_VALUE`, and the sign of a zero tie is unspecified.
-///
-/// # Errors
-///
-/// Returns an error if `input` has no elements.
 #[inline]
 pub fn max<T: Scalar, const N: usize>(input: &ArrayView<'_, T, N>) -> Result<T> {
     reduce_all::<MaxAxis, T, N>(input)
