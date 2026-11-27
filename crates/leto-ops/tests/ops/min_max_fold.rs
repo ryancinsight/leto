@@ -241,7 +241,7 @@ fn extrema_differing_from_the_seed_are_selected_across_shipped_scalars() {
     macro_rules! over_scalars {
         ($($t:ty),*) => {$(check::<$t>();)*};
     }
-    over_scalars!(f32, f64, F16, Bf16, i8, i32, i64, u8, u32, u64, usize);
+    over_scalars!(f32, f64, F16, Bf16, i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
 }
 
 /// An empty input has no extremum: `min` and `max` return a storage error for
@@ -297,10 +297,18 @@ fn empty_input_errors_and_the_empty_slice_is_the_identity_across_shipped_scalars
         Complex<f64>,
         Complex<F16>,
         Complex<Bf16>,
+        Complex<i8>,
+        Complex<i16>,
+        Complex<i32>,
+        Complex<i64>,
+        Complex<isize>,
         i8,
+        i16,
         i32,
         i64,
+        isize,
         u8,
+        u16,
         u32,
         u64,
         usize
