@@ -229,24 +229,10 @@ open.
 - Acceptance: a value-semantic test in `tests/core/geometry.rs`, over `f32` and `f64`, asserts `M * v` for a rotation and a non-symmetric matrix; it fails at the basis because the impl does not exist.
 - Next step: add the impl beside `Mul<Vector3<T>> for Isometry3` in `geometry/operators.rs` with the test.
 
-<a id="LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16"></a>
-## LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 — Pin the ln 2 crossing of `derives_vacuous` [patch] — todo
-- priority: verification; milestone: M-array-core
-- needs: none
-- basis: 274da18e1cff2d123c5dca9e05b848374bc3eb6e
-- scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`
-- Evidence: `derives_vacuous` (`coverage.rs:81-89`) compares against `LN_2`; its only caller is the `assert!` in `Coverage::record` (`:112-113`) and `assert_rows` pins only tallies. The crossing
-  test (`:172`) calls `growth`, not `derives_vacuous`. Source: judge on leto#425, F1, which reports the mutant `LN_2` -> `0.0` survives; not re-run here. By reading, a threshold of 0 passes every
-  unasserted case and leaves every tally unchanged.
-- Outcome: the threshold of `derives_vacuous` is observable by a test on each side of its crossing.
-- Acceptance: a test calls `derives_vacuous` at `eps = 2^-7` and asserts by value: residual site, `value` count 624 false and 625 true (`vectors` 0, `order` 1); orthogonality site, `vectors`
-  count 158 false and 159 true (`order` 1, from `2E(N) >= ln 2`, counts computed here and not yet run in the test); the test fails with `LN_2` replaced by `0.0` and by `f64::INFINITY`.
-- Next step: add the test beside `growth_counts` in `coverage.rs`, then run both mutants against it.
-
 <a id="LETO-GROWTH-GAMMA-TILDE-SSOT-2026-11-16"></a>
 ## LETO-GROWTH-GAMMA-TILDE-SSOT-2026-11-16 — Write the `γ̃` exponent once in the graded scan [patch] — todo
 - priority: tightening; milestone: M-array-core
-- needs: LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16
+- needs: none
 - basis: 274da18e1cff2d123c5dca9e05b848374bc3eb6e
 - scope: `crates/leto-ops/tests/ops/graded_scan/coverage.rs`, `crates/leto-ops/tests/ops/backward_error/mod.rs`
 - Evidence: `growth` (`coverage.rs:74-77`) repeats the exponent `λ√N·u + N·u²/(1−u)` that `gamma_tilde` exponentiates (`backward_error/mod.rs:119-122`); `growth_matches_gamma_tilde` (`:148`) pins
@@ -255,8 +241,8 @@ open.
   only libm's `ln_1p(exp_m1(x))`, which no leto defect can fail, so the test is deleted, not retained. The crossing test at `:172` calls `growth`. Source: judge on leto#425, F2 and F3; leto#426, F1.
 - Outcome: the exponent is written once, and no tolerance constant lacks its derivation.
 - Acceptance: `git grep -c 'sqrt() \* u' -- crates/leto-ops/tests` totals 1; `gamma_tilde` and `derives_vacuous` call that one function; `growth`, `growth_matches_gamma_tilde`, `ROUND_TRIP_ULPS` and the
-  `growth` crossing test (`:172`) are deleted; the `derives_vacuous` crossing test of LETO-COVERAGE-VACUITY-THRESHOLD-2026-11-16 and the `assert_rows` tallies pass unchanged.
-- Next step: after the `needs:` item lands, make `gamma_tilde` exponentiate the shared exponent and read `derives_vacuous` from it, then delete the round-trip and `growth` crossing tests.
+  `growth` crossing test (`:172`) are deleted; the `vacuity_threshold` tests of `coverage.rs` and the `assert_rows` tallies pass unchanged.
+- Next step: make `gamma_tilde` exponentiate the shared exponent and read `derives_vacuous` from it, then delete the round-trip and `growth` crossing tests.
 
 <a id="LETO-COVERAGE-RECORD-SIGNATURE-2026-11-16"></a>
 ## LETO-COVERAGE-RECORD-SIGNATURE-2026-11-16 — Type the arguments of `Coverage::record` [patch] — todo

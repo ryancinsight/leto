@@ -175,3 +175,90 @@ mod growth_counts {
         assert!(growth(625.0, eps) >= std::f64::consts::LN_2);
     }
 }
+
+#[cfg(test)]
+mod vacuity_threshold {
+    use super::{derives_vacuous, Counts, Site};
+
+    /// Machine epsilon `2⁻⁷` of `Bf16` (8 significand bits), so the unit
+    /// roundoff is `u = 2⁻⁸`, the case of the item's exact evaluation.
+    const EPS: f64 = 1.0 / 128.0;
+
+    const fn counts(value: f64, vectors: f64, order: usize) -> Counts {
+        Counts {
+            value,
+            vectors,
+            order,
+        }
+    }
+
+    /// Residual sites with no vector roundings reduce to `E(N_r) ≥ ln 2`.
+    /// At `u = 2⁻⁸`, `λ = 7`, `E(624) < ln 2 ≤ E(625)`.
+    #[test]
+    fn residual_sites_cross_at_625_value_roundings() {
+        for site in [Site::SvdResidual, Site::SchurResidual] {
+            assert!(
+                !derives_vacuous(site, counts(624.0, 0.0, 1), EPS),
+                "{site:?}"
+            );
+            assert!(
+                derives_vacuous(site, counts(625.0, 0.0, 1), EPS),
+                "{site:?}"
+            );
+        }
+    }
+
+    /// Orthogonality sites at order `1` reduce to `2E(N_v) ≥ ln 2`:
+    /// `E(158) = 0.3461` doubles to `0.6922 < ln 2 = 0.6931`, and
+    /// `E(159) = 0.3472` doubles to `0.6944`.
+    #[test]
+    fn orthogonality_sites_cross_at_159_vector_roundings() {
+        for site in [Site::SvdOrthogonality, Site::SchurOrthogonality] {
+            assert!(
+                !derives_vacuous(site, counts(0.0, 158.0, 1), EPS),
+                "{site:?}"
+            );
+            assert!(
+                derives_vacuous(site, counts(0.0, 159.0, 1), EPS),
+                "{site:?}"
+            );
+        }
+    }
+
+    /// The value path enters the residual only: `10⁶` value roundings leave
+    /// an orthogonality site below the threshold, and add to a residual site
+    /// whose vector path alone is below it.
+    #[test]
+    fn value_roundings_enter_the_residual_sites_only() {
+        assert!(!derives_vacuous(
+            Site::SvdOrthogonality,
+            counts(1.0e6, 0.0, 1),
+            EPS
+        ));
+        assert!(!derives_vacuous(
+            Site::SchurOrthogonality,
+            counts(1.0e6, 158.0, 1),
+            EPS
+        ));
+        assert!(!derives_vacuous(
+            Site::SvdResidual,
+            counts(0.0, 158.0, 1),
+            EPS
+        ));
+        assert!(derives_vacuous(
+            Site::SvdResidual,
+            counts(1.0, 158.0, 1),
+            EPS
+        ));
+    }
+
+    /// At order `4` the vector term is `d = 2·γ̃_{N_v}`, so the crossing
+    /// `d ≥ √2 − 1` needs `E(N_v) ≥ ln(1 + (√2 − 1)/2) = 0.18823`:
+    /// `E(47) = 0.18818` falls short and `E(48) = 0.19018` clears it.
+    #[test]
+    fn the_factor_order_scales_the_vector_term() {
+        let site = Site::SvdOrthogonality;
+        assert!(!derives_vacuous(site, counts(0.0, 47.0, 4), EPS));
+        assert!(derives_vacuous(site, counts(0.0, 48.0, 4), EPS));
+    }
+}
